@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WattsMyPower</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><rect width='30' height='30' rx='9' fill='%23141414'/><path d='M16.6 6.8 L9.2 16.2 H14.4 L13.4 23.2 L20.8 13.8 H15.6 Z' fill='%23ffb547'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="#/overview" aria-label="WattsMyPower, overview">
+      <span class="brand-mark"><svg width="18" height="20" viewBox="0 0 16 18" aria-hidden="true" style="display:block"><path d="M9.6 0.8 L2.2 10.2 H7.4 L6.4 17.2 L13.8 7.8 H8.6 Z" fill="#ffb547" stroke-linejoin="round"/></svg></span>
+      <span class="brand-name">Watts<span>My</span>Power</span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Main"></nav>
+    <div class="top-right">
+      <div class="hp" id="hp">
+        <span class="hp-item hp-time" id="hp-time"><span class="live-dot" id="live-dot"></span><span class="hp-date" id="hp-date"></span><span id="hp-clock"></span></span>
+      </div>
+      <a class="gear" href="#/settings" id="gear" aria-label="Settings" title="Settings"></a>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-head">
+      <h1 id="page-title">&nbsp;</h1>
+      <div class="page-sub" id="page-sub">&nbsp;</div>
+    </div>
+    <div class="notice" id="error" hidden></div>
+    <div id="view"></div>
+  </main>
+</div>
+<a class="dock" id="dock" href="#/overview" hidden></a>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="/static/house.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+services:
+  wattsmypower:
+    build: .
+    container_name: wattsmypower
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      INVERTER_HOST: ${INVERTER_HOST:-}
+      INVERTER_PORT: ${INVERTER_PORT:-502}
+      INVERTER_UNIT: ${INVERTER_UNIT:-1}
+      PV2_HOST: ${PV2_HOST:-}
+      PV2_PORT: ${PV2_PORT:-502}
+      PV2_UNIT: ${PV2_UNIT:-1}
+      PV2_BEHIND_METER: ${PV2_BEHIND_METER:-true}
+      POLL_INTERVAL: ${POLL_INTERVAL:-60}
+      RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}
+      TZ: ${TZ:-Australia/Brisbane}
+      PV_KW: ${PV_KW:-6.6}
+      BATTERY_KWH: ${BATTERY_KWH:-0}
+      IMPORT_RATE: ${IMPORT_RATE:-0.32}
+      FEED_IN_RATE: ${FEED_IN_RATE:-0.05}
+      SUPPLY_CHARGE: ${SUPPLY_CHARGE:-1.05}
+      LATITUDE: ${LATITUDE:--27.47}
+      LONGITUDE: ${LONGITUDE:-153.03}
