@@ -42,3 +42,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Python environment (uv)
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
