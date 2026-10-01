@@ -23,24 +23,19 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
 1. **Log in to the Linux machine** (for example `ssh root@<machine IP>`, or the Proxmox console).
 
-2. **Install git** if it isn't there already:
+2. **Run the installer:**
 
    ```bash
-   apt install -y git
+   curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
    ```
 
-   (Prefix with `sudo` if you're not logged in as root.)
+   (On a minimal system without curl, run `apt install -y curl` first. Prefix commands with `sudo` if you're not logged in as root.)
 
-3. **Download WattsMyPower:**
-
-   ```bash
-   git clone <this repo URL> wattsmypower
-   ```
-
-4. **Run the installer:**
+   It downloads WattsMyPower into a `wattsmypower` folder where you run it (installing git first if it's missing, asking first). To use another folder, put `WMP_DIR=/opt/wattsmypower` before `bash`. If you'd rather read the script before running it, download it, look it over, then run it:
 
    ```bash
-   cd wattsmypower && bash install.sh
+   curl -fsSLO https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh
+   bash install.sh
    ```
 
    It installs Docker if it's missing (asking first), and sets Docker to start at boot so the dashboard comes back by itself after a restart. Then it asks:
@@ -51,7 +46,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
    It saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
 
-5. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. Then finish setting up:
+3. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. Then finish setting up:
    - **Settings → Tariffs:** your electricity rates. Use **Find your plan** to load them from Energy Made Easy, or enter them by hand.
    - **Settings → Integrations → Change location:** your suburb, for the weather forecast.
    - **Savings:** what your system cost, for the payback estimate.
@@ -73,7 +68,7 @@ Run these from the `wattsmypower` folder:
 
 **Updating** pulls the latest version, backs up the database to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
-**Moving an existing install to a git checkout** (for example one copied over as a zip): clone into a new folder and run `bash install.sh` there. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
+**Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
 **Your data** lives in `data/wattsmypower.db`. With the default settings it grows to about 20 MB over the first 90 days, then by about 18 MB a year. To restore a backup: `docker compose stop`, copy the backup over `data/wattsmypower.db`, then `docker compose start`.
 

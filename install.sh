@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Install or update WattsMyPower with Docker.
 #
-#   First install:  git clone <repo url> wattsmypower && cd wattsmypower && bash install.sh
-#   Update:         cd wattsmypower && bash install.sh
+#   Install:  curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
+#   Update:   cd wattsmypower && bash install.sh
+#
+# Run from anywhere other than a WattsMyPower folder, it downloads WattsMyPower into
+# ./wattsmypower (installing git first if needed) and carries on from there. Run inside
+# that folder, it updates it.
 #
 # Your data (data/) and settings (.env) are never overwritten. Before each update
 # the database is backed up to data/backups/ (the newest 5 are kept), without
@@ -15,23 +19,25 @@
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
 #                        passed in, e.g. INVERTER_HOST=192.168.1.20 bash install.sh --yes
 #           -h, --help   show this help
+#
+# First install only:  WMP_DIR=/path  folder to install into (default: ./wattsmypower)
 set -euo pipefail
 
 APP=wattsmypower
-cd "$(dirname "$0")"
-HERE="$(pwd)"
+REPO=https://github.com/KlemmyDev/WattsMyPower.git
 
 YES=0
 PULL=1
 CONFIGURE=0
 START=0
+HELP=0
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) YES=1 ;;
     --configure) CONFIGURE=1 ;;
     --start) START=1; PULL=0 ;;
     --no-pull) PULL=0 ;;  # internal: used when the script restarts itself after updating
-    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) HELP=1 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -40,7 +46,7 @@ say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
 warn() { printf '\033[33m%s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
-interactive() { [ "$YES" = 0 ] && [ -r /dev/tty ]; }
+interactive() { [ "$YES" = 0 ] && { true </dev/tty; } 2>/dev/null; }  # asking needs a terminal we can open
 # ask "Question" "default": prints the answer (the default when not interactive)
 ask() {
   local answer
@@ -71,6 +77,38 @@ set_env() {
 SUDO=""
 if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then SUDO="sudo"; fi
 
+# ---------------------------------------------------------------- find (or download) the app
+# This script's own folder, when it's being run from a file rather than piped in from curl.
+SELF_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; fi
+is_app() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/app" ] && [ -f "$1/install.sh" ]; }
+
+if [ "$HELP" = 1 ]; then
+  if [ -n "$SELF_DIR" ]; then sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash [-s -- --yes]"; fi
+  exit 0
+fi
+
+if [ -z "$SELF_DIR" ] || ! is_app "$SELF_DIR"; then
+  DIR="${WMP_DIR:-$(pwd)/wattsmypower}"
+  if is_app "$DIR"; then
+    say "WattsMyPower is already in $DIR: updating it"
+  else
+    [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ] && die "$DIR already exists and isn't a WattsMyPower folder. Move it, or choose another folder with WMP_DIR=/path."
+    if ! command -v git >/dev/null 2>&1; then
+      warn "git is needed to download WattsMyPower and to update it later."
+      command -v apt-get >/dev/null 2>&1 || die "Install git (https://git-scm.com/downloads) and run this again."
+      confirm "Install git now (apt-get install git)?" || die "Install git (apt install git) and run this again."
+      $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git
+    fi
+    say "Downloading WattsMyPower into $DIR"
+    git clone --branch main "$REPO" "$DIR"
+  fi
+  exec bash "$DIR/install.sh" "$@"
+fi
+cd "$SELF_DIR"
+HERE="$SELF_DIR"
+
 # ---------------------------------------------------------------- update the code
 if [ "$PULL" = 1 ] && [ -d .git ]; then
   say "Getting the latest version"
@@ -85,7 +123,7 @@ if [ "$PULL" = 1 ] && [ -d .git ]; then
   else
     git log --oneline "$before..HEAD" | sed 's/^/  /'
     # This script may itself have changed: carry on with the new version.
-    if ! git diff --quiet "$before" HEAD -- install.sh; then exec bash "$0" --no-pull "$@"; fi
+    if ! git diff --quiet "$before" HEAD -- install.sh; then exec bash "$HERE/install.sh" --no-pull "$@"; fi
   fi
 fi
 
