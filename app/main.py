@@ -15,7 +15,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, forecast, geocode, insights, plans, savings, settings, tariffs
+from . import auth, config, db, forecast, geocode, insights, plans, savings, settings, tariffs
 from .poller import Poller
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -33,6 +33,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="WattsMyPower", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(auth.AuthMiddleware)
+app.include_router(auth.router)
 
 
 def _range(start: Optional[int], end: Optional[int], default_span: int) -> tuple[int, int]:

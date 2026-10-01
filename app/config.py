@@ -54,3 +54,7 @@ LONGITUDE = float(os.getenv("LONGITUDE", "153.03"))
 
 # Generate synthetic data instead of talking to an inverter (for local dev / demos).
 MOCK = _bool("MOCK", False)
+
+# Require signing in to the dashboard (an account is created the first time it's opened).
+# Turn off only if something else in front of it already handles sign-in, e.g. a reverse proxy.
+AUTH = _bool("AUTH", True)

@@ -25,3 +25,4 @@ services:
       SUPPLY_CHARGE: ${SUPPLY_CHARGE:-1.05}
       LATITUDE: ${LATITUDE:--27.47}
       LONGITUDE: ${LONGITUDE:-153.03}
+      AUTH: ${AUTH:-true}
