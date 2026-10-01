@@ -91,6 +91,13 @@
 @layer base {
   :root {
     color-scheme: dark;
+    /* Sections scrolled into view (e.g. History's day panel) stop below the sticky header. */
+    scroll-padding-top: 96px;
+  }
+  @media (width < 640px) {
+    :root {
+      scroll-padding-top: 76px;
+    }
   }
   html,
   body {
