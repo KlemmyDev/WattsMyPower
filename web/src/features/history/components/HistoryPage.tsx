@@ -90,11 +90,17 @@ export function HistoryPage() {
   const selected = Math.round((dayTs - start) / 86400);
   const { label, color } = METRICS[metric];
 
+  // The view lives in the URL, but changing it isn't a new page: resetScroll: false keeps the
+  // reader where they are (the router otherwise jumps to the top on every navigation).
   // Stepping past either end of the year moves into the next or previous year.
   const select = useCallback(
     (ts: number) => {
       if (ts > today) return;
-      navigate({ search: (prev) => ({ ...daySearch(ts, today), metric: prev.metric }), replace: true });
+      navigate({
+        search: (prev) => ({ ...daySearch(ts, today), metric: prev.metric }),
+        replace: true,
+        resetScroll: false,
+      });
     },
     [navigate, today],
   );
@@ -108,9 +114,14 @@ export function HistoryPage() {
     [select],
   );
   // The previous year opens on its last day, the next on its first.
-  const goToYear = (ts: number) => navigate({ search: (prev) => ({ ...daySearch(ts, today), metric: prev.metric }) });
+  const goToYear = (ts: number) =>
+    navigate({ search: (prev) => ({ ...daySearch(ts, today), metric: prev.metric }), resetScroll: false });
   const setMetric = (m: Metric) =>
-    navigate({ search: (prev) => ({ ...prev, metric: m === "gen" ? undefined : m }), replace: true });
+    navigate({
+      search: (prev) => ({ ...prev, metric: m === "gen" ? undefined : m }),
+      replace: true,
+      resetScroll: false,
+    });
 
   return (
     <>

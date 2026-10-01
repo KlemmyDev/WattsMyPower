@@ -5,8 +5,9 @@ import { TopBar } from "~/features/common/layout/components/TopBar";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-canvas">
+      {/* The sticky header carries the space above and below it (pt-5/pb-3), so the page starts where it did. */}
       <TopBar />
-      <main className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-8 pt-12 pb-[120px] max-sm:px-4 max-sm:pt-8">
+      <main className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-8 pt-9 pb-[120px] max-sm:px-4 max-sm:pt-6">
         {children}
       </main>
       <Dock />

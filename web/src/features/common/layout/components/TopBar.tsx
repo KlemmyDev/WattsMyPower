@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
+import { useScrolled } from "~/features/common/layout/hooks";
 import { cn } from "~/features/common/ui/utils";
 import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
@@ -24,35 +25,47 @@ const NAV: NavItem[] = [
 /** Which top-level section a path belongs to. */
 const sectionOf = (path: string) => (path === "/" ? "/" : `/${path.split("/")[1]}`);
 
+/**
+ * The header stays at the top while the page scrolls. At the top it's see-through, as in the design;
+ * once content passes under it, it gets a translucent background and a hairline so the two don't clash.
+ */
 export function TopBar() {
+  const scrolled = useScrolled();
   return (
-    <header className="relative z-10 mx-auto mt-5 flex max-w-[1320px] items-center justify-between gap-4 px-8 max-sm:mt-4 max-sm:gap-2 max-sm:px-4 max-2xs:gap-1.5">
-      <Link
-        to="/"
-        aria-label="WattsMyPower, overview"
-        className="flex flex-none items-center gap-3 text-ink no-underline hover:text-ink"
-      >
-        <span className="flex size-12 items-center justify-center rounded-2xl border border-white/8 bg-linear-160 from-[#242424] to-[#121212] max-sm:size-10 max-sm:rounded-[13px] max-2xs:size-9">
-          <BrandMark />
-        </span>
-        <span className="font-display text-xl font-semibold tracking-[-0.4px] whitespace-nowrap max-xl:hidden">
-          Watts<span className="text-solar">My</span>Power
-        </span>
-      </Link>
-      <Nav />
-      <div className="flex flex-none items-center gap-2">
-        <HeaderClock />
+    <div
+      className={cn(
+        "sticky top-0 z-20 border-b pt-5 pb-3 transition-[background-color,border-color] duration-200 max-sm:pt-4 max-sm:pb-2",
+        scrolled ? "border-line-subtle bg-canvas/80 backdrop-blur-xl" : "border-transparent",
+      )}
+    >
+      <header className="relative mx-auto flex max-w-[1320px] items-center justify-between gap-4 px-8 max-sm:gap-2 max-sm:px-4 max-2xs:gap-1.5">
         <Link
-          to="/settings"
-          aria-label="Settings"
-          title="Settings"
-          activeProps={{ "aria-current": "page", className: "bg-ink! text-ink-inverse!" }}
-          className="flex size-12 items-center justify-center rounded-full border border-white/8 bg-chip text-ink-muted transition-colors duration-200 hover:border-white/20 hover:text-ink max-sm:size-10 max-2xs:size-9"
+          to="/"
+          aria-label="WattsMyPower, overview"
+          className="flex flex-none items-center gap-3 text-ink no-underline hover:text-ink"
         >
-          <Icon name="settings" size={18} />
+          <span className="flex size-12 items-center justify-center rounded-2xl border border-white/8 bg-linear-160 from-[#242424] to-[#121212] max-sm:size-10 max-sm:rounded-[13px] max-2xs:size-9">
+            <BrandMark />
+          </span>
+          <span className="font-display text-xl font-semibold tracking-[-0.4px] whitespace-nowrap max-xl:hidden">
+            Watts<span className="text-solar">My</span>Power
+          </span>
         </Link>
-      </div>
-    </header>
+        <Nav />
+        <div className="flex flex-none items-center gap-2">
+          <HeaderClock />
+          <Link
+            to="/settings"
+            aria-label="Settings"
+            title="Settings"
+            activeProps={{ "aria-current": "page", className: "bg-ink! text-ink-inverse!" }}
+            className="flex size-12 items-center justify-center rounded-full border border-white/8 bg-chip text-ink-muted transition-colors duration-200 hover:border-white/20 hover:text-ink max-sm:size-10 max-2xs:size-9"
+          >
+            <Icon name="settings" size={18} />
+          </Link>
+        </div>
+      </header>
+    </div>
   );
 }
 
