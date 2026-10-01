@@ -1,1 +1,44 @@
+# Local data: SQLite database (+ -wal/-shm) and backups
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Settings and secrets (keep the example)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Release bundles
+*.zip
+
+# Editors and tools
+.claude/
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
 .DS_Store
+Thumbs.db
