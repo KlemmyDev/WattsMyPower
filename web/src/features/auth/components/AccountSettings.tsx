@@ -21,7 +21,7 @@ export function AccountSettings() {
       <section className="flex max-w-[880px] flex-col gap-2 rounded-3xl border border-line-subtle bg-surface p-7">
         <TitleBlock title="Account" />
         <p className="m-0 text-sm text-ink-muted">
-          Sign-in is turned off on this server (AUTH=false), so there is no account to manage here.
+          This server doesn't ask anyone to sign in, so there's no account to manage here.
         </p>
       </section>
     );
