@@ -1,3 +1,12 @@
+# ---- dashboard: build the single-page app with Node; only its static output is kept
+FROM node:24-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
+# ---- server: Python only
 FROM python:3.12-slim
 
 # tzdata so SQLite's 'localtime' (daily totals) and log timestamps follow $TZ
@@ -9,7 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
-COPY static ./static
+COPY --from=web /web/dist/client ./web/dist/client
 
 ENV DB_PATH=/data/wattsmypower.db \
     PYTHONUNBUFFERED=1

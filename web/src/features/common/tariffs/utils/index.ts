@@ -1,0 +1,101 @@
+import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
+import { centsShort, money } from "~/features/common/formatting/utils/number";
+import { isWeekend } from "~/features/common/time/utils";
+
+export const BAND_COLORS = ["#ffb547", "#6f8cff", "#9a9aa3", "#3ee08f", "#c4a7ff", "#ff8a80"];
+export const bandColor = (i: number) => BAND_COLORS[i % BAND_COLORS.length];
+export const MAX_BANDS = 6;
+export const MAX_WINDOWS = 6;
+
+export const DAY_OPTIONS: [TimeWindow["days"], string][] = [
+  ["all", "Every day"],
+  ["weekdays", "Weekdays"],
+  ["weekends", "Weekends"],
+];
+
+export type DayKind = "weekday" | "weekend";
+
+const num = (v: number | "") => (v === "" ? 0 : v);
+
+export function toMinutes(t: string): number {
+  const [h, m] = String(t || "0:0")
+    .split(":")
+    .map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function bandsOf(t: Tariff): TariffBand[] {
+  return t.type === "tou" ? t.bands : [{ name: "All times", rate: t.flat_rate, other: true, windows: [] }];
+}
+
+/**
+ * Which band applies at each minute of a weekday or weekend day. The first matching window wins
+ * (the server rejects overlaps); minutes no window covers use the band marked `other`.
+ */
+export function bandTable(t: Tariff, kind: DayKind): { bands: TariffBand[]; tab: number[] } {
+  const bands = bandsOf(t);
+  const other = Math.max(
+    0,
+    bands.findIndex((b) => b.other),
+  );
+  const tab = new Array<number>(1440).fill(other);
+  const set = new Array<boolean>(1440).fill(false);
+  bands.forEach((b, i) => {
+    if (b.other) return;
+    for (const w of b.windows || []) {
+      if (w.days !== "all" && w.days.slice(0, -1) !== kind) continue;
+      const end = toMinutes(w.end);
+      let m = toMinutes(w.start); // equal start and end = the whole day
+      do {
+        if (!set[m]) {
+          tab[m] = i;
+          set[m] = true;
+        }
+        m = (m + 1) % 1440;
+      } while (m !== end);
+    }
+  });
+  return { bands, tab };
+}
+
+/** Indexes of bands that apply at some minute of the week (a band can be fully covered by others). */
+export const usedBands = (t: Tariff) => new Set([...bandTable(t, "weekday").tab, ...bandTable(t, "weekend").tab]);
+
+/** The band in force at a moment. */
+export function bandAt(t: Tariff, ts: number): { name: string; rate: number } {
+  const d = new Date(ts * 1000);
+  const { bands, tab } = bandTable(t, isWeekend(d) ? "weekend" : "weekday");
+  const b = bands[tab[d.getHours() * 60 + d.getMinutes()]];
+  return { name: b.name, rate: num(b.rate) };
+}
+
+/** Bands that apply at some time of the week (a band left with no hours isn't worth listing). */
+export function liveBands(t: Tariff): { name: string; rate: number }[] {
+  if (t.type !== "tou") return [{ name: "All times", rate: num(t.flat_rate) }];
+  const used = usedBands(t);
+  return t.bands.filter((_, i) => used.has(i)).map((b) => ({ name: b.name, rate: num(b.rate) }));
+}
+
+/** One line describing a tariff: "45c peak · 22c off-peak · 5c feed-in · $1.05 a day". */
+export function tariffDetail(t: Tariff): string {
+  const usage =
+    t.type === "tou"
+      ? liveBands(t)
+          .map((b) => `${centsShort(b.rate)} ${b.name.toLowerCase()}`)
+          .join(" · ")
+      : `${centsShort(num(t.flat_rate))} per kWh`;
+  return `${usage} · ${centsShort(num(t.feed_in_rate))} feed-in · ${money(num(t.supply_charge))} a day`;
+}
+
+/** A starting set of time-of-use bands when switching from a single rate. */
+export function seedBands(t: Tariff): TariffBand[] {
+  const r = num(t.flat_rate) || 0.32;
+  const f2 = (x: number) => Math.round(x * 100) / 100;
+  return [
+    { name: "Peak", rate: f2(r * 1.4), windows: [{ days: "all", start: "16:00", end: "21:00" }] },
+    { name: "Off-peak", rate: f2(r * 0.7), windows: [{ days: "all", start: "21:00", end: "07:00" }] },
+    { name: "Shoulder", rate: r, other: true, windows: [] },
+  ];
+}
+
+export const tariffNumber = num;
