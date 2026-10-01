@@ -383,10 +383,10 @@ function build() {
   // night: dim everything, then light the windows and porch
   const night: Kid[] = [
     h("rect", {
-      x: -200,
-      y: 0,
-      width: 1200,
-      height: 600,
+      x: -204,
+      y: -4,
+      width: 1208,
+      height: 608,
       fill: "#16203a",
       fillOpacity: 0.55,
       style: { mixBlendMode: "multiply" },

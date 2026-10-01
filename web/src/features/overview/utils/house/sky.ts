@@ -66,7 +66,8 @@ export function sky(wx: SkyMode, cover: Cover = "clear") {
       h("clipPath", { id: "skyClip" }, h("rect", { x: -200, y: 0, width: 1200, height: 600 })),
     ),
   );
-  E.push(h("rect", { x: -200, y: 0, width: 1200, height: 600, fill: `url(#sky-${wx})` }));
+  // A little past the edges, so rounding where the scene meets its box never leaves a seam.
+  E.push(h("rect", { x: -204, y: -4, width: 1208, height: 608, fill: `url(#sky-${wx})` }));
   if (wx === "sunny")
     E.push(sun(905, 62, 1), cloud(300, 72, 0.7, "#ffffff", 26, -4), cloud(720, 110, 0.55, "#ffffff", 30, -11));
   if (wx === "cloudy")

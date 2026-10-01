@@ -23,12 +23,12 @@ export function PowerFlowHero({
   return (
     <section
       aria-label="Power flow"
-      className="relative col-span-12 overflow-hidden rounded-[28px] bg-[#dcebff] max-md:rounded-[20px] max-md:bg-surface"
+      className="relative col-span-12 overflow-hidden rounded-[28px] max-md:rounded-[20px] max-md:bg-surface"
     >
       {p ? (
         <Scene p={p} s={s} f={f} now={now} />
       ) : (
-        <div className="relative aspect-[1200/600] w-full max-md:aspect-[4/3] max-md:bg-[#dcebff]" />
+        <div className="relative aspect-[1200/600] w-full bg-[#dcebff] max-md:aspect-[4/3]" />
       )}
     </section>
   );
@@ -63,7 +63,9 @@ function Scene({
 
   return (
     <>
-      <div className="relative aspect-[1200/600] w-full whitespace-nowrap max-md:aspect-[4/3] max-md:bg-[#dcebff]">
+      {/* No background under the scene: it covers the box, and a light one would show as a fringe
+          around the rounded corners against a dark sky. */}
+      <div className="relative aspect-[1200/600] w-full whitespace-nowrap max-md:aspect-[4/3]">
         <HouseScene flows={flows} sky={wx.mode} cover={wx.cover} />
         <div className="absolute top-7 left-8 z-1 flex max-w-[300px] flex-col items-start gap-3.5 whitespace-normal max-md:top-3 max-md:left-3.5">
           <div className="flex flex-col gap-1 max-md:hidden">
