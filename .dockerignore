@@ -3,3 +3,7 @@ data
 .git
 **/__pycache__
 .env
+web/node_modules
+web/dist
+web/.tanstack
+web/.env.local

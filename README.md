@@ -23,24 +23,19 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
 1. **Log in to the Linux machine** (for example `ssh root@<machine IP>`, or the Proxmox console).
 
-2. **Install git** if it isn't there already:
+2. **Run the installer:**
 
    ```bash
-   apt install -y git
+   curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
    ```
 
-   (Prefix with `sudo` if you're not logged in as root.)
+   (On a minimal system without curl, run `apt install -y curl` first. Prefix commands with `sudo` if you're not logged in as root.)
 
-3. **Download WattsMyPower:**
-
-   ```bash
-   git clone <this repo URL> wattsmypower
-   ```
-
-4. **Run the installer:**
+   It downloads WattsMyPower into a `wattsmypower` folder where you run it (installing git first if it's missing, asking first). To use another folder, put `WMP_DIR=/opt/wattsmypower` before `bash`. If you'd rather read the script before running it, download it, look it over, then run it:
 
    ```bash
-   cd wattsmypower && bash install.sh
+   curl -fsSLO https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh
+   bash install.sh
    ```
 
    It installs Docker if it's missing (asking first), and sets Docker to start at boot so the dashboard comes back by itself after a restart. Then it asks:
@@ -51,7 +46,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
    It saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
 
-5. **Open that address** in a browser on any device on your network, then finish setting up in the dashboard:
+3. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. Then finish setting up:
    - **Settings → Tariffs:** your electricity rates. Use **Find your plan** to load them from Energy Made Easy, or enter them by hand.
    - **Settings → Integrations → Change location:** your suburb, for the weather forecast.
    - **Savings:** what your system cost, for the payback estimate.
@@ -73,17 +68,17 @@ Run these from the `wattsmypower` folder:
 
 **Updating** pulls the latest version, backs up the database to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
-**Moving an existing install to a git checkout** (for example one copied over as a zip): clone into a new folder and run `bash install.sh` there. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
+**Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
 **Your data** lives in `data/wattsmypower.db`. With the default settings it grows to about 20 MB over the first 90 days, then by about 18 MB a year. To restore a backup: `docker compose stop`, copy the backup over `data/wattsmypower.db`, then `docker compose start`.
 
-> **The dashboard has no login.** Anyone on your network who can reach it can view it and change the rates and location. Keep it on your home network (don't port-forward it), or put it behind a reverse proxy with authentication.
+> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Settings → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app.auth reset` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
 
 ## Pages in detail
 
-The dashboard implements the "Energy Dashboard v5" design from Claude Design: a dark theme with Nunito headings and Geist type. The header has the page navigation (a white pill slides to the current page), the live status with the date and time, and a gear for Settings. The Tesla page only appears in the navigation once a Tesla is connected.
+The dashboard implements the "Energy Dashboard v5" design from Claude Design: a dark theme with Nunito headings and Geist type. Pages have their own addresses (`/history`, `/settings/tariffs`), and links from the old dashboard (`#/history`) still work. The header has the page navigation (a white pill slides to the current page), the live status with the date and time, and a gear for Settings. The Tesla page only appears in the navigation once a Tesla is connected.
 
 - **Overview:** a greeting for the time of day, then a wide power-flow scene: an isometric house with animated flows between solar, grid, battery and home, with live readings in pills at the left and right edges. The scene follows the current hour's weather from the forecast: sunny, cloudy, rain or storm by day, and a night sky after dark with clouds or rain if it's cloudy or wet. Live updates arrive every minute (server-sent events).
 - **Mini power flow:** on every page except Overview, a small live bar floats at the bottom. It shows solar, home and grid, with animated flow direction, plus battery charge and whether it's charging or discharging. Select it to open Overview.
@@ -139,6 +134,7 @@ All settings are environment variables (see `.env.example`):
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Settings → Tariffs**. |
 | `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Settings → Integrations → Change location.** |
 | `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
+| `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
 
 ### A second solar system (AC-coupled)
 
@@ -193,10 +189,13 @@ sqlite3 data/wattsmypower.db \
   "SELECT datetime(ts,'unixepoch','localtime'), pv_power, battery_soc FROM samples ORDER BY ts DESC LIMIT 10"
 ```
 
-HTTP API:
+HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session cookie; `/healthz` is open):
 
 | Endpoint | |
 |---|---|
+| `GET /api/auth/session` | whether this browser is signed in, and whether an account still needs creating |
+| `POST /api/auth/setup`, `POST /api/auth/login`, `POST /api/auth/logout` | create the account (first run only), sign in, sign out |
+| `PUT /api/auth/password` | change the password (signs out other browsers) |
 | `GET /api/live` | latest snapshot and poller status |
 | `GET /api/stream` | server-sent events, one message per poll |
 | `GET /api/history?start=&end=&points=&fields=` | time-bucketed columnar series (unix seconds) |
@@ -217,6 +216,8 @@ HTTP API:
 
 ## Local development
 
+Backend:
+
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 INVERTER_HOST=<WiNet-S IP> DB_PATH=./data/wattsmypower.db .venv/bin/uvicorn app.main:app --port 8080
@@ -224,13 +225,17 @@ INVERTER_HOST=<WiNet-S IP> DB_PATH=./data/wattsmypower.db .venv/bin/uvicorn app.
 
 `MOCK=1` swaps in a simulated inverter with 14 days of generated history, for working on the UI away from home. Point `DB_PATH` at a separate file when you use it so fake data never mixes with real data.
 
-**Working on the dashboard against your running instance.** To try frontend changes with live data, without a second copy of the app polling your inverters (they cope badly with two clients), serve this checkout's `static/` and pass the API through to the running service:
+Dashboard (React, TanStack Start in SPA mode, Tailwind; see [web/README.md](web/README.md)):
 
 ```bash
-python3 dev/proxy.py http://<server IP>:8080
+cd web && npm install
+echo "API_TARGET=http://127.0.0.1:8080" > .env.local
+npm run dev
 ```
 
-Then open `http://localhost:8081`. Edits to `static/` show up on reload. API and backend changes still need a deploy. Saving rates, location or system cost is blocked unless you add `--allow-writes`, which saves to the live service. `dev/` isn't included in the Docker image.
+Then open `http://localhost:5174`. `/api` is proxied to `API_TARGET`, and edits show up straight away. `npm run build` writes the production build to `web/dist/client/`, which the backend serves at `/` (the Docker image builds it for you).
+
+**Working on the dashboard against your running instance.** To try frontend changes with live data, without a second copy of the app polling your inverters (they cope badly with two clients), set `API_TARGET=http://<server IP>:8080` and sign in with your usual account. API and backend changes still need a deploy. While `API_TARGET` isn't a local address, saving rates, location or system cost is refused unless you also set `API_ALLOW_WRITES=1`, which saves to the live service.
 
 ## Layout
 
@@ -247,10 +252,9 @@ app/plans.py      Energy Made Easy / CDR plan search and plan-to-tariff conversi
 app/retailers.json  retailer names and AER API slugs
 app/settings.py   forecast location (and place name) and system cost, editable from the Settings page (stored in SQLite)
 app/geocode.py    place search and reverse lookup for the forecast location (OpenStreetMap Nominatim)
-app/main.py       FastAPI app and API
+app/auth.py       sign-in: the household account, sessions, and the /api guard
+app/main.py       FastAPI app and API, and serves the built dashboard
 install.sh        install or update with Docker (see above)
 start.sh          start it, and Docker if needed
-static/           dashboard (vanilla JS + SVG, no build step; hash routes like #/history)
-static/house.js   the isometric house illustration and its power flows
-dev/proxy.py      local dev server: this checkout's dashboard with the API from a running instance
+web/              dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 ```

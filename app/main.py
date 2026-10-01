@@ -15,11 +15,11 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, forecast, geocode, insights, plans, savings, settings, tariffs
+from . import auth, config, db, forecast, geocode, insights, plans, savings, settings, tariffs
 from .poller import Poller
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-STATIC = Path(__file__).resolve().parent.parent / "static"
+WEB = Path(__file__).resolve().parent.parent / "web" / "dist" / "client"
 poller = Poller()
 
 
@@ -33,6 +33,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="WattsMyPower", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(auth.AuthMiddleware)
+app.include_router(auth.router)
 
 
 def _range(start: Optional[int], end: Optional[int], default_span: int) -> tuple[int, int]:
@@ -236,18 +238,33 @@ async def healthz():
     return {"ok": True, "inverter_fresh": bool(fresh), "error": poller.last_error}
 
 
-@app.get("/")
-async def index():
-    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+# ---------------------------------------------------------------------------
+# The dashboard: a single-page app built from web/ (npm run build) into web/dist/client.
+# Hashed assets are cached for good; every other path gets the app shell, and the
+# client-side router shows the right page.
+# ---------------------------------------------------------------------------
 
-
-class RevalidatedStatic(StaticFiles):
-    """Static files that browsers re-check (cheaply, via ETag) so updates show up without a hard refresh."""
+class ImmutableStatic(StaticFiles):
+    """Build output with content-hashed names, so browsers can keep it forever."""
 
     def file_response(self, *args, **kwargs):
         resp = super().file_response(*args, **kwargs)
-        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return resp
 
 
-app.mount("/static", RevalidatedStatic(directory=STATIC), name="static")
+app.mount("/assets", ImmutableStatic(directory=WEB / "assets", check_dir=False), name="assets")
+
+
+@app.get("/{path:path}", include_in_schema=False)
+async def spa(path: str):
+    if path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    shell = WEB / "_shell.html"
+    if not shell.is_file():
+        raise HTTPException(status_code=503, detail="The dashboard hasn't been built. Run `npm run build` in web/.")
+    # Files at the top of the build (none today, but e.g. robots.txt) are served as they are.
+    file = (WEB / path).resolve()
+    if path and WEB in file.parents and file.is_file():
+        return FileResponse(file, headers={"Cache-Control": "no-cache"})
+    return FileResponse(shell, headers={"Cache-Control": "no-cache"})
