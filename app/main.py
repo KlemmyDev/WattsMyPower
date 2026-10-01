@@ -1,270 +1,74 @@
+"""The FastAPI app: `uvicorn app.main:app`. Build one for tests with create_app(Config(...))."""
+
 from __future__ import annotations
 
 import asyncio
-import csv
-import io
-import json
 import logging
-import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Optional
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 
-from . import auth, config, db, forecast, geocode, insights, plans, savings, settings, tariffs
-from .poller import Poller
+from app.container import build_services
+from app.core.config import Config
+from app.core.spa import mount_spa
+from app.features.auth.middleware import AuthMiddleware
+from app.features.auth.router import router as auth_router
+from app.features.forecast.router import router as forecast_router
+from app.features.insights.router import router as insights_router
+from app.features.live.router import health_router
+from app.features.live.router import router as live_router
+from app.features.plans.router import router as plans_router
+from app.features.readings.router import router as readings_router
+from app.features.savings.router import router as savings_router
+from app.features.settings.router import name_location
+from app.features.settings.router import router as settings_router
+from app.features.tariffs.router import router as tariffs_router
+
+ROUTERS = [
+    auth_router,
+    live_router,
+    readings_router,
+    tariffs_router,
+    settings_router,
+    forecast_router,
+    insights_router,
+    savings_router,
+    plans_router,
+    health_router,
+]
+
+
+def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboard: bool = True) -> FastAPI:
+    """The app and its services. `poll=False` skips the inverter poller (for tests)."""
+    config = config or Config.from_env()
+    services = build_services(config)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        await asyncio.to_thread(services.db.migrate)
+        await asyncio.to_thread(services.settings.load)
+        await asyncio.to_thread(services.tariffs.load)
+        if poll:
+            await services.poller.start()
+            # In the background: a network lookup for the forecast location's place name.
+            naming = asyncio.create_task(asyncio.to_thread(name_location, services))
+        yield
+        if poll:
+            naming.cancel()
+            await services.poller.stop()
+
+    app = FastAPI(title="WattsMyPower", lifespan=lifespan)
+    app.state.services = services
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    app.add_middleware(AuthMiddleware)
+    for router in ROUTERS:
+        app.include_router(router)
+    if serve_dashboard:
+        mount_spa(app)
+    return app
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-WEB = Path(__file__).resolve().parent.parent / "web" / "dist" / "client"
-poller = Poller()
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    await poller.start()
-    asyncio.create_task(asyncio.to_thread(_name_location))  # in the background: it's a network lookup
-    yield
-    await poller.stop()
-
-
-app = FastAPI(title="WattsMyPower", lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=1024)
-app.add_middleware(auth.AuthMiddleware)
-app.include_router(auth.router)
-
-
-def _range(start: Optional[int], end: Optional[int], default_span: int) -> tuple[int, int]:
-    end = end or int(time.time()) + 1
-    start = start if start is not None else end - default_span
-    return start, end
-
-
-@app.get("/api/live")
-async def live():
-    return poller.status()
-
-
-@app.get("/api/stream")
-async def stream(request: Request):
-    """Server-sent events: one message per poll."""
-    q = poller.subscribe()
-
-    async def events():
-        try:
-            yield f"data: {json.dumps(poller.status())}\n\n"
-            while not await request.is_disconnected():
-                try:
-                    msg = await asyncio.wait_for(q.get(), timeout=15)
-                    yield f"data: {json.dumps(msg)}\n\n"
-                except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
-        finally:
-            poller.unsubscribe(q)
-
-    return StreamingResponse(events(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-
-@app.get("/api/history")
-async def history(
-    start: Optional[int] = Query(None, description="unix seconds"),
-    end: Optional[int] = Query(None, description="unix seconds"),
-    points: int = Query(1200, ge=10, le=10000, description="approximate max points returned"),
-    fields: str = Query("pv_power,load_power,grid_power,battery_power,battery_soc"),
-):
-    start, end = _range(start, end, 86400)
-    return await asyncio.to_thread(db.history, start, end, points, fields.split(","))
-
-
-@app.get("/api/daily")
-async def daily(start: Optional[int] = None, end: Optional[int] = None):
-    start, end = _range(start, end, 30 * 86400)
-    return await asyncio.to_thread(db.daily, start, end)
-
-
-@app.get("/api/export.csv")
-async def export_csv(start: Optional[int] = None, end: Optional[int] = None, rollup: bool = False):
-    """Download raw snapshots (or 5-minute rollups) as CSV."""
-    start, end = _range(start, end, 86400)
-
-    def rows():
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        for row in db.export_rows(start, end, rollup):
-            w.writerow(row)
-            if buf.tell() > 64_000:
-                yield buf.getvalue()
-                buf.seek(0)
-                buf.truncate()
-        yield buf.getvalue()
-
-    name = f"wattsmypower_{time.strftime('%Y%m%d', time.localtime(start))}-{time.strftime('%Y%m%d', time.localtime(end))}.csv"
-    return StreamingResponse(rows(), media_type="text/csv",
-                             headers={"Content-Disposition": f'attachment; filename="{name}"'})
-
-
-@app.get("/api/forecast")
-async def get_forecast():
-    """Next ~24 h of solar and battery, from Open-Meteo plus our own history. null if unavailable."""
-    return await asyncio.to_thread(forecast.build, poller.latest, poller.battery_kwh(), poller.reserve())
-
-
-@app.get("/api/insights")
-async def get_insights():
-    """Self-sufficiency by month, battery figures, grid use by hour and month, and solar performance."""
-    return await asyncio.to_thread(insights.build, poller.latest, poller.battery_kwh())
-
-
-@app.get("/api/savings")
-async def get_savings():
-    """This quarter's bill (so far and estimated) and system payback."""
-    return await asyncio.to_thread(savings.build, poller.latest)
-
-
-@app.get("/api/plans/compare")
-async def plan_compare(brand: str, postcode: str):
-    """A year of your actual usage priced on each of a retailer's published plans, cheapest first."""
-    try:
-        return await asyncio.to_thread(savings.compare, brand, postcode)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"The retailer's plan data could not be loaded ({type(e).__name__}). Try again shortly.")
-
-
-@app.get("/api/tariff")
-async def get_tariff():
-    return tariffs.get()
-
-
-@app.put("/api/tariff")
-async def put_tariff(tariff: dict = Body(...)):
-    """Replace the tariff. Validated (including overlapping time windows); errors come back as 422 with a readable message."""
-    try:
-        return await asyncio.to_thread(tariffs.save, tariff)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-
-@app.get("/api/plans/brands")
-async def plan_brands():
-    """Energy retailers from the CDR Register (cached for a day)."""
-    try:
-        return [{"id": b["id"], "name": b["name"]} for b in await asyncio.to_thread(plans.brands)]
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"The retailer list could not be loaded ({type(e).__name__}).")
-
-
-@app.get("/api/plans/search")
-async def plan_search(brand: str, postcode: str, q: str = ""):
-    """A retailer's current residential electricity plans available at a postcode, with headline prices (incl. GST)."""
-    try:
-        return await asyncio.to_thread(plans.search, brand, postcode, q)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"The retailer's plan data could not be loaded ({type(e).__name__}). Try again shortly.")
-
-
-@app.get("/api/plans/tariff")
-async def plan_tariff(brand: str, plan: str):
-    """Convert one published plan into a tariff for the editor. Not saved until PUT /api/tariff."""
-    try:
-        return await asyncio.to_thread(plans.to_tariff, brand, plan)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"The plan could not be loaded ({type(e).__name__}). Try again shortly.")
-
-
-@app.get("/api/costs")
-async def get_costs(start: Optional[int] = None, end: Optional[int] = None):
-    """Per-day import/export, costs and savings, priced at the rate in force for each 5 minutes."""
-    start, end = _range(start, end, 86400)
-    return await asyncio.to_thread(tariffs.costs, start, end)
-
-
-@app.get("/api/settings")
-async def get_settings():
-    return settings.all_values()
-
-
-@app.put("/api/settings")
-async def put_settings(changes: dict = Body(...)):
-    """Save the forecast location (and its place name) or system cost. Only keys in settings.EDITABLE / TEXT are accepted."""
-    moved = ("latitude" in changes or "longitude" in changes) and "location_name" not in changes
-    if moved:
-        changes = {**changes, "location_name": None}  # the old name no longer applies
-    try:
-        saved = await asyncio.to_thread(settings.save, changes)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    if moved:  # coordinates typed in by hand: look up a place name for them
-        saved = await asyncio.to_thread(_name_location) or saved
-    return saved
-
-
-def _name_location() -> dict | None:
-    """Give the forecast location a place name if it doesn't have one yet."""
-    if settings.get_text("location_name"):
-        return None
-    name = geocode.reverse(settings.get("latitude"), settings.get("longitude"))
-    return settings.save({"location_name": name}) if name else None
-
-
-@app.get("/api/geocode")
-async def search_places(q: str):
-    """Suburbs, towns and addresses matching q, for choosing the forecast location (OpenStreetMap)."""
-    try:
-        return await asyncio.to_thread(geocode.search, q)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"The place search couldn't be reached ({type(e).__name__}). Try again, or enter coordinates instead.")
-
-
-@app.get("/api/stats")
-async def stats():
-    return await asyncio.to_thread(db.stats)
-
-
-@app.get("/healthz")
-async def healthz():
-    fresh = poller.last_success and time.time() - poller.last_success < max(120, config.POLL_INTERVAL * 6)
-    return {"ok": True, "inverter_fresh": bool(fresh), "error": poller.last_error}
-
-
-# ---------------------------------------------------------------------------
-# The dashboard: a single-page app built from web/ (npm run build) into web/dist/client.
-# Hashed assets are cached for good; every other path gets the app shell, and the
-# client-side router shows the right page.
-# ---------------------------------------------------------------------------
-
-class ImmutableStatic(StaticFiles):
-    """Build output with content-hashed names, so browsers can keep it forever."""
-
-    def file_response(self, *args, **kwargs):
-        resp = super().file_response(*args, **kwargs)
-        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        return resp
-
-
-app.mount("/assets", ImmutableStatic(directory=WEB / "assets", check_dir=False), name="assets")
-
-
-@app.get("/{path:path}", include_in_schema=False)
-async def spa(path: str):
-    if path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    shell = WEB / "_shell.html"
-    if not shell.is_file():
-        raise HTTPException(status_code=503, detail="The dashboard hasn't been built. Run `npm run build` in web/.")
-    # Files at the top of the build (none today, but e.g. robots.txt) are served as they are.
-    file = (WEB / path).resolve()
-    if path and WEB in file.parents and file.is_file():
-        return FileResponse(file, headers={"Cache-Control": "no-cache"})
-    return FileResponse(shell, headers={"Cache-Control": "no-cache"})
+app = create_app()

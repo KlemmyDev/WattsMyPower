@@ -72,7 +72,7 @@ Run these from the `wattsmypower` folder:
 
 **Your data** lives in `data/wattsmypower.db`. With the default settings it grows to about 20 MB over the first 90 days, then by about 18 MB a year. To restore a backup: `docker compose stop`, copy the backup over `data/wattsmypower.db`, then `docker compose start`.
 
-> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Settings → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app.auth reset` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
+> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Settings → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
 
@@ -106,7 +106,7 @@ Settings → Tariffs takes either a **single rate** or **time of use**. Time of 
 - time-varying feed-in (the highest rate is used)
 - government feed-in schemes like the Queensland Solar Bonus Scheme, which only apply to customers already on them
 
-Plan lists are cached for 6 hours and plan details for a day. The retailer list is `app/retailers.json`, taken from the AER's "Energy Retailer Base URIs" PDF (January 2026) and limited to retailers that currently publish electricity plans. Refresh it when the AER updates that list.
+Plan lists are cached for 6 hours and plan details for a day. The retailer list is `app/features/plans/retailers.json`, taken from the AER's "Energy Retailer Base URIs" PDF (January 2026) and limited to retailers that currently publish electricity plans. Refresh it when the AER updates that list.
 
 Costs are worked out on the server for every 5-minute reading, so each kWh is priced at the rate in force at that moment. Each day's totals are then scaled to match the inverter's own daily import and export counters. The whole history is priced with the current tariff, so saving new rates reprices past days too. "Today so far" shows the day's bill so far: grid usage (per rate on time of use), plus the daily supply charge, minus the feed-in credit, giving a cost (or credit) for today. History's "Saved" uses the same per-day figures.
 
@@ -147,7 +147,7 @@ To check, run a known load (an EV charging, an oven) and see whether home use on
 
 The hybrid's own figures are stored too (`pv1_power`, `daily_pv1`, `total_pv1`, `load_hybrid`, `grid_hybrid`, `daily_export1`), alongside the second system's (`pv2_power`, `daily_pv2`, `total_pv2`, `pv2_temp`).
 
-These older dongles accept Modbus TCP on port 502 but only answer Sungrow's encrypted variant (a daily key from the dongle, then AES on every frame); `app/string_inverter.py` handles that. If the second inverter stops answering, the hybrid keeps polling normally: its last values are carried for a couple of minutes, then its output counts as zero (they power down after dark) while today's yield stands. System payback uses the hybrid's own lifetime solar counter, because a second system's lifetime counter can predate the hybrid's meter.
+These older dongles accept Modbus TCP on port 502 but only answer Sungrow's encrypted variant (a daily key from the dongle, then AES on every frame); `app/features/inverters/string.py` handles that. If the second inverter stops answering, the hybrid keeps polling normally: its last values are carried for a couple of minutes, then its output counts as zero (they power down after dark) while today's yield stands. System payback uses the hybrid's own lifetime solar counter, because a second system's lifetime counter can predate the hybrid's meter.
 
 ### How plan comparison works
 
@@ -219,11 +219,13 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 Backend:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-INVERTER_HOST=<WiNet-S IP> DB_PATH=./data/wattsmypower.db .venv/bin/uvicorn app.main:app --port 8080
+uv sync                      # Python 3.12 and the dependencies, from uv.lock (install uv: https://docs.astral.sh/uv/)
+INVERTER_HOST=<WiNet-S IP> DB_PATH=./data/wattsmypower.db uv run uvicorn app.main:app --port 8080
 ```
 
 `MOCK=1` swaps in a simulated inverter with 14 days of generated history, for working on the UI away from home. Point `DB_PATH` at a separate file when you use it so fake data never mixes with real data.
+
+Checks (`uv run …`): `pytest` (tests), `ruff check` and `ruff format` (lint and format), `mypy` (types).
 
 Dashboard (React, TanStack Start in SPA mode, Tailwind; see [web/README.md](web/README.md)):
 
@@ -240,21 +242,30 @@ Then open `http://localhost:5174`. `/api` is proxied to `API_TARGET`, and edits 
 ## Layout
 
 ```
-app/inverter.py   Modbus reader (block reads, per-register fallback, decoding)
-app/string_inverter.py  second (SG-D series) inverter over its encrypted Wi-Fi dongle
-app/poller.py     background poll loop, backoff, live fan-out
-app/db.py         SQLite schema, rollups, history/daily queries
-app/forecast.py   Open-Meteo forecast, self-calibration, battery projection
-app/insights.py   Insights page figures, including solar performance against past weather
-app/savings.py    Savings page: quarterly bill, payback, plan comparison
-app/tariffs.py    tariff model, validation, and time-of-use cost maths
-app/plans.py      Energy Made Easy / CDR plan search and plan-to-tariff conversion
-app/retailers.json  retailer names and AER API slugs
-app/settings.py   forecast location (and place name) and system cost, editable from the Settings page (stored in SQLite)
-app/geocode.py    place search and reverse lookup for the forecast location (OpenStreetMap Nominatim)
-app/auth.py       sign-in: the household account, sessions, and the /api guard
-app/main.py       FastAPI app and API, and serves the built dashboard
-install.sh        install or update with Docker (see above)
-start.sh          start it, and Docker if needed
-web/              dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
+app/
+  main.py               the FastAPI app (create_app), its middleware and routers
+  container.py          builds every service once from the config; routers get them via app/dependencies.py
+  __main__.py           maintenance commands (python -m app reset-account)
+  core/                 shared infrastructure
+    config.py           settings from environment variables
+    database.py         SQLite connections and migrations
+    schema.py           every table, and the versioned migrations that create and change them
+    http.py, cache.py   outbound JSON requests, and a TTL cache for slow lookups
+    spa.py              serves the built dashboard
+  features/<name>/      one module per capability, each with its router, service and SQL:
+    inverters/          Modbus readers: the hybrid (hybrid.py), the SG-D string inverter over its
+                        encrypted Wi-Fi dongle (string.py), a simulator (mock.py), and merging the two
+    live/               the poll loop, backoff, and the live event stream
+    readings/           samples and 5-minute rollups: history, daily totals, CSV export
+    tariffs/            tariff model and validation, the saved tariff, and time-of-use cost maths
+    settings/           forecast location (and place name) and system cost; OpenStreetMap place search
+    forecast/           Open-Meteo forecast, self-calibration, battery projection
+    insights/           Insights page figures, including solar performance against past weather
+    savings/            quarterly bill, payback, plan comparison
+    plans/              Energy Made Easy / CDR plan search and plan-to-tariff conversion (retailers.json)
+    auth/               sign-in: the household account, sessions, and the /api guard
+tests/                  pytest suite
+web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
+install.sh              install or update with Docker (see above)
+start.sh                start it, and Docker if needed
 ```
