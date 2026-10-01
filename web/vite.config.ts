@@ -25,6 +25,10 @@ export default defineConfig(({ mode }) => {
         "/healthz": { target, changeOrigin: true },
       },
     },
+    // `vite build` renders the app shell by starting a preview server and fetching "/" from it.
+    // Pin it to IPv4 loopback: in Linux containers "localhost" can bind to ::1 while the build
+    // connects to 127.0.0.1, which fails the Docker build with ECONNREFUSED.
+    preview: { host: "127.0.0.1" },
     resolve: { tsconfigPaths: true },
     plugins: [
       ...(allowWrites ? [] : [readOnlyApi(target)]),
