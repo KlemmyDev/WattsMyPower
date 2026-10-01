@@ -26,6 +26,7 @@ import socket
 import struct
 from contextlib import closing
 from datetime import date
+from typing import Any
 
 from Cryptodome.Cipher import AES
 
@@ -59,10 +60,10 @@ def _u16(v: int, scale: float = 1.0) -> float | None:
 class StringInverter:
     def __init__(self, host: str, port: int = 502, unit: int = 1, timeout: float = 6):
         self.host, self.port, self.unit, self.timeout = host, port, unit, timeout
-        self._aes = None
+        self._aes: Any = None  # an AES-ECB cipher, or None when the dongle doesn't encrypt
         self._key_day: date | None = None
         self._tid = 0
-        self.info: dict = {}
+        self.info: dict[str, Any] = {}
 
     def _connect(self) -> socket.socket:
         return socket.create_connection((self.host, self.port), timeout=self.timeout)
@@ -76,7 +77,9 @@ class StringInverter:
         if len(pkt) < 25:
             raise ConnectionError(f"{self.host} didn't send an encryption key")
         key = pkt[9:25]
-        self._aes = None if key in NO_KEY else AES.new(bytes(a ^ b for a, b in zip(key, FIXED_KEY)), AES.MODE_ECB)
+        self._aes = (
+            None if key in NO_KEY else AES.new(bytes(a ^ b for a, b in zip(key, FIXED_KEY, strict=False)), AES.MODE_ECB)
+        )
         self._key_day = date.today()
 
     def _read(self, s: socket.socket, address: int, count: int) -> list[int] | None:
@@ -93,7 +96,7 @@ class StringInverter:
             body = _recv(s, n + pad)
             if len(body) < n + pad:
                 raise ConnectionError(f"{self.host} sent a short reply")
-            raw = self._aes.decrypt(body)[:n]
+            raw: bytes = self._aes.decrypt(body)[:n]
         else:
             s.sendall(req)
             head = _recv(s, 7)
@@ -103,16 +106,17 @@ class StringInverter:
         if len(raw) < 9 or raw[7] & 0x80:
             return None
         nbytes = raw[8]
-        return list(struct.unpack(f">{nbytes // 2}H", raw[9:9 + nbytes]))
+        return list(struct.unpack(f">{nbytes // 2}H", raw[9 : 9 + nbytes]))
 
-    def read_snapshot(self) -> dict:
+    def read_snapshot(self) -> dict[str, float | None]:
         """Current output and counters. Raises ConnectionError if the dongle can't be reached."""
         self._handshake()
         try:
             with closing(self._connect()) as s:
-                a = self._read(s, 5000, 9)   # 5000 type, 5001 nominal, 5003 daily, 5004-05 total, 5006-07 hours, 5008 temp
-                b = self._read(s, 5011, 8)   # 5011-14 MPPT V/A, 5017-18 DC power
-                c = self._read(s, 5031, 2)   # 5031-32 AC power
+                # 5000 type, 5001 nominal, 5003 daily, 5004-05 total, 5006-07 hours, 5008 temp
+                a = self._read(s, 5000, 9)
+                b = self._read(s, 5011, 8)  # 5011-14 MPPT V/A, 5017-18 DC power
+                c = self._read(s, 5031, 2)  # 5031-32 AC power
         except (OSError, ConnectionError):
             self._key_day = None  # the dongle may have restarted with a new key
             raise

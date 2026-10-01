@@ -1,6 +1,6 @@
 """
 Reads a snapshot from a Sungrow SH-RS / SH-RT hybrid inverter over Modbus TCP
-(via the WiNet-S2 dongle), plus a mock inverter for local development.
+(via the WiNet-S2 dongle). The mock inverter for local development is in mock.py.
 
 Register addresses, scaling and quirks come from
 https://github.com/berndverhofstadt/sungrow-poc (MIT), which transcribed them
@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import inspect
 import logging
-import math
-import random
 import time
 from dataclasses import dataclass
+from typing import Any
 
 log = logging.getLogger(__name__)
+
+# One reading, keyed by sample column (see app.core.schema), in the sign conventions above.
+Snapshot = dict[str, Any]
 
 # Per Sungrow's doc: communication address = protocol address - 1.
 ADDRESS_OFFSET = -1
@@ -82,20 +84,45 @@ REGISTERS = [
 BLOCKS = [(5008, 29), (13000, 42)]
 
 RUNNING_STATE = {
-    0x0000: "Running", 0x0040: "Running", 0x0041: "Off-grid charge",
-    0x0200: "Update failed", 0x0400: "Maintain mode", 0x0800: "Forced mode",
-    0x1000: "Off-grid mode", 0x1111: "Uninitialized", 0x0010: "Initial standby",
-    0x0002: "Shutdown", 0x0008: "Standby", 0x0004: "Emergency stop",
-    0x0020: "Startup", 0x2000: "Open loop", 0x4000: "External EMS mode",
-    0x4001: "Emergency charging", 0x0100: "Fault", 0x0001: "Stop",
-    0x8100: "Derating", 0x8200: "Dispatch", 0x9100: "Warn run",
+    0x0000: "Running",
+    0x0040: "Running",
+    0x0041: "Off-grid charge",
+    0x0200: "Update failed",
+    0x0400: "Maintain mode",
+    0x0800: "Forced mode",
+    0x1000: "Off-grid mode",
+    0x1111: "Uninitialized",
+    0x0010: "Initial standby",
+    0x0002: "Shutdown",
+    0x0008: "Standby",
+    0x0004: "Emergency stop",
+    0x0020: "Startup",
+    0x2000: "Open loop",
+    0x4000: "External EMS mode",
+    0x4001: "Emergency charging",
+    0x0100: "Fault",
+    0x0001: "Stop",
+    0x8100: "Derating",
+    0x8200: "Dispatch",
+    0x9100: "Warn run",
 }
 
 DEVICE_TYPES = {
-    0x0D17: "SH3.0RS", 0x0D0D: "SH3.6RS", 0x0D18: "SH4.0RS", 0x0D0F: "SH5.0RS",
-    0x0D10: "SH6.0RS", 0x0D1A: "SH8.0RS", 0x0D1B: "SH10RS",
-    0x0E00: "SH5.0RT", 0x0E01: "SH6.0RT", 0x0E02: "SH8.0RT", 0x0E03: "SH10RT",
-    0x0E10: "SH5.0RT-20", 0x0E11: "SH6.0RT-20", 0x0E12: "SH8.0RT-20", 0x0E13: "SH10RT-20",
+    0x0D17: "SH3.0RS",
+    0x0D0D: "SH3.6RS",
+    0x0D18: "SH4.0RS",
+    0x0D0F: "SH5.0RS",
+    0x0D10: "SH6.0RS",
+    0x0D1A: "SH8.0RS",
+    0x0D1B: "SH10RS",
+    0x0E00: "SH5.0RT",
+    0x0E01: "SH6.0RT",
+    0x0E02: "SH8.0RT",
+    0x0E03: "SH10RT",
+    0x0E10: "SH5.0RT-20",
+    0x0E11: "SH6.0RT-20",
+    0x0E12: "SH8.0RT-20",
+    0x0E13: "SH10RT-20",
 }
 
 FLOW_BATTERY_CHARGING = 1 << 1
@@ -118,9 +145,9 @@ def _decode(reg: Reg, words: list[int]) -> float | None:
     return round(raw * reg.scale, 3)
 
 
-def derive(values: dict) -> dict:
+def derive(values: dict[str, float | None]) -> Snapshot:
     """Turn raw register values into the snapshot shape stored in the DB."""
-    snap = {k: v for k, v in values.items() if k not in ("battery_power_raw", "export_power")}
+    snap: Snapshot = {k: v for k, v in values.items() if k not in ("battery_power_raw", "export_power")}
 
     flow = int(values.get("power_flow") or 0)
     bp = values.get("battery_power_raw")
@@ -145,7 +172,7 @@ class SungrowInverter:
         self.host, self.port, self.unit = host, port, unit
         self._client_cls = ModbusTcpClient
         self._bad_blocks: set[int] = set()
-        self.info: dict = {}
+        self.info: dict[str, Any] = {}
         self._info_at = 0.0
         # pymodbus renamed the unit-id kwarg across 3.x versions.
         params = inspect.signature(ModbusTcpClient.read_input_registers).parameters
@@ -159,14 +186,14 @@ class SungrowInverter:
     def battery_kwh(self) -> float | None:
         return self.info.get("battery_kwh")
 
-    def _read(self, client, address: int, count: int, holding: bool = False) -> list[int] | None:
+    def _read(self, client: Any, address: int, count: int, holding: bool = False) -> list[int] | None:
         fn = client.read_holding_registers if holding else client.read_input_registers
         rr = fn(address + ADDRESS_OFFSET, count=count, **{self._unit_kw: self.unit})
         if rr.isError():
             return None
         return list(rr.registers)
 
-    def _read_info(self, client) -> None:
+    def _read_info(self, client: Any) -> None:
         """System details that rarely change. Read on first connect, then every 6 hours."""
         info = dict(self.info)
         w = self._read(client, 4990, 10)  # serial number, 10 registers of ASCII
@@ -186,10 +213,12 @@ class SungrowInverter:
         self.info = info
         self._info_at = time.time()
 
-    def read_snapshot(self) -> dict:
+    def read_snapshot(self) -> Snapshot:
         """One connect -> read -> disconnect cycle. Raises ConnectionError if unreachable."""
         if not self.host:
-            raise ConnectionError("No inverter address set. Set INVERTER_HOST in .env, or run: bash install.sh --configure")
+            raise ConnectionError(
+                "No inverter address set. Set INVERTER_HOST in .env, or run: bash install.sh --configure"
+            )
         client = self._client_cls(self.host, port=self.port, timeout=5, retries=1)
         if not client.connect():
             raise ConnectionError(f"Could not connect to {self.host}:{self.port}")
@@ -207,7 +236,7 @@ class SungrowInverter:
                 for r in regs:
                     if words is not None:
                         off = r.address - start
-                        values[r.key] = _decode(r, words[off:off + r.count])
+                        values[r.key] = _decode(r, words[off : off + r.count])
                     else:
                         w = self._read(client, r.address, r.count)
                         values[r.key] = _decode(r, w) if w else None
@@ -217,74 +246,3 @@ class SungrowInverter:
             return derive(values)
         finally:
             client.close()
-
-
-class MockInverter:
-    """Plausible fake data: a sunny-ish day, an evening load peak, a 10 kWh battery."""
-
-    CAPACITY_WH = 16_000
-    model = "Mock SH5.0RS"
-    battery_kwh = 16.0
-    info = {"model": model, "serial": "MOCK0000001", "nominal_kw": 5.0, "phases": "Single phase",
-            "battery_kwh": battery_kwh, "reserve": 5.0}
-
-    def __init__(self):
-        self.soc = 55.0
-        self.day = None
-        self.totals = {"pv": 8_000.0, "import": 3_000.0, "export": 4_000.0, "charge": 2_000.0, "discharge": 1_800.0}
-        self.daily = dict.fromkeys(self.totals, 0.0)
-        self.last_ts = None
-        self.cloud = 1.0
-
-    def simulate(self, ts: float) -> dict:
-        lt = time.localtime(ts)
-        if lt.tm_yday != self.day:
-            self.day = lt.tm_yday
-            self.daily = dict.fromkeys(self.totals, 0.0)
-        dt_h = 0 if self.last_ts is None else min(ts - self.last_ts, 600) / 3600
-        self.last_ts = ts
-        hour = lt.tm_hour + lt.tm_min / 60 + lt.tm_sec / 3600
-
-        self.cloud = min(1.0, max(0.25, self.cloud + random.uniform(-0.02, 0.02)))
-        sun = max(0.0, math.sin(math.pi * (hour - 6) / 13))
-        pv = 5200 * sun ** 1.4 * self.cloud
-        load = 350 + 150 * random.random() + 1800 * math.exp(-((hour - 18.5) ** 2) / 3) + 600 * math.exp(-((hour - 7.5) ** 2) / 1)
-        if random.random() < 0.003:
-            load += 2000  # kettle
-
-        surplus = pv - load
-        batt = 0.0  # + discharge
-        if surplus > 0 and self.soc < 100:
-            batt = -min(surplus, 5000)
-        elif surplus < 0 and self.soc > 10:
-            batt = min(-surplus, 5000)
-        self.soc = min(100.0, max(0.0, self.soc - batt * dt_h / self.CAPACITY_WH * 100))
-        grid = load - pv - batt
-
-        for k, w in (("pv", pv), ("import", max(grid, 0)), ("export", max(-grid, 0)),
-                     ("charge", max(-batt, 0)), ("discharge", max(batt, 0))):
-            self.daily[k] += w * dt_h / 1000
-            self.totals[k] += w * dt_h / 1000
-
-        flow = (1 if pv > 0 else 0) | (FLOW_BATTERY_CHARGING if batt < 0 else 0) | \
-            (FLOW_BATTERY_DISCHARGING if batt > 0 else 0) | 8 | (16 if grid < 0 else 0) | (32 if grid > 0 else 0)
-        r = lambda v, n=1: round(v, n)
-        return {
-            "pv_power": r(pv, 0), "load_power": r(load, 0), "grid_power": r(grid, 0), "battery_power": r(batt, 0),
-            "battery_soc": r(self.soc), "battery_soh": 99.0, "battery_temp": r(24 + 4 * sun),
-            "battery_voltage": r(360 + self.soc * 0.4), "battery_current": r(abs(batt) / 380),
-            "inverter_temp": r(30 + 15 * sun), "grid_freq": r(50 + random.uniform(-0.05, 0.05), 2),
-            "mppt1_v": r(320 * min(1, sun * 4)), "mppt1_a": r(pv * 0.55 / 320 if pv else 0),
-            "mppt2_v": r(310 * min(1, sun * 4)), "mppt2_a": r(pv * 0.45 / 310 if pv else 0),
-            "running_state": 0, "power_flow": flow,
-            "daily_pv": r(self.daily["pv"]), "daily_import": r(self.daily["import"]),
-            "daily_export": r(self.daily["export"]), "daily_charge": r(self.daily["charge"]),
-            "daily_discharge": r(self.daily["discharge"]),
-            "daily_direct": r(max(0.0, self.daily["pv"] - self.daily["export"] - self.daily["charge"])),
-            "total_pv": r(self.totals["pv"]), "total_import": r(self.totals["import"]),
-            "total_export": r(self.totals["export"]), "total_charge": r(self.totals["charge"]),
-            "total_discharge": r(self.totals["discharge"]),
-        }
-
-    def read_snapshot(self) -> dict:
-        return self.simulate(time.time())
