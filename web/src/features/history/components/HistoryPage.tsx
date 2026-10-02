@@ -133,50 +133,33 @@ export function HistoryPage() {
     <>
       <PageHeader title="History" sub="Solar generation, home use, and grid activity over time" />
       <PageBody className="gap-10 max-md:gap-8">
-        <div className="flex flex-wrap items-center justify-between gap-5 max-md:gap-4">
-          <div className="flex max-w-full min-w-0 flex-col gap-2.5">
-            <div role="tablist" aria-label="Period" className={PILLS}>
+        <div className="flex max-w-full min-w-0 flex-col gap-2.5">
+          <div role="tablist" aria-label="Period" className={PILLS}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={year === undefined}
+              onClick={() => setYear(undefined)}
+              className={pill(year === undefined)}
+            >
+              Last 12 months
+            </button>
+            {years.map((y) => (
               <button
+                key={y}
                 type="button"
                 role="tab"
-                aria-selected={year === undefined}
-                onClick={() => setYear(undefined)}
-                className={pill(year === undefined)}
+                aria-selected={year === y}
+                onClick={() => setYear(y)}
+                className={pill(year === y)}
               >
-                Last 12 months
-              </button>
-              {years.map((y) => (
-                <button
-                  key={y}
-                  type="button"
-                  role="tab"
-                  aria-selected={year === y}
-                  onClick={() => setYear(y)}
-                  className={pill(year === y)}
-                >
-                  {y}
-                </button>
-              ))}
-            </div>
-            <span className="pl-1 font-mono text-xs tracking-[1.5px] text-[#7a7a7a] uppercase">
-              {dmy(start)} to {dmy(last)}
-            </span>
-          </div>
-          <div role="tablist" aria-label="Colour days by" className={PILLS}>
-            {METRIC_KEYS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={k === metric}
-                onClick={() => setMetric(k)}
-                className={pill(k === metric)}
-              >
-                <i className="size-[7px] rounded-full" style={{ background: METRICS[k].color }} />
-                {METRICS[k].label}
+                {y}
               </button>
             ))}
           </div>
+          <span className="pl-1 font-mono text-xs tracking-[1.5px] text-[#7a7a7a] uppercase">
+            {dmy(start)} to {dmy(last)}
+          </span>
         </div>
 
         {loaded && (startsLate || !totals.days) && (
@@ -228,6 +211,22 @@ export function HistoryPage() {
         )}
 
         <div className="flex flex-col gap-3">
+          {/* What the heatmap colours days by, right above it. */}
+          <div role="tablist" aria-label="Colour days by" className={cn(PILLS, "mb-2 self-start")}>
+            {METRIC_KEYS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={k === metric}
+                onClick={() => setMetric(k)}
+                className={pill(k === metric)}
+              >
+                <i className="size-[7px] rounded-full" style={{ background: METRICS[k].color }} />
+                {METRICS[k].label}
+              </button>
+            ))}
+          </div>
           <YearHeatmap cells={cells} lead={lead} selected={selected} onSelect={select} />
           <MonthCalendar
             cells={cells}
