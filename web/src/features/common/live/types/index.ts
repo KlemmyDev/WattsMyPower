@@ -34,6 +34,7 @@ export type Snapshot = {
 export type SecondInverter = {
   host: string;
   behind_meter: boolean;
+  brand?: string | null;
   model?: string | null;
   nominal_kw?: number | null;
   last_success: number | null;
@@ -41,6 +42,7 @@ export type SecondInverter = {
 };
 
 export type SystemInfo = {
+  brand: string | null;
   model: string | null;
   serial: string | null;
   nominal_kw: number | null;

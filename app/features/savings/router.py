@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api")
 @router.get("/savings")
 async def get_savings(svc: ServicesDep):
     """This quarter's bill (so far and estimated) and system payback."""
-    return await asyncio.to_thread(svc.savings.build, svc.poller.latest)
+    return await asyncio.to_thread(svc.savings.build, svc.live.latest)
 
 
 @router.get("/plans/compare")

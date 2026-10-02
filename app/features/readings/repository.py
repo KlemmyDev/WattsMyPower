@@ -44,7 +44,7 @@ class ReadingsRepository:
         self.poll_interval = poll_interval
         self.raw_retention_days = raw_retention_days
 
-    # ------------------------------------------------------------------ writing (the poller's connection)
+    # ------------------------------------------------------------------ writing (the ingest loop's connection)
     def heal_rollups(self, conn: sqlite3.Connection) -> None:
         """After a crash or restart, rebuild rollups from the last rollup bucket onward."""
         last = conn.execute("SELECT MAX(ts) FROM samples_5m").fetchone()[0] or 0

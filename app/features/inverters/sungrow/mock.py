@@ -1,4 +1,4 @@
-"""A fake hybrid inverter for local development and demos (MOCK=1)."""
+"""A fake Sungrow SH5.0RS hybrid for local development and demos (MOCK=1)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import random
 import time
 from typing import Any
 
-from app.features.inverters.hybrid import FLOW_BATTERY_CHARGING, FLOW_BATTERY_DISCHARGING, Snapshot
+from app.features.inverters.sungrow.sh_rs import FLOW_BATTERY_CHARGING, FLOW_BATTERY_DISCHARGING
+from app.features.inverters.types import Snapshot
 
 
 class MockInverter:
@@ -19,6 +20,7 @@ class MockInverter:
 
     def __init__(self) -> None:
         self.info: dict[str, Any] = {
+            "brand": "Sungrow",
             "model": self.model,
             "serial": "MOCK0000001",
             "nominal_kw": 5.0,

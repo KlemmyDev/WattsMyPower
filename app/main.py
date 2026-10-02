@@ -41,7 +41,7 @@ ROUTERS = [
 
 
 def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboard: bool = True) -> FastAPI:
-    """The app and its services. `poll=False` skips the inverter poller (for tests)."""
+    """The app and its services. `poll=False` doesn't start following the collector (for tests)."""
     config = config or Config.from_env()
     services = build_services(config)
 
@@ -51,13 +51,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
         await asyncio.to_thread(services.settings.load)
         await asyncio.to_thread(services.tariffs.load)
         if poll:
-            await services.poller.start()
+            await services.source.start()
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
-            await services.poller.stop()
+            await services.source.stop()
 
     app = FastAPI(title="WattsMyPower", lifespan=lifespan)
     app.state.services = services
