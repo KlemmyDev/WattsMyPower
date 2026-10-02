@@ -134,7 +134,7 @@ export function HistoryPage() {
       <PageHeader title="History" sub="Solar generation, home use, and grid activity over time" />
       <PageBody className="gap-10 max-md:gap-8">
         <div className="flex max-w-full min-w-0 flex-col gap-2.5">
-          <div role="tablist" aria-label="Period" className={PILLS}>
+          <div role="tablist" aria-label="Period" className={cn(PILLS, "self-start")}>
             <button
               type="button"
               role="tab"
