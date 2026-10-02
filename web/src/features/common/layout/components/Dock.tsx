@@ -26,14 +26,14 @@ export function Dock() {
   const verb = gridVerb(g);
   const batVerb = st === "charge" ? "Charging" : st === "discharge" ? "Discharging" : "Idle";
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-15 flex justify-center px-4 max-sm:bottom-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-8 z-15 flex justify-center px-4 max-sm:bottom-5">
       <Link
         to="/"
         data-shown={shown}
         inert={!shown}
         aria-hidden={!shown}
         aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}. Open overview.`}
-        className="dock group flex max-w-full items-center gap-2.5 rounded-full border border-white/8 bg-[#141416]/75 py-1.5 pr-3 pl-1.5 whitespace-nowrap text-white no-underline shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_2px_8px_rgb(0_0_0/0.35),0_18px_40px_-18px_rgb(0_0_0/0.9)] backdrop-blur-xl backdrop-saturate-150 hover:border-white/15 hover:bg-[#18181b]/85 hover:text-white max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
+        className="dock group flex max-w-full items-center gap-3 rounded-full border border-white/8 bg-[#141416]/75 py-2 pr-4 pl-2 whitespace-nowrap text-white no-underline shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_2px_8px_rgb(0_0_0/0.35),0_18px_40px_-18px_rgb(0_0_0/0.9)] backdrop-blur-xl backdrop-saturate-150 hover:border-white/15 hover:bg-[#18181b]/85 hover:text-white max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
       >
         <DockItem icon="sun" color="#ffb547" k="Solar" v={kW(pv)} />
         <Conn on={(pv || 0) > ON} color="#ffb547" />
@@ -43,11 +43,11 @@ export function Dock() {
         <span aria-hidden className="h-5 w-px flex-none bg-white/10 max-sm:h-4" />
         <span className="flex items-center gap-2 max-xs:gap-[5px]">
           <span
-            className="soc-ring flex size-7 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
+            className="soc-ring flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
             style={{ "--deg": `${(Math.max(0, Math.min(100, soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties}
           >
-            <span className="flex size-[23px] items-center justify-center rounded-full bg-[#17171a] text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
-              <Icon name="battery" size={13} className="max-xs:size-3" />
+            <span className="flex size-[27px] items-center justify-center rounded-full bg-[#17171a] text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
+              <Icon name="battery" size={14} className="max-sm:size-[13px] max-xs:size-3" />
             </span>
           </span>
           <DockText
@@ -58,7 +58,7 @@ export function Dock() {
         </span>
         <Icon
           name="chevR"
-          size={14}
+          size={16}
           className="ml-0.5 flex-none text-white/35 transition-[color,transform] duration-200 group-hover:translate-x-0.5 group-hover:text-white/70 max-sm:hidden"
         />
       </Link>
@@ -71,10 +71,10 @@ function DockItem({ icon, color, k, v }: { icon: IconName; color: string; k: str
   return (
     <span className="flex items-center gap-2 max-xs:gap-[5px]">
       <span
-        className="flex size-7 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
+        className="flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
         style={{ background: `color-mix(in oklch, ${color} 16%, transparent)`, color }}
       >
-        <Icon name={icon} size={14} className="max-xs:size-3" />
+        <Icon name={icon} size={15} className="max-sm:size-3.5 max-xs:size-3" />
       </span>
       <DockText k={k} v={v} />
     </span>
@@ -84,9 +84,9 @@ function DockItem({ icon, color, k, v }: { icon: IconName; color: string; k: str
 function DockText({ k, v, color }: { k: string; v: string; color?: string }) {
   return (
     <span className="flex flex-col gap-[3px] leading-none">
-      <span className="text-[10px] font-medium text-white/45 max-sm:hidden">{k}</span>
+      <span className="text-[11px] font-medium text-white/45 max-sm:hidden">{k}</span>
       <span
-        className="text-[13.5px] font-semibold tracking-[-0.2px] tabular-nums max-sm:text-xs max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
+        className="text-[15px] font-semibold tracking-[-0.2px] tabular-nums max-sm:text-xs max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
         style={{ color }}
       >
         {v}
@@ -100,7 +100,7 @@ function Conn({ on, rev, color }: { on: boolean; rev?: boolean; color: string })
   return (
     <span
       aria-hidden
-      className="dock-conn w-6 max-sm:w-3.5 max-xs:w-2.5"
+      className="dock-conn w-7 max-sm:w-3.5 max-xs:w-2.5"
       data-on={on}
       data-rev={!!rev}
       style={{ "--c": color } as React.CSSProperties}
