@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from app.core.database import Database
-from app.core.schema import ROLLUP, ROLLUP_SQL, SAMPLE_COLUMNS
+from app.core.schema import MAX_W, ROLLUP, ROLLUP_SQL, SAMPLE_COLUMNS
 
 Snapshot = dict[str, Any]
 
@@ -26,6 +26,7 @@ DAILY_COLS = [
     "daily_direct",
     "daily_pv2",
 ]
+KWH_PER_W_ROLLUP = ROLLUP / 3.6e6  # one rollup of 1 W, in kWh
 DEFAULT_FIELDS = ["pv_power", "load_power", "grid_power", "battery_power", "battery_soc"]
 
 _INSERT = f"INSERT OR REPLACE INTO samples (ts, {', '.join(COLS)}) VALUES (?{', ?' * len(COLS)})"
@@ -121,7 +122,10 @@ class ReadingsRepository:
         return {"bucket": bucket, "source": table, "series": out}
 
     def daily(self, start: int, end: int) -> list[dict[str, Any]]:
-        """Per-local-day energy totals (kWh) from the inverter's daily counters."""
+        """
+        Per-local-day energy totals (kWh) from the inverter's daily counters, except grid import
+        and export, which come from the meter (see `metered`).
+        """
         # Skip the first 10 minutes after midnight: if the inverter's clock lags
         # ours, yesterday's un-reset counter would otherwise count as today's max.
         select = ", ".join(f"MAX({c})" for c in DAILY_COLS)
@@ -132,13 +136,85 @@ class ReadingsRepository:
         )
         with self.db.reading() as conn:
             rows = conn.execute(sql, (start, end)).fetchall()
-        return [
-            {
-                "date": r[0],
-                **{c: (round(v, 2) if v is not None else None) for c, v in zip(DAILY_COLS, r[1:], strict=True)},
-            }
-            for r in rows
-        ]
+        grid = self.metered(start, end)
+        out = []
+        for r in rows:
+            day = {c: (round(v, 2) if v is not None else None) for c, v in zip(DAILY_COLS, r[1:], strict=True)}
+            imp, exp = grid.get(r[0], (None, None))
+            # Days with nothing to go on keep the inverter's own counters.
+            day["daily_import"] = imp if imp is not None else day["daily_import"]
+            day["daily_export"] = exp if exp is not None else day["daily_export"]
+            out.append({"date": r[0], **day})
+        return out
+
+    def metered(self, start: int, end: int) -> dict[str, tuple[float | None, float | None]]:
+        """
+        Grid import and export (kWh) per local day, as the meter counted them.
+
+        Not from the inverter's daily import/export counters: some units (an SH5.0RS here) leave
+        those at 0 all day. Instead, how far the meter's lifetime counters moved in each 5-minute
+        rollup, which also counts through gaps in the readings. Where a rollup has no usable
+        counter reading (before they were recorded, a reset, a garbled jump), its average grid
+        power stands in. Export counters only count from when total_pv_export was recorded too:
+        before that, total_export held the hybrid's own panels' export, not the meter's.
+        A day whose counter didn't move while grid power says it should have uses grid power.
+        """
+        cols = "ts, total_import, total_export, total_pv_export, grid_power"
+        with self.db.reading() as conn:
+            prev = conn.execute(f"SELECT {cols} FROM samples_5m WHERE ts < ? ORDER BY ts DESC LIMIT 1", (start,))
+            rows = [
+                *prev.fetchall(),
+                *conn.execute(f"SELECT {cols} FROM samples_5m WHERE ts >= ? AND ts < ? ORDER BY ts", (start, end)),
+            ]
+
+        # Per day and direction: [kWh from counters, grid kWh where counters were used, grid kWh
+        # otherwise, rollups with anything to go on].
+        days: dict[str, list[list[float]]] = {}
+        for p, (ts, imp, exp, pv_exp, grid) in zip([None, *rows], rows, strict=False):
+            if ts < start:
+                continue
+            date = time.strftime("%Y-%m-%d", time.localtime(ts))
+            d = days.setdefault(date, [[0.0] * 4, [0.0] * 4])
+            g = grid or 0.0
+            by_power = (max(g, 0.0) * KWH_PER_W_ROLLUP, max(-g, 0.0) * KWH_PER_W_ROLLUP)
+            cap = MAX_W / 1000 * (ts - p[0]) / 3600 if p else 0.0  # the most the grid could carry since
+            counters = (
+                (p[1], imp) if p else (None, None),
+                (p[2], exp) if p and p[3] is not None and pv_exp is not None else (None, None),
+            )
+            for i, (before, after) in enumerate(counters):
+                step = after - before if before is not None and after is not None else None
+                if step is not None and 0 <= step <= cap:
+                    d[i][0] += step
+                    d[i][1] += by_power[i]
+                    d[i][3] += 1
+                elif grid is not None:
+                    d[i][2] += by_power[i]
+                    d[i][3] += 1
+
+        def total(c: list[float]) -> float | None:
+            from_counter, power_there, power_elsewhere, known = c
+            if not known:
+                return None
+            if power_there > 1 and from_counter < power_there / 2:  # the counter isn't counting
+                from_counter = power_there
+            return round(from_counter + power_elsewhere, 2)
+
+        return {date: (total(i), total(e)) for date, (i, e) in days.items()}
+
+    def with_metered_today(self, snap: Snapshot) -> Snapshot:
+        """A live snapshot with today's grid import/export as `metered` counts them."""
+        ts = snap.get("ts")
+        if ts is None:
+            return snap
+        lt = time.localtime(ts)
+        midnight = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
+        imp, exp = self.metered(midnight, ts + 1).get(time.strftime("%Y-%m-%d", lt), (None, None))
+        return {
+            **snap,
+            "daily_import": imp if imp is not None else snap.get("daily_import"),
+            "daily_export": exp if exp is not None else snap.get("daily_export"),
+        }
 
     def rollups(self, start: int, end: int, columns: list[str], not_null: str | None = None) -> list[tuple[Any, ...]]:
         """(ts, *columns) for each 5-minute rollup in the range, oldest first."""
