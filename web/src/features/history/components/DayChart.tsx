@@ -1,8 +1,9 @@
 import { useMemo, useState, type PointerEvent } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
+import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
 import { hourLabel } from "~/features/common/formatting/utils/date";
-import { kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
 import type { Hour } from "~/features/history/utils/day";
 
@@ -68,37 +69,30 @@ const STROKE = {
   strokeLinecap: "round",
 } as const;
 
-const kwh1 = (v: number | null) => (v == null ? "—" : kWh(Math.abs(v)));
-
-/** One hour in words: solar, home use, battery at the end of it, and the grid either way. */
-function Readout({ hour, at, peak }: { hour: Hour; at: number; peak: boolean }) {
+/** The hour under the pointer, in the same tooltip as the Overview's Next 24 hours card. */
+function HourTooltip({ hour, at, width }: { hour: Hour; at: number; width: number }) {
   const g = hour.grid ?? 0;
-  const vals: [string, string, string][] = [
-    ["Solar", kwh1(hour.pv), SOLAR],
-    ["Home use", kwh1(hour.load), HOME],
-    ["Battery", pct(hour.soc), BATTERY],
-    [g > 0.05 ? "From grid" : g < -0.05 ? "Sent to grid" : "Grid", kwh1(hour.grid), g < -0.05 ? TO_GRID : FROM_GRID],
-  ];
+  const left = ((at + 0.5) / 24) * 100;
   return (
-    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 rounded-xl bg-[#1b1b1d] px-4 py-3 text-[13px] tabular-nums max-sm:gap-x-4">
-      <span className="font-mono text-xs text-ink">
+    <ChartTooltip left={left} flip={left > 60} width={width}>
+      <span className="font-medium text-ink">
         {hourLabel(at)} to {hourLabel(at + 1)}
-        {peak && " · peak solar"}
       </span>
-      {vals.map(([label, value, color]) => (
-        <span key={label} className="flex items-center gap-1.5 text-ink-dim">
-          <i className="size-1.5 rounded-full" style={{ background: color }} />
-          {label}
-          <span className="font-medium text-ink">{value}</span>
-        </span>
-      ))}
-    </div>
+      {/* Each hour's energy is its average power, so kWh in an hour reads as kW. */}
+      <TooltipRow label="Solar" value={hour.pv == null ? DASH : kW(hour.pv * 1000)} color={SOLAR} />
+      <TooltipRow label="Home use" value={hour.load == null ? DASH : kW(hour.load * 1000)} color={HOME} />
+      <TooltipRow label={`Battery at ${hourLabel(at + 1)}`} value={pct(hour.soc)} color={BATTERY} />
+      <TooltipRow
+        label={g > 0.05 ? "From the grid" : g < -0.05 ? "To the grid" : "Grid"}
+        value={Math.abs(g) > 0.05 ? kWh(Math.abs(g)) : "Idle"}
+      />
+    </ChartTooltip>
   );
 }
 
 /**
  * One day hour by hour: solar, home use and battery level from the 5-minute readings, the grid
- * as bars (from it above the line, to it below), and the hour under the pointer in words.
+ * as bars (from it above the line, to it below), and the hour under the pointer in a tooltip.
  */
 export function DayChart({
   series,
@@ -111,13 +105,12 @@ export function DayChart({
 }) {
   const chart = useMemo(() => series && plot(series), [series]);
   const [hover, setHover] = useState<number | null>(null);
-  const pvs = hours.map((h) => h.pv ?? -1);
-  const peakHour = Math.max(...pvs) > 0 ? pvs.indexOf(Math.max(...pvs)) : null;
-  const at = hover ?? peakHour;
+  const [width, setWidth] = useState(0);
   const gMax = Math.max(0.5, ...hours.map((h) => Math.abs(h.grid ?? 0))) * 1.1;
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
+    setWidth(r.width);
     setHover(Math.max(0, Math.min(23, Math.floor(((e.clientX - r.left) / r.width) * 24))));
   };
 
@@ -144,7 +137,6 @@ export function DayChart({
           </span>
         ))}
       </div>
-      {at != null && <Readout hour={hours[at]} at={at} peak={hover == null} />}
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
         onPointerMove={onPoint}
@@ -188,10 +180,6 @@ export function DayChart({
             </div>
           )}
         </div>
-        <div className="flex justify-between gap-3 text-[11px] text-ink-faint">
-          <span>Grid</span>
-          <span className="text-right">Above the line: from the grid · below: sent to the grid</span>
-        </div>
         <div className="relative h-[72px]">
           <div className="absolute inset-x-0 top-1/2 border-t border-white/12" />
           <div className="absolute inset-0 flex gap-0.5">
@@ -215,11 +203,11 @@ export function DayChart({
             })}
           </div>
         </div>
-        {at != null && (
-          <div
-            className="pointer-events-none absolute inset-y-0 w-px bg-white/35"
-            style={{ left: `${(((at + 0.5) / 24) * 100).toFixed(2)}%` }}
-          />
+        {hover != null && (
+          <>
+            <HoverLine left={((hover + 0.5) / 24) * 100} />
+            <HourTooltip hour={hours[hover]} at={hover} width={width} />
+          </>
         )}
       </div>
       <div className="relative h-3.5">

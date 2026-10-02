@@ -145,7 +145,11 @@ export function MonthCalendar({
   const idx = steppedIdx >= 0 ? steppedIdx : selIdx;
   const month = months[idx];
   const go = (k: number) => setStepped({ key: months[k].key, from: selected });
-  const lead = (new Date(month.cells[0].ts * 1000).getDay() + 6) % 7;
+  // The whole month, even where the view starts partway through it or stops at today.
+  const first = new Date(month.cells[0].ts * 1000);
+  const lead = (new Date(first.getFullYear(), first.getMonth(), 1).getDay() + 6) % 7;
+  const byDate = new Map(month.cells.map((c) => [new Date(c.ts * 1000).getDate(), c]));
+  const length = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
 
   return (
     <section aria-label="Month calendar" className="hidden flex-col gap-4 max-md:flex">
@@ -182,10 +186,16 @@ export function MonthCalendar({
         {Array.from({ length: lead }, (_, i) => (
           <span key={`pad${i}`} />
         ))}
-        {month.cells.map((c) => {
-          const num = new Date(c.ts * 1000).getDate();
+        {Array.from({ length }, (_, k) => k + 1).map((num) => {
+          const c = byDate.get(num);
           const base =
             "flex aspect-square min-h-10 items-center justify-center rounded-lg border-0 p-0 text-[13px] font-medium tabular-nums";
+          if (!c)
+            return (
+              <span key={`out${num}`} className={cn(base, "text-white/15")}>
+                {num}
+              </span>
+            );
           if (!c.label)
             return (
               <span key={c.i} className={cn(base, "text-grey-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")}>

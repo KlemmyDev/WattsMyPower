@@ -249,7 +249,7 @@ export function HistoryPage() {
           </div>
         </div>
 
-        <StandoutDays standouts={standouts} selected={selected} onSelect={selectAndShow} />
+        <StandoutDays standouts={standouts} onSelect={selectAndShow} />
 
         <DayPanel
           ref={dayRef}

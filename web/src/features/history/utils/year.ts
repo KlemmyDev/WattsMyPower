@@ -45,8 +45,12 @@ export function buildDays(start: number, end: number, today: number, rows?: Dail
     const charge = r.daily_charge || 0;
     const home = Math.max(0, gen + imp - exp + (r.daily_discharge || 0) - charge);
     const covered = Math.max(0, home - imp);
-    // Solar used as it was made; the rest of what the grid didn't supply came from the battery.
-    const direct = Math.min(covered, Math.max(0, r.daily_direct ?? gen - exp - charge));
+    // What the grid didn't supply came from the battery (its daily discharge) or straight from the
+    // panels. Not the inverter's own direct-use counter: the SH5.0RS leaves that at 0 all day.
+    const battery =
+      r.daily_discharge != null
+        ? Math.min(covered, r.daily_discharge)
+        : Math.max(0, covered - Math.max(0, gen - exp - charge));
     const ss = home > 0 ? Math.max(0, Math.min(1, covered / home)) : 0;
     const c = cost.get(key);
     return {
@@ -58,8 +62,8 @@ export function buildDays(start: number, end: number, today: number, rows?: Dail
       imp,
       exp,
       home,
-      direct,
-      battery: covered - direct,
+      direct: covered - battery,
+      battery,
       ss,
       saved: c?.saved || 0,
       credit: c?.feed_in_credit || 0,
