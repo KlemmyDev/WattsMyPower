@@ -8,7 +8,7 @@ import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useNow } from "~/features/common/time/hooks";
 import { cn } from "~/features/common/ui/utils";
 import { dayMonth } from "~/features/common/formatting/utils/date";
-import { dollars, intAU } from "~/features/common/formatting/utils/number";
+import { dollars, energyParts, kWh } from "~/features/common/formatting/utils/number";
 import { addDays, fromDateKey, midnight } from "~/features/common/time/utils";
 import { DayPanel } from "~/features/history/components/DayPanel";
 import { MonthlySources } from "~/features/history/components/MonthlySources";
@@ -37,6 +37,12 @@ const pill = (on: boolean) =>
     "flex flex-none items-center gap-2 rounded-full border-0 px-4 py-[9px] text-sm font-medium whitespace-nowrap transition-colors duration-200 ease-[ease] max-sm:px-3.5",
     on ? "bg-ink text-ink-inverse" : "bg-transparent text-[#a0a0a0] hover:text-ink",
   );
+
+/** A total's figure and unit: "1,013" kWh, or "395" Wh under one. */
+const energy = (v: number) => {
+  const [value, unit] = energyParts(v, true);
+  return { value, unit };
+};
 
 /** "2 Oct 2025". */
 const dmy = (ts: number) => `${dayMonth(ts)} ${yearOf(ts)}`;
@@ -186,15 +192,13 @@ export function HistoryPage() {
             <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-y-2 border-t border-white/8 max-md:grid-cols-2">
               <Total
                 label="Solar generated"
-                value={intAU(totals.gen)}
-                unit="kWh"
-                sub={`${(totals.gen / totals.days).toFixed(1)} kWh a day on average`}
+                {...energy(totals.gen)}
+                sub={`${kWh(totals.gen / totals.days)} a day on average`}
               />
               <Total
                 label="Home use"
-                value={intAU(totals.home)}
-                unit="kWh"
-                sub={`${(totals.home / totals.days).toFixed(1)} kWh a day on average`}
+                {...energy(totals.home)}
+                sub={`${kWh(totals.home / totals.days)} a day on average`}
               />
               <Total
                 label="Self-sufficiency"
@@ -204,14 +208,12 @@ export function HistoryPage() {
               />
               <Total
                 label="Grid import"
-                value={intAU(totals.imp)}
-                unit="kWh"
-                sub={`${(totals.imp / totals.days).toFixed(1)} kWh a day on average`}
+                {...energy(totals.imp)}
+                sub={`${kWh(totals.imp / totals.days)} a day on average`}
               />
               <Total
                 label="Exported to grid"
-                value={intAU(totals.exp)}
-                unit="kWh"
+                {...energy(totals.exp)}
                 sub={`Earned ${dollars(totals.credit)} in feed-in credit`}
               />
               <Total

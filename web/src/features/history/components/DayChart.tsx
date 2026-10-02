@@ -2,7 +2,7 @@ import { useMemo, useState, type PointerEvent } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { cn } from "~/features/common/ui/utils";
 import { hourLabel } from "~/features/common/formatting/utils/date";
-import { pct } from "~/features/common/formatting/utils/number";
+import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
 import type { Hour } from "~/features/history/utils/day";
 
@@ -68,7 +68,7 @@ const STROKE = {
   strokeLinecap: "round",
 } as const;
 
-const kwh1 = (v: number | null) => (v == null ? "—" : `${Math.abs(v).toFixed(1)} kWh`);
+const kwh1 = (v: number | null) => (v == null ? "—" : kWh(Math.abs(v)));
 
 /** One hour in words: solar, home use, battery at the end of it, and the grid either way. */
 function Readout({ hour, at, peak }: { hour: Hour; at: number; peak: boolean }) {

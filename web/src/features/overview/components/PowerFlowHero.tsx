@@ -4,7 +4,7 @@ import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { batteryState, gridVerb } from "~/features/common/energy/utils";
-import { kW, kWnum } from "~/features/common/formatting/utils/number";
+import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { HouseScene, houseAnchors, type Anchor } from "~/features/overview/components/HouseScene";
 
@@ -57,8 +57,10 @@ function Scene({
   const { labels } = houseAnchors();
   const dark = wx.mode === "night" || wx.mode === "storm";
   const { grid_power: g, battery_power: b, load_power: l } = p;
+  const parts = (w: number | null | undefined) => (w == null ? [DASH, "kW"] : powerParts(w));
+  const [pv, grid, home] = [parts(p.pv_power), parts(g), parts(l)];
   const st = batteryState(b);
-  const batRate = st === "charge" ? `↑ ${kW(b)}` : st === "discharge" ? `↓ ${kW(b)}` : "0.0 kW";
+  const batRate = st === "charge" ? `↑ ${kW(b)}` : st === "discharge" ? `↓ ${kW(b)}` : "0 W";
   const batColor = st === "charge" ? "#8fa6ff" : st === "discharge" ? "#ffc777" : "rgba(255,255,255,0.6)";
 
   return (
@@ -107,8 +109,8 @@ function Scene({
           icon={<Icon name="sun" size={18} />}
           iconStyle={{ background: "#ff7a1a" }}
           k="Solar"
-          v={kWnum(p.pv_power)}
-          unit="kW"
+          v={pv[0]}
+          unit={pv[1]}
           title={
             p.pv2_power != null
               ? `Hybrid ${kW(p.pv1_power)} · ${s?.pv2?.model || "Second inverter"} ${kW(p.pv2_power)}`
@@ -122,8 +124,8 @@ function Scene({
           icon={<Icon name="grid" size={18} />}
           iconStyle={{ background: "#3a3d44" }}
           k={gridVerb(g)}
-          v={g == null ? "—" : kWnum(g)}
-          unit="kW"
+          v={grid[0]}
+          unit={grid[1]}
         />
         <ValuePill
           side="left"
@@ -132,8 +134,8 @@ function Scene({
           icon={<Icon name="home" size={18} />}
           iconStyle={{ background: "#ffffff", color: "#111111" }}
           k="Home"
-          v={`${l != null && l < 0 ? "−" : ""}${kWnum(l)}`}
-          unit="kW"
+          v={`${l != null && l < 0 ? "−" : ""}${home[0]}`}
+          unit={home[1]}
         />
         <ValuePill
           side="right"

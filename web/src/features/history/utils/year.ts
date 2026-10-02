@@ -192,11 +192,11 @@ export function standoutsOf(days: Day[]): Standout[] {
     { title: "Highest use", color: "#9aa4ff", day: top((d) => d.home), value: "" },
     { title: "Most from the grid", color: "#8a8a90", day: top((d) => d.imp), value: "" },
   ];
-  out[0].value = `${out[0].day.gen.toFixed(1)} kWh`;
+  out[0].value = kWh(out[0].day.gen);
   out[1].value = `${Math.round(out[1].day.ss * 100)}%`;
   out[2].value = money(out[2].day.saved);
-  out[3].value = `${out[3].day.home.toFixed(1)} kWh`;
-  out[4].value = `${out[4].day.imp.toFixed(1)} kWh`;
+  out[3].value = kWh(out[3].day.home);
+  out[4].value = kWh(out[4].day.imp);
   // A record of nothing (no saving, no grid use at all) isn't worth a card.
   const records = out.filter((s, k) => !((k === 2 && s.day.saved < 0.01) || (k === 4 && s.day.imp < 0.05)));
 

@@ -1,7 +1,7 @@
 import type { Forecast, ForecastHour } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { kWh, money } from "~/features/common/formatting/utils/number";
+import { kWh, kWhInt, money } from "~/features/common/formatting/utils/number";
 import { bandAt, tariffNumber } from "~/features/common/tariffs/utils";
 import { reserveOf } from "~/features/common/energy/utils";
 import { isWet } from "~/features/common/weather/utils";
@@ -124,8 +124,8 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
       ) + tariffNumber(t.supply_charge)
     : null;
   const stats: [label: string, value: string, color: string][] = [
-    ["Solar forecast", `${Math.round(f.summary.pv_kwh_24h)} kWh`, "#ffb547"],
-    ["Expected use", `${Math.round(use)} kWh`, "#f5f5f5"],
+    ["Solar forecast", kWhInt(f.summary.pv_kwh_24h), "#ffb547"],
+    ["Expected use", kWhInt(use), "#f5f5f5"],
     ["From the grid", kWh(imp), "#f5f5f5"],
     ["Expected cost", money(cost), cost != null && cost < 0 ? "#3ee08f" : "#f5f5f5"],
   ];
@@ -133,7 +133,7 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   return {
     headline:
       `Solar and battery should cover ${Math.round(cover * 100)}% of your power. ` +
-      (imp < 0.5 ? "You should barely need the grid." : `You will need about ${imp.toFixed(1)} kWh from the grid.`),
+      (imp < 0.5 ? "You should barely need the grid." : `You will need about ${kWh(imp)} from the grid.`),
     cover: cover * 100,
     gridKwh: kWh(imp),
     moments: moments.map((m, i) => ({

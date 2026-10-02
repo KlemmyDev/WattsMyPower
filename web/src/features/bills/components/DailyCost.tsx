@@ -3,7 +3,7 @@ import { barScale, ymdLabel } from "~/features/bills/utils";
 import { Key } from "~/features/bills/components/BillParts";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Swatch } from "~/features/common/ui/components/Swatch";
-import { money } from "~/features/common/formatting/utils/number";
+import { kWhInt, money } from "~/features/common/formatting/utils/number";
 import { dayMonth, parseYmd } from "~/features/common/formatting/utils/date";
 
 const addDays = (ymd: string, n: number) => {
@@ -93,8 +93,8 @@ export function DailyCost({ bills }: { bills: Bills | undefined }) {
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-sm font-semibold text-ink">{ymdLabel(d.date)}</span>
                 <span className="text-xs leading-[18px] text-pretty text-ink-faint">
-                  {d.pv_kwh != null ? `${Math.round(d.pv_kwh)} kWh of solar · ` : ""}
-                  {Math.round(d.import_kwh)} kWh from the grid
+                  {d.pv_kwh != null ? `${kWhInt(d.pv_kwh)} of solar · ` : ""}
+                  {kWhInt(d.import_kwh)} from the grid
                 </span>
               </div>
               <span className="text-sm font-semibold text-ink">{money(d.net_cost)}</span>

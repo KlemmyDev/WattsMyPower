@@ -8,7 +8,7 @@ import { useNow } from "~/features/common/time/hooks";
 import { useForecast } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { hhmm, longDate, weekdayLong } from "~/features/common/formatting/utils/date";
-import { money } from "~/features/common/formatting/utils/number";
+import { energyParts, money, powerParts } from "~/features/common/formatting/utils/number";
 import { addDays } from "~/features/common/time/utils";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { DayChart } from "~/features/history/components/DayChart";
@@ -50,23 +50,30 @@ function Stat({ label, value, unit, color }: { label: string; value: string; uni
   );
 }
 
+/** A day's figure and unit: "26.6" kWh, or "395" Wh under one. */
+const energy = (v: number) => {
+  const [value, unit] = energyParts(v);
+  return { value, unit };
+};
+
 function DayStats({ day, extremes }: { day: Day; extremes: ReturnType<typeof extremesOf> }) {
   if (day.kind === "none")
     return <div className="col-span-full text-sm text-ink-dim">No readings were recorded on this day.</div>;
   if (day.kind !== "data") return null;
   const { peak, low } = extremes;
+  const [peakValue, peakUnit] = peak ? powerParts(peak.w) : ["—", ""];
   return (
     <>
-      <Stat label="Solar generated" value={day.gen.toFixed(1)} unit="kWh" color="#ffb547" />
-      <Stat label="Home use" value={day.home.toFixed(1)} unit="kWh" color="#f5f5f5" />
+      <Stat label="Solar generated" {...energy(day.gen)} color="#ffb547" />
+      <Stat label="Home use" {...energy(day.home)} color="#f5f5f5" />
       <Stat label="Self-sufficiency" value={String(Math.round(day.ss * 100))} unit="%" color="#3ee08f" />
       <Stat label="Saved" value={money(day.saved)} color="#9aa4ff" />
-      <Stat label="From the grid" value={day.imp.toFixed(1)} unit="kWh" color="#8a8a90" />
-      <Stat label="Sent to the grid" value={day.exp.toFixed(1)} unit="kWh" color="#f2a65a" />
+      <Stat label="From the grid" {...energy(day.imp)} color="#8a8a90" />
+      <Stat label="Sent to the grid" {...energy(day.exp)} color="#f2a65a" />
       <Stat
         label="Peak solar"
-        value={peak ? (peak.w / 1000).toFixed(1) : "—"}
-        unit={peak ? `kW at ${hhmm(peak.t)}` : undefined}
+        value={peakValue}
+        unit={peak ? `${peakUnit} at ${hhmm(peak.t)}` : undefined}
         color="#ffb547"
       />
       <Stat label="Lowest battery" value={low != null ? String(Math.round(low)) : "—"} unit="%" color="#6f8cff" />

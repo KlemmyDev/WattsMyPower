@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { dollars, intAU } from "~/features/common/formatting/utils/number";
+import { dollars, kWhInt } from "~/features/common/formatting/utils/number";
 import { cn } from "~/features/common/ui/utils";
 import { HCARD } from "~/features/history/components/parts";
 import type { Month } from "~/features/history/utils/year";
@@ -24,10 +24,10 @@ export function MonthlySources({ months }: { months: Month[] }) {
   const top = niceMax(Math.max(...months.map((m) => m.home)));
   const pc = (v: number) => `${((v / top) * 100).toFixed(2)}%`;
   const rows: [string, string, string][] = [
-    ["Solar used directly", `${intAU(sel.direct)} kWh`, "#ffb547"],
-    ["From the battery", `${intAU(sel.battery)} kWh`, "#6f8cff"],
-    ["From the grid", `${intAU(sel.imp)} kWh`, "#5a5a60"],
-    ["Sent to the grid", `${intAU(sel.exp)} kWh`, "#f2a65a"],
+    ["Solar used directly", kWhInt(sel.direct), "#ffb547"],
+    ["From the battery", kWhInt(sel.battery), "#6f8cff"],
+    ["From the grid", kWhInt(sel.imp), "#5a5a60"],
+    ["Sent to the grid", kWhInt(sel.exp), "#f2a65a"],
     [
       "Self-sufficiency",
       sel.home > 0 ? `${Math.round(((sel.direct + sel.battery) / sel.home) * 100)}%` : "—",
@@ -61,7 +61,7 @@ export function MonthlySources({ months }: { months: Month[] }) {
                 style={{ top: `${(1 - q) * 100}%` }}
               >
                 <span className="absolute -top-[7px] right-0 font-mono text-[10px] leading-[14px] text-ink-faint">
-                  {intAU(top * q)} kWh
+                  {kWhInt(top * q)}
                 </span>
               </div>
             ))}
@@ -71,8 +71,8 @@ export function MonthlySources({ months }: { months: Month[] }) {
                 <button
                   key={m.key}
                   type="button"
-                  title={`${m.name} ${m.year}: ${intAU(m.home)} kWh used`}
-                  aria-label={`${m.name} ${m.year}: ${intAU(m.home)} kWh used`}
+                  title={`${m.name} ${m.year}: ${kWhInt(m.home)} used`}
+                  aria-label={`${m.name} ${m.year}: ${kWhInt(m.home)} used`}
                   aria-pressed={on}
                   onClick={() => setPicked(m.key)}
                   onMouseEnter={() => setPicked(m.key)}

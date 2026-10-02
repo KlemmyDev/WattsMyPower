@@ -4,7 +4,7 @@ import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
 import { reserveOf } from "~/features/common/energy/utils";
 import { hourLabel, monthLong, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
-import { pct } from "~/features/common/formatting/utils/number";
+import { kWh, pct } from "~/features/common/formatting/utils/number";
 
 type Month = Insights["months"][number];
 type Busiest = { cell: NonNullable<HeatCell>; hour: number; month: Month };
@@ -90,7 +90,7 @@ function HeatRow({ month, hmax }: { month: Month; hmax: number }) {
             key={h}
             className="h-[22px] rounded"
             style={{ background: heatShade(c.kwh / hmax) }}
-            title={`${mon} ${hourLabel(h)}: ${c.kwh.toFixed(2)} kWh average`}
+            title={`${mon} ${hourLabel(h)}: ${kWh(c.kwh)} average`}
           />
         ) : (
           <div key={h} className={cn("h-[22px] rounded", emptyCell)} title={`${mon} ${hourLabel(h)}: no readings`} />
