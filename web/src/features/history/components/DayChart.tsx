@@ -1,19 +1,18 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useMemo, useState, type MouseEvent } from "react";
-import { historyQuery } from "~/features/common/readings/api";
+import { useMemo, useState, type PointerEvent } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
-import { ChartTooltip, HoverLine, nearest, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
-import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
-import { kW, pct } from "~/features/common/formatting/utils/number";
+import { hourLabel } from "~/features/common/formatting/utils/date";
+import { pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
+import type { Hour } from "~/features/history/utils/day";
 
 const W = 1000;
-const H = 240;
-const FIELDS = ["pv_power", "load_power", "battery_soc"];
+const H = 220;
 const SOLAR = "#ffb547";
 const HOME = "#f5f5f5";
-const BATTERY = "#3ee08f";
+const BATTERY = "#6f8cff";
+const FROM_GRID = "#8a8a90";
+const TO_GRID = "#f2a65a";
 
 type Row = { t: number; pv: number | null; load: number | null; soc: number | null };
 type Key = "pv" | "load" | "soc";
@@ -69,27 +68,62 @@ const STROKE = {
   strokeLinecap: "round",
 } as const;
 
-/** One day's solar, home use and battery level, in 5-minute averages (288 a day). */
-export function DayChart({ dayTs, live }: { dayTs: number; live: boolean }) {
-  const q = useQuery({
-    ...historyQuery({ start: dayTs, end: addDays(dayTs, 1), points: 288, fields: FIELDS, live }),
-    placeholderData: keepPreviousData,
-  });
-  const chart = useMemo(() => q.data && plot(q.data.series), [q.data]);
-  const [hover, setHover] = useState<Row | null>(null);
+const kwh1 = (v: number | null) => (v == null ? "—" : `${Math.abs(v).toFixed(1)} kWh`);
 
-  const onMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (!chart?.readings.length) return;
+/** One hour in words: solar, home use, battery at the end of it, and the grid either way. */
+function Readout({ hour, at, peak }: { hour: Hour; at: number; peak: boolean }) {
+  const g = hour.grid ?? 0;
+  const vals: [string, string, string][] = [
+    ["Solar", kwh1(hour.pv), SOLAR],
+    ["Home use", kwh1(hour.load), HOME],
+    ["Battery", pct(hour.soc), BATTERY],
+    [g > 0.05 ? "From grid" : g < -0.05 ? "Sent to grid" : "Grid", kwh1(hour.grid), g < -0.05 ? TO_GRID : FROM_GRID],
+  ];
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 rounded-xl bg-[#1b1b1d] px-4 py-3 text-[13px] tabular-nums max-sm:gap-x-4">
+      <span className="font-mono text-xs text-ink">
+        {hourLabel(at)} to {hourLabel(at + 1)}
+        {peak && " · peak solar"}
+      </span>
+      {vals.map(([label, value, color]) => (
+        <span key={label} className="flex items-center gap-1.5 text-ink-dim">
+          <i className="size-1.5 rounded-full" style={{ background: color }} />
+          {label}
+          <span className="font-medium text-ink">{value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One day hour by hour: solar, home use and battery level from the 5-minute readings, the grid
+ * as bars (from it above the line, to it below), and the hour under the pointer in words.
+ */
+export function DayChart({
+  series,
+  hours,
+  placeholder,
+}: {
+  series: HistorySeries | undefined;
+  hours: Hour[];
+  placeholder: boolean;
+}) {
+  const chart = useMemo(() => series && plot(series), [series]);
+  const [hover, setHover] = useState<number | null>(null);
+  const pvs = hours.map((h) => h.pv ?? -1);
+  const peakHour = Math.max(...pvs) > 0 ? pvs.indexOf(Math.max(...pvs)) : null;
+  const at = hover ?? peakHour;
+  const gMax = Math.max(0.5, ...hours.map((h) => Math.abs(h.grid ?? 0))) * 1.1;
+
+  const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const t = chart.start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * chart.span;
-    const best = nearest(chart.readings, t);
-    setHover(best && Math.abs(best.t - t) <= 1800 ? best : null);
+    setHover(Math.max(0, Math.min(23, Math.floor(((e.clientX - r.left) / r.width) * 24))));
   };
-  const lp = chart && hover ? ((hover.t - chart.start) / chart.span) * 100 : 0;
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <div className="flex gap-5 text-xs text-ink-dim">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-dim">
         {[
           ["Solar", SOLAR],
           ["Home use", HOME],
@@ -100,59 +134,92 @@ export function DayChart({ dayTs, live }: { dayTs: number; live: boolean }) {
             {label}
           </span>
         ))}
-      </div>
-      <div className="relative h-60 cursor-crosshair" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-        {["0%", "33%", "66%", "100%"].map((top) => (
-          <div key={top} className="absolute right-0 left-0 border-t border-white/5" style={{ top }} />
+        {[
+          ["From grid", FROM_GRID],
+          ["Sent to grid", TO_GRID],
+        ].map(([label, color]) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <i className="size-2.5 rounded-[2px]" style={{ background: color }} />
+            {label}
+          </span>
         ))}
-        {chart && (
-          <svg
-            viewBox={`0 0 ${W} ${H}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 size-full overflow-visible"
-          >
-            <defs>
-              <linearGradient id="hyPv" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor={SOLAR} stopOpacity="0.35" />
-                <stop offset="1" stopColor={SOLAR} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {chart.solar.map((s, i) => (
-              <g key={i}>
-                <path d={s.area} fill="url(#hyPv)" />
-                <path d={s.d} {...STROKE} stroke={SOLAR} strokeWidth="2" />
-              </g>
-            ))}
-            {chart.home.map((d, i) => (
-              <path key={i} d={d} {...STROKE} stroke={HOME} strokeWidth="1.5" />
-            ))}
-            {chart.soc.map((d, i) => (
-              <path key={i} d={d} {...STROKE} stroke={BATTERY} strokeWidth="1.5" strokeDasharray="5 5" />
-            ))}
-          </svg>
-        )}
-        {chart && !q.isPlaceholderData && !chart.readings.length && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-faint">
-            No readings were recorded on this day.
+      </div>
+      {at != null && <Readout hour={hours[at]} at={at} peak={hover == null} />}
+      <div
+        className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
+        onPointerMove={onPoint}
+        onPointerDown={onPoint}
+        onPointerLeave={() => setHover(null)}
+      >
+        <div className="relative h-[220px] max-sm:h-[180px]">
+          {["0%", "33%", "66%", "100%"].map((top) => (
+            <div key={top} className="absolute right-0 left-0 border-t border-white/5" style={{ top }} />
+          ))}
+          {chart && (
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 size-full overflow-visible"
+            >
+              <defs>
+                <linearGradient id="hyPv" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor={SOLAR} stopOpacity="0.35" />
+                  <stop offset="1" stopColor={SOLAR} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {chart.solar.map((s, i) => (
+                <g key={i}>
+                  <path d={s.area} fill="url(#hyPv)" />
+                  <path d={s.d} {...STROKE} stroke={SOLAR} strokeWidth="2" />
+                </g>
+              ))}
+              {chart.home.map((d, i) => (
+                <path key={i} d={d} {...STROKE} stroke={HOME} strokeWidth="1.5" />
+              ))}
+              {chart.soc.map((d, i) => (
+                <path key={i} d={d} {...STROKE} stroke={BATTERY} strokeWidth="1.5" strokeDasharray="5 5" />
+              ))}
+            </svg>
+          )}
+          {chart && !placeholder && !chart.readings.length && (
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-faint">
+              No readings were recorded on this day.
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between gap-3 text-[11px] text-ink-faint">
+          <span>Grid</span>
+          <span className="text-right">Above the line: from the grid · below: sent to the grid</span>
+        </div>
+        <div className="relative h-[72px]">
+          <div className="absolute inset-x-0 top-1/2 border-t border-white/12" />
+          <div className="absolute inset-0 flex gap-0.5">
+            {hours.map((h, i) => {
+              const g = h.grid ?? 0;
+              const hh = (Math.abs(g) / gMax) * 50;
+              return (
+                <div key={i} className="relative min-w-0 flex-1">
+                  {Math.abs(g) >= 0.05 && (
+                    <div
+                      className="absolute inset-x-0 rounded-[2px]"
+                      style={{
+                        top: `${(g > 0 ? 50 - hh : 50).toFixed(2)}%`,
+                        height: `${Math.max(1, hh).toFixed(2)}%`,
+                        background: g > 0 ? FROM_GRID : TO_GRID,
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
-        {hover && (
-          <>
-            <HoverLine left={lp} />
-            <ChartTooltip left={lp} flip={lp > 70}>
-              <div className="flex justify-between font-semibold">
-                <span>{hhmm(hover.t)}</span>
-              </div>
-              <TooltipRow label="Solar" value={kW(hover.pv)} color={SOLAR} />
-              <TooltipRow
-                label="Home"
-                value={`${hover.load != null && hover.load < 0 ? "−" : ""}${kW(hover.load)}`}
-                color={HOME}
-              />
-              <TooltipRow label="Battery" value={pct(hover.soc)} color={BATTERY} />
-            </ChartTooltip>
-          </>
+        </div>
+        {at != null && (
+          <div
+            className="pointer-events-none absolute inset-y-0 w-px bg-white/35"
+            style={{ left: `${(((at + 0.5) / 24) * 100).toFixed(2)}%` }}
+          />
         )}
       </div>
       <div className="relative h-3.5">

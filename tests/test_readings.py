@@ -117,3 +117,14 @@ def test_export_starts_with_a_header(readings: ReadingsRepository) -> None:
     assert rows[0][:3] == ["ts", "time", "pv_power"]
     assert len(rows) == 3  # header and both raw rows
     assert len(list(readings.export_rows(RECENT, RECENT + 600, rollup=True))) == 2  # header and one rollup
+
+
+def test_history_starts_at_the_first_rollup_after_raw_rows_are_pruned(readings: ReadingsRepository) -> None:
+    conn = readings.db.connect()
+    readings.insert_many(conn, [(MIDNIGHT, {"pv_power": 100.0}), (MIDNIGHT + 86400 * 200, {"pv_power": 200.0})])
+    conn.execute("DELETE FROM samples WHERE ts = ?", (MIDNIGHT,))  # as RAW_RETENTION_DAYS would
+    conn.commit()
+    conn.close()
+    stats = readings.stats()
+    assert stats["first_ts"] == MIDNIGHT + 86400 * 200
+    assert stats["history_from"] == MIDNIGHT

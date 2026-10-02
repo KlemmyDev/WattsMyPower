@@ -1,11 +1,13 @@
-import { memo } from "react";
-import { monthShort } from "~/features/common/formatting/utils/date";
+import { memo, useMemo, useState } from "react";
+import { monthShort, monthYearLong } from "~/features/common/formatting/utils/date";
+import { Button } from "~/features/common/ui/components/Button";
+import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import type { Cell } from "~/features/history/utils/year";
 
 type GridProps = {
   cells: Cell[];
-  /** Blank cells before 1 January, so weeks run Monday to Sunday. */
+  /** Blank cells before the first day, so weeks run Monday to Sunday. */
   lead: number;
   selected: number;
   onSelect: (ts: number) => void;
@@ -30,7 +32,7 @@ function DayCell({
   className?: string;
 }) {
   const base = cn("border-0 p-0 transition-[background] duration-240 ease-[ease]", SHAPE[shape], className);
-  // Padding before 1 January keeps its space but isn't drawn.
+  // Padding before the first day keeps its space but isn't drawn.
   if (!cell) return <span className={cn(base, "invisible")} />;
   if (!cell.label)
     return <span className={cn(base, "bg-transparent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")} />;
@@ -54,7 +56,7 @@ function DayCell({
 
 const WEEKDAYS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 
-/** Desktop: the year as 53 week columns, Monday at the top, scrolling sideways when narrow. */
+/** Wider screens: the view as week columns, Monday at the top, scrolling sideways when narrow. */
 export const YearHeatmap = memo(function YearHeatmap({ cells, lead, selected, onSelect }: GridProps) {
   const nWeeks = Math.ceil((lead + cells.length) / 7);
   const months: { col: number; label: string }[] = [];
@@ -105,52 +107,113 @@ export const YearHeatmap = memo(function YearHeatmap({ cells, lead, selected, on
 });
 
 const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"];
+const RING = "shadow-[0_0_0_2px_#0a0a0a,0_0_0_3.5px_#ffffff]";
 
 /**
- * Phones: the same days flipped on their side, a row per week (Monday to Sunday across),
- * January at the top, with the month named where each month starts.
+ * Phones: one month at a time, Monday to Sunday across, with each day's date on its cell.
+ * It follows the selected day until the reader steps to another month.
  */
-export const MonthGrid = memo(function MonthGrid({ cells, lead, selected, onSelect }: GridProps) {
-  const weeks: (Cell | null)[][] = [];
-  for (const c of cells) {
-    const w = Math.floor((c.i + lead) / 7);
-    (weeks[w] ??= Array<Cell | null>(7).fill(null))[(c.i + lead) % 7] = c;
-  }
-  const rows: { week: (Cell | null)[]; month: string | null }[] = [];
-  let prevMonth: string | null = null;
-  for (const week of weeks) {
-    const latest = week.findLast((c) => c !== null);
-    const month: string | null = latest ? monthShort.format(new Date(latest.ts * 1000)) : prevMonth;
-    rows.push({ week, month: month !== prevMonth ? month : null });
-    prevMonth = month;
-  }
-  return (
-    <div className="hidden grid-cols-[34px_repeat(7,minmax(0,1fr))] items-center gap-[3px] max-md:grid">
-      <span />
-      {WEEKDAY_INITIALS.map((w, i) => (
-        <span key={i} className="pb-0.5 text-center font-mono text-[10px] text-ink-faint">
-          {w}
-        </span>
-      ))}
-      {rows.map(({ week, month }, w) => {
-        // A little space where each month begins.
-        const start = month ? "mt-2" : undefined;
-        return [
-          <span key={`m${w}`} className={cn("font-mono text-[10px] text-ink-dim", start)}>
-            {month}
-          </span>,
-          ...week.map((c, d) => (
-            <DayCell
-              key={c ? c.i : `pad${w}-${d}`}
-              cell={c}
-              shape="month"
-              selected={c?.i === selected}
-              onSelect={onSelect}
-              className={start}
-            />
-          )),
-        ];
-      })}
-    </div>
+export function MonthCalendar({
+  cells,
+  selected,
+  onSelect,
+  sub,
+}: {
+  cells: Cell[];
+  selected: number;
+  onSelect: (ts: number) => void;
+  sub: string;
+}) {
+  const months = useMemo(() => {
+    const out: { key: string; title: string; cells: Cell[] }[] = [];
+    for (const c of cells) {
+      const dt = new Date(c.ts * 1000);
+      const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+      if (out[out.length - 1]?.key !== key) out.push({ key, title: monthYearLong.format(dt), cells: [] });
+      out[out.length - 1].cells.push(c);
+    }
+    return out;
+  }, [cells]);
+  // The month the reader stepped to, and the day that was selected when they did.
+  const [stepped, setStepped] = useState<{ key: string; from: number } | null>(null);
+  if (!months.length) return null;
+  const selIdx = Math.max(
+    0,
+    months.findIndex((m) => m.cells.some((c) => c.i === selected)),
   );
-});
+  const steppedIdx = stepped && stepped.from === selected ? months.findIndex((m) => m.key === stepped.key) : -1;
+  const idx = steppedIdx >= 0 ? steppedIdx : selIdx;
+  const month = months[idx];
+  const go = (k: number) => setStepped({ key: months[k].key, from: selected });
+  const lead = (new Date(month.cells[0].ts * 1000).getDay() + 6) % 7;
+
+  return (
+    <section aria-label="Month calendar" className="hidden flex-col gap-4 max-md:flex">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="round"
+          className="size-11"
+          aria-label="Previous month"
+          disabled={idx === 0}
+          onClick={() => go(idx - 1)}
+        >
+          <Icon name="chevL" size={18} />
+        </Button>
+        <div className="flex flex-col items-center gap-0.5 text-center">
+          <span className="text-xl font-semibold text-ink">{month.title}</span>
+          <span className="text-xs text-ink-dim">{sub}</span>
+        </div>
+        <Button
+          variant="round"
+          className="size-11"
+          aria-label="Next month"
+          disabled={idx === months.length - 1}
+          onClick={() => go(idx + 1)}
+        >
+          <Icon name="chevR" size={18} />
+        </Button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {WEEKDAY_INITIALS.map((w, i) => (
+          <span key={i} className="text-center font-mono text-[11px] text-ink-faint">
+            {w}
+          </span>
+        ))}
+        {Array.from({ length: lead }, (_, i) => (
+          <span key={`pad${i}`} />
+        ))}
+        {month.cells.map((c) => {
+          const num = new Date(c.ts * 1000).getDate();
+          const base =
+            "flex aspect-square min-h-10 items-center justify-center rounded-lg border-0 p-0 text-[13px] font-medium tabular-nums";
+          if (!c.label)
+            return (
+              <span key={c.i} className={cn(base, "text-grey-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")}>
+                {num}
+              </span>
+            );
+          return (
+            <button
+              key={c.i}
+              type="button"
+              title={c.label}
+              aria-label={c.label}
+              aria-pressed={c.i === selected}
+              onClick={() => onSelect(c.ts)}
+              className={cn(
+                base,
+                c.fill ? ((c.v ?? 0) > 0.55 ? "text-ink-inverse" : "text-ink") : "bg-transparent text-grey-400",
+                c.i === selected
+                  ? cn("relative z-1", RING)
+                  : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
+              )}
+              style={c.fill ? { background: c.fill } : undefined}
+            >
+              {num}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
