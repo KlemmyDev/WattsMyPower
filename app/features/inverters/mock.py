@@ -106,12 +106,14 @@ class MockInverter:
             "daily_pv": r(self.daily["pv"]),
             "daily_import": r(self.daily["import"]),
             "daily_export": r(self.daily["export"]),
+            "daily_pv_export": r(self.daily["export"]),  # no second system here: all export is the hybrid's
             "daily_charge": r(self.daily["charge"]),
             "daily_discharge": r(self.daily["discharge"]),
             "daily_direct": r(max(0.0, self.daily["pv"] - self.daily["export"] - self.daily["charge"])),
             "total_pv": r(self.totals["pv"]),
             "total_import": r(self.totals["import"]),
             "total_export": r(self.totals["export"]),
+            "total_pv_export": r(self.totals["export"]),
             "total_charge": r(self.totals["charge"]),
             "total_discharge": r(self.totals["discharge"]),
         }

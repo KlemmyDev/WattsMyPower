@@ -27,3 +27,14 @@ def test_outside_the_meter_its_output_counts_as_export() -> None:
 def test_missing_values_stay_missing() -> None:
     out = merge_pv2({**HYBRID, "pv_power": None}, PV2)
     assert out["pv_power"] is None
+
+
+def test_feed_in_comes_from_the_meter_not_the_hybrids_own_pv() -> None:
+    """13005/13006 are the hybrid's own panels' export; a system behind the meter exports through 13045/13046."""
+    from app.features.inverters.hybrid import BLOCKS, REGISTERS
+
+    by_key = {r.key: r.address for r in REGISTERS}
+    assert by_key["daily_export"] == 13045 and by_key["total_export"] == 13046
+    assert by_key["daily_pv_export"] == 13005 and by_key["total_pv_export"] == 13006
+    for r in REGISTERS:  # every register is read as part of a block
+        assert any(start <= r.address and r.address + r.count <= start + count for start, count in BLOCKS), r.key

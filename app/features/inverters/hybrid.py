@@ -57,8 +57,10 @@ REGISTERS = [
     Reg("power_flow", 13001),
     Reg("daily_pv", 13002, 1, False, 0.1),
     Reg("total_pv", 13003, 2, False, 0.1),
-    Reg("daily_export", 13005, 1, False, 0.1),
-    Reg("total_export", 13006, 2, False, 0.1),
+    # 13005/13006 count only what the hybrid's own panels exported. An AC-coupled system behind
+    # the meter exports through the same meter, so feed-in comes from the meter's counters below.
+    Reg("daily_pv_export", 13005, 1, False, 0.1),
+    Reg("total_pv_export", 13006, 2, False, 0.1),
     Reg("load_power", 13008, 2, True, 1),
     Reg("export_power", 13010, 2, True, 1),
     Reg("daily_direct", 13017, 1, False, 0.1),
@@ -75,13 +77,18 @@ REGISTERS = [
     Reg("total_import", 13037, 2, False, 0.1),
     Reg("daily_charge", 13040, 1, False, 0.1),
     Reg("total_charge", 13041, 2, False, 0.1),
+    # Everything exported through the meter (the bill's feed-in), whichever system produced it.
+    Reg("daily_export", 13045, 1, False, 0.1),
+    Reg("total_export", 13046, 2, False, 0.1),
 ]
 
 # Contiguous ranges read in one request each, instead of ~30 single-register
 # requests per poll. If the gateway rejects a block (some addresses inside a
 # range can be "Illegal Data Address" on some models, e.g. MPPT3 on SH5.0RS),
 # that block permanently falls back to one request per register.
-BLOCKS = [(5008, 29), (13000, 42)]
+# Each register must sit wholly inside one block: 13041-42 (total charge) used to straddle the
+# end of a 13000+42 block, so its high word was never read.
+BLOCKS = [(5008, 29), (13000, 41), (13041, 2), (13045, 3)]
 
 RUNNING_STATE = {
     0x0000: "Running",
