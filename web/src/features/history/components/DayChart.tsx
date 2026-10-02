@@ -1,6 +1,6 @@
 import { useMemo, useState, type PointerEvent } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
-import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
 import { hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
@@ -143,6 +143,14 @@ export function DayChart({
         onPointerDown={onPoint}
         onPointerLeave={() => setHover(null)}
       >
+        {/* The hovered hour, as a soft block behind the lines and grid bars: the tooltip sums it up. */}
+        {hover != null && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 rounded-md bg-white/6"
+            style={{ left: `${((hover / 24) * 100).toFixed(3)}%`, width: `${(100 / 24).toFixed(3)}%` }}
+          />
+        )}
         <div className="relative h-[220px] max-sm:h-[180px]">
           {["0%", "33%", "66%", "100%"].map((top) => (
             <div key={top} className="absolute right-0 left-0 border-t border-white/5" style={{ top }} />
@@ -205,7 +213,6 @@ export function DayChart({
         </div>
         {hover != null && (
           <>
-            <HoverLine left={((hover + 0.5) / 24) * 100} />
             <HourTooltip hour={hours[hover]} at={hover} width={width} />
           </>
         )}
