@@ -1,79 +1,80 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
 import { kW } from "~/features/common/formatting/utils/number";
 
-/** Mini power flow pinned to the bottom of every page except Overview. Opens Overview. */
+/**
+ * Mini power flow pinned to the bottom of every page except Overview, which it opens. It stays
+ * mounted so it can slide out when Overview opens and back in when you leave (see `.dock`).
+ */
 export function Dock() {
   const p = useSnapshot();
   const onOverview = useRouterState({ select: (s) => s.location.pathname === "/" });
-  if (onOverview || !p) return null;
+  // Start hidden and show on the next frame, so the first appearance slides in too.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  if (!p) return null;
+  const shown = ready && !onOverview;
   const { pv_power: pv, grid_power: g, battery_power: b, load_power: l } = p;
   const soc = p.battery_soc ?? 0;
   const st = batteryState(b);
   const verb = gridVerb(g);
   const batVerb = st === "charge" ? "Charging" : st === "discharge" ? "Discharging" : "Idle";
   return (
-    <Link
-      to="/"
-      aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}. Open overview.`}
-      className="fixed bottom-5 left-1/2 z-15 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2.5 rounded-full border border-white/12 bg-popover py-1.5 pr-3.5 pl-1.5 whitespace-nowrap text-white no-underline shadow-dock transition-[transform,box-shadow] duration-200 ease-out-soft hover:-translate-y-0.5 hover:text-white max-sm:bottom-3 max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
-    >
-      <DockItem icon="sun" iconBg="#ff7a1a" k="Solar" v={kW(pv)} />
-      <Conn on={(pv || 0) > ON} color="#ff7a1a" />
-      <DockItem
-        icon="home"
-        iconBg="#ffffff"
-        iconColor="#111111"
-        k="Home"
-        v={`${l != null && l < 0 ? "−" : ""}${kW(l)}`}
-      />
-      <Conn on={g != null && Math.abs(g) > ON} rev={(g ?? 0) > 0} color="#9a9aa3" />
-      <DockItem icon="grid" iconBg="#3a3d44" k={verb} v={kW(g)} />
-      <span aria-hidden className="h-6 w-px flex-none bg-white/14 max-sm:h-[18px]" />
-      <span className="flex items-center gap-2 max-xs:gap-[5px]">
-        <span
-          className="soc-ring flex size-7 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
-          style={{ "--deg": `${(Math.max(0, Math.min(100, soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties}
-        >
-          <span className="flex size-[22px] items-center justify-center rounded-full bg-popover max-sm:size-[18px] max-xs:size-4">
-            <Icon name="battery" size={14} className="max-xs:size-3" />
+    <div className="pointer-events-none fixed inset-x-0 bottom-8 z-15 flex justify-center px-4 max-sm:bottom-5">
+      <Link
+        to="/"
+        data-shown={shown}
+        inert={!shown}
+        aria-hidden={!shown}
+        aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}. Open overview.`}
+        className="dock group flex max-w-full items-center gap-3 rounded-full border border-white/8 bg-[#141416]/75 py-2 pr-4 pl-2 whitespace-nowrap text-white no-underline shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_2px_8px_rgb(0_0_0/0.35),0_18px_40px_-18px_rgb(0_0_0/0.9)] backdrop-blur-xl backdrop-saturate-150 hover:border-white/15 hover:bg-[#18181b]/85 hover:text-white max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
+      >
+        <DockItem icon="sun" color="#ffb547" k="Solar" v={kW(pv)} />
+        <Conn on={(pv || 0) > ON} color="#ffb547" />
+        <DockItem icon="home" color="#f5f5f5" k="Home" v={`${l != null && l < 0 ? "−" : ""}${kW(l)}`} />
+        <Conn on={g != null && Math.abs(g) > ON} rev={(g ?? 0) > 0} color="#9a9aa3" />
+        <DockItem icon="grid" color="#b4b4bc" k={verb} v={kW(g)} />
+        <span aria-hidden className="h-5 w-px flex-none bg-white/10 max-sm:h-4" />
+        <span className="flex items-center gap-2 max-xs:gap-[5px]">
+          <span
+            className="soc-ring flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
+            style={{ "--deg": `${(Math.max(0, Math.min(100, soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties}
+          >
+            <span className="flex size-[27px] items-center justify-center rounded-full bg-[#17171a] text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
+              <Icon name="battery" size={14} className="max-sm:size-[13px] max-xs:size-3" />
+            </span>
           </span>
+          <DockText
+            k={`Battery ${Math.round(soc)}%`}
+            v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(b) : "Idle"}`}
+            color={st === "charge" ? "#8fa6ff" : st === "discharge" ? "#ffc777" : "rgba(255,255,255,0.75)"}
+          />
         </span>
-        <DockText
-          k={`Battery ${Math.round(soc)}%`}
-          v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(b) : "Idle"}`}
-          color={st === "charge" ? "#8fa6ff" : st === "discharge" ? "#ffc777" : "rgba(255,255,255,0.75)"}
+        <Icon
+          name="chevR"
+          size={16}
+          className="ml-0.5 flex-none text-white/35 transition-[color,transform] duration-200 group-hover:translate-x-0.5 group-hover:text-white/70 max-sm:hidden"
         />
-      </span>
-      <span aria-hidden className="ml-0.5 text-lg text-white/50 max-sm:hidden">
-        ›
-      </span>
-    </Link>
+      </Link>
+    </div>
   );
 }
 
-function DockItem({
-  icon,
-  iconBg,
-  iconColor = "#ffffff",
-  k,
-  v,
-}: {
-  icon: IconName;
-  iconBg: string;
-  iconColor?: string;
-  k: string;
-  v: string;
-}) {
+/** An icon on a soft tint of its colour, with a label and value beside it. */
+function DockItem({ icon, color, k, v }: { icon: IconName; color: string; k: string; v: string }) {
   return (
     <span className="flex items-center gap-2 max-xs:gap-[5px]">
       <span
-        className="flex size-7 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
-        style={{ background: iconBg, color: iconColor }}
+        className="flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
+        style={{ background: `color-mix(in oklch, ${color} 16%, transparent)`, color }}
       >
-        <Icon name={icon} size={14} className="max-xs:size-3" />
+        <Icon name={icon} size={15} className="max-sm:size-3.5 max-xs:size-3" />
       </span>
       <DockText k={k} v={v} />
     </span>
@@ -82,10 +83,10 @@ function DockItem({
 
 function DockText({ k, v, color }: { k: string; v: string; color?: string }) {
   return (
-    <span className="flex flex-col gap-0.5 leading-none">
-      <span className="font-mono text-[9px] tracking-[1px] text-white/65 uppercase max-sm:hidden">{k}</span>
+    <span className="flex flex-col gap-[3px] leading-none">
+      <span className="text-[11px] font-medium text-white/45 max-sm:hidden">{k}</span>
       <span
-        className="text-sm font-semibold tracking-[-0.2px] tabular-nums max-sm:text-xs max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
+        className="text-[15px] font-semibold tracking-[-0.2px] tabular-nums max-sm:text-xs max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
         style={{ color }}
       >
         {v}

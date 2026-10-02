@@ -3,21 +3,21 @@ import type { Forecast } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, CardHeader } from "~/features/common/ui/components/Card";
-import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { kW, pct } from "~/features/common/formatting/utils/number";
 import { hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import { BH, next24, PH, W } from "~/features/overview/utils/next24";
 
 type N24 = NonNullable<ReturnType<typeof next24>>;
-type Hour = N24["hours"][number];
+type Point = N24["points"][number];
 
 const plot = "absolute inset-0 size-full overflow-visible";
 const line = { vectorEffect: "non-scaling-stroke", strokeLinejoin: "round" } as const;
 
-/** A dot on a chart line at the hovered hour. `top` is a percentage of the plot's height. */
+/** A dot on a chart line at the hovered point. `top` is a percentage of the plot's height. */
 const Dot = ({ left, top, color }: { left: number; top: number; color: string }) => (
   <span
     className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_#141414]"
@@ -25,18 +25,18 @@ const Dot = ({ left, top, color }: { left: number; top: number; color: string })
   />
 );
 
-/** What the forecast expects in the hovered hour. */
-function HourTooltip({ hour, first, width }: { hour: Hour; first: boolean; width: number }) {
-  const { h } = hour;
+/** What the forecast expects in the hovered 5 minutes. */
+function PointTooltip({ point, width }: { point: Point; width: number }) {
+  const { h } = point;
   const icon = hourIcon(h);
-  const tomorrow = new Date(hour.from * 1000).toDateString() !== new Date().toDateString();
-  const g = h.grid_kwh;
+  const tomorrow = new Date(point.t * 1000).toDateString() !== new Date().toDateString();
+  const g = point.grid;
   return (
-    <ChartTooltip left={hour.left} flip={hour.left > 60} width={width} className="top-[30px]">
+    <ChartTooltip left={point.left} flip={point.left > 60} width={width} className="top-[30px]">
       <div className="flex items-end justify-between gap-2 font-medium text-ink">
         <span className="flex flex-col">
           {tomorrow && <span className="text-[11px] font-normal text-ink-faint">Tomorrow</span>}
-          {first ? "Now" : hhmm(hour.from)} to {hhmm(hour.to)}
+          {hhmm(point.t)} to {hhmm(point.t + 300)}
         </span>
         <span className="flex items-center gap-1 text-ink-soft">
           <span style={{ color: hourIconColor(icon) }}>
@@ -45,12 +45,12 @@ function HourTooltip({ hour, first, width }: { hour: Hour; first: boolean; width
           {h.temp != null ? `${Math.round(h.temp)}°` : ""}
         </span>
       </div>
-      <TooltipRow label="Solar" value={kW(h.pv_kw * 1000)} color="#ffb547" />
-      <TooltipRow label="Home use" value={kW(h.load_kw * 1000)} color="#f5f5f5" />
-      <TooltipRow label={`Battery at ${hhmm(hour.to)}`} value={pct(hour.socEnd)} color="#6f8cff" />
+      <TooltipRow label="Solar" value={kW(point.pv * 1000)} color="#ffb547" />
+      <TooltipRow label="Home use" value={kW(point.load * 1000)} color="#f5f5f5" />
+      <TooltipRow label="Battery" value={pct(point.soc)} color="#6f8cff" />
       <TooltipRow
         label={g > 0.05 ? "From the grid" : g < -0.05 ? "To the grid" : "Grid"}
-        value={Math.abs(g) > 0.05 ? kWh(Math.abs(g)) : "Idle"}
+        value={Math.abs(g) > 0.05 ? kW(g * 1000) : "Idle"}
       />
     </ChartTooltip>
   );
@@ -160,13 +160,13 @@ function Moments({ n }: { n: N24 }) {
 
 /** Weather, then solar / home use and battery level on a shared time axis, with the moments marked across both. */
 function Charts({ n }: { n: N24 }) {
-  const [hover, setHover] = useState<Hour | null>(null);
+  const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * 100;
     setWidth(r.width);
-    setHover(n.hours.reduce((a, b) => (Math.abs(b.left - x) < Math.abs(a.left - x) ? b : a)));
+    if (n.points.length) setHover(n.points.reduce((a, b) => (Math.abs(b.left - x) < Math.abs(a.left - x) ? b : a)));
   };
   const nights = (h: number) =>
     n.nights.map((r) => (
@@ -198,6 +198,14 @@ function Charts({ n }: { n: N24 }) {
         onPointerDown={onPoint}
         onPointerLeave={() => setHover(null)}
       >
+        {/* The hovered 5 minutes, as a soft band behind both charts (below the moment markers). */}
+        {hover && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute top-6 bottom-0 -translate-x-1/2 rounded-[3px] bg-white/8"
+            style={{ left: `${hover.left.toFixed(3)}%`, width: `max(4px, ${n.stepWidth.toFixed(3)}%)` }}
+          />
+        )}
         {n.moments.map((m) => (
           <div
             key={m.num}
@@ -279,12 +287,7 @@ function Charts({ n }: { n: N24 }) {
           </svg>
           {hover && <Dot left={hover.left} top={hover.socTop} color="#6f8cff" />}
         </div>
-        {hover && (
-          <>
-            <HoverLine left={hover.left} className="top-6" />
-            <HourTooltip hour={hover} first={hover === n.hours[0]} width={width} />
-          </>
-        )}
+        {hover && <PointTooltip point={hover} width={width} />}
       </div>
       <div className="relative h-3.5">
         {n.ticks.map((tk, i) => (

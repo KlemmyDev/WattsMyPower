@@ -1,18 +1,9 @@
-import { cn } from "~/features/common/ui/utils";
 import type { Standout } from "~/features/history/utils/year";
 
 const fullDay = new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
 
 /** The view's record days as cards; choosing one opens it hour by hour. */
-export function StandoutDays({
-  standouts,
-  selected,
-  onSelect,
-}: {
-  standouts: Standout[];
-  selected: number;
-  onSelect: (ts: number) => void;
-}) {
+export function StandoutDays({ standouts, onSelect }: { standouts: Standout[]; onSelect: (ts: number) => void }) {
   if (!standouts.length) return null;
   return (
     <section aria-labelledby="h-standout" className="flex flex-col gap-4">
@@ -26,10 +17,7 @@ export function StandoutDays({
             key={s.title}
             type="button"
             onClick={() => onSelect(s.day.ts)}
-            className={cn(
-              "flex min-w-0 flex-col gap-1.5 rounded-2xl border bg-surface p-[18px] text-left transition-colors duration-200 hover:border-white/25 max-sm:p-3.5",
-              s.day.i === selected ? "border-ink" : "border-line-subtle",
-            )}
+            className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-line-subtle bg-surface p-[18px] text-left transition-colors duration-200 hover:border-white/25 max-sm:p-3.5"
           >
             <span className="flex items-center gap-2 text-[13px] text-ink-dim max-sm:text-xs">
               <i className="size-1.5 flex-none rounded-full" style={{ background: s.color }} />

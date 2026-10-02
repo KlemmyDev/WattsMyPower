@@ -145,7 +145,11 @@ export function MonthCalendar({
   const idx = steppedIdx >= 0 ? steppedIdx : selIdx;
   const month = months[idx];
   const go = (k: number) => setStepped({ key: months[k].key, from: selected });
-  const lead = (new Date(month.cells[0].ts * 1000).getDay() + 6) % 7;
+  // The whole month, even where the view starts partway through it or stops at today.
+  const first = new Date(month.cells[0].ts * 1000);
+  const lead = (new Date(first.getFullYear(), first.getMonth(), 1).getDay() + 6) % 7;
+  const byDate = new Map(month.cells.map((c) => [new Date(c.ts * 1000).getDate(), c]));
+  const length = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
 
   return (
     <section aria-label="Month calendar" className="hidden flex-col gap-4 max-md:flex">
@@ -173,7 +177,8 @@ export function MonthCalendar({
           <Icon name="chevR" size={18} />
         </Button>
       </div>
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* Squares like the desktop heatmap, in a compact grid; each day's date is in its label. */}
+      <div className="grid grid-cols-[repeat(7,32px)] justify-center gap-1.5">
         {WEEKDAY_INITIALS.map((w, i) => (
           <span key={i} className="text-center font-mono text-[11px] text-ink-faint">
             {w}
@@ -182,16 +187,14 @@ export function MonthCalendar({
         {Array.from({ length: lead }, (_, i) => (
           <span key={`pad${i}`} />
         ))}
-        {month.cells.map((c) => {
-          const num = new Date(c.ts * 1000).getDate();
-          const base =
-            "flex aspect-square min-h-10 items-center justify-center rounded-lg border-0 p-0 text-[13px] font-medium tabular-nums";
+        {Array.from({ length }, (_, k) => k + 1).map((num) => {
+          const c = byDate.get(num);
+          const base = "size-8 rounded-md border-0 p-0";
+          // Outside the view (before it starts, or after today): just a faint outline.
+          if (!c)
+            return <span key={`out${num}`} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]")} />;
           if (!c.label)
-            return (
-              <span key={c.i} className={cn(base, "text-grey-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")}>
-                {num}
-              </span>
-            );
+            return <span key={c.i} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]")} />;
           return (
             <button
               key={c.i}
@@ -202,15 +205,13 @@ export function MonthCalendar({
               onClick={() => onSelect(c.ts)}
               className={cn(
                 base,
-                c.fill ? ((c.v ?? 0) > 0.55 ? "text-ink-inverse" : "text-ink") : "bg-transparent text-grey-400",
+                !c.fill && "bg-transparent",
                 c.i === selected
                   ? cn("relative z-1", RING)
-                  : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
+                  : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]",
               )}
               style={c.fill ? { background: c.fill } : undefined}
-            >
-              {num}
-            </button>
+            />
           );
         })}
       </div>

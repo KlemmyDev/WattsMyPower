@@ -45,8 +45,12 @@ export function buildDays(start: number, end: number, today: number, rows?: Dail
     const charge = r.daily_charge || 0;
     const home = Math.max(0, gen + imp - exp + (r.daily_discharge || 0) - charge);
     const covered = Math.max(0, home - imp);
-    // Solar used as it was made; the rest of what the grid didn't supply came from the battery.
-    const direct = Math.min(covered, Math.max(0, r.daily_direct ?? gen - exp - charge));
+    // What the grid didn't supply came from the battery (its daily discharge) or straight from the
+    // panels. Not the inverter's own direct-use counter: the SH5.0RS leaves that at 0 all day.
+    const battery =
+      r.daily_discharge != null
+        ? Math.min(covered, r.daily_discharge)
+        : Math.max(0, covered - Math.max(0, gen - exp - charge));
     const ss = home > 0 ? Math.max(0, Math.min(1, covered / home)) : 0;
     const c = cost.get(key);
     return {
@@ -58,8 +62,8 @@ export function buildDays(start: number, end: number, today: number, rows?: Dail
       imp,
       exp,
       home,
-      direct,
-      battery: covered - direct,
+      direct: covered - battery,
+      battery,
       ss,
       saved: c?.saved || 0,
       credit: c?.feed_in_credit || 0,
@@ -82,11 +86,8 @@ export const METRICS: Record<
 export const heatColor = (color: string, v: number) =>
   `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, #1b1b1d)`;
 
-/**
- * One calendar cell. Without a label it's an empty placeholder; without a fill, a day with no
- * readings. `v` is where the day sits from the view's lowest (0) to highest (1).
- */
-export type Cell = { i: number; ts: number; label: string | null; fill: string | null; v: number | null };
+/** One calendar cell. Without a label it's an empty placeholder; without a fill, a day with no readings. */
+export type Cell = { i: number; ts: number; label: string | null; fill: string | null };
 
 export function heatCells(days: Day[], metric: Metric): Cell[] {
   const { value, format, color } = METRICS[metric];
@@ -97,17 +98,14 @@ export function heatCells(days: Day[], metric: Metric): Cell[] {
   const norm = (d: DataDay) => Math.max(0, Math.min(1, (value(d) - lo) / (hi - lo || 1)));
   return days.map((d) => {
     const base = { i: d.i, ts: d.ts };
-    if (hasData(d)) {
-      const v = norm(d);
+    if (hasData(d))
       return {
         ...base,
         label: `${dayMonth(d.ts)}${d.partial ? " so far" : ""}: ${format(value(d))}`,
-        fill: heatColor(color, v),
-        v,
+        fill: heatColor(color, norm(d)),
       };
-    }
-    if (d.kind === "none") return { ...base, label: `${dayMonth(d.ts)}: no readings`, fill: null, v: null };
-    return { ...base, label: null, fill: null, v: null };
+    if (d.kind === "none") return { ...base, label: `${dayMonth(d.ts)}: no readings`, fill: null };
+    return { ...base, label: null, fill: null };
   });
 }
 
