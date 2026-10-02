@@ -51,6 +51,24 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   // A dashed guide at a round kW figure near the solar peak.
   const guideKw = Math.max(1, Math.round(peak));
 
+  // Each forecast hour for the hover readout, placed at its middle. Battery is forecast for the end
+  // of each hour, so its dot sits halfway between the hour's start and end levels.
+  const hours = hrs.map((h, k) => {
+    const socEnd = h.soc;
+    const socMid = (socPts[k].v + socEnd) / 2;
+    return {
+      h,
+      left: left(mid(h)),
+      from: h.start,
+      to: Math.min(end, h.ts + 3600),
+      socEnd,
+      // as percentages of each plot's height, for the dots on the lines
+      pvTop: (py(h.pv_kw) / PH) * 100,
+      loadTop: (py(h.load_kw) / PH) * 100,
+      socTop: (by(socMid) / BH) * 100,
+    };
+  });
+
   // Shaded spans for the hours after dark.
   const nights: { x: number; w: number }[] = [];
   let n0: number | null = null;
@@ -152,6 +170,7 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
     reserveY: by(reserve),
     fullY: by(100),
     nights,
+    hours,
     // as percentages of the plot width
     ticks: [0, 6, 12, 18, 24].map((o) => ({ left: (o / 24) * 100, label: o ? hhmm(now + o * 3600) : "Now" })),
     weather,
