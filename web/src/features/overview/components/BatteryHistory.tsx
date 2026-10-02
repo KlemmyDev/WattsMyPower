@@ -6,7 +6,7 @@ import type { SystemInfo } from "~/features/common/live/types";
 import { nearest } from "~/features/common/ui/components/ChartHover";
 import { batteryState, reserveOf } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { kW, pct } from "~/features/common/formatting/utils/number";
+import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 
 const B6W = 600;
 const B6H = 150;
@@ -137,7 +137,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
           {chart &&
             (last
               ? `${Math.round(first.soc)}% → ${Math.round(last.soc)}%` +
-                (dk != null ? ` · ${dk >= 0 ? "+" : "−"}${Math.abs(dk).toFixed(1)} kWh` : "")
+                (dk != null ? ` · ${dk >= 0 ? "+" : "−"}${kWh(Math.abs(dk))}` : "")
               : "No readings yet")}
         </span>
       </div>

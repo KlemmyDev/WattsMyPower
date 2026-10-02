@@ -7,7 +7,7 @@ import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/compon
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { kWh, pct } from "~/features/common/formatting/utils/number";
+import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import { BH, next24, PH, W } from "~/features/overview/utils/next24";
 
@@ -45,8 +45,8 @@ function HourTooltip({ hour, first, width }: { hour: Hour; first: boolean; width
           {h.temp != null ? `${Math.round(h.temp)}°` : ""}
         </span>
       </div>
-      <TooltipRow label="Solar" value={`${h.pv_kw.toFixed(1)} kW`} color="#ffb547" />
-      <TooltipRow label="Home use" value={`${h.load_kw.toFixed(1)} kW`} color="#f5f5f5" />
+      <TooltipRow label="Solar" value={kW(h.pv_kw * 1000)} color="#ffb547" />
+      <TooltipRow label="Home use" value={kW(h.load_kw * 1000)} color="#f5f5f5" />
       <TooltipRow label={`Battery at ${hhmm(hour.to)}`} value={pct(hour.socEnd)} color="#6f8cff" />
       <TooltipRow
         label={g > 0.05 ? "From the grid" : g < -0.05 ? "To the grid" : "Grid"}

@@ -242,11 +242,13 @@ class ReadingsRepository:
     def stats(self) -> dict[str, Any]:
         with self.db.reading() as conn:
             raw = conn.execute("SELECT COUNT(*), MIN(ts), MAX(ts) FROM samples").fetchone()
-            r5 = conn.execute("SELECT COUNT(*) FROM samples_5m").fetchone()[0]
+            r5 = conn.execute("SELECT COUNT(*), MIN(ts) FROM samples_5m").fetchone()
         return {
             "raw_rows": raw[0],
             "first_ts": raw[1],
             "last_ts": raw[2],
-            "rollup_rows": r5,
+            "rollup_rows": r5[0],
+            # Raw rows are pruned after RAW_RETENTION_DAYS; rollups are kept, so history starts here.
+            "history_from": r5[1],
             "db_bytes": self.db.size_bytes(),
         }
