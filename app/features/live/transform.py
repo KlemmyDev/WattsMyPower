@@ -42,6 +42,12 @@ def _unknown_driver(device: str, driver: str | None) -> None:
         log.warning("No %s driver %r in this version: skipping its readings", device, driver)
 
 
+def behind_meter(pv2: dict[str, Any] | None, default: bool) -> bool:
+    """Where the second inverter connects: its setting (Settings → Integrations), else PV2_BEHIND_METER."""
+    value = ((pv2 or {}).get("settings") or {}).get("behind_meter")
+    return value if isinstance(value, bool) else default
+
+
 @dataclass
 class Pv2Carry:
     """The second inverter's last good values, carried across polls it missed."""
