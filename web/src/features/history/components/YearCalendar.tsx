@@ -192,9 +192,9 @@ export function MonthCalendar({
           const base = "size-8 rounded-md border-0 p-0";
           // Outside the view (before it starts, or after today): just a faint outline.
           if (!c)
-            return <span key={`out${num}`} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")} />;
+            return <span key={`out${num}`} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]")} />;
           if (!c.label)
-            return <span key={c.i} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")} />;
+            return <span key={c.i} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]")} />;
           return (
             <button
               key={c.i}
@@ -208,7 +208,7 @@ export function MonthCalendar({
                 !c.fill && "bg-transparent",
                 c.i === selected
                   ? cn("relative z-1", RING)
-                  : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
+                  : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]",
               )}
               style={c.fill ? { background: c.fill } : undefined}
             />
