@@ -4,11 +4,12 @@ import { PageHeader } from "~/features/common/layout/components/PageHeader";
 const TABS = [
   { to: "/settings/system", label: "System" },
   { to: "/settings/tariffs", label: "Tariffs" },
+  { to: "/settings/billing", label: "Billing" },
   { to: "/settings/integrations", label: "Integrations" },
   { to: "/settings/account", label: "Account" },
 ] as const;
 
-/** Settings: a tab row over the System, Tariffs, Integrations and Account pages. */
+/** Settings: a tab row over the System, Tariffs, Billing, Integrations and Account pages. */
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsLayout,
 });
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_app/settings")({
 function SettingsLayout() {
   return (
     <>
-      <PageHeader title="Settings" sub="System details, rates, and connected services" />
+      <PageHeader title="Settings" sub="System details, rates, billing, and connected services" />
       <div className="flex gap-1 border-b border-line">
         {TABS.map((t) => (
           <Link

@@ -3,7 +3,7 @@ import { apiSend } from "~/features/common/api/utils";
 import { patchSystem } from "~/features/common/live/api";
 import type { Settings } from "~/features/common/settings/types";
 
-/** Save the forecast location or system cost, and refresh what depends on it. */
+/** Save the forecast location or billing period, and refresh what depends on it. */
 export function useSaveSettings() {
   const qc = useQueryClient();
   return useMutation({
@@ -11,7 +11,8 @@ export function useSaveSettings() {
     onSuccess: (saved, changes) => {
       patchSystem(qc, saved);
       if ("latitude" in changes || "longitude" in changes) qc.invalidateQueries({ queryKey: ["forecast"] });
-      if ("system_cost" in changes) qc.invalidateQueries({ queryKey: ["savings"] });
+      if ("bill_months" in changes || "bill_day" in changes || "bill_anchor" in changes)
+        qc.invalidateQueries({ queryKey: ["bills"] });
     },
   });
 }

@@ -13,8 +13,7 @@ export function useSaveTariff() {
       patchSystem(qc, { tariff });
       qc.invalidateQueries({ queryKey: [POLL] });
       qc.invalidateQueries({ queryKey: ["costs"] });
-      qc.invalidateQueries({ queryKey: ["savings"] });
-      qc.invalidateQueries({ queryKey: ["plans", "compare"] });
+      qc.invalidateQueries({ queryKey: ["bills"] });
     },
   });
 }

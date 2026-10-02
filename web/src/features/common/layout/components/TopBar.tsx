@@ -9,7 +9,7 @@ import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
 
 type NavItem = {
-  to: "/" | "/history" | "/forecast" | "/insights" | "/savings" | "/tesla";
+  to: "/" | "/history" | "/forecast" | "/insights" | "/bills" | "/tesla";
   label: string;
   icon: IconName;
 };
@@ -18,7 +18,7 @@ const NAV: NavItem[] = [
   { to: "/history", label: "History", icon: "chart" },
   { to: "/forecast", label: "Forecast", icon: "cloudSun" },
   { to: "/insights", label: "Insights", icon: "pulse" },
-  { to: "/savings", label: "Savings", icon: "dollar" },
+  { to: "/bills", label: "Bills", icon: "dollar" },
   { to: "/tesla", label: "Tesla", icon: "car" },
 ];
 
