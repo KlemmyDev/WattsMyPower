@@ -9,8 +9,14 @@ so a mapping fix can be re-applied to history with `python -m app reprocess`.
 ## Devices
 
 There are two roles: `hybrid`, the inverter with the battery and the grid meter (required), and `pv2`, a
-second, AC-coupled solar inverter (optional). Each is read by a driver, picked with `INVERTER_DRIVER` /
-`PV2_DRIVER`; a driver id is `<brand>.<model family>`, and the API needs a decoder with the same id.
+second, AC-coupled solar inverter (optional). Each is read by a driver; a driver id is
+`<brand>.<model family>`, and the API needs a decoder with the same id.
+
+The devices are stored in the collector's database (table `devices`, one per role) and connected from
+the dashboard (Settings → Integrations) through the `/v1/devices` endpoints below. A collector that
+starts with a database from before that copies `INVERTER_HOST` / `PV2_HOST` (with their `_DRIVER`,
+`_PORT`, `_UNIT` and `PV2_BEHIND_METER`) into it, once; after that the environment's devices are no
+longer read. Changes take effect from the next poll, without a restart.
 
 | Driver          | Role     | What                                        | Input ranges read every poll (start, count)      | Read every 6 h ("info")                                    |
 |-----------------|----------|---------------------------------------------|--------------------------------------------------|------------------------------------------------------------|
@@ -52,5 +58,21 @@ transaction, with the same `ts`, so readers never see half a poll.
                           "info": {"input": {"4990": 16691, "5000": 3597}, "holding": {"13059": 50}}},
                "pv2": {"host": "192.168.0.10", "driver": "sungrow.sg_d", "last_success": 1790852400.9, "error": null, "info": {"input": {}}}}}
   ```
-  `info` holds the most recent info registers read. `pv2` is absent when no second inverter is configured.
+  `info` holds the most recent info registers read. `pv2` is absent when no second inverter is connected,
+  and `devices` is empty until a hybrid is (nothing is read without one). Each device also reports its
+  `port`, `unit` and `settings`.
+- `GET /v1/devices`: `{"devices": [{"role", "driver", "host", "port", "unit", "settings", "added_at"}],
+  "drivers": {"sungrow.sh_rs": "hybrid", ...}}`. `settings` belong to the API (e.g. `behind_meter` for a
+  `pv2`): the collector stores them as they are.
+- `PUT /v1/devices/<role>` with `{"driver", "host", "port"?, "unit"?, "settings"?, "check"?}`: connect a
+  device in that role, replacing any there. Unless `check` is false (or only `settings` changed), the device
+  must answer its driver's probe first (422 if not). Returns `{"device": {...}, "input": {address: word}}`,
+  the words the probe read (the identity registers: type code, nominal power, serial).
+- `DELETE /v1/devices/<role>`: `{"removed": true|false}`.
+- `POST /v1/scan` with `{"network": "192.168.1.0/24"}` (private, /22 or smaller): start looking for inverters.
+  422 for a network that can't be scanned, 409 while a scan runs. `GET /v1/scan` reports progress:
+  `{"running", "network", "started_at", "finished_at", "checked", "total", "error", "found": [{"host", "port",
+  "driver", "input", "connected"?}]}`. `found` lists every address with Modbus TCP port 502 open: `driver`
+  is the first reader whose probe recognised it (null if none did), with the words its probe read; addresses
+  of connected devices are marked `connected` and not probed.
 - `GET /healthz` (no token): `{"ok": true, "fresh": <hybrid read within max(120, poll_interval * 6) s>}`.

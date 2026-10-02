@@ -155,8 +155,8 @@ class MockSite:
 
 
 class MockDevice:
-    def __init__(self, site: MockSite, name: str, driver: str):
-        self.site, self.name, self.driver, self.host = site, name, driver, "mock"
+    def __init__(self, site: MockSite, name: str, driver: str, host: str = "mock"):
+        self.site, self.name, self.driver, self.host = site, name, driver, host
 
     def read(self, include_info: bool) -> RawReading:
         return self.at(int(time.time()), include_info)
@@ -168,6 +168,22 @@ class MockDevice:
         if not include_info:
             return RawReading(input=r.input)
         return RawReading({**r.info_input, **r.input}, dict(r.info_holding), r.info_input, r.info_holding)
+
+
+# Where a scan in mock mode "finds" the fake inverters.
+MOCK_HOSTS = {"192.168.0.244": "hybrid", "192.168.0.10": "pv2"}
+
+
+def mock_probe(site: MockSite, host: str) -> tuple[str, Words] | None:
+    """(role, identity words) of the fake inverter at `host`, as a scan would read them."""
+    role = MOCK_HOSTS.get(host)
+    if role is None:
+        return None
+    r = site.readings(int(time.time()))
+    if role == "hybrid":
+        return role, dict(r["hybrid"].info_input) if r["hybrid"] else {}
+    p = r["pv2"]
+    return (role, {a: w for a, w in p.input.items() if a < 5009}) if p else None
 
 
 def backfill(store: Store, devices: list[Device], interval: int, days: int) -> None:

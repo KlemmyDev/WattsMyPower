@@ -120,7 +120,10 @@ def test_status_shape(client: TestClient) -> None:
     assert body["devices"] == {
         "hybrid": {
             "host": "10.0.0.1",
+            "port": 502,
+            "unit": 1,
             "driver": "sungrow.sh_rs",
+            "settings": {},
             "last_success": None,
             "error": None,
             "info": {"input": {}},
@@ -141,8 +144,8 @@ def test_status_includes_pv2_when_configured(cfg: Config) -> None:
     with TestClient(create_app(cfg, hybrid=FakeDevice(), pv2=pv2, poll=False)) as c:
         poll(c)
         devices = c.get("/v1/status", headers=AUTH).json()["devices"]
-        assert devices["pv2"] == {"host": "10.0.0.2", "driver": "sungrow.sg_d", "last_success": None, "error": "ConnectionError: pv2 down",
-                                  "info": {"input": {}}}  # fmt: skip
+        assert devices["pv2"] == {"host": "10.0.0.2", "port": 502, "unit": 1, "driver": "sungrow.sg_d", "settings": {},
+                                  "last_success": None, "error": "ConnectionError: pv2 down", "info": {"input": {}}}  # fmt: skip
         assert devices["hybrid"]["error"] is None
 
 

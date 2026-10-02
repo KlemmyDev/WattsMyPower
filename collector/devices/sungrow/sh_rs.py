@@ -54,12 +54,30 @@ class ShRsDevice:
             return None
         return list(rr.registers)
 
+    def probe(self) -> Words | None:
+        """The identity registers (device type, nominal power, serial), or None if nothing here answers
+        plain Modbus like a Sungrow hybrid. Quick and quiet, for scanning the network: one short try."""
+        client = self._client_cls(self.host, port=self.port, timeout=3, retries=0)
+        try:
+            if not client.connect():
+                return None
+            ident = self._read(client, 5000, 3)
+            if not ident or len(ident) != 3:
+                return None
+            serial = self._read(client, 4990, 10) or []
+        except (ModbusException, OSError):
+            return None
+        finally:
+            client.close()
+        words = dict(zip(range(5000, 5003), ident, strict=True))
+        if len(serial) == 10:
+            words.update(zip(range(4990, 5000), serial, strict=True))
+        return words
+
     def read(self, include_info: bool) -> RawReading:
         """One connect -> read -> disconnect cycle. Raises ConnectionError if unreachable."""
         if not self.host:
-            raise ConnectionError(
-                "No inverter address set. Set INVERTER_HOST in .env, or run: bash install.sh --configure"
-            )
+            raise ConnectionError("No inverter address set. Connect it in Settings → Integrations.")
         client = self._client_cls(self.host, port=self.port, timeout=5, retries=1)
         if not client.connect():
             raise ConnectionError(f"Could not connect to {self.host}:{self.port}")

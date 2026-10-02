@@ -84,7 +84,10 @@ def test_status_keeps_the_latest_info(cfg: Config, store: Store) -> None:
     st = poller.status["hybrid"].as_json()
     assert st == {
         "host": "10.0.0.1",
+        "port": 502,
+        "unit": 1,
         "driver": "sungrow.sh_rs",
+        "settings": {},
         "last_success": clock.t,
         "error": None,
         "info": {"input": {"4990": 16691, "5000": 3597}, "holding": {"13059": 50}},

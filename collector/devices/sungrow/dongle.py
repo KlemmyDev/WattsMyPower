@@ -25,7 +25,7 @@ from typing import Any
 
 from Cryptodome.Cipher import AES
 
-from collector.devices import RawReading
+from collector.devices import RawReading, Words
 from collector.devices.modbus import Range, read_ranges
 
 FIXED_KEY = b"Grow#0*2Sun68CbE"
@@ -102,6 +102,20 @@ class DongleDevice:
             # Usually a stale key: the reply decrypts to garbage. Raising makes read() fetch a new one.
             raise ConnectionError(f"{self.host} sent a garbled reply")
         return list(struct.unpack(f">{count}H", raw[9 : 9 + nbytes]))
+
+    def probe(self) -> Words | None:
+        """The first range's words (for an SG-D: type, nominal power, yield, hours), or None if nothing
+        here answers like an encrypted Sungrow dongle. For scanning the network: one try, no retries."""
+        start, count = self.ranges[0]
+        try:
+            self._handshake()
+            with closing(self._connect()) as s:
+                block = self._read(s, start, count)
+        except OSError:  # includes ConnectionError: no key, no reply, or garbage back
+            return None
+        finally:
+            self._key_day = None  # a probe's key isn't kept
+        return dict(zip(range(start, start + count), block, strict=True)) if block else None
 
     def read(self, include_info: bool) -> RawReading:
         """The words in `ranges`. Raises ConnectionError if unreachable."""

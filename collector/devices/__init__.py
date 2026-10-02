@@ -10,11 +10,44 @@ registered by driver id in drivers.py.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 # Register address -> raw unsigned 16-bit word.
 Words = dict[int, int]
+
+# The roles a device can have: the inverter with the battery and the grid meter, and a second,
+# AC-coupled solar inverter. One device per role.
+ROLES = ("hybrid", "pv2")
+
+
+@dataclass(frozen=True)
+class DeviceConfig:
+    """A connected inverter, as stored in the collector's database (Settings → Integrations).
+
+    `settings` belong to the API (e.g. where a second inverter connects): stored and served as they
+    are, never interpreted here.
+    """
+
+    role: str
+    driver: str
+    host: str
+    port: int = 502
+    unit: int = 1
+    settings: Mapping[str, Any] = field(default_factory=dict)
+    added_at: int = 0
+
+    def as_json(self) -> dict[str, Any]:
+        return {
+            "role": self.role,
+            "driver": self.driver,
+            "host": self.host,
+            "port": self.port,
+            "unit": self.unit,
+            "settings": dict(self.settings),
+            "added_at": self.added_at,
+        }
 
 
 @dataclass(frozen=True)
