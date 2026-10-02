@@ -4,7 +4,7 @@ import type { IconName } from "~/features/common/ui/components/Icon";
 
 // WMO weather codes (Open-Meteo).
 const isRain = (c: number) => (c >= 51 && c <= 67) || (c >= 80 && c <= 82);
-const isWet = (c: number) => isRain(c) || c >= 95;
+export const isWet = (c: number) => isRain(c) || c >= 95;
 
 export type SkyMode = "sunny" | "cloudy" | "rain" | "storm" | "night";
 export type Cover = "clear" | "cloudy" | "rain" | "storm";

@@ -4,15 +4,18 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { bandAt, tariffNumber } from "~/features/common/tariffs/utils";
 import { reserveOf } from "~/features/common/energy/utils";
+import { isWet } from "~/features/common/weather/utils";
 
-/* The figures behind the Overview's "Next 24 hours" card: chart geometry, the story line, and totals. */
+/* The figures behind the Overview's "Next 24 hours" card: headline, key moments, chart geometry, and totals. */
 
 export const W = 600;
-export const H = 170;
+/** Heights of the solar / home use plot and the battery level plot. */
+export const PH = 110;
+export const BH = 56;
 const DAY = 86400;
 
 type V = { t: number; v: number };
-type Mark = { t: number; soc: number; label: string; color: string };
+type Moment = { t: number; title: string; sub: string; color: string };
 
 export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefined, now: number) {
   const end = now + DAY;
@@ -22,6 +25,7 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   if (!hrs.length) return null;
 
   const X = (ts: number) => ((Math.min(end, Math.max(now, ts)) - now) / DAY) * W;
+  const left = (ts: number) => (X(ts) / W) * 100;
   const mid = (h: ForecastHour) => h.start + (h.ts + 3600 - h.start) / 2;
   const last = hrs[hrs.length - 1];
   const pv: V[] = [
@@ -38,11 +42,14 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
     { t: now, v: p && p.battery_soc != null ? p.battery_soc : hrs[0].soc },
     ...hrs.map((h) => ({ t: Math.min(end, h.ts + 3600), v: h.soc })),
   ];
-  const mx = Math.max(1, ...pv.map((x) => x.v), ...load.map((x) => x.v)) * 1.1;
-  const Y = (v: number) => H - 6 - (v / mx) * (H - 30);
-  const YS = (v: number) => H - 6 - (v / 100) * (H - 30);
+  const peak = Math.max(...pv.map((x) => x.v));
+  const mx = Math.max(1, peak, ...load.map((x) => x.v)) * 1.1;
+  const py = (v: number) => PH - 2 - (v / mx) * (PH - 10);
+  const by = (soc: number) => BH - 2 - (soc / 100) * (BH - 4);
   const path = (arr: V[], fy: (v: number) => number) =>
     arr.map((x, k) => `${k ? "L" : "M"}${X(x.t).toFixed(1)} ${fy(x.v).toFixed(1)}`).join(" ");
+  // A dashed guide at a round kW figure near the solar peak.
+  const guideKw = Math.max(1, Math.round(peak));
 
   // Shaded spans for the hours after dark.
   const nights: { x: number; w: number }[] = [];
@@ -57,12 +64,43 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
     }
   });
 
-  const fullAt = f.summary.full_at && f.summary.full_at < end ? f.summary.full_at : null;
+  // Key moments, numbered in time order.
+  const fullAt = f.summary.full_at && f.summary.full_at > now && f.summary.full_at < end ? f.summary.full_at : null;
+  const sunDrop = hrs.find(
+    (h, k) => k > 0 && h.is_day && new Date(h.ts * 1000).getHours() >= 13 && h.pv_kw < h.load_kw,
+  );
   const resH = hrs.find((h) => h.soc <= reserve + 0.5 && (!fullAt || h.start > fullAt));
   const resAt = resH ? Math.min(end, resH.ts + 3600) : null;
-  const marks: Mark[] = [];
-  if (fullAt) marks.push({ t: fullAt, soc: 100, label: `Full ${hhmm(fullAt)}`, color: "#6f8cff" });
-  if (resH && resAt) marks.push({ t: resAt, soc: resH.soc, label: `Reserve ${hhmm(resAt)}`, color: "#8a8a90" });
+  // The first daytime rain, which is the only rain that matters for solar.
+  const wet = (h: ForecastHour) => isWet(h.code) || h.precip >= 50;
+  const k0 = hrs.findIndex((h) => wet(h) && h.is_day);
+  const wetEnd = k0 < 0 ? -1 : hrs.findIndex((h, k) => k > k0 && !wet(h));
+  const showers = k0 < 0 ? null : { t: hrs[k0].start, until: wetEnd < 0 ? last.ts + 3600 : hrs[wetEnd].ts };
+  const moments: Moment[] = [];
+  if (fullAt) moments.push({ t: fullAt, title: "Battery full", sub: "Extra solar goes to the grid", color: "#6f8cff" });
+  if (sunDrop)
+    moments.push({
+      t: sunDrop.ts,
+      title: "Solar drops below home use",
+      sub: "Battery starts powering your home",
+      color: "#ffb547",
+    });
+  if (resAt)
+    moments.push({
+      t: resAt,
+      title: "Battery reaches reserve",
+      sub: "Your home runs on the grid until morning",
+      color: "#b0b0b5",
+    });
+  if (showers)
+    moments.push({
+      t: showers.t,
+      title: `Showers until ${hhmm(showers.until)}`,
+      sub: new Date(showers.t * 1000).getHours() < 12 ? "Lower solar early in the day" : "Lower solar while it rains",
+      color: "#9fb2ff",
+    });
+  moments.sort((a, b) => a.t - b.t);
+  const today = new Date(now * 1000).toDateString();
 
   // One weather reading every three hours.
   const weather = Array.from({ length: 8 }, (_, k) => {
@@ -71,36 +109,11 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
     return { at, h };
   });
 
-  // Story
-  const sunDrop = hrs.find(
-    (h, k) => k > 0 && h.is_day && new Date(h.ts * 1000).getHours() >= 13 && h.pv_kw < h.load_kw,
-  );
-  const tm = f.summary.tomorrow_morning || "";
-  const tomorrow = /^Showers /.test(tm)
-    ? ` Showers are expected ${tm.slice(8)} tomorrow.`
-    : tm && tm !== "No forecast"
-      ? ` Tomorrow morning looks ${tm.toLowerCase()}.`
-      : "";
-  const story =
-    (p && (p.battery_soc ?? 0) >= 99.5
-      ? "Your battery is full."
-      : fullAt
-        ? `Your battery should be full by ${hhmm(fullAt)}.`
-        : "Your battery won't quite fill in the next 24 hours.") +
-    (sunDrop ? ` Solar drops below home use around ${hhmm(sunDrop.ts)}` : "") +
-    (sunDrop
-      ? resAt
-        ? `, and the battery reaches its reserve at about ${hhmm(resAt)}.`
-        : ", and the battery should last the night."
-      : resAt
-        ? ` The battery reaches its reserve at about ${hhmm(resAt)}.`
-        : "") +
-    tomorrow;
-
   // Totals for the next 24 hours
   const kwhOf = (h: ForecastHour, v: number) => (v * (h.ts + 3600 - h.start)) / 3600;
   const use = hrs.reduce((a, h) => a + kwhOf(h, h.load_kw), 0);
   const imp = hrs.reduce((a, h) => a + Math.max(0, h.grid_kwh), 0);
+  const cover = use > 0 ? Math.max(0, Math.min(1, 1 - imp / use)) : 1;
   const cost = t
     ? hrs.reduce(
         (a, h) =>
@@ -118,15 +131,30 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   ];
 
   return {
-    pvPath: path(pv, Y),
-    loadPath: path(load, Y),
-    socPath: path(socPts, YS),
+    headline:
+      `Solar and battery should cover ${Math.round(cover * 100)}% of your power. ` +
+      (imp < 0.5 ? "You should barely need the grid." : `You will need about ${imp.toFixed(1)} kWh from the grid.`),
+    cover: cover * 100,
+    gridKwh: kWh(imp),
+    moments: moments.map((m, i) => ({
+      ...m,
+      num: i + 1,
+      time: hhmm(m.t),
+      day: new Date(m.t * 1000).toDateString() === today ? "Today" : "Tomorrow",
+      left: left(m.t),
+    })),
+    pvPath: path(pv, py),
+    loadPath: path(load, py),
+    socPath: path(socPts, by),
+    guideKw,
+    guideY: py(guideKw),
+    reserve,
+    reserveY: by(reserve),
+    fullY: by(100),
     nights,
-    // as percentages of the plot, for the HTML dots and labels
-    marks: marks.map((m) => ({ ...m, left: (X(m.t) / W) * 100, top: (YS(m.soc) / H) * 100 })),
+    // as percentages of the plot width
     ticks: [0, 6, 12, 18, 24].map((o) => ({ left: (o / 24) * 100, label: o ? hhmm(now + o * 3600) : "Now" })),
     weather,
-    story,
     stats,
   };
 }
