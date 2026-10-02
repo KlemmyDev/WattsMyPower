@@ -39,7 +39,11 @@ export async function apiGet<T>(path: string, params?: Params, init?: RequestIni
   return parse<T>(await fetch(apiUrl(path, params), { credentials: "same-origin", ...init }));
 }
 
-export async function apiSend<T>(method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+export async function apiSend<T>(
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   return parse<T>(
     await fetch(apiUrl(path), {
       method,

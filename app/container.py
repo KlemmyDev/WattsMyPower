@@ -15,6 +15,7 @@ from app.features.auth.service import AuthService
 from app.features.bills.service import BillsService
 from app.features.forecast.service import ForecastService
 from app.features.insights.service import InsightsService
+from app.features.integrations.service import IntegrationsService
 from app.features.live.client import CollectorClient
 from app.features.live.ingest import CollectorIngest
 from app.features.live.service import LiveService
@@ -39,6 +40,7 @@ class Services:
     insights: InsightsService
     bills: BillsService
     auth: AuthService
+    integrations: IntegrationsService
     live: LiveService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
@@ -51,10 +53,9 @@ def build_services(config: Config) -> Services:
     tariffs = TariffStore(db, config)
     plans = PlansService(tariffs)
     live = LiveService(config, settings, tariffs)
+    collector = None if config.mock else CollectorClient(config.collector_url, config.collector_token)
     source: CollectorIngest | Simulator = (
-        Simulator(config, db, readings, live)
-        if config.mock
-        else CollectorIngest(config, db, readings, live, CollectorClient(config.collector_url, config.collector_token))
+        CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
     return Services(
         config=config,
@@ -68,6 +69,7 @@ def build_services(config: Config) -> Services:
         insights=InsightsService(db, readings, settings),
         bills=BillsService(db, readings, settings, tariffs),
         auth=AuthService(db, enabled=config.auth),
+        integrations=IntegrationsService(config, collector, live),
         live=live,
         source=source,
     )

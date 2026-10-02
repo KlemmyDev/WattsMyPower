@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from collector.store import Row, Store
+from collector.store import MIGRATIONS, Row, Store
 
 
 def keys(rows: list[Row]) -> list[tuple[int, str]]:
@@ -99,6 +99,6 @@ def test_bounds_of_an_empty_store(store: Store) -> None:
 
 
 def test_migrate_is_idempotent_and_versioned(store: Store) -> None:
-    assert store.migrate() == 1
+    assert store.migrate() == len(MIGRATIONS)
     with sqlite3.connect(store.path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)

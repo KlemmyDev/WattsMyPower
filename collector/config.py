@@ -9,11 +9,14 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
+    # The inverters are connected in the dashboard (Settings → Integrations) and stored in the
+    # database. These settings are only read the first time the collector starts with a database
+    # from before that, to move an existing install's inverters into it (Store.seed_devices).
     # Which reader to use for each inverter (see devices/drivers.py).
     inverter_driver: str = "sungrow.sh_rs"
     pv2_driver: str = "sungrow.sg_d"
 
-    # IP address of the hybrid inverter's WiNet-S dongle. Required unless mock is on.
+    # IP address of the hybrid inverter's WiNet-S dongle.
     inverter_host: str = ""
     inverter_port: int = 502
     inverter_unit: int = 1
@@ -23,6 +26,9 @@ class Config:
     pv2_host: str = ""
     pv2_port: int = 502
     pv2_unit: int = 1
+    # Where the second system connects (true: on the house side of the hybrid's meter). Stored with
+    # it as a setting for the API.
+    pv2_behind_meter: bool = True
 
     # The WiNet-S2 gets unhappy under aggressive polling and only refreshes most registers
     # every ~30-60 s anyway, so 60 s is both the default and the floor.
@@ -64,6 +70,7 @@ class Config:
             pv2_host=text("PV2_HOST"),
             pv2_port=integer("PV2_PORT", d.pv2_port),
             pv2_unit=integer("PV2_UNIT", d.pv2_unit),
+            pv2_behind_meter=flag("PV2_BEHIND_METER", d.pv2_behind_meter),
             poll_interval=max(60, integer("POLL_INTERVAL", d.poll_interval)),
             max_backoff=integer("MAX_BACKOFF", d.max_backoff),
             db_path=text("COLLECTOR_DB_PATH", d.db_path),

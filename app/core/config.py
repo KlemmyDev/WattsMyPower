@@ -13,6 +13,10 @@ class Config:
     # token its feed requires. Point COLLECTOR_URL at the server's collector to run the API elsewhere.
     collector_url: str = "http://collector:8081"
     collector_token: str = ""
+    # Whether this dashboard may change what the collector reads (connect, remove or scan for inverters
+    # in Settings → Integrations). Set false for a dashboard following another server's collector,
+    # e.g. while developing, so trying the UI can't disconnect the live system's inverters.
+    collector_writes: bool = True
 
     # Where a second, AC-coupled system (configured on the collector) connects. True (the usual AC-coupled setup): on the house side
     # of the hybrid's meter, so the hybrid sees its output as lower (even negative) home use.
@@ -76,6 +80,7 @@ class Config:
         return cls(
             collector_url=text("COLLECTOR_URL", d.collector_url),
             collector_token=text("COLLECTOR_TOKEN"),
+            collector_writes=flag("COLLECTOR_WRITES", d.collector_writes),
             pv2_behind_meter=flag("PV2_BEHIND_METER", d.pv2_behind_meter),
             poll_interval=max(60, integer("POLL_INTERVAL", d.poll_interval)),
             max_backoff=integer("MAX_BACKOFF", d.max_backoff),

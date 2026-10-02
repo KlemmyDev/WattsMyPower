@@ -1,7 +1,11 @@
 """
-The collector's SQLite store: one row per device per poll, raw words as JSON text.
+The collector's SQLite store: one row per device per poll, raw words as JSON text, and the
+devices it reads.
 
     readings  (ts, device) -> driver, input words, holding words (NULL when none were read)
+    devices   role -> driver, host, port, unit, settings (JSON): the connected inverters, set up
+              from the dashboard (Settings → Integrations)
+    kv        small text values, e.g. whether the devices were seeded from the environment
 
 Each poll's rows go in one transaction with a shared `ts`, so a reader sees all of a poll or none
 of it, and paging (`since`) never splits one. Every call opens its own connection: cheap with WAL,
@@ -13,11 +17,12 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from typing import NamedTuple
 
-from collector.devices import Words
+from collector.devices import DeviceConfig, Words
 
 
 def _baseline(conn: sqlite3.Connection) -> None:
@@ -27,11 +32,24 @@ def _baseline(conn: sqlite3.Connection) -> None:
     )
 
 
+def _devices(conn: sqlite3.Connection) -> None:
+    """The inverters to read, moved from environment variables into the database (see seed_devices)."""
+    conn.execute(
+        "CREATE TABLE devices (role TEXT PRIMARY KEY, driver TEXT NOT NULL, host TEXT NOT NULL,"
+        " port INTEGER NOT NULL, unit INTEGER NOT NULL, settings TEXT NOT NULL DEFAULT '{}',"
+        " added_at INTEGER NOT NULL)"
+    )
+    conn.execute("CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
+    _devices,
 ]
+
+SEEDED = "devices_seeded"
 
 # One device's words from one poll: (device, driver, input words, holding words - empty if none were read).
 PollRow = tuple[str, str, Words, Words]
@@ -113,6 +131,60 @@ class Store:
         with self.writing() as conn:
             cur = conn.execute("DELETE FROM readings WHERE ts < ?", (int(now) - self.retention_days * 86400,))
             return cur.rowcount
+
+    # -- devices --------------------------------------------------------------
+    def devices(self) -> list[DeviceConfig]:
+        """The connected inverters, hybrid first."""
+        with self.reading() as conn:
+            rows = conn.execute(
+                "SELECT role, driver, host, port, unit, settings, added_at FROM devices"
+                " ORDER BY role = 'hybrid' DESC, role"
+            ).fetchall()
+        return [DeviceConfig(r, d, h, p, u, json.loads(s or "{}"), a) for r, d, h, p, u, s, a in rows]
+
+    def put_device(self, device: DeviceConfig) -> DeviceConfig:
+        """Connect a device in its role, replacing whatever had that role. Returns it as stored."""
+        added = device.added_at or int(time.time())
+        with self.writing() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO devices (role, driver, host, port, unit, settings, added_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (device.role, device.driver, device.host, device.port, device.unit,
+                 json.dumps(dict(device.settings), separators=(",", ":")), added),
+            )  # fmt: skip
+        return DeviceConfig(device.role, device.driver, device.host, device.port, device.unit, device.settings, added)
+
+    def remove_device(self, role: str) -> bool:
+        with self.writing() as conn:
+            return conn.execute("DELETE FROM devices WHERE role = ?", (role,)).rowcount > 0
+
+    def seed_devices(self, devices: Iterable[DeviceConfig]) -> bool:
+        """Store the devices the environment configures (INVERTER_HOST, PV2_HOST), once ever.
+
+        This moves an install from before devices were managed in the dashboard into the database.
+        After it has run, the database is the only source: removing every device in the dashboard
+        doesn't bring the environment's back on the next start. Returns whether it ran.
+        """
+        with self.writing() as conn:
+            if conn.execute("SELECT 1 FROM kv WHERE key = ?", (SEEDED,)).fetchone():
+                return False
+            now = int(time.time())
+            for d in devices:
+                conn.execute(
+                    "INSERT OR IGNORE INTO devices (role, driver, host, port, unit, settings, added_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        d.role,
+                        d.driver,
+                        d.host,
+                        d.port,
+                        d.unit,
+                        json.dumps(dict(d.settings), separators=(",", ":")),
+                        now,
+                    ),
+                )
+            conn.execute("INSERT INTO kv (key, value) VALUES (?, ?)", (SEEDED, str(now)))
+            return True
 
     # -- reading --------------------------------------------------------------
     def since(self, since: int, limit: int) -> tuple[list[Row], bool]:

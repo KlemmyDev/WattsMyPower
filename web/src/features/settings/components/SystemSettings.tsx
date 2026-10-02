@@ -51,8 +51,8 @@ export function SystemSettings() {
         ))}
       </div>
       <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-        These details come from your inverters over the local network. Solar array size (PV_KW) and the second
-        inverter's address (PV2_HOST) are set in the server configuration.
+        These details come from your inverters over the local network. Inverters are connected in Settings →
+        Integrations; the solar array size (PV_KW) is set in the server configuration.
       </div>
     </SettingsCard>
   );

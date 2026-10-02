@@ -12,12 +12,14 @@
 # the database is backed up to data/backups/ (the newest 5 are kept), without
 # stopping the app.
 #
-# Options:  --configure  change your settings (inverter addresses, array size, time zone,
-#                        port), then restart. Your current values are the defaults.
+# Options:  --configure  change your settings (array size, time zone, port), then restart.
+#                        Your current values are the defaults. Inverters are connected in the
+#                        dashboard: Settings → Integrations.
 #           --start      just start it (and Docker if needed): no update, rebuild or
 #                        questions. start.sh does the same.
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
-#                        passed in, e.g. INVERTER_HOST=192.168.1.20 bash install.sh --yes
+#                        passed in, e.g. PV_KW=10 bash install.sh --yes (INVERTER_HOST too, on a
+#                        first install, to connect the inverter without the dashboard)
 #           -h, --help   show this help
 #
 # First install only:  WMP_DIR=/path  folder to install into (default: ./wattsmypower)
@@ -165,6 +167,7 @@ wait_and_report() {
   if [ "$ok" = 1 ]; then
     local port; port="$(get_env PORT)"
     say "WattsMyPower is running: http://${ip:-localhost}:${port:-8080}"
+    info "New install? Connect your inverter there: Settings → Integrations finds it on your network."
     info "Logs: $DC logs -f --tail=50"
   else
     warn "It started but isn't responding yet. Recent logs:"
@@ -211,27 +214,18 @@ fi
 current() { local passed="${!1-}"; printf '%s' "${passed:-$(get_env "$1")}"; }
 
 configure() {
+  # Inverters are connected in the dashboard (Settings → Integrations). Ones passed in on a first
+  # install (INVERTER_HOST=... bash install.sh --yes) are still taken, and moved into its database.
   local v
-  while :; do
-    v="$(ask "IP address of your Sungrow hybrid's WiNet-S dongle" "$(current INVERTER_HOST)")"
-    [ -n "$v" ] && break
-    interactive || die "No inverter address: pass INVERTER_HOST=<IP address>, or run this without --yes to be asked."
-    warn "  This one is needed: find it in your router's device list or the iSolarCloud app."
+  for v in INVERTER_HOST PV2_HOST PV2_BEHIND_METER; do
+    [ -n "${!v-}" ] && set_env "$v" "${!v}"
   done
-  set_env INVERTER_HOST "$v"
-  v="$(ask "IP address of a second, older Sungrow inverter's Wi-Fi dongle (blank if none)" "$(current PV2_HOST)")"
-  set_env PV2_HOST "$v"
-  if [ -n "$v" ]; then
-    local behind; behind="$(current PV2_BEHIND_METER)"
-    behind="$(ask "Is it on the house side of the hybrid's meter, the usual setup? (yes/no)" "$([ "$behind" = false ] && echo no || echo yes)")"
-    set_env PV2_BEHIND_METER "$([[ "$behind" =~ ^[Nn] ]] && echo false || echo true)"
-  fi
   set_env PV_KW "$(ask "Total size of your solar panels in kW" "$(current PV_KW)")"
   local tz; tz="$(current TZ)"
   [ -n "$tz" ] && [ "$tz" != "$(get_env TZ .env.example)" ] || tz="$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || printf '%s' "$tz")"
   set_env TZ "$(ask "Time zone" "$tz")"
   set_env PORT "$(ask "Port to serve the dashboard on" "$(current PORT)")"
-  info "Saved to .env. Rates, location and system cost are set in the dashboard."
+  info "Saved to .env. Inverters, rates, location and system cost are set in the dashboard."
 }
 
 if [ ! -f .env ]; then
@@ -253,9 +247,6 @@ else
   [ -n "$kept" ] && info "Kept your running settings by writing them into .env:$kept"
   if [ "$CONFIGURE" = 1 ]; then
     say "Your settings (press Enter to keep each one)"
-    configure
-  elif [ -z "$(get_env INVERTER_HOST)" ]; then
-    say "No inverter address is set yet"
     configure
   fi
 fi

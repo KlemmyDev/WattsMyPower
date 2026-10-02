@@ -19,12 +19,13 @@ from app.core.database import Database
 from app.features.inverters import drivers
 from app.features.live.client import Feed
 from app.features.live.service import LiveService
-from app.features.live.transform import Pv2Carry, snapshots
+from app.features.live.transform import Pv2Carry, behind_meter, snapshots
 from app.features.readings.repository import ReadingsRepository
 
 log = logging.getLogger(__name__)
 
 CURSOR_KEY = "collector_cursor"
+NO_INVERTER = "No inverter connected yet. Connect one in Settings → Integrations."
 BATCH = 2000  # rows per request while catching up
 WAIT = 30  # seconds to hold a request open for the next poll once caught up
 
@@ -55,6 +56,8 @@ class CollectorIngest:
         self.client = client
         self.carry = Pv2Carry()
         self.has_pv2 = False
+        self.behind_meter = config.pv2_behind_meter
+        self._hybrid: tuple[Any, Any] | None = None  # (host, driver) the details in live.info are from
         self._conn: sqlite3.Connection | None = None
         self._task: asyncio.Task[None] | None = None
 
@@ -73,24 +76,38 @@ class CollectorIngest:
             self._conn.close()
 
     # ------------------------------------------------------------------ status
+    async def refresh(self) -> None:
+        """Take in the collector's status now (after a device was connected or removed) rather than on the next poll."""
+        self.apply_status(await asyncio.to_thread(self.client.status))
+        self.live.publish()
+
     def apply_status(self, status: dict[str, Any]) -> None:
         """The collector's view of the devices: connection state and their details."""
         devices = status.get("devices") or {}
-        h = devices.get("hybrid") or {}
-        self.live.last_success = h.get("last_success")
-        self.live.last_error = h.get("error")
-        main = drivers.hybrid(h.get("driver"))
-        decoded = main.decode_info(h.get("info") or {}) if main else {}
-        if decoded:
-            self.live.info = {**self.live.info, **decoded}
+        h = devices.get("hybrid")
+        if h is None:  # none connected yet (or it was removed): nothing to show about one
+            self.live.last_success, self.live.last_error, self.live.info = None, NO_INVERTER, {}
+        else:
+            if (h.get("host"), h.get("driver")) != self._hybrid:  # another inverter: the old one's details don't apply
+                self._hybrid, self.live.info = (h.get("host"), h.get("driver")), {}
+            self.live.last_success = h.get("last_success")
+            self.live.last_error = h.get("error")
+            main = drivers.hybrid(h.get("driver"))
+            decoded = main.decode_info(h.get("info") or {}) if main else {}
+            if decoded:
+                self.live.info = {**self.live.info, **decoded}
         p = devices.get("pv2")
         self.has_pv2 = p is not None
+        self.behind_meter = behind_meter(p, self.config.pv2_behind_meter)
+        if p is None:
+            self.carry.info = {}
         self.live.pv2 = (
             None
             if p is None
             else {
                 "host": p.get("host"),
                 **self.carry.info,
+                "behind_meter": self.behind_meter,
                 "last_success": p.get("last_success"),
                 "error": p.get("error"),
             }
@@ -102,7 +119,7 @@ class CollectorIngest:
         snaps = snapshots(
             rows,
             has_pv2=self.has_pv2,
-            behind_meter=self.config.pv2_behind_meter,
+            behind_meter=self.behind_meter,
             poll_interval=self.config.poll_interval,
             carry=self.carry,
         )

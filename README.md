@@ -15,9 +15,9 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
 ## What you need
 
-- A Sungrow SH-RS or SH-RT hybrid inverter with a **WiNet-S or WiNet-S2** dongle on your home network, and its **IP address** (find it in your router's list of connected devices, or in the iSolarCloud app).
+- A Sungrow SH-RS or SH-RT hybrid inverter with a **WiNet-S or WiNet-S2** dongle on your home network. The dashboard finds it by scanning your network; if it can't, you'll need its **IP address** (from your router's list of connected devices, or the iSolarCloud app).
 - A **Linux machine on the same network that stays on**: a Proxmox LXC container or VM, a Raspberry Pi, or any Debian or Ubuntu box. The install script sets up Docker on it if needed.
-- Optional: the IP address of a second, older Sungrow inverter's Wi-Fi dongle.
+- Optional: a second, older Sungrow inverter with a Wi-Fi dongle (found by the same scan).
 
 ## How it fits together
 
@@ -46,14 +46,13 @@ Two services, run together by Docker Compose:
    ```
 
    It installs Docker if it's missing (asking first), and sets Docker to start at boot so the dashboard comes back by itself after a restart. Then it asks:
-   - your hybrid inverter's WiNet-S IP address (required)
-   - a second inverter's dongle IP address (press Enter to skip)
    - the total size of your solar panels in kW
    - your time zone, and the port for the dashboard (8080 unless you change it)
 
    It saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
 
 3. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. Then finish setting up:
+   - **Settings → Integrations → Connect an inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
    - **Settings → Tariffs:** your electricity rates. Use **Find your plan** to load them from Energy Made Easy, or enter them by hand.
    - **Settings → Integrations → Change location:** your suburb, for the weather forecast.
    - **Savings:** what your system cost, for the payback estimate.
@@ -67,12 +66,12 @@ Run these from the `wattsmypower` folder:
 | Command | What it does |
 |---|---|
 | `bash install.sh` | update to the latest version (backs up both databases first) |
-| `bash install.sh --configure` | change your settings (inverter addresses, array size, time zone, port) and restart |
+| `bash install.sh --configure` | change your settings (array size, time zone, port) and restart. Inverters are changed in **Settings → Integrations**. |
 | `bash start.sh` | start it, and Docker if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
-| `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `INVERTER_HOST=192.168.1.20 bash install.sh --yes` |
+| `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `PV_KW=10 bash install.sh --yes`, or `INVERTER_HOST=192.168.1.20` on a first install to connect the inverter without the dashboard |
 
 **Updating** pulls the latest version, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
@@ -128,16 +127,12 @@ All settings are environment variables (see `.env.example`):
 |---|---|---|
 | `PORT` | `8080` | Port the dashboard is served on |
 | `COLLECTOR_TOKEN` | *(generated)* | Secret the dashboard uses to read the collector's feed. `install.sh` creates one in `.env`. |
+| `COLLECTOR_WRITES` | `true` | Whether the dashboard may change what the collector reads (connect, remove or scan for inverters). Set `false` on a dashboard following another server's collector, such as one you're developing on, so it can't disturb that system. |
 | `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
 | `COLLECTOR_RETENTION_DAYS` | `365` | Keep the collector's raw registers this many days (what `reprocess` can rebuild from). `0` = keep everything. |
-| `INVERTER_DRIVER` | `sungrow.sh_rs` | Which hybrid inverter you have (see [Supported inverters](#supported-inverters)) |
-| `INVERTER_HOST` | *(required)* | IP address of the hybrid's WiNet-S dongle |
-| `INVERTER_PORT` | `502` | Modbus TCP port |
-| `INVERTER_UNIT` | `1` | Modbus unit id |
-| `PV2_HOST` | *(empty)* | Optional second, AC-coupled solar system on an older Sungrow string inverter with a Wi-Fi dongle (e.g. an SG5K-D). Its IP address; empty = none. |
-| `PV2_DRIVER` | `sungrow.sg_d` | Which second inverter you have |
-| `PV2_PORT` / `PV2_UNIT` | `502` / `1` | Second inverter's Modbus port and unit id |
-| `PV2_BEHIND_METER` | `true` | Where the second system connects. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
+| `INVERTER_HOST`, `INVERTER_DRIVER`, `INVERTER_PORT`, `INVERTER_UNIT` | *(empty)*, `sungrow.sh_rs`, `502`, `1` | **Only read once:** inverters are connected in **Settings → Integrations** and stored in `data/collector.db`. The first time the collector starts with a database from before that, it moves the hybrid set here into it; after that these are ignored. |
+| `PV2_HOST`, `PV2_DRIVER`, `PV2_PORT`, `PV2_UNIT` | *(empty)*, `sungrow.sg_d`, `502`, `1` | The same, for a second, AC-coupled solar inverter. |
+| `PV2_BEHIND_METER` | `true` | Where a second system connects, unless it's set in **Settings → Integrations**. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
 | `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
@@ -151,7 +146,7 @@ All settings are environment variables (see `.env.example`):
 
 ### Supported inverters
 
-Each inverter is handled by a driver, picked with `INVERTER_DRIVER` (the hybrid, with the battery and grid meter) and `PV2_DRIVER` (an optional second solar inverter). So far:
+Each inverter is handled by a driver: one for the hybrid (with the battery and grid meter), and one for an optional second solar inverter. **Settings → Integrations** picks the driver when it finds an inverter, or lets you choose one when you enter an address yourself. So far:
 
 | Driver | Role | Inverters | Connection |
 |---|---|---|---|
@@ -160,9 +155,15 @@ Each inverter is handled by a driver, picked with `INVERTER_DRIVER` (the hybrid,
 
 A driver has two halves with the same id. The collector's reader (`collector/devices/<brand>/<model>.py`, listed in `collector/devices/drivers.py`) only fetches raw registers. The dashboard's decoder (`app/features/inverters/<brand>/<model>.py`, listed in `app/features/inverters/drivers.py`) turns them into readings in the shape described in `app/features/inverters/types.py`. Every stored reading records which driver read it, so swapping inverters later doesn't confuse the history. To add an inverter, write both halves and add them to the two lists. Everything past the decoder (merging, costs, the dashboard) works unchanged.
 
+### Connecting inverters
+
+**Settings → Integrations → Connect an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle. Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
+
+The collector does the scanning and stores the connected inverters in `data/collector.db`, since it's the only part that talks to them and keeps recording while the dashboard updates. Changes apply from its next poll, without a restart. Inverters already connected aren't probed during a scan, because the WiNet-S2 copes badly with a second Modbus client. Installs from before this kept their inverters in `.env` (`INVERTER_HOST`, `PV2_HOST`): the first time the updated collector starts, it moves them into its database, once, and they're managed in the dashboard from then on.
+
 ### A second solar system (AC-coupled)
 
-If you also have an older Sungrow string inverter (for example an SG5K-D), the hybrid can't read it, so none of its output counts as solar. Set `PV2_HOST` to its Wi-Fi dongle's IP address and it's read every poll alongside the hybrid. Solar becomes both systems together. What else changes depends on where it's wired, set with `PV2_BEHIND_METER`:
+If you also have an older Sungrow string inverter (for example an SG5K-D), the hybrid can't read it, so none of its output counts as solar. Connect it in **Settings → Integrations** as a second solar inverter and it's read every poll alongside the hybrid. Solar becomes both systems together. What else changes depends on where it's wired, which you choose when connecting it (and can change there later):
 
 - **Behind the hybrid's meter** (`true`, the default and the usual setup): the meter already counts its surplus as export, and the hybrid sees its output as reduced (even negative) home use, so it's added back to home use.
 - **Outside the hybrid's meter** (`false`): the hybrid's meter never sees it, so all of its output is exported on top of what the meter measured. Export, feed-in credit and "solar used at home" include it; home use is unchanged.
@@ -189,7 +190,7 @@ Hourly weather comes from [Open-Meteo](https://open-meteo.com) (free, no API key
 
 Both are fitted day by day and then combined in a way one odd day can't skew: solar takes the median day's calibration, and home use drops the highest and lowest fifth of days for each hour before averaging. Readings no home system could produce, such as a reply decrypted with a stale key or a 32-bit value read across an update, are dropped when they're decoded, so they never reach the history or the forecast.
 
-The inverter's solar reading only covers panels connected to the Sungrow. If you also have an AC-coupled system, set `PV2_HOST` (see below) so it's included; otherwise it shows up as lower (sometimes negative) home use.
+The inverter's solar reading only covers panels connected to the Sungrow. If you also have an AC-coupled system, connect it as a second inverter (see below) so it's included; otherwise it shows up as lower (sometimes negative) home use.
 
 If the inverter stops responding, the poller backs off exponentially (up to 5 min) and the dashboard shows the error.
 
