@@ -20,6 +20,8 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       port: Number(env.PORT) || 5174,
+      // Fail if the port is taken rather than quietly moving to another, so the URL stays put.
+      strictPort: true,
       proxy: {
         "/api": { target, changeOrigin: true },
         "/healthz": { target, changeOrigin: true },

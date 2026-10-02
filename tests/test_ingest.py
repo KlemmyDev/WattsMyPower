@@ -20,20 +20,27 @@ from app.features.tariffs.store import TariffStore
 DAY = int(time.mktime(time.strptime("2026-10-01 12:00", "%Y-%m-%d %H:%M")))
 
 
-def hybrid_words() -> dict[str, int]:
-    """A daytime poll: 4.12 kW solar, battery charging at 1.5 kW, exporting 2 kW, 43.2 kWh fed in today."""
+def hybrid_words(exported: float = 14421.0) -> dict[str, int]:
+    """
+    A daytime poll: 4.12 kW solar, battery charging at 1.5 kW, exporting 2 kW, `exported` kWh fed
+    in over the meter's lifetime. Like the real SH5.0RS, the meter's daily export counter stays at 0.
+    """
+    total = round(exported * 10)
     w = {
         5017: 4120, 5018: 0,  # pv power (U32, low word first)
         5036: 500,  # grid frequency in 0.1 Hz on this firmware
         13001: sh_rs.FLOW_BATTERY_CHARGING,  # power flow bits
         13002: 663,  # daily pv, 0.1 kWh
         13005: 251,  # daily export from the hybrid's own pv
+        13006: 27549, 13007: 1,  # lifetime export from the hybrid's own pv (U32, 0.1 kWh)
         13008: 620, 13009: 0,  # load power
         13010: 2000, 13011: 0,  # export power (positive = exporting)
         13022: 1500,  # battery power, unsigned
         13023: 556,  # soc, 0.1 %
         13036: 12,  # daily import
-        13045: 432,  # daily export through the meter
+        13037: 28626, 13038: 0,  # lifetime import through the meter
+        13045: 0,  # daily export through the meter: never counts on this unit
+        13046: total & 0xFFFF, 13047: total >> 16,  # lifetime export through the meter
     }  # fmt: skip
     return {str(k): v for k, v in w.items()}
 
@@ -48,7 +55,8 @@ def test_decode_applies_scales_signs_and_the_meter_export() -> None:
     assert snap["pv_power"] == 4120
     assert snap["battery_power"] == -1500  # charging is negative
     assert snap["grid_power"] == -2000  # exporting is negative
-    assert snap["daily_export"] == 43.2 and snap["daily_pv_export"] == 25.1
+    assert snap["daily_export"] == 0.0 and snap["daily_pv_export"] == 25.1
+    assert snap["total_export"] == 14421.0 and snap["total_pv_export"] == 9308.5
     assert snap["battery_soc"] == 55.6 and snap["grid_freq"] == 50.0
     assert snap["daily_charge"] is None  # not read this poll
 
@@ -69,8 +77,8 @@ def test_decode_second_inverter() -> None:
     assert sg_d.decode_info(raw) == {"brand": "Sungrow", "model": "SG5K-D", "nominal_kw": 5.0, "running_hours": 65636}
 
 
-def rows(ts: int, pv2: bool = True) -> list[dict[str, Any]]:
-    out = [{"ts": ts, "device": "hybrid", "driver": "sungrow.sh_rs", "input": hybrid_words()}]
+def rows(ts: int, pv2: bool = True, exported: float = 14421.0) -> list[dict[str, Any]]:
+    out = [{"ts": ts, "device": "hybrid", "driver": "sungrow.sh_rs", "input": hybrid_words(exported)}]
     if pv2:
         out.append({"ts": ts, "device": "pv2", "driver": "sungrow.sg_d", "input": pv2_words()})
     return out
@@ -140,19 +148,22 @@ def _services(db: Database, config: Config) -> tuple[ReadingsRepository, LiveSer
 
 def test_ingest_writes_readings_and_status(db: Database, config: Config) -> None:
     readings, live = _services(db, config)
-    fake = FakeCollector(rows(DAY) + rows(DAY + 60))
+    fake = FakeCollector(rows(DAY) + rows(DAY + 300, exported=14421.1))
     ingest = CollectorIngest(config, db, readings, live, fake)
     ingest.apply_status(fake.status())
     conn = db.connect()
     newest = ingest._ingest(conn, fake.readings(0)[0])
-    assert newest == DAY + 60 and load_cursor(conn) == DAY + 60
+    assert newest == DAY + 300 and load_cursor(conn) == DAY + 300
     conn.close()
 
     status = live.status()
     assert status["model"] == "SH5.0RS" and status["system"]["battery_reserve"] == 5.0
     assert status["system"]["pv2"]["host"] == "dongle" and status["system"]["pv2"]["behind_meter"] is True
-    assert status["snapshot"]["ts"] == DAY + 60
-    assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == 43.2
+    assert status["snapshot"]["ts"] == DAY + 300
+    # The first rollup has nothing before it, so 2 kW of export for 5 minutes stands in; the
+    # second is what the meter's lifetime counter moved. The Today card and the day agree.
+    assert status["snapshot"]["daily_export"] == round(2000 * 300 / 3.6e6 + 0.1, 2)
+    assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == status["snapshot"]["daily_export"]
 
 
 def test_reprocess_rebuilds_from_raw(db: Database, config: Config) -> None:
@@ -160,9 +171,9 @@ def test_reprocess_rebuilds_from_raw(db: Database, config: Config) -> None:
     conn = db.connect()
     readings.insert_many(conn, [(DAY, {"daily_export": 25.1, "daily_pv": 66.3})])  # decoded the old way
     conn.close()
-    done = reprocess(config, db, FakeCollector(rows(DAY)))
-    assert done["polls"] == 1
-    assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == 43.2
+    done = reprocess(config, db, FakeCollector(rows(DAY) + rows(DAY + 300, exported=14421.1)))
+    assert done["polls"] == 2
+    assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == round(2000 * 300 / 3.6e6 + 0.1, 2)
 
 
 def test_a_torn_32_bit_read_is_dropped() -> None:

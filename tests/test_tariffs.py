@@ -76,22 +76,30 @@ def test_first_load_carries_over_rates_from_the_old_settings_table(db: Database,
     assert (t["flat_rate"], t["feed_in_rate"], t["supply_charge"]) == (0.41, 0.07, config.supply_charge)
 
 
-def test_costs_are_priced_by_rate_and_scaled_to_the_daily_counters(readings: ReadingsRepository) -> None:
+def test_costs_are_priced_by_rate_and_scaled_to_the_meter(readings: ReadingsRepository) -> None:
     t = validate(TOU)
     day = int(dt.datetime(2026, 3, 3).timestamp())  # a Tuesday
     conn = readings.db.connect()
-    # 1 kW of grid import from 17:00 to 18:00 (peak), then the inverter's counters for the day.
-    rows = [
-        (day + 17 * 3600 + i * 60, {"grid_power": 1000.0, "pv_power": 0.0, "battery_power": 0.0}) for i in range(60)
-    ]
-    rows.append((day + 18 * 3600, {"daily_import": 2.0, "daily_export": 1.0, "daily_pv": 3.0}))
+    # 1 kW of grid import from 17:00 to 18:00 (peak), while the meter's lifetime counters say
+    # 2 kWh came in and 1 kWh went out (the readings are averages, the counters the bill).
+    meter = {"total_pv_export": 10.0}
+    rows = [(day + 16 * 3600 + 59 * 60, {"total_import": 100.0, "total_export": 50.0, **meter})]
+    rows += [
+        (
+            day + 17 * 3600 + i * 60,
+            {"grid_power": 1000.0, "pv_power": 0.0, "battery_power": 0.0,
+             "total_import": 100 + 2 * (i + 1) / 60, "total_export": 50 + (i + 1) / 60, **meter},
+        )
+        for i in range(60)
+    ]  # fmt: skip
+    rows.append((day + 18 * 3600, {"daily_pv": 3.0, "total_import": 102.0, "total_export": 51.0, **meter}))
     readings.insert_many(conn, rows)
     conn.close()
 
     out = daily_costs(readings, t, rate_tables(t), day, day + 86400)
     (d,) = out["days"]
     peak = d["bands"][0]
-    assert d["import_kwh"] == 2.0  # scaled from the ~1 kWh of readings to the counter's 2 kWh
+    assert d["import_kwh"] == 2.0  # scaled from the ~1 kWh of readings to the meter's 2 kWh
     assert peak["import_kwh"] == 2.0 and peak["cost"] == pytest.approx(0.9)
     assert d["feed_in_credit"] == pytest.approx(0.05)
     assert d["net_cost"] == pytest.approx(0.9 + 1.0 - 0.05)

@@ -62,7 +62,8 @@ class CollectorIngest:
         """Open the write connection and start following the feed. Expects the database migrated already."""
         self._conn = conn = await asyncio.to_thread(self.db.connect)
         await asyncio.to_thread(self.readings.heal_rollups, conn)
-        self.live.latest = await asyncio.to_thread(self.readings.latest)
+        latest = await asyncio.to_thread(self.readings.latest)
+        self.live.latest = latest and await asyncio.to_thread(self.readings.with_metered_today, latest)
         self._task = asyncio.create_task(self._run(conn))
 
     async def stop(self) -> None:
@@ -107,7 +108,7 @@ class CollectorIngest:
         )
         self.readings.insert_many(conn, snaps)
         if snaps:
-            self.live.latest = {"ts": snaps[-1][0], **snaps[-1][1]}
+            self.live.latest = self.readings.with_metered_today({"ts": snaps[-1][0], **snaps[-1][1]})
         newest = max(int(r["ts"]) for r in rows)
         save_cursor(conn, newest)
         return newest
