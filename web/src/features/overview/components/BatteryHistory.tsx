@@ -4,6 +4,7 @@ import { historyQuery } from "~/features/common/readings/api";
 import type { HistoryResponse } from "~/features/common/readings/types";
 import type { SystemInfo } from "~/features/common/live/types";
 import { nearest } from "~/features/common/ui/components/ChartHover";
+import { cn } from "~/features/common/ui/utils";
 import { batteryState, reserveOf } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
@@ -68,7 +69,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
       ref={plot}
       onMouseMove={onMove}
       onMouseLeave={() => setHoverAt(null)}
-      className="relative -mx-7 mt-auto mb-0 h-[150px] cursor-crosshair max-sm:-mx-5"
+      className="relative mt-auto mb-0 h-[150px] cursor-crosshair"
     >
       <svg
         viewBox={`0 0 ${B6W} ${B6H}`}
@@ -131,7 +132,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
           </>
         )}
       </svg>
-      <div className="pointer-events-none absolute top-1.5 right-7 left-7 flex items-baseline justify-between gap-3 max-sm:right-5 max-sm:left-5">
+      <div className="pointer-events-none absolute inset-x-0 top-1.5 flex items-baseline justify-between gap-3">
         <span className="font-mono text-[10px] tracking-[1.2px] text-[#7a7a7a] uppercase">Last 6 hours</span>
         <span className="text-xs text-ink-muted tabular-nums">
           {chart &&
@@ -141,8 +142,21 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
               : "No readings yet")}
         </span>
       </div>
-      <div className="pointer-events-none absolute right-7 bottom-3 left-7 flex justify-between font-mono text-[10px] text-ink-faint tabular-nums max-sm:right-5 max-sm:left-5">
-        {chart && [6, 4, 2, 0].map((o) => <span key={o}>{o ? hhmm(e - o * 3600) : "Now"}</span>)}
+      {/* Each time sits under its point on the chart; the end labels hang inward from the edges. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 h-3.5 font-mono text-[10px] text-ink-faint tabular-nums">
+        {chart &&
+          [6, 4, 2, 0].map((o) => (
+            <span
+              key={o}
+              className={cn(
+                "absolute whitespace-nowrap",
+                o === 6 ? "" : o === 0 ? "-translate-x-full" : "-translate-x-1/2",
+              )}
+              style={{ left: `${(((6 - o) / 6) * 100).toFixed(2)}%` }}
+            >
+              {o ? hhmm(e - o * 3600) : "Now"}
+            </span>
+          ))}
       </div>
       {chart && hover && <HoverReadout p={hover} left={(chart.X(hover.t) / B6W) * 100} />}
       {chart && last && (
