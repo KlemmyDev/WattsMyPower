@@ -259,23 +259,33 @@ else
     configure
   fi
 fi
+# The secret the dashboard uses to read the collector's feed: made once, kept in .env.
+if [ -z "$(get_env COLLECTOR_TOKEN)" ]; then
+  set_env COLLECTOR_TOKEN "$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
+  info "Generated COLLECTOR_TOKEN in .env (the dashboard uses it to read the collector)."
+fi
 mkdir -p data
 PORT="$(get_env PORT)"; PORT="${PORT:-8080}"
 
 # ---------------------------------------------------------------- back up, then build and start
 if $DOCKER ps --format '{{.Names}}' | grep -qx "$APP"; then
-  say "Backing up the database"
+  say "Backing up the databases"
   # SQLite's online backup, run inside the container: safe while the app keeps recording.
   $DOCKER exec "$APP" python - <<'PY'
 import glob, os, sqlite3, time
 os.makedirs("/data/backups", exist_ok=True)
-dest = time.strftime("/data/backups/wattsmypower-%Y%m%d-%H%M%S.db")
-src, dst = sqlite3.connect("/data/wattsmypower.db"), sqlite3.connect(dest)
-src.backup(dst)
-dst.close(); src.close()
-for old in sorted(glob.glob("/data/backups/wattsmypower-*.db"))[:-5]:  # keep the newest 5
-    os.remove(old)
-print("  data/backups/" + os.path.basename(dest))
+stamp = time.strftime("%Y%m%d-%H%M%S")
+for name in ("wattsmypower", "collector"):  # the dashboard's database, and the collector's raw readings
+    path = f"/data/{name}.db"
+    if not os.path.exists(path):
+        continue
+    dest = f"/data/backups/{name}-{stamp}.db"
+    src, dst = sqlite3.connect(path), sqlite3.connect(dest)
+    src.backup(dst)
+    dst.close(); src.close()
+    for old in sorted(glob.glob(f"/data/backups/{name}-*.db"))[:-5]:  # keep the newest 5 of each
+        os.remove(old)
+    print("  data/backups/" + os.path.basename(dest))
 PY
 fi
 

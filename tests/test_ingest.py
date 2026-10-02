@@ -1,0 +1,165 @@
+"""The API's side of the collector feed: decoding raw registers, merging, ingesting and reprocessing."""
+
+from __future__ import annotations
+
+import time
+from typing import Any
+
+from app.core.config import Config
+from app.core.database import Database
+from app.features.inverters import drivers
+from app.features.inverters.sungrow import sg_d, sh_rs
+from app.features.live.ingest import CollectorIngest, load_cursor
+from app.features.live.reprocess import reprocess
+from app.features.live.service import LiveService
+from app.features.live.transform import Pv2Carry, snapshots
+from app.features.readings.repository import ReadingsRepository
+from app.features.settings.store import SettingsStore
+from app.features.tariffs.store import TariffStore
+
+DAY = int(time.mktime(time.strptime("2026-10-01 12:00", "%Y-%m-%d %H:%M")))
+
+
+def hybrid_words() -> dict[str, int]:
+    """A daytime poll: 4.12 kW solar, battery charging at 1.5 kW, exporting 2 kW, 43.2 kWh fed in today."""
+    w = {
+        5017: 4120, 5018: 0,  # pv power (U32, low word first)
+        5036: 500,  # grid frequency in 0.1 Hz on this firmware
+        13001: sh_rs.FLOW_BATTERY_CHARGING,  # power flow bits
+        13002: 663,  # daily pv, 0.1 kWh
+        13005: 251,  # daily export from the hybrid's own pv
+        13008: 620, 13009: 0,  # load power
+        13010: 2000, 13011: 0,  # export power (positive = exporting)
+        13022: 1500,  # battery power, unsigned
+        13023: 556,  # soc, 0.1 %
+        13036: 12,  # daily import
+        13045: 432,  # daily export through the meter
+    }  # fmt: skip
+    return {str(k): v for k, v in w.items()}
+
+
+def pv2_words() -> dict[str, int]:
+    return {"5000": 0x0126, "5001": 50, "5003": 241, "5004": 51000, "5005": 0, "5006": 100, "5007": 1,
+            "5008": 312, "5017": 1900, "5018": 0, "5031": 1800, "5032": 0}  # fmt: skip
+
+
+def test_decode_applies_scales_signs_and_the_meter_export() -> None:
+    snap = sh_rs.decode({"input": hybrid_words()})
+    assert snap["pv_power"] == 4120
+    assert snap["battery_power"] == -1500  # charging is negative
+    assert snap["grid_power"] == -2000  # exporting is negative
+    assert snap["daily_export"] == 43.2 and snap["daily_pv_export"] == 25.1
+    assert snap["battery_soc"] == 55.6 and snap["grid_freq"] == 50.0
+    assert snap["daily_charge"] is None  # not read this poll
+
+
+def test_decode_info() -> None:
+    serial = "A23A0903744".ljust(20, "\x00").encode()
+    words = {4990 + i: int.from_bytes(serial[2 * i : 2 * i + 2], "big") for i in range(10)}
+    words.update({5000: 0x0D0F, 5001: 50, 5002: 0, 5639: 1600})
+    info = sh_rs.decode_info({"input": words, "holding": {13059: 50}})
+    assert info == {"brand": "Sungrow", "serial": "A23A0903744", "model": "SH5.0RS", "nominal_kw": 5.0, "phases": "Single phase",
+                    "battery_kwh": 16.0, "reserve": 5.0}  # fmt: skip
+
+
+def test_decode_second_inverter() -> None:
+    raw = {"input": pv2_words()}
+    assert sg_d.decode(raw) == {"pv2_power": 1800, "pv2_dc_power": 1900, "daily_pv2": 24.1, "total_pv2": 51000,
+                                "pv2_temp": 31.2}  # fmt: skip
+    assert sg_d.decode_info(raw) == {"brand": "Sungrow", "model": "SG5K-D", "nominal_kw": 5.0, "running_hours": 65636}
+
+
+def rows(ts: int, pv2: bool = True) -> list[dict[str, Any]]:
+    out = [{"ts": ts, "device": "hybrid", "driver": "sungrow.sh_rs", "input": hybrid_words()}]
+    if pv2:
+        out.append({"ts": ts, "device": "pv2", "driver": "sungrow.sg_d", "input": pv2_words()})
+    return out
+
+
+def test_snapshots_merge_the_second_inverter_and_carry_missed_reads() -> None:
+    carry = Pv2Carry()
+    feed = rows(DAY) + rows(DAY + 60, pv2=False) + [{"ts": DAY + 120, "device": "pv2", "input": pv2_words()}]
+    out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry)
+    assert [ts for ts, _ in out] == [DAY, DAY + 60]  # the poll the hybrid missed isn't recorded
+    first, carried = out[0][1], out[1][1]
+    assert first["pv_power"] == 4120 + 1800 and first["pv1_power"] == 4120
+    assert first["daily_pv"] == round(66.3 + 24.1, 3)
+    assert carried["pv2_power"] == 1800  # one missed read: last values carried
+    assert carry.info["model"] == "SG5K-D"
+
+
+def test_every_driver_implements_its_role() -> None:
+    for d in drivers.HYBRIDS.values():
+        assert d.brand and callable(d.decode) and callable(d.decode_info)
+    for s in drivers.SOLAR.values():
+        assert s.brand and callable(s.decode) and callable(s.decode_info)
+
+
+def test_rows_without_a_driver_use_the_default_and_unknown_drivers_are_skipped() -> None:
+    untagged = [{k: v for k, v in r.items() if k != "driver"} for r in rows(DAY)]
+    assert (
+        snapshots(untagged, has_pv2=True, behind_meter=True, poll_interval=60, carry=Pv2Carry())[0][1]["pv2_power"]
+        == 1800
+    )
+    unknown = [{**r, "driver": "acme.x1"} for r in rows(DAY, pv2=False)]
+    assert snapshots(unknown, has_pv2=False, behind_meter=True, poll_interval=60, carry=Pv2Carry()) == []
+
+
+def test_without_a_second_inverter_nothing_is_merged() -> None:
+    (_, snap), = snapshots(rows(DAY, pv2=False), has_pv2=False, behind_meter=True, poll_interval=60, carry=Pv2Carry())  # fmt: skip
+    assert snap["pv_power"] == 4120 and "pv1_power" not in snap
+
+
+class FakeCollector:
+    def __init__(self, feed: list[dict[str, Any]]):
+        self.feed = feed
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "oldest_ts": min(r["ts"] for r in self.feed),
+            "devices": {
+                "hybrid": {"host": "inverter", "driver": "sungrow.sh_rs", "last_success": 123.0, "error": None,
+                           "info": {"input": {"5000": 0x0D0F, "5001": 50, "5002": 0}, "holding": {"13059": 50}}},
+                "pv2": {"host": "dongle", "driver": "sungrow.sg_d", "last_success": 120.0, "error": None, "info": {}},
+            },
+        }  # fmt: skip
+
+    def readings(self, since: int, limit: int = 1000, wait: int = 0) -> tuple[list[dict[str, Any]], bool]:
+        out = [r for r in self.feed if r["ts"] > since]
+        return out, False
+
+
+def _services(db: Database, config: Config) -> tuple[ReadingsRepository, LiveService]:
+    settings, tariffs = SettingsStore(db, config), TariffStore(db, config)
+    settings.load()
+    tariffs.load()
+    return ReadingsRepository(db, config.poll_interval, config.raw_retention_days), LiveService(
+        config, settings, tariffs
+    )
+
+
+def test_ingest_writes_readings_and_status(db: Database, config: Config) -> None:
+    readings, live = _services(db, config)
+    fake = FakeCollector(rows(DAY) + rows(DAY + 60))
+    ingest = CollectorIngest(config, db, readings, live, fake)
+    ingest.apply_status(fake.status())
+    conn = db.connect()
+    newest = ingest._ingest(conn, fake.readings(0)[0])
+    assert newest == DAY + 60 and load_cursor(conn) == DAY + 60
+    conn.close()
+
+    status = live.status()
+    assert status["model"] == "SH5.0RS" and status["system"]["battery_reserve"] == 5.0
+    assert status["system"]["pv2"]["host"] == "dongle" and status["system"]["pv2"]["behind_meter"] is True
+    assert status["snapshot"]["ts"] == DAY + 60
+    assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == 43.2
+
+
+def test_reprocess_rebuilds_from_raw(db: Database, config: Config) -> None:
+    readings, _ = _services(db, config)
+    conn = db.connect()
+    readings.insert_many(conn, [(DAY, {"daily_export": 25.1, "daily_pv": 66.3})])  # decoded the old way
+    conn.close()
+    done = reprocess(config, db, FakeCollector(rows(DAY)))
+    assert done["polls"] == 1
+    assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == 43.2

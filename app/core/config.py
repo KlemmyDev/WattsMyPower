@@ -9,17 +9,12 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    # IP address of the hybrid inverter's WiNet-S dongle. Required (install.sh asks for it).
-    inverter_host: str = ""
-    inverter_port: int = 502
-    inverter_unit: int = 1
+    # The collector service, which reads the inverters (see collector/PROTOCOL.md), and the
+    # token its feed requires. Point COLLECTOR_URL at the server's collector to run the API elsewhere.
+    collector_url: str = "http://collector:8081"
+    collector_token: str = ""
 
-    # Optional second, AC-coupled solar system on an older Sungrow string inverter
-    # (e.g. SG5K-D) with a Wi-Fi dongle. Empty = not fitted.
-    pv2_host: str = ""
-    pv2_port: int = 502
-    pv2_unit: int = 1
-    # Where the second system connects. True (the usual AC-coupled setup): on the house side
+    # Where a second, AC-coupled system (configured on the collector) connects. True (the usual AC-coupled setup): on the house side
     # of the hybrid's meter, so the hybrid sees its output as lower (even negative) home use.
     # False: outside the hybrid's meter, so all its output is exported and home use is right.
     pv2_behind_meter: bool = True
@@ -27,7 +22,7 @@ class Config:
     # The WiNet-S2 gets unhappy under aggressive polling and only refreshes most registers
     # every ~30-60 s anyway, so 60 s is both the default and the floor.
     poll_interval: int = 60
-    # Upper bound for exponential backoff when the inverter stops answering.
+    # Upper bound for exponential backoff when the collector can't be reached.
     max_backoff: int = 300
 
     db_path: str = "/data/wattsmypower.db"
@@ -54,7 +49,7 @@ class Config:
     latitude: float = -27.47
     longitude: float = 153.03
 
-    # Generate synthetic data instead of talking to an inverter (for local dev and demos).
+    # Generate synthetic data instead of following a collector (for local dev and demos).
     mock: bool = False
 
     # Require signing in to the dashboard (an account is created the first time it's opened).
@@ -79,12 +74,8 @@ class Config:
 
         d = cls()
         return cls(
-            inverter_host=text("INVERTER_HOST"),
-            inverter_port=integer("INVERTER_PORT", d.inverter_port),
-            inverter_unit=integer("INVERTER_UNIT", d.inverter_unit),
-            pv2_host=text("PV2_HOST"),
-            pv2_port=integer("PV2_PORT", d.pv2_port),
-            pv2_unit=integer("PV2_UNIT", d.pv2_unit),
+            collector_url=text("COLLECTOR_URL", d.collector_url),
+            collector_token=text("COLLECTOR_TOKEN"),
             pv2_behind_meter=flag("PV2_BEHIND_METER", d.pv2_behind_meter),
             poll_interval=max(60, integer("POLL_INTERVAL", d.poll_interval)),
             max_backoff=integer("MAX_BACKOFF", d.max_backoff),

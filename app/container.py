@@ -14,7 +14,10 @@ from app.core.database import Database
 from app.features.auth.service import AuthService
 from app.features.forecast.service import ForecastService
 from app.features.insights.service import InsightsService
-from app.features.live.poller import Poller
+from app.features.live.client import CollectorClient
+from app.features.live.ingest import CollectorIngest
+from app.features.live.service import LiveService
+from app.features.live.simulator import Simulator
 from app.features.plans.service import PlansService
 from app.features.readings.repository import ReadingsRepository
 from app.features.savings.service import SavingsService
@@ -36,7 +39,9 @@ class Services:
     insights: InsightsService
     savings: SavingsService
     auth: AuthService
-    poller: Poller
+    live: LiveService
+    # What feeds `live`: the collector's feed, or generated readings in mock mode.
+    source: CollectorIngest | Simulator
 
 
 def build_services(config: Config) -> Services:
@@ -45,6 +50,12 @@ def build_services(config: Config) -> Services:
     settings = SettingsStore(db, config)
     tariffs = TariffStore(db, config)
     plans = PlansService(tariffs)
+    live = LiveService(config, settings, tariffs)
+    source: CollectorIngest | Simulator = (
+        Simulator(config, db, readings, live)
+        if config.mock
+        else CollectorIngest(config, db, readings, live, CollectorClient(config.collector_url, config.collector_token))
+    )
     return Services(
         config=config,
         db=db,
@@ -57,5 +68,6 @@ def build_services(config: Config) -> Services:
         insights=InsightsService(db, readings, settings),
         savings=SavingsService(db, readings, settings, tariffs, plans),
         auth=AuthService(db, enabled=config.auth),
-        poller=Poller(config, db, readings, settings, tariffs),
+        live=live,
+        source=source,
     )

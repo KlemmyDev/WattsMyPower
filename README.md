@@ -19,6 +19,13 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 - A **Linux machine on the same network that stays on**: a Proxmox LXC container or VM, a Raspberry Pi, or any Debian or Ubuntu box. The install script sets up Docker on it if needed.
 - Optional: the IP address of a second, older Sungrow inverter's Wi-Fi dongle.
 
+## How it fits together
+
+Two services, run together by Docker Compose:
+
+- **The collector** (`wattsmypower-collector`) is the only thing that talks to the inverters. Every poll it stores the raw register values it read, uninterpreted, in `data/collector.db`, and serves them over a token-protected feed ([collector/PROTOCOL.md](collector/PROTOCOL.md)). It rarely changes, so updates to the dashboard leave it recording without a break.
+- **The dashboard** (`wattsmypower`) follows that feed and does everything else: decoding the registers, merging a second inverter, readings and rollups (`data/wattsmypower.db`), costs, forecast, insights, savings, sign-in, and the web app. If the way a register is read ever turns out to be wrong, `python -m app reprocess` rebuilds the readings from the collector's raw history.
+
 ## Install
 
 1. **Log in to the Linux machine** (for example `ssh root@<machine IP>`, or the Proxmox console).
@@ -59,14 +66,15 @@ Run these from the `wattsmypower` folder:
 
 | Command | What it does |
 |---|---|
-| `bash install.sh` | update to the latest version (backs up the database first) |
+| `bash install.sh` | update to the latest version (backs up both databases first) |
 | `bash install.sh --configure` | change your settings (inverter addresses, array size, time zone, port) and restart |
 | `bash start.sh` | start it, and Docker if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
-| `docker compose logs -f --tail=50` | watch its log |
+| `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
+| `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
 | `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `INVERTER_HOST=192.168.1.20 bash install.sh --yes` |
 
-**Updating** pulls the latest version, backs up the database to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
+**Updating** pulls the latest version, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
 **Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
@@ -119,10 +127,15 @@ All settings are environment variables (see `.env.example`):
 | Variable | Default | |
 |---|---|---|
 | `PORT` | `8080` | Port the dashboard is served on |
+| `COLLECTOR_TOKEN` | *(generated)* | Secret the dashboard uses to read the collector's feed. `install.sh` creates one in `.env`. |
+| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
+| `COLLECTOR_RETENTION_DAYS` | `365` | Keep the collector's raw registers this many days (what `reprocess` can rebuild from). `0` = keep everything. |
+| `INVERTER_DRIVER` | `sungrow.sh_rs` | Which hybrid inverter you have (see [Supported inverters](#supported-inverters)) |
 | `INVERTER_HOST` | *(required)* | IP address of the hybrid's WiNet-S dongle |
 | `INVERTER_PORT` | `502` | Modbus TCP port |
 | `INVERTER_UNIT` | `1` | Modbus unit id |
 | `PV2_HOST` | *(empty)* | Optional second, AC-coupled solar system on an older Sungrow string inverter with a Wi-Fi dongle (e.g. an SG5K-D). Its IP address; empty = none. |
+| `PV2_DRIVER` | `sungrow.sg_d` | Which second inverter you have |
 | `PV2_PORT` / `PV2_UNIT` | `502` / `1` | Second inverter's Modbus port and unit id |
 | `PV2_BEHIND_METER` | `true` | Where the second system connects. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
@@ -136,6 +149,17 @@ All settings are environment variables (see `.env.example`):
 | `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
 | `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
 
+### Supported inverters
+
+Each inverter is handled by a driver, picked with `INVERTER_DRIVER` (the hybrid, with the battery and grid meter) and `PV2_DRIVER` (an optional second solar inverter). So far:
+
+| Driver | Role | Inverters | Connection |
+|---|---|---|---|
+| `sungrow.sh_rs` | hybrid | Sungrow SH-RS and SH-RT (tested on an SH5.0RS) | Modbus TCP through the WiNet-S / WiNet-S2 dongle |
+| `sungrow.sg_d` | second inverter | Sungrow SG-D string inverters (tested on an SG5K-D) | Sungrow's encrypted Modbus through the Wi-Fi dongle |
+
+A driver has two halves with the same id. The collector's reader (`collector/devices/<brand>/<model>.py`, listed in `collector/devices/drivers.py`) only fetches raw registers. The dashboard's decoder (`app/features/inverters/<brand>/<model>.py`, listed in `app/features/inverters/drivers.py`) turns them into readings in the shape described in `app/features/inverters/types.py`. Every stored reading records which driver read it, so swapping inverters later doesn't confuse the history. To add an inverter, write both halves and add them to the two lists. Everything past the decoder (merging, costs, the dashboard) works unchanged.
+
 ### A second solar system (AC-coupled)
 
 If you also have an older Sungrow string inverter (for example an SG5K-D), the hybrid can't read it, so none of its output counts as solar. Set `PV2_HOST` to its Wi-Fi dongle's IP address and it's read every poll alongside the hybrid. Solar becomes both systems together. What else changes depends on where it's wired, set with `PV2_BEHIND_METER`:
@@ -147,7 +171,7 @@ To check, run a known load (an EV charging, an oven) and see whether home use on
 
 The hybrid's own figures are stored too (`pv1_power`, `daily_pv1`, `total_pv1`, `load_hybrid`, `grid_hybrid`, `daily_export1`), alongside the second system's (`pv2_power`, `daily_pv2`, `total_pv2`, `pv2_temp`).
 
-These older dongles accept Modbus TCP on port 502 but only answer Sungrow's encrypted variant (a daily key from the dongle, then AES on every frame); `app/features/inverters/string.py` handles that. If the second inverter stops answering, the hybrid keeps polling normally: its last values are carried for a couple of minutes, then its output counts as zero (they power down after dark) while today's yield stands. System payback uses the hybrid's own lifetime solar counter, because a second system's lifetime counter can predate the hybrid's meter.
+These older dongles accept Modbus TCP on port 502 but only answer Sungrow's encrypted variant (a daily key from the dongle, then AES on every frame); the collector handles that (`collector/devices/sungrow/dongle.py`). If the second inverter stops answering, the hybrid keeps polling normally: its last values are carried for a couple of minutes, then its output counts as zero (they power down after dark) while today's yield stands. System payback uses the hybrid's own lifetime solar counter, because a second system's lifetime counter can predate the hybrid's meter.
 
 ### How plan comparison works
 
@@ -196,7 +220,7 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/auth/session` | whether this browser is signed in, and whether an account still needs creating |
 | `POST /api/auth/setup`, `POST /api/auth/login`, `POST /api/auth/logout` | create the account (first run only), sign in, sign out |
 | `PUT /api/auth/password` | change the password (signs out other browsers) |
-| `GET /api/live` | latest snapshot and poller status |
+| `GET /api/live` | latest snapshot, system details, and whether readings are arriving |
 | `GET /api/stream` | server-sent events, one message per poll |
 | `GET /api/history?start=&end=&points=&fields=` | time-bucketed columnar series (unix seconds) |
 | `GET /api/daily?start=&end=` | per-day kWh totals |
@@ -216,14 +240,17 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 
 ## Local development
 
-Backend:
+Backend (`uv sync --extra collector` gets Python 3.12 and everything both services need, from uv.lock; install uv: https://docs.astral.sh/uv/).
+
+**The dashboard API against your server's collector**, with real data and no second copy talking to the inverters (they cope badly with two clients). Use the `COLLECTOR_TOKEN` from the server's `.env`:
 
 ```bash
-uv sync                      # Python 3.12 and the dependencies, from uv.lock (install uv: https://docs.astral.sh/uv/)
-INVERTER_HOST=<WiNet-S IP> DB_PATH=./data/wattsmypower.db uv run uvicorn app.main:app --port 8080
+COLLECTOR_URL=http://<server IP>:8081 COLLECTOR_TOKEN=<token> DB_PATH=./data/local.db uv run uvicorn app.main:app --port 8080
 ```
 
-`MOCK=1` swaps in a simulated inverter with 14 days of generated history, for working on the UI away from home. Point `DB_PATH` at a separate file when you use it so fake data never mixes with real data.
+It builds its own database from the collector's raw history (whatever the collector holds), then follows it live. Its settings, rates and account are its own, so changes there never touch the server. `python -m app reprocess` with the same variables rebuilds it after changing how registers are decoded.
+
+**Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
 
 Checks (`uv run …`): `pytest` (tests), `ruff check` and `ruff format` (lint and format), `mypy` (types).
 
@@ -237,15 +264,19 @@ npm run dev
 
 Then open `http://localhost:5174`. `/api` is proxied to `API_TARGET`, and edits show up straight away. `npm run build` writes the production build to `web/dist/client/`, which the backend serves at `/` (the Docker image builds it for you).
 
-**Working on the dashboard against your running instance.** To try frontend changes with live data, without a second copy of the app polling your inverters (they cope badly with two clients), set `API_TARGET=http://<server IP>:8080` and sign in with your usual account. API and backend changes still need a deploy. While `API_TARGET` isn't a local address, saving rates, location or system cost is refused unless you also set `API_ALLOW_WRITES=1`, which saves to the live service.
+**Working on just the dashboard against your running instance.** To try frontend changes with live data, without a second copy of the app polling your inverters (they cope badly with two clients), set `API_TARGET=http://<server IP>:8080` and sign in with your usual account. API and backend changes still need a deploy. While `API_TARGET` isn't a local address, saving rates, location or system cost is refused unless you also set `API_ALLOW_WRITES=1`, which saves to the live service.
 
 ## Layout
 
 ```
+collector/              the collector service: reads the inverters, stores raw registers, serves the feed
+  PROTOCOL.md           the feed's contract: devices, register ranges, rows, endpoints
+  devices/              the device interface, the reader registry (drivers.py), Modbus helpers, and a
+                        package per brand with a reader per model family (sungrow/sh_rs.py, sungrow/sg_d.py)
 app/
   main.py               the FastAPI app (create_app), its middleware and routers
   container.py          builds every service once from the config; routers get them via app/dependencies.py
-  __main__.py           maintenance commands (python -m app reset-account)
+  __main__.py           maintenance commands (python -m app reset-account | reprocess)
   core/                 shared infrastructure
     config.py           settings from environment variables
     database.py         SQLite connections and migrations
@@ -253,9 +284,11 @@ app/
     http.py, cache.py   outbound JSON requests, and a TTL cache for slow lookups
     spa.py              serves the built dashboard
   features/<name>/      one module per capability, each with its router, service and SQL:
-    inverters/          Modbus readers: the hybrid (hybrid.py), the SG-D string inverter over its
-                        encrypted Wi-Fi dongle (string.py), a simulator (mock.py), and merging the two
-    live/               the poll loop, backoff, and the live event stream
+    inverters/          what the readings mean: the driver interface (types.py) and registry
+                        (drivers.py), merging the two systems (merge.py), and a package per brand
+                        with a module per model family (sungrow/sh_rs.py, sungrow/sg_d.py)
+    live/               following the collector's feed (ingest.py), turning raw rows into readings
+                        (transform.py), reprocessing, mock mode, and the live event stream
     readings/           samples and 5-minute rollups: history, daily totals, CSV export
     tariffs/            tariff model and validation, the saved tariff, and time-of-use cost maths
     settings/           forecast location (and place name) and system cost; OpenStreetMap place search

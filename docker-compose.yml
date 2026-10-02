@@ -1,19 +1,48 @@
 services:
+  # Reads the inverters every poll and stores the raw registers. Rarely changes, so it keeps
+  # recording through dashboard updates. See collector/PROTOCOL.md.
+  collector:
+    build:
+      context: .
+      target: collector
+    container_name: wattsmypower-collector
+    restart: unless-stopped
+    # Published so a dashboard running elsewhere (e.g. while developing) can follow it; the feed
+    # needs COLLECTOR_TOKEN. Set COLLECTOR_PORT to change it.
+    ports:
+      - "${COLLECTOR_PORT:-8081}:8081"
+    volumes:
+      - ./data:/data
+    environment:
+      INVERTER_DRIVER: ${INVERTER_DRIVER:-sungrow.sh_rs}
+      INVERTER_HOST: ${INVERTER_HOST:-}
+      INVERTER_PORT: ${INVERTER_PORT:-502}
+      INVERTER_UNIT: ${INVERTER_UNIT:-1}
+      PV2_DRIVER: ${PV2_DRIVER:-sungrow.sg_d}
+      PV2_HOST: ${PV2_HOST:-}
+      PV2_PORT: ${PV2_PORT:-502}
+      PV2_UNIT: ${PV2_UNIT:-1}
+      POLL_INTERVAL: ${POLL_INTERVAL:-60}
+      COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-365}
+      COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}
+      TZ: ${TZ:-Australia/Brisbane}
+
+  # The dashboard and its API: turns the collector's raw registers into readings, costs and insights.
   wattsmypower:
-    build: .
+    build:
+      context: .
+      target: api
     container_name: wattsmypower
     restart: unless-stopped
+    depends_on:
+      - collector
     ports:
       - "${PORT:-8080}:8080"
     volumes:
       - ./data:/data
     environment:
-      INVERTER_HOST: ${INVERTER_HOST:-}
-      INVERTER_PORT: ${INVERTER_PORT:-502}
-      INVERTER_UNIT: ${INVERTER_UNIT:-1}
-      PV2_HOST: ${PV2_HOST:-}
-      PV2_PORT: ${PV2_PORT:-502}
-      PV2_UNIT: ${PV2_UNIT:-1}
+      COLLECTOR_URL: http://collector:8081
+      COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}
       PV2_BEHIND_METER: ${PV2_BEHIND_METER:-true}
       POLL_INTERVAL: ${POLL_INTERVAL:-60}
       RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}

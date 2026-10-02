@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from app.features.inverters.hybrid import Snapshot
+from app.features.inverters.types import Snapshot
 
 
 def _add(a: float | None, b: float | None) -> float | None:

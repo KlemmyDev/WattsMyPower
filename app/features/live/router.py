@@ -1,4 +1,4 @@
-"""The live reading (polled or streamed as server-sent events) and the health check."""
+"""The live reading (fetched, or streamed as server-sent events) and the health check."""
 
 from __future__ import annotations
 
@@ -17,19 +17,19 @@ health_router = APIRouter()
 
 
 @router.get("/live")
-async def live(svc: ServicesDep):
-    return svc.poller.status()
+async def live_status(svc: ServicesDep):
+    return svc.live.status()
 
 
 @router.get("/stream")
 async def stream(request: Request, svc: ServicesDep) -> StreamingResponse:
     """Server-sent events: one message per poll."""
-    poller = svc.poller
-    q = poller.subscribe()
+    live = svc.live
+    q = live.subscribe()
 
     async def events() -> AsyncIterator[str]:
         try:
-            yield f"data: {json.dumps(poller.status())}\n\n"
+            yield f"data: {json.dumps(live.status())}\n\n"
             while not await request.is_disconnected():
                 try:
                     msg = await asyncio.wait_for(q.get(), timeout=15)
@@ -37,7 +37,7 @@ async def stream(request: Request, svc: ServicesDep) -> StreamingResponse:
                 except TimeoutError:
                     yield ": keepalive\n\n"
         finally:
-            poller.unsubscribe(q)
+            live.unsubscribe(q)
 
     return StreamingResponse(
         events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -46,6 +46,6 @@ async def stream(request: Request, svc: ServicesDep) -> StreamingResponse:
 
 @health_router.get("/healthz")
 async def healthz(svc: ServicesDep):
-    poller = svc.poller
-    fresh = poller.last_success and time.time() - poller.last_success < max(120, svc.config.poll_interval * 6)
-    return {"ok": True, "inverter_fresh": bool(fresh), "error": poller.last_error}
+    live = svc.live
+    fresh = live.last_success and time.time() - live.last_success < max(120, svc.config.poll_interval * 6)
+    return {"ok": True, "inverter_fresh": bool(fresh), "error": live.last_error}

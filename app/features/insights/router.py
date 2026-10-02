@@ -14,4 +14,4 @@ router = APIRouter(prefix="/api")
 @router.get("/insights")
 async def get_insights(svc: ServicesDep):
     """Self-sufficiency by month, battery figures, grid use by hour and month, and solar performance."""
-    return await asyncio.to_thread(svc.insights.build, svc.poller.latest, svc.poller.battery_kwh())
+    return await asyncio.to_thread(svc.insights.build, svc.live.latest, svc.live.battery_kwh())

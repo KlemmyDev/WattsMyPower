@@ -1,46 +1,23 @@
 """
-Reads a snapshot from a Sungrow SH-RS / SH-RT hybrid inverter over Modbus TCP
-(via the WiNet-S2 dongle). The mock inverter for local development is in mock.py.
+Sungrow SH-RS / SH-RT hybrid inverters (e.g. SH5.0RS): decodes the raw registers the collector
+stored (collector/PROTOCOL.md) into a snapshot. The collector only reads and stores the words;
+everything about what they mean lives here, so a fix can be re-applied to history
+(`python -m app reprocess`).
 
 Register addresses, scaling and quirks come from
 https://github.com/berndverhofstadt/sungrow-poc (MIT), which transcribed them
 from Sungrow's "Communication Protocol of Residential Hybrid Inverter" V1.1.5
 and verified them against an SH5.0RS + WiNet-S2.
-
-Sign conventions for the power values in a snapshot - positive always means
-"power flowing into the house":
-    pv_power       W  solar production (>= 0)
-    load_power     W  house consumption (>= 0)
-    grid_power     W  + importing from grid, - exporting to grid
-    battery_power  W  + discharging into house, - charging
 """
 
 from __future__ import annotations
 
-import inspect
-import logging
-import time
-from dataclasses import dataclass
 from typing import Any
 
-log = logging.getLogger(__name__)
+from app.features.inverters.sungrow.registers import SENTINELS, Reg, span, value, words
+from app.features.inverters.types import Info, Raw, Snapshot
 
-# One reading, keyed by sample column (see app.core.schema), in the sign conventions above.
-Snapshot = dict[str, Any]
-
-# Per Sungrow's doc: communication address = protocol address - 1.
-ADDRESS_OFFSET = -1
-# Raw values that mean "no data" (e.g. export power with no meter fitted).
-SENTINELS = {0xFFFF, 0x7FFF, 0xFFFFFFFF, 0x7FFFFFFF}
-
-
-@dataclass(frozen=True)
-class Reg:
-    key: str
-    address: int  # protocol address, as printed in the Sungrow doc
-    count: int = 1
-    signed: bool = False
-    scale: float = 1.0
+brand = "Sungrow"
 
 
 # All input registers (function code 0x04) we read each poll.
@@ -82,13 +59,6 @@ REGISTERS = [
     Reg("total_export", 13046, 2, False, 0.1),
 ]
 
-# Contiguous ranges read in one request each, instead of ~30 single-register
-# requests per poll. If the gateway rejects a block (some addresses inside a
-# range can be "Illegal Data Address" on some models, e.g. MPPT3 on SH5.0RS),
-# that block permanently falls back to one request per register.
-# Each register must sit wholly inside one block: 13041-42 (total charge) used to straddle the
-# end of a 13000+42 block, so its high word was never read.
-BLOCKS = [(5008, 29), (13000, 41), (13041, 2), (13045, 3)]
 
 RUNNING_STATE = {
     0x0000: "Running",
@@ -136,22 +106,6 @@ FLOW_BATTERY_CHARGING = 1 << 1
 FLOW_BATTERY_DISCHARGING = 1 << 2
 
 
-def _combine(words: list[int]) -> int:
-    """Low word first, per Sungrow doc."""
-    return words[0] if len(words) == 1 else (words[1] << 16) | words[0]
-
-
-def _decode(reg: Reg, words: list[int]) -> float | None:
-    raw = _combine(words)
-    if raw in SENTINELS:
-        return None
-    if reg.signed:
-        bits = 16 * reg.count
-        if raw >= 1 << (bits - 1):
-            raw -= 1 << bits
-    return round(raw * reg.scale, 3)
-
-
 def derive(values: dict[str, float | None]) -> Snapshot:
     """Turn raw register values into the snapshot shape stored in the DB."""
     snap: Snapshot = {k: v for k, v in values.items() if k not in ("battery_power_raw", "export_power")}
@@ -172,84 +126,28 @@ def derive(values: dict[str, float | None]) -> Snapshot:
     return snap
 
 
-class SungrowInverter:
-    def __init__(self, host: str, port: int = 502, unit: int = 1):
-        from pymodbus.client import ModbusTcpClient
+def decode(raw: Raw) -> Snapshot:
+    """A snapshot from one poll's input registers. Registers that weren't read come out as None."""
+    w = words(raw)
+    return derive({r.key: value(r, w) for r in REGISTERS})
 
-        self.host, self.port, self.unit = host, port, unit
-        self._client_cls = ModbusTcpClient
-        self._bad_blocks: set[int] = set()
-        self.info: dict[str, Any] = {}
-        self._info_at = 0.0
-        # pymodbus renamed the unit-id kwarg across 3.x versions.
-        params = inspect.signature(ModbusTcpClient.read_input_registers).parameters
-        self._unit_kw = next((k for k in ("device_id", "slave", "unit") if k in params), "slave")
 
-    @property
-    def model(self) -> str | None:
-        return self.info.get("model")
-
-    @property
-    def battery_kwh(self) -> float | None:
-        return self.info.get("battery_kwh")
-
-    def _read(self, client: Any, address: int, count: int, holding: bool = False) -> list[int] | None:
-        fn = client.read_holding_registers if holding else client.read_input_registers
-        rr = fn(address + ADDRESS_OFFSET, count=count, **{self._unit_kw: self.unit})
-        if rr.isError():
-            return None
-        return list(rr.registers)
-
-    def _read_info(self, client: Any) -> None:
-        """System details that rarely change. Read on first connect, then every 6 hours."""
-        info = dict(self.info)
-        w = self._read(client, 4990, 10)  # serial number, 10 registers of ASCII
-        if w:
-            info["serial"] = b"".join(x.to_bytes(2, "big") for x in w).decode("ascii", "replace").strip("\x00 ")
-        w = self._read(client, 5000, 3)  # device type, nominal power (0.1 kW), output type
-        if w:
-            info["model"] = DEVICE_TYPES.get(w[0], f"Unknown (0x{w[0]:04X})")
-            info["nominal_kw"] = round(w[1] * 0.1, 1)
-            info["phases"] = {0: "Single phase", 1: "Three phase", 2: "Three phase"}.get(w[2])
-        w = self._read(client, 5639, 1)  # battery capacity, 0.01 kWh
-        if w and w[0] not in SENTINELS:
-            info["battery_kwh"] = round(w[0] * 0.01, 2)
-        w = self._read(client, 13059, 1, holding=True)  # min SOC = backup reserve, 0.1 % (read only)
-        if w and w[0] not in SENTINELS:
-            info["reserve"] = round(w[0] * 0.1, 1)
-        self.info = info
-        self._info_at = time.time()
-
-    def read_snapshot(self) -> Snapshot:
-        """One connect -> read -> disconnect cycle. Raises ConnectionError if unreachable."""
-        if not self.host:
-            raise ConnectionError(
-                "No inverter address set. Set INVERTER_HOST in .env, or run: bash install.sh --configure"
-            )
-        client = self._client_cls(self.host, port=self.port, timeout=5, retries=1)
-        if not client.connect():
-            raise ConnectionError(f"Could not connect to {self.host}:{self.port}")
-        try:
-            if time.time() - self._info_at > 6 * 3600:
-                self._read_info(client)
-
-            values: dict[str, float | None] = {}
-            for start, count in BLOCKS:
-                regs = [r for r in REGISTERS if start <= r.address < start + count]
-                words = None if start in self._bad_blocks else self._read(client, start, count)
-                if words is None and start not in self._bad_blocks:
-                    log.warning("Block read %s+%s rejected; falling back to single-register reads", start, count)
-                    self._bad_blocks.add(start)
-                for r in regs:
-                    if words is not None:
-                        off = r.address - start
-                        values[r.key] = _decode(r, words[off : off + r.count])
-                    else:
-                        w = self._read(client, r.address, r.count)
-                        values[r.key] = _decode(r, w) if w else None
-
-            if all(v is None for v in values.values()):
-                raise ConnectionError("Inverter connected but returned no data")
-            return derive(values)
-        finally:
-            client.close()
+def decode_info(raw: Raw) -> Info:
+    """System details from the info registers (read on start and every 6 hours)."""
+    inp, holding = words(raw), words(raw, "holding")
+    info: dict[str, Any] = {}
+    w = span(inp, 4990, 10)  # serial number, 10 registers of ASCII
+    if w:
+        info["serial"] = b"".join(x.to_bytes(2, "big") for x in w).decode("ascii", "replace").strip("\x00 ")
+    w = span(inp, 5000, 3)  # device type, nominal power (0.1 kW), output type
+    if w:
+        info["model"] = DEVICE_TYPES.get(w[0], f"Unknown (0x{w[0]:04X})")
+        info["nominal_kw"] = round(w[1] * 0.1, 1)
+        info["phases"] = {0: "Single phase", 1: "Three phase", 2: "Three phase"}.get(w[2])
+    w = span(inp, 5639, 1)  # battery capacity, 0.01 kWh
+    if w and w[0] not in SENTINELS:
+        info["battery_kwh"] = round(w[0] * 0.01, 2)
+    w = span(holding, 13059, 1)  # min SOC = backup reserve, 0.1 % (read only)
+    if w and w[0] not in SENTINELS:
+        info["reserve"] = round(w[0] * 0.1, 1)
+    return {"brand": brand, **info} if info else info
