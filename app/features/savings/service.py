@@ -169,7 +169,10 @@ class SavingsService:
         p = latest or {}
         # The hybrid's own solar only: a second system's lifetime counter can predate the hybrid's
         # meter, so its early output was never seen as exported and would all count as saved.
-        pv, exp = p.get("total_pv1", p.get("total_pv")), p.get("total_export")
+        # So pair it with the hybrid's own export (readings from before that counter was recorded
+        # only have total_export, which was the same figure then).
+        pv = p.get("total_pv1", p.get("total_pv"))
+        exp = p.get("total_pv_export") if p.get("total_pv_export") is not None else p.get("total_export")
         chg, dis = p.get("total_charge") or 0, p.get("total_discharge") or 0
         selfu = sum(sum(b["self_kwh"] for b in d["bands"]) for d in recent)
         worth = sum(sum(b["saved"] for b in d["bands"]) for d in recent)

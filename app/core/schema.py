@@ -33,6 +33,8 @@ SAMPLE_COLUMNS: dict[str, str] = {
     "total_pv": "MAX", "total_import": "MAX", "total_export": "MAX",
     "total_charge": "MAX", "total_discharge": "MAX",
     "daily_pv1": "MAX", "daily_pv2": "MAX", "daily_export1": "MAX", "total_pv1": "MAX", "total_pv2": "MAX",
+    # the hybrid's own panels' share of export (daily_export/total_export are the meter's)
+    "daily_pv_export": "MAX", "total_pv_export": "MAX",
 }  # fmt: skip
 SAMPLE_TABLES = ("samples", "samples_5m")
 
