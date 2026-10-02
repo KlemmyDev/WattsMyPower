@@ -3,7 +3,8 @@ from __future__ import annotations
 import datetime as dt
 import time
 
-from app.features.readings.repository import ROLLUP, ReadingsRepository
+from app.core.schema import ROLLUP
+from app.features.readings.repository import ReadingsRepository
 
 # Recent enough to be inside raw-reading retention, and on a 5-minute boundary.
 RECENT = (int(time.time()) - 2 * 86400) // ROLLUP * ROLLUP

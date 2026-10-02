@@ -30,10 +30,26 @@ REGISTERS = [
 ]
 
 
-def decode(raw: Raw) -> SolarValues:
-    """This poll's figures from its input registers."""
+NOMINAL = Reg("nominal_kw", 5001, 1, False, 0.1)
+
+
+def decode(raw: Raw) -> SolarValues | None:
+    """This poll's figures from its input registers, or None if they can't be real.
+
+    A reply decrypted with a stale key comes out as random words that can still look like a valid
+    frame, so the whole reading is checked against the inverter's own nominal power (which comes
+    with every poll): an SG-D can't report more than 1-100 kW nominal, or output well beyond it.
+    """
     w = words(raw)
-    return {r.key: value(r, w) for r in REGISTERS}
+    values = {r.key: value(r, w) for r in REGISTERS}
+    nominal = value(NOMINAL, w)
+    if nominal is not None:
+        limit_w = nominal * 1000 * 1.5
+        if not 1 <= nominal <= 100 or any((values[k] or 0) > limit_w for k in ("pv2_power", "pv2_dc_power")):
+            return None
+        if (values["daily_pv2"] or 0) > nominal * 24:
+            return None
+    return values
 
 
 def decode_info(raw: Raw) -> Info:
@@ -46,6 +62,6 @@ def decode_info(raw: Raw) -> Info:
     return {
         "brand": brand,
         "model": MODELS.get(type_code, f"Unknown (0x{type_code:04X})"),
-        "nominal_kw": value(Reg("nominal_kw", 5001, 1, False, 0.1), w),
+        "nominal_kw": value(NOMINAL, w),
         "running_hours": int(hours) if hours is not None else None,
     }

@@ -163,3 +163,24 @@ def test_reprocess_rebuilds_from_raw(db: Database, config: Config) -> None:
     done = reprocess(config, db, FakeCollector(rows(DAY)))
     assert done["polls"] == 1
     assert readings.daily(DAY - 3600, DAY + 3600)[0]["daily_export"] == 43.2
+
+
+def test_a_torn_32_bit_read_is_dropped() -> None:
+    """-600 W is 0xFFFF_FDA8; read across an update with a fresh high word it comes out as +64,936 W."""
+    torn = {"input": {**hybrid_words(), "13008": 0xFDA8, "13009": 0}}
+    out = snapshots([{"ts": DAY, "device": "hybrid", **torn}], has_pv2=False, behind_meter=True,
+                    poll_interval=60, carry=Pv2Carry())  # fmt: skip
+    [(_, snap)] = out
+    assert snap["load_power"] is None and snap["pv_power"] == 4120  # only the bad value goes
+
+
+def test_a_garbled_second_inverter_reading_counts_as_missed() -> None:
+    """A frame decrypted with a stale key: random words that still parse."""
+    garbled = {"5000": 0x9C41, "5001": 0x7A2E, "5003": 0x1F00, "5017": 0x33AA, "5018": 0x0B12,
+               "5031": 0xE001, "5032": 0x4D1C, "5008": 0x0101}  # fmt: skip
+    assert sg_d.decode({"input": garbled}) is None
+    assert sg_d.decode({"input": {**pv2_words(), "5031": 0x2000, "5032": 0x0001}}) is None  # 73 kW from 5 kW
+    carry = Pv2Carry()
+    feed = [*rows(DAY), *rows(DAY + 60, pv2=False), {"ts": DAY + 60, "device": "pv2", "input": garbled}]
+    out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry)
+    assert out[1][1]["pv2_power"] == 1800  # the last good values carried, as for a missed read

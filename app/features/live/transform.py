@@ -13,6 +13,7 @@ from itertools import groupby
 from typing import Any
 
 from app.features.inverters import drivers
+from app.features.inverters.limits import clean, outside
 from app.features.inverters.merge import merge_pv2
 from app.features.inverters.types import Snapshot, SolarValues
 
@@ -21,6 +22,17 @@ log = logging.getLogger(__name__)
 Row = dict[str, Any]  # one device's reading, as served by the collector (see collector/PROTOCOL.md)
 
 _unknown: set[str] = set()
+
+
+def _garbled(ts: int, device: str, what: str) -> None:
+    log.info(
+        "Dropped a garbled %s reading at %s: %s", device, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)), what
+    )
+
+
+def _note_outside(ts: int, device: str, values: dict[str, Any]) -> None:
+    if bad := outside(values):
+        _garbled(ts, device, ", ".join(f"{k}={values[k]}" for k in bad))
 
 
 def _unknown_driver(device: str, driver: str | None) -> None:
@@ -64,7 +76,11 @@ def snapshots(
         pv2_read = None
         if (row := by_device.get("pv2")) is not None:
             if solar := drivers.solar(row.get("driver")):
-                pv2_read, carry.info = solar.decode(row), solar.decode_info(row)
+                if (pv2_read := solar.decode(row)) is None:
+                    _garbled(ts, "pv2", "the reading as a whole")
+                else:
+                    _note_outside(ts, "pv2", pv2_read)
+                    pv2_read, carry.info = clean(pv2_read), solar.decode_info(row)
             else:
                 _unknown_driver("pv2", row.get("driver"))
         pv2 = carry.values_at(ts, pv2_read, poll_interval) if has_pv2 else None
@@ -74,6 +90,8 @@ def snapshots(
             _unknown_driver("hybrid", row.get("driver"))
             continue
         snap = main.decode(row)
+        _note_outside(ts, "hybrid", snap)
+        snap = clean(snap)
         if has_pv2:
             snap = merge_pv2(snap, pv2, behind_meter)
         out.append((ts, snap))
