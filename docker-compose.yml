@@ -14,6 +14,8 @@ services:
     volumes:
       - ./data:/data
     environment:
+      # The inverters are connected in the dashboard (Settings → Integrations) and stored in
+      # data/collector.db. These only move an older install's inverters into it, the first time.
       INVERTER_DRIVER: ${INVERTER_DRIVER:-sungrow.sh_rs}
       INVERTER_HOST: ${INVERTER_HOST:-}
       INVERTER_PORT: ${INVERTER_PORT:-502}
@@ -22,6 +24,7 @@ services:
       PV2_HOST: ${PV2_HOST:-}
       PV2_PORT: ${PV2_PORT:-502}
       PV2_UNIT: ${PV2_UNIT:-1}
+      PV2_BEHIND_METER: ${PV2_BEHIND_METER:-true}
       POLL_INTERVAL: ${POLL_INTERVAL:-60}
       COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-365}
       COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}
@@ -43,6 +46,7 @@ services:
     environment:
       COLLECTOR_URL: http://collector:8081
       COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}
+      COLLECTOR_WRITES: ${COLLECTOR_WRITES:-true}
       PV2_BEHIND_METER: ${PV2_BEHIND_METER:-true}
       POLL_INTERVAL: ${POLL_INTERVAL:-60}
       RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}
