@@ -3,11 +3,12 @@ import { SettingRow } from "~/features/common/ui/components/DataRow";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { useLive } from "~/features/common/live/hooks/useLive";
+import { inverterName } from "~/features/common/live/utils";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
   const model = pv2.model
-    ? `Sungrow ${pv2.model}${pv2.nominal_kw ? `, ${pv2.nominal_kw} kW` : ""}`
+    ? `${inverterName(pv2)}${pv2.nominal_kw ? `, ${pv2.nominal_kw} kW` : ""}`
     : `At ${pv2.host}, not read yet`;
   return (
     model +
@@ -18,7 +19,7 @@ function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
 function systemRows(s: SystemInfo | undefined): [string, string][] {
   return [
     ["Site name", "Home"],
-    ["Inverter", s?.model ? `Sungrow ${s.model} hybrid${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"],
+    ["Inverter", s?.model ? `${inverterName(s)} hybrid${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"],
     ["Serial number", s?.serial || "—"],
     ["Solar array", s?.pv_kw ? `${s.pv_kw} kW` : "—"],
     ["Battery", s?.battery_kwh ? `${s.battery_kwh} kWh` : "—"],
@@ -39,7 +40,7 @@ export function SystemSettings() {
         <SettingsTitle
           id="h-sys"
           title="Solar and battery system"
-          sub={`From your Sungrow inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
+          sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
         />
       </div>
       <div>

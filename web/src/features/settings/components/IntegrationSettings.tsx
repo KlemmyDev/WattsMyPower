@@ -9,6 +9,7 @@ import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { useForecast } from "~/features/common/weather/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
+import { inverterName } from "~/features/common/live/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { LocationForm } from "~/features/settings/components/LocationForm";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
@@ -63,7 +64,7 @@ function SecondInverterRow({ live, snapshot, now }: { live: LiveStatus; snapshot
   return (
     <IntegrationRow
       icon="sun"
-      name={`Sungrow ${pv2.model || "second inverter"}`}
+      name={inverterName(pv2) || "Second inverter"}
       on={ok}
       status={ok ? "Connected" : pv2.last_success ? "Not responding" : "Connecting"}
       detail={`Second solar system through its Wi-Fi dongle at ${pv2.host} · ${reading}`}
@@ -87,7 +88,7 @@ export function IntegrationSettings() {
       <SettingsCard aria-label="Connected services">
         <IntegrationRow
           icon="sun"
-          name="Sungrow inverter"
+          name={live?.system.brand ? `${live.system.brand} inverter` : "Inverter"}
           on={ok}
           status={ok ? "Connected" : "Not responding"}
           detail={`Inverter and battery data every minute over the local network · ${last ? `last sync ${hhmm(last)}` : "no data yet"}`}
