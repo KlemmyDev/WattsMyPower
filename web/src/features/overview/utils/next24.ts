@@ -13,6 +13,7 @@ export const W = 600;
 export const PH = 110;
 export const BH = 56;
 const DAY = 86400;
+const STEP = 300; // the hover readout's step: 5 minutes
 
 type V = { t: number; v: number };
 type Moment = { t: number; title: string; sub: string; color: string };
@@ -51,21 +52,34 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   // A dashed guide at a round kW figure near the solar peak.
   const guideKw = Math.max(1, Math.round(peak));
 
-  // Each forecast hour for the hover readout, placed at its middle. Battery is forecast for the end
-  // of each hour, so its dot sits halfway between the hour's start and end levels.
-  const hours = hrs.map((h, k) => {
-    const socEnd = h.soc;
-    const socMid = (socPts[k].v + socEnd) / 2;
+  // The hover readout, every 5 minutes on the clock. The forecast is hourly, so values are read
+  // off the lines as drawn (straight between its points), and grid flow is its hour's average power.
+  const lerp = (arr: V[], ts: number) => {
+    const k = arr.findIndex((x) => x.t >= ts);
+    if (k <= 0) return k === 0 ? arr[0].v : arr[arr.length - 1].v;
+    const a = arr[k - 1];
+    const b = arr[k];
+    return a.v + ((b.v - a.v) * (ts - a.t)) / (b.t - a.t || 1);
+  };
+  const first = Math.ceil(now / STEP) * STEP;
+  const points = Array.from({ length: Math.floor((end - first) / STEP) }, (_, k) => {
+    const ts = first + k * STEP;
+    const h = hrs.find((x) => x.start <= ts && ts < x.ts + 3600) ?? last;
+    const pvKw = lerp(pv, ts);
+    const loadKw = lerp(load, ts);
+    const soc = lerp(socPts, ts);
     return {
+      t: ts,
       h,
-      left: left(mid(h)),
-      from: h.start,
-      to: Math.min(end, h.ts + 3600),
-      socEnd,
+      pv: pvKw,
+      load: loadKw,
+      soc,
+      grid: h.grid_kwh / ((h.ts + 3600 - h.start) / 3600), // kW, + from the grid
+      left: left(ts),
       // as percentages of each plot's height, for the dots on the lines
-      pvTop: (py(h.pv_kw) / PH) * 100,
-      loadTop: (py(h.load_kw) / PH) * 100,
-      socTop: (by(socMid) / BH) * 100,
+      pvTop: (py(pvKw) / PH) * 100,
+      loadTop: (py(loadKw) / PH) * 100,
+      socTop: (by(soc) / BH) * 100,
     };
   });
 
@@ -120,9 +134,10 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   moments.sort((a, b) => a.t - b.t);
   const today = new Date(now * 1000).toDateString();
 
-  // One weather reading every three hours.
+  // One weather reading every three hours, taken at the middle of each three-hour slot: that's
+  // where its icon sits above the chart.
   const weather = Array.from({ length: 8 }, (_, k) => {
-    const at = now + k * 3 * 3600;
+    const at = now + (k * 3 + 1.5) * 3600;
     const h = f.hours.find((x) => x.ts <= at && at < x.ts + 3600) || hrs[Math.min(hrs.length - 1, k * 3)];
     return { at, h };
   });
@@ -170,7 +185,9 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
     reserveY: by(reserve),
     fullY: by(100),
     nights,
-    hours,
+    points,
+    /** One step of the hover readout, as a percentage of the plot's width. */
+    stepWidth: (STEP / DAY) * 100,
     // as percentages of the plot width
     ticks: [0, 6, 12, 18, 24].map((o) => ({ left: (o / 24) * 100, label: o ? hhmm(now + o * 3600) : "Now" })),
     weather,

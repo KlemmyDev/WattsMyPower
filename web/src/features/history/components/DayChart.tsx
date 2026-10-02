@@ -1,9 +1,9 @@
 import { useMemo, useState, type PointerEvent } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
-import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, nearest, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
-import { hourLabel } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
 import type { Hour } from "~/features/history/utils/day";
 
@@ -15,7 +15,7 @@ const BATTERY = "#6f8cff";
 const FROM_GRID = "#8a8a90";
 const TO_GRID = "#f2a65a";
 
-type Row = { t: number; pv: number | null; load: number | null; soc: number | null };
+type Row = { t: number; pv: number | null; load: number | null; soc: number | null; grid: number | null };
 type Key = "pv" | "load" | "soc";
 
 /** Runs of consecutive readings, so gaps in the data show as gaps in the line. */
@@ -38,6 +38,7 @@ function plot(series: HistorySeries) {
     pv: series.pv_power?.[i] ?? null,
     load: series.load_power?.[i] ?? null,
     soc: series.battery_soc?.[i] ?? null,
+    grid: series.grid_power?.[i] ?? null,
   }));
   // The chart's day comes from its own readings, so the previous day stays drawn while the next one loads.
   const start = rows.length ? midnight(rows[0].t) : 0;
@@ -47,6 +48,7 @@ function plot(series: HistorySeries) {
   const X = (t: number) => (((t - start) / span) * W).toFixed(1);
   const Yk = (v: number) => (H - (Math.max(0, v) / mx) * (H - 10)).toFixed(1);
   const Ys = (v: number) => (H - (v / 100) * (H - 10)).toFixed(1);
+  const step = rows.length > 1 ? rows[1].t - rows[0].t : 300;
   const line = (pts: Row[], k: Key, fy: (v: number) => string) =>
     pts.map((r, i) => `${i ? "L" : "M"}${X(r.t)} ${fy(r[k] ?? 0)}`).join(" ");
   return {
@@ -58,7 +60,15 @@ function plot(series: HistorySeries) {
     }),
     home: segments(rows, "load").map((sg) => line(sg, "load", Yk)),
     soc: segments(rows, "soc").map((sg) => line(sg, "soc", Ys)),
-    readings: rows.filter((r) => r.pv != null),
+    readings: rows.filter((r) => r.pv != null || r.load != null || r.soc != null),
+    step,
+    /** Where a reading sits, as percentages of the plot: across, and down to each line. */
+    at: (r: Row) => ({
+      left: ((r.t - start) / span) * 100,
+      pv: r.pv == null ? null : (+Yk(r.pv) / H) * 100,
+      load: r.load == null ? null : (+Yk(r.load) / H) * 100,
+      soc: r.soc == null ? null : (+Ys(r.soc) / H) * 100,
+    }),
   };
 }
 
@@ -69,30 +79,41 @@ const STROKE = {
   strokeLinecap: "round",
 } as const;
 
-/** The hour under the pointer, in the same tooltip as the Overview's Next 24 hours card. */
-function HourTooltip({ hour, at, width }: { hour: Hour; at: number; width: number }) {
-  const g = hour.grid ?? 0;
-  const left = ((at + 0.5) / 24) * 100;
+/** The 5 minutes under the pointer, in the same tooltip as the Overview's Next 24 hours card. */
+function ReadingTooltip({ r, step, left, width }: { r: Row; step: number; left: number; width: number }) {
+  const g = r.grid ?? 0;
   return (
     <ChartTooltip left={left} flip={left > 60} width={width}>
       <span className="font-medium text-ink">
-        {hourLabel(at)} to {hourLabel(at + 1)}
+        {hhmm(r.t)} to {hhmm(r.t + step)}
       </span>
-      {/* Each hour's energy is its average power, so kWh in an hour reads as kW. */}
-      <TooltipRow label="Solar" value={hour.pv == null ? DASH : kW(hour.pv * 1000)} color={SOLAR} />
-      <TooltipRow label="Home use" value={hour.load == null ? DASH : kW(hour.load * 1000)} color={HOME} />
-      <TooltipRow label={`Battery at ${hourLabel(at + 1)}`} value={pct(hour.soc)} color={BATTERY} />
+      <TooltipRow label="Solar" value={r.pv == null ? DASH : kW(r.pv)} color={SOLAR} />
       <TooltipRow
-        label={g > 0.05 ? "From the grid" : g < -0.05 ? "To the grid" : "Grid"}
-        value={Math.abs(g) > 0.05 ? kWh(Math.abs(g)) : "Idle"}
+        label="Home use"
+        value={r.load == null ? DASH : `${r.load < 0 ? "−" : ""}${kW(r.load)}`}
+        color={HOME}
+      />
+      <TooltipRow label="Battery" value={pct(r.soc)} color={BATTERY} />
+      <TooltipRow
+        label={g > 50 ? "From the grid" : g < -50 ? "To the grid" : "Grid"}
+        value={r.grid == null ? DASH : Math.abs(g) > 50 ? kW(g) : "Idle"}
       />
     </ChartTooltip>
   );
 }
 
+/** A dot on a line at the hovered reading. `top` is a percentage of the plot's height. */
+const Dot = ({ left, top, color }: { left: number; top: number | null; color: string }) =>
+  top == null ? null : (
+    <span
+      className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_#141414]"
+      style={{ left: `${left}%`, top: `${top}%`, background: color }}
+    />
+  );
+
 /**
  * One day hour by hour: solar, home use and battery level from the 5-minute readings, the grid
- * as bars (from it above the line, to it below), and the hour under the pointer in a tooltip.
+ * as bars (from it above the line, to it below), and the 5-minute reading under the pointer in a tooltip.
  */
 export function DayChart({
   series,
@@ -104,14 +125,17 @@ export function DayChart({
   placeholder: boolean;
 }) {
   const chart = useMemo(() => series && plot(series), [series]);
-  const [hover, setHover] = useState<number | null>(null);
+  const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
   const gMax = Math.max(0.5, ...hours.map((h) => Math.abs(h.grid ?? 0))) * 1.1;
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setWidth(r.width);
-    setHover(Math.max(0, Math.min(23, Math.floor(((e.clientX - r.left) / r.width) * 24))));
+    if (!chart?.readings.length) return;
+    const t = chart.start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * chart.span;
+    const best = nearest(chart.readings, t);
+    setHover(best && Math.abs(best.t - t) <= 2 * chart.step ? best : null);
   };
 
   return (
@@ -143,12 +167,15 @@ export function DayChart({
         onPointerDown={onPoint}
         onPointerLeave={() => setHover(null)}
       >
-        {/* The hovered hour, as a soft block behind the lines and grid bars: the tooltip sums it up. */}
-        {hover != null && (
+        {/* The hovered 5 minutes, as a soft band behind the lines and grid bars: the tooltip sums it up. */}
+        {hover && chart && (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 rounded-md bg-white/6"
-            style={{ left: `${((hover / 24) * 100).toFixed(3)}%`, width: `${(100 / 24).toFixed(3)}%` }}
+            className="pointer-events-none absolute inset-y-0 -translate-x-1/2 rounded-[3px] bg-white/8"
+            style={{
+              left: `${chart.at(hover).left.toFixed(3)}%`,
+              width: `max(4px, ${((chart.step / chart.span) * 100).toFixed(3)}%)`,
+            }}
           />
         )}
         <div className="relative h-[220px] max-sm:h-[180px]">
@@ -187,6 +214,18 @@ export function DayChart({
               No readings were recorded on this day.
             </div>
           )}
+          {hover &&
+            chart &&
+            (() => {
+              const at = chart.at(hover);
+              return (
+                <>
+                  <Dot left={at.left} top={at.pv} color={SOLAR} />
+                  <Dot left={at.left} top={at.load} color={HOME} />
+                  <Dot left={at.left} top={at.soc} color={BATTERY} />
+                </>
+              );
+            })()}
         </div>
         <div className="relative h-[72px]">
           <div className="absolute inset-x-0 top-1/2 border-t border-white/12" />
@@ -211,11 +250,7 @@ export function DayChart({
             })}
           </div>
         </div>
-        {hover != null && (
-          <>
-            <HourTooltip hour={hours[hover]} at={hover} width={width} />
-          </>
-        )}
+        {hover && chart && <ReadingTooltip r={hover} step={chart.step} left={chart.at(hover).left} width={width} />}
       </div>
       <div className="relative h-3.5">
         {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h, i, all) => (
