@@ -10,10 +10,11 @@ from typing import Any
 
 from app.core.config import Config
 from app.core.database import Database
+from app.core.schema import ROLLUP
 from app.features.live.client import Feed
 from app.features.live.ingest import BATCH, save_cursor
 from app.features.live.transform import Pv2Carry, snapshots
-from app.features.readings.repository import ROLLUP, ReadingsRepository
+from app.features.readings.repository import ReadingsRepository
 
 log = logging.getLogger(__name__)
 

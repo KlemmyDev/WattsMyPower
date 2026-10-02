@@ -12,12 +12,11 @@ from collections.abc import Iterator
 from typing import Any
 
 from app.core.database import Database
-from app.core.schema import SAMPLE_COLUMNS
+from app.core.schema import ROLLUP, ROLLUP_SQL, SAMPLE_COLUMNS
 
 Snapshot = dict[str, Any]
 
 COLS = list(SAMPLE_COLUMNS)
-ROLLUP = 300  # seconds per rollup bucket
 DAILY_COLS = [
     "daily_pv",
     "daily_import",
@@ -30,12 +29,6 @@ DAILY_COLS = [
 DEFAULT_FIELDS = ["pv_power", "load_power", "grid_power", "battery_power", "battery_soc"]
 
 _INSERT = f"INSERT OR REPLACE INTO samples (ts, {', '.join(COLS)}) VALUES (?{', ?' * len(COLS)})"
-_ROLLUP_SQL = (
-    f"INSERT OR REPLACE INTO samples_5m (ts, {', '.join(COLS)}) "
-    f"SELECT (ts / {ROLLUP}) * {ROLLUP} AS b, "
-    + ", ".join(f"{agg}({c})" for c, agg in SAMPLE_COLUMNS.items())
-    + " FROM samples WHERE ts >= ? AND ts < ? GROUP BY b"
-)
 
 
 class ReadingsRepository:
@@ -48,20 +41,20 @@ class ReadingsRepository:
     def heal_rollups(self, conn: sqlite3.Connection) -> None:
         """After a crash or restart, rebuild rollups from the last rollup bucket onward."""
         last = conn.execute("SELECT MAX(ts) FROM samples_5m").fetchone()[0] or 0
-        conn.execute(_ROLLUP_SQL, (last, 2**62))
+        conn.execute(ROLLUP_SQL, (last, 2**62))
         conn.commit()
 
     def insert(self, conn: sqlite3.Connection, ts: int, snap: Snapshot) -> None:
         conn.execute(_INSERT, (ts, *(snap.get(c) for c in COLS)))
         bucket = ts // ROLLUP * ROLLUP
-        conn.execute(_ROLLUP_SQL, (bucket, bucket + ROLLUP))
+        conn.execute(ROLLUP_SQL, (bucket, bucket + ROLLUP))
         conn.commit()
 
     def insert_many(self, conn: sqlite3.Connection, rows: list[tuple[int, Snapshot]]) -> None:
         if not rows:
             return
         conn.executemany(_INSERT, [(ts, *(s.get(c) for c in COLS)) for ts, s in rows])
-        conn.execute(_ROLLUP_SQL, (rows[0][0] // ROLLUP * ROLLUP, 2**62))
+        conn.execute(ROLLUP_SQL, (rows[0][0] // ROLLUP * ROLLUP, 2**62))
         conn.commit()
 
     def raw_cutoff(self) -> int:

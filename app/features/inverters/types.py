@@ -55,7 +55,9 @@ class SolarDriver(Protocol):
 
     brand: str
 
-    def decode(self, raw: Raw) -> SolarValues: ...
+    def decode(self, raw: Raw) -> SolarValues | None:
+        """This poll's figures, or None if the reading is garbled as a whole (treated as a missed read)."""
+        ...
 
     def decode_info(self, raw: Raw) -> Info:
         """The device's details, from the same poll's reading."""

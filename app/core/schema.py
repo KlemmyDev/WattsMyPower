@@ -38,6 +38,39 @@ SAMPLE_COLUMNS: dict[str, str] = {
 }  # fmt: skip
 SAMPLE_TABLES = ("samples", "samples_5m")
 
+ROLLUP = 300  # seconds per rollup bucket
+# Rebuild the rollups of the buckets in [?, ?) from the raw samples.
+ROLLUP_SQL = (
+    f"INSERT OR REPLACE INTO samples_5m (ts, {', '.join(SAMPLE_COLUMNS)}) "
+    f"SELECT (ts / {ROLLUP}) * {ROLLUP} AS b, "
+    + ", ".join(f"{agg}({c})" for c, agg in SAMPLE_COLUMNS.items())
+    + " FROM samples WHERE ts >= ? AND ts < ? GROUP BY b"
+)
+
+# The range each sample column can physically hold for a home system. A value outside it isn't a
+# measurement but a garbled read: a frame decrypted with a stale key comes out as random words, and
+# a 32-bit register pair read across an update turns -600 W into +64,936 W. Such values are dropped
+# as readings are decoded (app.features.inverters.limits), and were cleaned out of older history by
+# the migration below. Columns not listed aren't checked.
+MAX_W = 30_000  # more than any home inverter, battery or grid connection here can carry
+_POWER = (-MAX_W, MAX_W)
+_OUTPUT = (0, MAX_W)
+_TEMP = (-40, 100)
+_DAY_KWH = (0, 500)
+_TOTAL_KWH = (0, 10_000_000)
+SAMPLE_BOUNDS: dict[str, tuple[float, float]] = {
+    "pv_power": _OUTPUT, "pv1_power": _OUTPUT, "pv2_power": _OUTPUT,
+    "load_power": _POWER, "load_hybrid": _POWER, "grid_power": _POWER, "grid_hybrid": _POWER,
+    "battery_power": _POWER,
+    "battery_soc": (0, 100), "battery_soh": (0, 100),
+    "battery_voltage": (0, 1000), "battery_current": (-500, 500),
+    "battery_temp": _TEMP, "inverter_temp": _TEMP, "pv2_temp": _TEMP,
+    "grid_freq": (40, 70),
+    "mppt1_v": (0, 1500), "mppt2_v": (0, 1500), "mppt1_a": (0, 100), "mppt2_a": (0, 100),
+    **{c: _DAY_KWH for c in SAMPLE_COLUMNS if c.startswith("daily_")},
+    **{c: _TOTAL_KWH for c in SAMPLE_COLUMNS if c.startswith("total_")},
+}  # fmt: skip
+
 _SAMPLES = "ts INTEGER PRIMARY KEY, " + ", ".join(f"{c} REAL" for c in SAMPLE_COLUMNS)
 
 
@@ -58,10 +91,25 @@ def _baseline(conn: sqlite3.Connection) -> None:
     )
 
 
+def _drop_impossible_values(conn: sqlite3.Connection) -> None:
+    """Null out readings outside SAMPLE_BOUNDS (garbled reads stored before they were caught at
+    decode time), then rebuild the rollups they skewed. Rollups whose raw samples are gone past
+    retention are only cleaned, as there's nothing to rebuild them from."""
+    add_missing_sample_columns(conn)
+    outside = " OR ".join(f"{c} < {lo} OR {c} > {hi}" for c, (lo, hi) in SAMPLE_BOUNDS.items())
+    buckets = [b for (b,) in conn.execute(f"SELECT DISTINCT ts / {ROLLUP} * {ROLLUP} FROM samples WHERE {outside}")]
+    for table in SAMPLE_TABLES:
+        for c, (lo, hi) in SAMPLE_BOUNDS.items():
+            conn.execute(f"UPDATE {table} SET {c} = NULL WHERE {c} < ? OR {c} > ?", (lo, hi))
+    for b in buckets:
+        conn.execute(ROLLUP_SQL, (b, b + ROLLUP))
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
+    _drop_impossible_values,
 ]
 
 

@@ -185,7 +185,9 @@ CO₂ avoided uses 0.68 kg per kWh, the average Australian grid emissions factor
 
 ### How the forecast works
 
-Hourly weather comes from [Open-Meteo](https://open-meteo.com) (free, no API key), fetched at most every 30 minutes. Solar output is modelled from forecast sunlight and calibrated against what your inverter actually produced over the last week, so panel direction, shading and clipping are learned automatically. The first calibration happens after about 30 minutes of daylight data. Home use is the average for each hour of the day over the last two weeks. The battery is then projected forward hour by hour from its current charge.
+Hourly weather comes from [Open-Meteo](https://open-meteo.com) (free, no API key), fetched at most every 30 minutes. Solar output is modelled from forecast sunlight and calibrated against what your inverter actually produced over the last week, so panel direction, shading and clipping are learned automatically. The first calibration happens after about 30 minutes of daylight data. Home use is what the house typically uses in each hour of the day over the last two weeks. The battery is then projected forward hour by hour from its current charge.
+
+Both are fitted day by day and then combined in a way one odd day can't skew: solar takes the median day's calibration, and home use drops the highest and lowest fifth of days for each hour before averaging. Readings no home system could produce, such as a reply decrypted with a stale key or a 32-bit value read across an update, are dropped when they're decoded, so they never reach the history or the forecast.
 
 The inverter's solar reading only covers panels connected to the Sungrow. If you also have an AC-coupled system, set `PV2_HOST` (see below) so it's included; otherwise it shows up as lower (sometimes negative) home use.
 

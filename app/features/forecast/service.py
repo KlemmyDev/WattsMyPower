@@ -5,15 +5,21 @@ Weather comes from Open-Meteo (free, no API key). Solar per hour is modelled as
     pv_kwh = k * radiation_kwh_per_m2
 where k starts at PV_KW * 0.8 and is then calibrated against what the inverter
 actually produced over the last week (so orientation, shading and clipping are
-absorbed without needing to be configured). Home use per hour comes from the
-average load for that hour of day over the last two weeks. The battery is then
+absorbed without needing to be configured). Home use per hour comes from what
+the house used in that hour of day over the last two weeks. The battery is then
 stepped forward hour by hour from its current charge.
+
+Both are fitted per day and then combined robustly (a median for solar, a trimmed
+mean for home use), so one odd day, or a garbled reading that slipped through,
+can't drag the forecast far from what the system really does.
 """
 
 from __future__ import annotations
 
 import logging
+import statistics
 import time
+from collections import defaultdict
 from itertools import pairwise
 from typing import Any
 
@@ -68,6 +74,13 @@ def hours_from(weather: dict[str, Any]) -> list[Hour]:
             }
         )
     return out
+
+
+def trimmed_mean(values: list[float], cut: float = 0.2) -> float:
+    """The mean after dropping the highest and lowest `cut` share of values (none when there are few)."""
+    v = sorted(values)
+    n = int(len(v) * cut)
+    return statistics.fmean(v[n : len(v) - n] if len(v) - 2 * n > 0 else v)
 
 
 def simulate(steps: list[Hour], soc: float, cap: float, reserve: float, max_kw: float) -> None:
@@ -160,18 +173,39 @@ class ForecastService:
             return mids[-1][1]
 
         rows = self.readings.rollups(past[0]["ts"], now - 300, ["pv_power"], not_null="pv_power")
-        pairs = [(pv / 1000, r) for ts, pv in rows if (r := rad_at(ts + 150)) >= 0.1]
-        if len(pairs) < 6:
+        # Output beyond what the array could ever make is a bad reading, not sunshine.
+        ceiling = 1.5 * pv_kw * 1000
+        by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
+        for ts, pv in rows:
+            if 0 <= pv <= ceiling and (r := rad_at(ts + 150)) >= 0.1:
+                by_day[time.strftime("%Y-%m-%d", time.localtime(ts))].append((pv / 1000, r))
+        pairs = sum(len(p) for p in by_day.values())
+        if pairs < 6:
             return default, 0.0
-        k = sum(a for a, _ in pairs) / sum(r for _, r in pairs)
-        return min(max(k, 0.05 * pv_kw), 1.2 * pv_kw), round(len(pairs) / 12, 1)
+        # One fit per day with at least an hour of daylight data, then the median day: a day of
+        # bad readings (or panels covered in hail) moves it far less than it would a single fit.
+        days = [sum(a for a, _ in p) / sum(r for _, r in p) for p in by_day.values() if len(p) >= 12]
+        if days:
+            k = statistics.median(days)
+        else:  # under an hour of data on any one day: fit it all at once
+            every = [x for p in by_day.values() for x in p]
+            k = sum(a for a, _ in every) / sum(r for _, r in every)
+        return min(max(k, 0.05 * pv_kw), 1.2 * pv_kw), round(pairs / 12, 1)
 
     def _load_profile(self, now: int) -> list[float]:
-        """Average home use (kW) for each local hour of day over the last 14 days."""
+        """Typical home use (kW) for each local hour of day over the last 14 days.
+
+        Each hour's figure is the mean across days after dropping the highest and lowest fifth, so
+        a one-off (guests, a long car charge) or a bad reading doesn't set what every day expects,
+        while loads that happen most days still count in full.
+        """
+        by_hour: dict[int, list[float]] = defaultdict(list)
+        for _, hr, avg, n in self.repo.hourly_load(now - 14 * 86400):
+            if n >= 6:  # at least half an hour of data for that hour
+                by_hour[hr].append(avg / 1000)
         prof = list(DEFAULT_LOAD)
-        for hr, avg, n in self.repo.hourly_load(now - 14 * 86400):
-            if n >= 6 and avg is not None:  # at least half an hour of data for that hour
-                prof[hr] = avg / 1000
+        for hr, days in by_hour.items():
+            prof[hr] = trimmed_mean(days)
         return prof
 
     def build(self, latest: Snapshot | None, battery_kwh: float, reserve_pct: float) -> dict[str, Any] | None:
