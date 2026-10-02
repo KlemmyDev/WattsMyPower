@@ -14,14 +14,33 @@ export function HoverLine({ left, className }: { left: number; className?: strin
   );
 }
 
+const TIP_W = 200;
+const GAP = 12;
+
+/**
+ * The tooltip box, beside the hover line: to its right, or its left when `flip`. Given the plot's
+ * `width` in pixels it picks the side with room itself, and on a plot too narrow for either side
+ * (a phone) it centres on the line, kept inside the plot.
+ */
+function tipLeft(left: number, flip: boolean, width?: number): string {
+  if (!width) return flip ? `calc(${left}% - ${TIP_W + GAP}px)` : `calc(${left}% + ${GAP}px)`;
+  const x = (left / 100) * width;
+  if (x + GAP + TIP_W <= width) return `${x + GAP}px`;
+  if (x - GAP - TIP_W >= 0) return `${x - GAP - TIP_W}px`;
+  return `${Math.max(0, Math.min(width - TIP_W, x - TIP_W / 2))}px`;
+}
+
 export function ChartTooltip({
   left,
   flip,
+  width,
   children,
   className,
 }: {
   left: number;
   flip: boolean;
+  /** The plot's width in pixels, to keep the box inside it. */
+  width?: number;
   children: ReactNode;
   className?: string;
 }) {
@@ -31,7 +50,7 @@ export function ChartTooltip({
         "pointer-events-none absolute top-2 z-2 flex w-[200px] flex-col gap-1.5 rounded-xl border border-line bg-popover px-3.5 py-3 text-[13px] tabular-nums shadow-pop",
         className,
       )}
-      style={{ left: flip ? `calc(${left}% - 212px)` : `calc(${left}% + 12px)` }}
+      style={{ left: tipLeft(left, flip, width) }}
     >
       {children}
     </div>
