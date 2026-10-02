@@ -177,7 +177,8 @@ export function MonthCalendar({
           <Icon name="chevR" size={18} />
         </Button>
       </div>
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* Squares like the desktop heatmap, in a compact grid; each day's date is in its label. */}
+      <div className="grid grid-cols-[repeat(7,32px)] justify-center gap-1.5">
         {WEEKDAY_INITIALS.map((w, i) => (
           <span key={i} className="text-center font-mono text-[11px] text-ink-faint">
             {w}
@@ -188,20 +189,12 @@ export function MonthCalendar({
         ))}
         {Array.from({ length }, (_, k) => k + 1).map((num) => {
           const c = byDate.get(num);
-          const base =
-            "flex aspect-square min-h-10 items-center justify-center rounded-lg border-0 p-0 text-[13px] font-medium tabular-nums";
+          const base = "size-8 rounded-md border-0 p-0";
+          // Outside the view (before it starts, or after today): just a faint outline.
           if (!c)
-            return (
-              <span key={`out${num}`} className={cn(base, "text-white/15")}>
-                {num}
-              </span>
-            );
+            return <span key={`out${num}`} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")} />;
           if (!c.label)
-            return (
-              <span key={c.i} className={cn(base, "text-grey-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")}>
-                {num}
-              </span>
-            );
+            return <span key={c.i} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")} />;
           return (
             <button
               key={c.i}
@@ -212,15 +205,13 @@ export function MonthCalendar({
               onClick={() => onSelect(c.ts)}
               className={cn(
                 base,
-                c.fill ? ((c.v ?? 0) > 0.55 ? "text-ink-inverse" : "text-ink") : "bg-transparent text-grey-400",
+                !c.fill && "bg-transparent",
                 c.i === selected
                   ? cn("relative z-1", RING)
                   : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
               )}
               style={c.fill ? { background: c.fill } : undefined}
-            >
-              {num}
-            </button>
+            />
           );
         })}
       </div>

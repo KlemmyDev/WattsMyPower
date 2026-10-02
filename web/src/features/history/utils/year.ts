@@ -86,11 +86,8 @@ export const METRICS: Record<
 export const heatColor = (color: string, v: number) =>
   `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, #1b1b1d)`;
 
-/**
- * One calendar cell. Without a label it's an empty placeholder; without a fill, a day with no
- * readings. `v` is where the day sits from the view's lowest (0) to highest (1).
- */
-export type Cell = { i: number; ts: number; label: string | null; fill: string | null; v: number | null };
+/** One calendar cell. Without a label it's an empty placeholder; without a fill, a day with no readings. */
+export type Cell = { i: number; ts: number; label: string | null; fill: string | null };
 
 export function heatCells(days: Day[], metric: Metric): Cell[] {
   const { value, format, color } = METRICS[metric];
@@ -101,17 +98,14 @@ export function heatCells(days: Day[], metric: Metric): Cell[] {
   const norm = (d: DataDay) => Math.max(0, Math.min(1, (value(d) - lo) / (hi - lo || 1)));
   return days.map((d) => {
     const base = { i: d.i, ts: d.ts };
-    if (hasData(d)) {
-      const v = norm(d);
+    if (hasData(d))
       return {
         ...base,
         label: `${dayMonth(d.ts)}${d.partial ? " so far" : ""}: ${format(value(d))}`,
-        fill: heatColor(color, v),
-        v,
+        fill: heatColor(color, norm(d)),
       };
-    }
-    if (d.kind === "none") return { ...base, label: `${dayMonth(d.ts)}: no readings`, fill: null, v: null };
-    return { ...base, label: null, fill: null, v: null };
+    if (d.kind === "none") return { ...base, label: `${dayMonth(d.ts)}: no readings`, fill: null };
+    return { ...base, label: null, fill: null };
   });
 }
 
