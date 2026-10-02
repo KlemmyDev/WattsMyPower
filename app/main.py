@@ -15,13 +15,13 @@ from app.core.config import Config
 from app.core.spa import mount_spa
 from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
+from app.features.bills.router import router as bills_router
 from app.features.forecast.router import router as forecast_router
 from app.features.insights.router import router as insights_router
 from app.features.live.router import health_router
 from app.features.live.router import router as live_router
 from app.features.plans.router import router as plans_router
 from app.features.readings.router import router as readings_router
-from app.features.savings.router import router as savings_router
 from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
 from app.features.tariffs.router import router as tariffs_router
@@ -34,7 +34,7 @@ ROUTERS = [
     settings_router,
     forecast_router,
     insights_router,
-    savings_router,
+    bills_router,
     plans_router,
     health_router,
 ]

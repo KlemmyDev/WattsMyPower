@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { SavingsPage } from "~/features/savings/components/SavingsPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** The Savings page became Bills: keep old links and bookmarks working. */
 export const Route = createFileRoute("/_app/savings")({
-  head: () => ({ meta: [{ title: "Savings · WattsMyPower" }] }),
-  component: SavingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/bills", replace: true });
+  },
 });

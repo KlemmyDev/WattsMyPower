@@ -47,7 +47,7 @@ def test_saved_tariff_is_used_everywhere(client: TestClient) -> None:
 def test_settings_reject_out_of_range_values(client: TestClient) -> None:
     r = client.put("/api/settings", json={"latitude": 120})
     assert r.status_code == 422 and r.json()["detail"] == "latitude must be between -90 and 90"
-    assert client.put("/api/settings", json={"system_cost": 18400}).json()["system_cost"] == 18400
+    assert client.put("/api/settings", json={"bill_months": 1}).json()["bill_months"] == 1
 
 
 def test_history_of_an_empty_database(client: TestClient) -> None:

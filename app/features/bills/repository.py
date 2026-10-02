@@ -1,11 +1,11 @@
-"""The Savings page's own query over the 5-minute rollups."""
+"""The Bills page's own query over the 5-minute rollups."""
 
 from __future__ import annotations
 
 from app.core.database import Database
 
 
-class SavingsRepository:
+class BillsRepository:
     def __init__(self, db: Database):
         self.db = db
 

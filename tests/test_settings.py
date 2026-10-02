@@ -13,7 +13,9 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
     assert store.all_values() == {
         "latitude": config.latitude,
         "longitude": config.longitude,
-        "system_cost": 0,
+        "bill_months": 3,
+        "bill_day": 1,
+        "bill_anchor": 1,
         "location_name": None,
     }
 
@@ -21,11 +23,11 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
 def test_saved_values_win_and_persist(db: Database, config: Config) -> None:
     store = SettingsStore(db, config)
     store.load()
-    store.save({"latitude": -33.87, "location_name": "  Sydney, NSW  ", "system_cost": 18400})
+    store.save({"latitude": -33.87, "location_name": "  Sydney, NSW  ", "bill_months": 1, "bill_day": 15})
     fresh = SettingsStore(db, config)
     fresh.load()
     assert fresh.get("latitude") == -33.87
-    assert fresh.get("system_cost") == 18400
+    assert fresh.get("bill_months") == 1 and fresh.get("bill_day") == 15
     assert fresh.get_text("location_name") == "Sydney, NSW"
 
 
@@ -33,7 +35,9 @@ def test_saved_values_win_and_persist(db: Database, config: Config) -> None:
     ("changes", "message"),
     [
         ({"latitude": 91}, "latitude must be between -90 and 90"),
-        ({"system_cost": "a lot"}, "system_cost must be a number"),
+        ({"bill_day": "the first"}, "bill_day must be a number"),
+        ({"bill_day": 31}, "bill_day must be between 1 and 28"),
+        ({"bill_months": 1.5}, "bill_months must be a whole number"),
         ({"colour": 1}, "Unknown setting: colour"),
     ],
 )

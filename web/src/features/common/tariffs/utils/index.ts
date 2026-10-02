@@ -87,6 +87,17 @@ export function tariffDetail(t: Tariff): string {
   return `${usage} · ${centsShort(num(t.feed_in_rate))} feed-in · ${money(num(t.supply_charge))} a day`;
 }
 
+/** When a time-of-use band applies: "16:00 to 21:00", "Weekdays 07:00 to 09:00", or "All other times". */
+export function bandHours(b: TariffBand): string {
+  if (b.other) return "All other times";
+  return b.windows
+    .map((w) => {
+      const days = w.days === "all" ? "" : `${DAY_OPTIONS.find(([d]) => d === w.days)?.[1]} `;
+      return days + (w.start === w.end ? (days ? "all day" : "All day") : `${w.start} to ${w.end}`);
+    })
+    .join(", ");
+}
+
 /** A starting set of time-of-use bands when switching from a single rate. */
 export function seedBands(t: Tariff): TariffBand[] {
   const r = num(t.flat_rate) || 0.32;

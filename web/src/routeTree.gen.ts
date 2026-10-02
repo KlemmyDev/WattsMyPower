@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppBillsRouteImport } from './routes/_app/bills'
 import { Route as AppForecastRouteImport } from './routes/_app/forecast'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppInsightsRouteImport } from './routes/_app/insights'
@@ -19,6 +20,7 @@ import { Route as AppSavingsRouteImport } from './routes/_app/savings'
 import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsBillingRouteImport } from './routes/_app/settings/billing'
 import { Route as AppSettingsIntegrationsRouteImport } from './routes/_app/settings/integrations'
 import { Route as AppSettingsSystemRouteImport } from './routes/_app/settings/system'
 import { Route as AppSettingsTariffsRouteImport } from './routes/_app/settings/tariffs'
@@ -37,6 +39,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBillsRoute = AppBillsRouteImport.update({
+  id: '/bills',
+  path: '/bills',
   getParentRoute: () => AppRoute,
 } as any)
 const AppForecastRoute = AppForecastRouteImport.update({
@@ -74,6 +81,11 @@ const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
+const AppSettingsBillingRoute = AppSettingsBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
 const AppSettingsIntegrationsRoute = AppSettingsIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
@@ -104,11 +116,13 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/settings': typeof AppSettingsRouteRouteWithChildren
+  '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
   '/history': typeof AppHistoryRoute
   '/insights': typeof AppInsightsRoute
   '/savings': typeof AppSavingsRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/billing': typeof AppSettingsBillingRoute
   '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
   '/settings/tariffs': typeof AppSettingsTariffsRoute
@@ -118,12 +132,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
   '/history': typeof AppHistoryRoute
   '/insights': typeof AppInsightsRoute
   '/savings': typeof AppSavingsRoute
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/billing': typeof AppSettingsBillingRoute
   '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
   '/settings/tariffs': typeof AppSettingsTariffsRoute
@@ -136,12 +152,14 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/settings': typeof AppSettingsRouteRouteWithChildren
+  '/_app/bills': typeof AppBillsRoute
   '/_app/forecast': typeof AppForecastRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/insights': typeof AppInsightsRoute
   '/_app/savings': typeof AppSavingsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/billing': typeof AppSettingsBillingRoute
   '/_app/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/_app/settings/system': typeof AppSettingsSystemRoute
   '/_app/settings/tariffs': typeof AppSettingsTariffsRoute
@@ -155,11 +173,13 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/settings'
+    | '/bills'
     | '/forecast'
     | '/history'
     | '/insights'
     | '/savings'
     | '/settings/account'
+    | '/settings/billing'
     | '/settings/integrations'
     | '/settings/system'
     | '/settings/tariffs'
@@ -169,12 +189,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/bills'
     | '/forecast'
     | '/history'
     | '/insights'
     | '/savings'
     | '/'
     | '/settings/account'
+    | '/settings/billing'
     | '/settings/integrations'
     | '/settings/system'
     | '/settings/tariffs'
@@ -186,12 +208,14 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/settings'
+    | '/_app/bills'
     | '/_app/forecast'
     | '/_app/history'
     | '/_app/insights'
     | '/_app/savings'
     | '/_app/'
     | '/_app/settings/account'
+    | '/_app/settings/billing'
     | '/_app/settings/integrations'
     | '/_app/settings/system'
     | '/_app/settings/tariffs'
@@ -226,6 +250,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/bills': {
+      id: '/_app/bills'
+      path: '/bills'
+      fullPath: '/bills'
+      preLoaderRoute: typeof AppBillsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/forecast': {
@@ -277,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsAccountRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/billing': {
+      id: '/_app/settings/billing'
+      path: '/billing'
+      fullPath: '/settings/billing'
+      preLoaderRoute: typeof AppSettingsBillingRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/integrations': {
       id: '/_app/settings/integrations'
       path: '/integrations'
@@ -317,6 +355,7 @@ declare module '@tanstack/react-router' {
 
 interface AppSettingsRouteRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsBillingRoute: typeof AppSettingsBillingRoute
   AppSettingsIntegrationsRoute: typeof AppSettingsIntegrationsRoute
   AppSettingsSystemRoute: typeof AppSettingsSystemRoute
   AppSettingsTariffsRoute: typeof AppSettingsTariffsRoute
@@ -325,6 +364,7 @@ interface AppSettingsRouteRouteChildren {
 
 const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsBillingRoute: AppSettingsBillingRoute,
   AppSettingsIntegrationsRoute: AppSettingsIntegrationsRoute,
   AppSettingsSystemRoute: AppSettingsSystemRoute,
   AppSettingsTariffsRoute: AppSettingsTariffsRoute,
@@ -336,6 +376,7 @@ const AppSettingsRouteRouteWithChildren =
 
 interface AppRouteChildren {
   AppSettingsRouteRoute: typeof AppSettingsRouteRouteWithChildren
+  AppBillsRoute: typeof AppBillsRoute
   AppForecastRoute: typeof AppForecastRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppInsightsRoute: typeof AppInsightsRoute
@@ -347,6 +388,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppSettingsRouteRoute: AppSettingsRouteRouteWithChildren,
+  AppBillsRoute: AppBillsRoute,
   AppForecastRoute: AppForecastRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppInsightsRoute: AppInsightsRoute,

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from app.core.config import Config
 from app.core.database import Database
 from app.features.auth.service import AuthService
+from app.features.bills.service import BillsService
 from app.features.forecast.service import ForecastService
 from app.features.insights.service import InsightsService
 from app.features.live.client import CollectorClient
@@ -20,7 +21,6 @@ from app.features.live.service import LiveService
 from app.features.live.simulator import Simulator
 from app.features.plans.service import PlansService
 from app.features.readings.repository import ReadingsRepository
-from app.features.savings.service import SavingsService
 from app.features.settings.geocode import Geocoder
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
@@ -37,7 +37,7 @@ class Services:
     plans: PlansService
     forecast: ForecastService
     insights: InsightsService
-    savings: SavingsService
+    bills: BillsService
     auth: AuthService
     live: LiveService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
@@ -66,7 +66,7 @@ def build_services(config: Config) -> Services:
         plans=plans,
         forecast=ForecastService(config, readings, settings),
         insights=InsightsService(db, readings, settings),
-        savings=SavingsService(db, readings, settings, tariffs, plans),
+        bills=BillsService(db, readings, settings, tariffs),
         auth=AuthService(db, enabled=config.auth),
         live=live,
         source=source,

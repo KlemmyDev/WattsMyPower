@@ -1,6 +1,6 @@
 """
 Settings people can change from the dashboard: the forecast location (and its place
-name) and what the system cost. Tariffs are structured, so they have their own store.
+name) and the billing period. Tariffs are structured, so they have their own store.
 
 Environment variables provide the defaults; anything saved from the Settings page is
 stored in the database and wins over the environment.
@@ -16,6 +16,8 @@ from app.core.database import Database
 
 # Text settings: key -> max length. Stored in the kv table (the settings table holds REALs).
 TEXT: dict[str, int] = {"location_name": 120}
+# Settings that only take whole numbers.
+WHOLE = {"bill_months", "bill_day", "bill_anchor"}
 
 
 class SettingsStore:
@@ -25,8 +27,11 @@ class SettingsStore:
         self.editable: dict[str, tuple[float, float, float]] = {
             "latitude": (-90, 90, config.latitude),
             "longitude": (-180, 180, config.longitude),
-            # What the solar and battery system cost (AUD), for the payback estimate. 0 = not entered.
-            "system_cost": (0, 1_000_000, 0),
+            # The billing period: every 1, 2 or 3 months, starting on this day of the month, in step
+            # with a month a bill starts in (1-12). The default is calendar quarters.
+            "bill_months": (1, 3, 3),
+            "bill_day": (1, 28, 1),
+            "bill_anchor": (1, 12, 1),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}
@@ -50,7 +55,9 @@ class SettingsStore:
             return self._text.get(key)
 
     def all_values(self) -> dict[str, Any]:
-        return {**{k: self.get(k) for k in self.editable}, **{k: self.get_text(k) for k in TEXT}}
+        values = {k: self.get(k) for k in self.editable}
+        whole = {k: int(v) for k, v in values.items() if k in WHOLE}
+        return {**values, **whole, **{k: self.get_text(k) for k in TEXT}}
 
     def save(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Validate and store. Raises ValueError naming the first bad field."""
@@ -69,6 +76,8 @@ class SettingsStore:
             lo, hi, _ = self.editable[key]
             if not lo <= value <= hi:
                 raise ValueError(f"{key} must be between {lo:g} and {hi:g}")
+            if key in WHOLE and not value.is_integer():
+                raise ValueError(f"{key} must be a whole number")
             clean[key] = round(value, 6)
         with self.db.writing() as conn:
             conn.executemany("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", clean.items())

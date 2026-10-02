@@ -1,4 +1,4 @@
-"""Settings saved from the dashboard (forecast location, system cost), and place search for the location."""
+"""Settings saved from the dashboard (forecast location, billing period), and place search for the location."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ async def get_settings(svc: ServicesDep):
 
 @router.put("/settings")
 async def put_settings(svc: ServicesDep, changes: JsonBody):
-    """Save the forecast location (and its place name) or system cost. Only known keys are accepted."""
+    """Save the forecast location (and its place name) or billing period. Only known keys are accepted."""
     moved = ("latitude" in changes or "longitude" in changes) and "location_name" not in changes
     if moved:
         changes = {**changes, "location_name": None}  # the old name no longer applies

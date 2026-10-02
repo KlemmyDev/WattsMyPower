@@ -10,7 +10,9 @@ export const failure = (err: unknown, fallback: string) =>
 const FIELD_NAMES: Record<string, string> = {
   latitude: "Latitude",
   longitude: "Longitude",
-  system_cost: "System cost",
+  bill_months: "Billing frequency",
+  bill_day: "Day the period starts",
+  bill_anchor: "Month a period starts",
 };
 
 /** The settings endpoint's range errors ("latitude must be between -90 and 90") as a sentence. */
