@@ -25,7 +25,7 @@ TEXT: dict[str, int] = {"location_name": 120}
 CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # Open-Meteo's weather model for the forecast: its own pick for the location, or one model.
     "weather_model": (
-        ("best_match", "bom_access_global", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
+        ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
         "best_match",
     ),
 }

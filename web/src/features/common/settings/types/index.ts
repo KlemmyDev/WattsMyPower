@@ -27,7 +27,7 @@ export type Settings = {
   forecast_learning: number;
 };
 
-export type WeatherModel = "best_match" | "bom_access_global" | "ecmwf_ifs025" | "gfs_seamless" | "icon_seamless";
+export type WeatherModel = "best_match" | "ecmwf_ifs025" | "gfs_seamless" | "icon_seamless";
 
 /** Settings the weather is fetched for, or the forecast's solar depends on. */
 export const WEATHER_SETTINGS: (keyof Settings)[] = [

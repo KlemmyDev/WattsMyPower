@@ -32,10 +32,10 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
 def test_a_choice_takes_only_its_values_and_its_default_isnt_stored(db: Database, config: Config) -> None:
     store = SettingsStore(db, config)
     store.load()
-    store.save({"weather_model": "bom_access_global"})
+    store.save({"weather_model": "gfs_seamless"})
     fresh = SettingsStore(db, config)
     fresh.load()
-    assert fresh.get_choice("weather_model") == "bom_access_global"
+    assert fresh.get_choice("weather_model") == "gfs_seamless"
     with pytest.raises(ValueError, match="weather_model must be one of"):
         store.save({"weather_model": "made_up"})
     store.save({"weather_model": "best_match"})

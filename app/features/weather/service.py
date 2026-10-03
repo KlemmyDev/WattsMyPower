@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime as dt
+import functools
 import logging
 import statistics
 import threading
@@ -41,8 +42,13 @@ CHUNK_DAYS = 90  # days of history per request
 REQUESTS_PER_RUN = 4  # history requests per run of the loop
 MAX_DAYS = 5 * 365  # how far back to fill in
 RECENT_DAYS = 7  # the forecast itself covers this many days back
+COMPLETE = 0.9  # share of hours a model must give sunlight and temperature for (and codes, for history)
 # Weather codes, worst first within a day: storms, snow, rain, drizzle, fog, cloud, clear.
 SEVERITY = [range(95, 100), range(71, 87), range(61, 68), range(80, 83), range(51, 58), range(45, 49)]
+
+
+def _complete(rows: list[dict[str, Any]], fields: tuple[str, ...]) -> bool:
+    return bool(rows) and all(sum(r.get(f) is not None for r in rows) >= COMPLETE * len(rows) for f in fields)
 
 
 def _local_midnight(date: dt.date) -> int:
@@ -98,6 +104,21 @@ class WeatherService:
     def _fetch(self, url: str) -> list[dict[str, Any]]:
         return openmeteo.fetch(url, self._get) if self._get else openmeteo.fetch(url)
 
+    def _fetch_model(self, url: Callable[[str], str], model: str, fields: tuple[str, ...]) -> list[dict[str, Any]]:
+        """Fetch with the chosen model, falling back to Open-Meteo's best match if that model can't serve the
+        location (an error, or hours mostly missing: not every model covers everywhere, or every variable)."""
+        if model != "best_match":
+            try:
+                rows = self._fetch(url(model))
+                if _complete(rows, fields):
+                    return rows
+                reason: object = "most hours missing"
+            except Exception as e:
+                reason = e
+            log.warning("Open-Meteo couldn't serve the %s model here (%s); using its best match", model, reason)
+            self.model_unavailable = model
+        return self._fetch(url("best_match"))
+
     # ------------------------------------------------------------------ the forecast
     def ensure_fresh(self) -> None:
         """Refresh the forecast if it's older than REFRESH, or for another place or model (not within
@@ -120,17 +141,9 @@ class WeatherService:
 
     def _refresh(self, what: tuple[Any, ...], now: float) -> None:
         lat, lon, model = what
+        self.model_unavailable = None
         try:
-            try:
-                fetched = self._fetch(openmeteo.forecast_url(lat, lon, model))
-                self.model_unavailable = None
-            except Exception as e:
-                if model == "best_match":
-                    raise
-                # A model Open-Meteo can't serve here: fall back to its own pick, and say so.
-                log.warning("Open-Meteo couldn't serve the %s model (%s); using its best match", model, e)
-                self.model_unavailable = model
-                fetched = self._fetch(openmeteo.forecast_url(lat, lon, "best_match"))
+            fetched = self._fetch_model(lambda m: openmeteo.forecast_url(lat, lon, m), model, ("ghi", "temp"))
         except Exception as e:
             log.warning("Open-Meteo fetch failed: %s", e)
             self._failed_at = now
@@ -180,7 +193,8 @@ class WeatherService:
                 if start < openmeteo.HISTORICAL_FROM:
                     limit = min(limit, openmeteo.HISTORICAL_FROM - dt.timedelta(days=1))
                 end = max(d for d in missing if d <= limit)
-                rows = self._fetch(openmeteo.history_url(lat, lon, model, start, end))
+                chunk = functools.partial(openmeteo.history_url, lat, lon, start=start, end=end)
+                rows = self._fetch_model(chunk, model, ("ghi", "temp", "code"))
                 self.repo.write(rows, lat, lon, int(self.clock()), history=True)
                 done = [d for d in missing if d <= end]
                 added += len(done)

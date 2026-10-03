@@ -74,10 +74,10 @@ def test_rows_take_each_hours_sunlight_rain_and_code_from_the_next_stamp() -> No
 
 
 def test_older_days_come_from_the_archive_and_newer_from_the_historical_forecast() -> None:
-    old = openmeteo.history_url(LAT, LON, "bom_access_global", dt.date(2021, 3, 1), dt.date(2021, 3, 31))
-    new = openmeteo.history_url(LAT, LON, "bom_access_global", dt.date(2024, 3, 1), dt.date(2024, 3, 31))
+    old = openmeteo.history_url(LAT, LON, "ecmwf_ifs025", dt.date(2021, 3, 1), dt.date(2021, 3, 31))
+    new = openmeteo.history_url(LAT, LON, "ecmwf_ifs025", dt.date(2024, 3, 1), dt.date(2024, 3, 31))
     assert old.startswith(openmeteo.ARCHIVE) and "models=" not in old and "precipitation_probability" not in old
-    assert new.startswith(openmeteo.HISTORICAL) and "models=bom_access_global" in new
+    assert new.startswith(openmeteo.HISTORICAL) and "models=ecmwf_ifs025" in new
 
 
 # ---------------------------------------------------------------------------------------- storing
@@ -167,18 +167,28 @@ def test_a_failed_fill_is_reported_and_tried_again(db: Database, config: Config,
 def test_a_model_open_meteo_cant_serve_falls_back_to_its_best_match(
     db: Database, config: Config, settings: SettingsStore
 ) -> None:
-    settings.save({"weather_model": "bom_access_global"})
     times = [NOW - 3600 + i * 3600 for i in range(30)]
+    asked: list[str] = []
 
     def get(url: str) -> dict[str, Any]:
-        if "models=" in url:
+        asked.append(url)
+        if "models=gfs" in url:
             raise OSError("400 Bad Request")
+        if "models=icon" in url:  # answers, but with nothing in it
+            return open_meteo(times, shortwave_radiation=[None] * 30, temperature_2m=[None] * 30)
         return open_meteo(times, shortwave_radiation=[500] * 30, temperature_2m=[22] * 30)
 
     weather = WeatherService(config, db, settings, get=get, clock=lambda: NOW)
+    for model in ("gfs_seamless", "icon_seamless"):
+        settings.save({"weather_model": model})
+        weather.invalidate()
+        weather.ensure_fresh()
+        assert weather.status()["model_unavailable"] == model
+        assert len(weather.hours(NOW, NOW + 86400)) == 24
+    settings.save({"weather_model": "best_match"})
+    weather.invalidate()
     weather.ensure_fresh()
-    assert weather.status()["model_unavailable"] == "bom_access_global"
-    assert len(weather.hours(NOW, NOW + 86400)) == 24
+    assert weather.status()["model_unavailable"] is None
 
 
 def test_a_days_weather_is_summed_up(db: Database, config: Config, settings: SettingsStore) -> None:
