@@ -46,6 +46,8 @@ function InverterRow({
   const last = (hybrid ? live?.last_success : pv2?.last_success) ?? null;
   const error = hybrid ? live?.error : pv2?.error;
   const ok = !!last && now - last < (live?.poll_interval || 60) * 3;
+  // Answering, but with the same readings over and over: its dongle has stopped refreshing them.
+  const frozen = (ok && hybrid && live?.frozen_since) || null;
   const reported = hybrid ? live?.system : pv2;
   const name = deviceName({
     brand: reported?.brand ?? device.brand,
@@ -54,9 +56,11 @@ function InverterRow({
   });
   const where = `${device.via ? `${device.via} at` : "At"} ${device.host}${device.port !== 502 ? `:${device.port}` : ""}`;
   const reading = hybrid
-    ? last
-      ? `last sync ${hhmm(last)}`
-      : "waiting for its first reading"
+    ? frozen
+      ? `readings frozen since ${hhmm(frozen)} – the dongle isn't refreshing them`
+      : last
+        ? `last sync ${hhmm(last)}`
+        : "waiting for its first reading"
     : ok && snapshot
       ? `${kW(snapshot.pv2_power)} now, ${kWh(snapshot.daily_pv2)} today`
       : last
@@ -84,8 +88,8 @@ function InverterRow({
     <IntegrationRow
       icon={hybrid ? "battery" : "sun"}
       name={name}
-      on={ok}
-      status={ok ? "Connected" : last ? "Not responding" : "Connecting"}
+      on={ok && !frozen}
+      status={frozen ? "Frozen" : ok ? "Connected" : last ? "Not responding" : "Connecting"}
       detail={
         <>
           {hybrid ? "Main inverter, with the battery and meter" : "Second solar inverter"} · {where} · {reading}

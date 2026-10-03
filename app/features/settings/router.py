@@ -1,4 +1,4 @@
-"""Settings saved from the dashboard (forecast location, billing period), and place search for the location."""
+"""Settings saved from the dashboard (forecast location, billing period, system details), and place search for the location."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.container import Services
 from app.dependencies import JsonBody, ServicesDep
+from app.features.settings.store import SYSTEM
 
 router = APIRouter(prefix="/api")
 
@@ -28,7 +29,7 @@ async def get_settings(svc: ServicesDep):
 
 @router.put("/settings")
 async def put_settings(svc: ServicesDep, changes: JsonBody):
-    """Save the forecast location (and its place name) or billing period. Only known keys are accepted."""
+    """Save the forecast location (and its place name), billing period or system details. Only known keys are accepted."""
     moved = ("latitude" in changes or "longitude" in changes) and "location_name" not in changes
     if moved:
         changes = {**changes, "location_name": None}  # the old name no longer applies
@@ -36,6 +37,8 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
         saved = await asyncio.to_thread(svc.settings.save, changes)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    if SYSTEM.keys() & changes.keys():  # the battery's capacity or reserve may have changed: tell every open dashboard
+        svc.live.publish()
     if moved:  # coordinates typed in by hand: look up a place name for them
         named = await asyncio.to_thread(name_location, svc)
         return named or saved

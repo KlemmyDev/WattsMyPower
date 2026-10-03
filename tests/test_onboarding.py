@@ -13,6 +13,10 @@ from fastapi.testclient import TestClient
 from app.core.config import Config
 from app.core.database import Database
 from app.features.live.client import CollectorError
+from app.features.live.ingest import save_cursor
+from app.features.onboarding.service import ENTERED
+from app.features.settings.router import name_location
+from app.features.settings.store import SYSTEM, SYSTEM_SEEDED
 from app.main import create_app
 from tests.test_integrations import FakeCollector
 
@@ -115,19 +119,21 @@ def test_any_sign_of_use_counts_as_set_up(
 
 
 def test_what_startup_writes_by_itself_doesnt_count(db: Database, open_app: Callable[..., TestClient]) -> None:
-    """A new install, after startup has run: system details seeded from the environment into settings
-    (with their kv marker), the default location's place name looked up, and the collector's cursor.
-    None of it was entered by a person, so the guide still shows."""
+    """A new install, after startup has run: the system details seeded from the environment into
+    settings (with their kv marker), the default location's place name looked up, and the collector's
+    cursor. None of it was entered by a person, so the guide still shows."""
+    client = open_app()  # startup runs SettingsStore.seed_system
+    svc = client.app.state.services  # type: ignore[attr-defined]
+    with db.reading() as conn:
+        seeded = {k for (k,) in conn.execute("SELECT key FROM settings")}
+        assert conn.execute("SELECT 1 FROM kv WHERE key = ?", (SYSTEM_SEEDED,)).fetchone()
+    assert seeded == set(SYSTEM) and not seeded & set(ENTERED)
+    # What starting to poll adds, without the network: the place name lookup and the feed's cursor.
+    svc.geocoder.reverse = lambda lat, lon: "Brisbane City, QLD"
+    assert name_location(svc)
     with db.writing() as conn:
-        conn.executemany(
-            "INSERT INTO settings (key, value) VALUES (?, ?)",
-            [("pv_kw", 6.6), ("battery_kwh_override", 0), ("battery_reserve_fallback", 10), ("battery_max_kw", 5)],
-        )
-        conn.executemany(
-            "INSERT INTO kv (key, value) VALUES (?, ?)",
-            [("system_seeded", "1760000000"), ("location_name", "Brisbane City, QLD"), ("collector_cursor", "0")],
-        )
-    assert open_app().get("/api/onboarding").json()["show"] is True
+        save_cursor(conn, 1_760_000_000)
+    assert client.get("/api/onboarding").json()["show"] is True
 
 
 def test_a_fresh_install_is_guided_until_it_finishes(

@@ -3,6 +3,7 @@ import type { DailyRow } from "~/features/history/types";
 import { dayMonth, monthLong, monthShort } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { addDays, dateKey } from "~/features/common/time/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Metric } from "~/features/history/utils/search";
 
 type DayBase = { i: number; ts: number; key: string };
@@ -76,15 +77,15 @@ export const METRICS: Record<
   Metric,
   { label: string; value: (d: DataDay) => number; format: (v: number) => string; color: string }
 > = {
-  gen: { label: "Solar", value: (d) => d.gen, format: kWh, color: "#ffb547" },
-  ss: { label: "Self-sufficiency", value: (d) => d.ss, format: (v) => `${Math.round(v * 100)}%`, color: "#3ee08f" },
-  imp: { label: "Grid import", value: (d) => d.imp, format: kWh, color: "#9aa4ff" },
-  saved: { label: "Saved", value: (d) => d.saved, format: money, color: "#f5f5f5" },
+  gen: { label: "Solar", value: (d) => d.gen, format: kWh, color: COLOR.solar },
+  ss: { label: "Self-sufficiency", value: (d) => d.ss, format: (v) => `${Math.round(v * 100)}%`, color: COLOR.good },
+  imp: { label: "Grid import", value: (d) => d.imp, format: kWh, color: COLOR.import },
+  saved: { label: "Saved", value: (d) => d.saved, format: money, color: COLOR.ink },
 };
 
 /** A metric colour blended into the empty-cell grey; `v` from 0 (least) to 1 (most). */
 export const heatColor = (color: string, v: number) =>
-  `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, #1b1b1d)`;
+  `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, ${COLOR.heatBase})`;
 
 /** One calendar cell. Without a label it's an empty placeholder; without a fill, a day with no readings. */
 export type Cell = { i: number; ts: number; label: string | null; fill: string | null };
@@ -184,11 +185,11 @@ export function standoutsOf(days: Day[]): Standout[] {
   if (!whole.length) return [];
   const top = (f: (d: DataDay) => number) => whole.reduce((b, d) => (f(d) > f(b) ? d : b));
   const out: Standout[] = [
-    { title: "Best solar day", color: "#ffb547", day: top((d) => d.gen), value: "" },
-    { title: "Most self-sufficient", color: "#3ee08f", day: top((d) => d.ss), value: "" },
-    { title: "Biggest saving", color: "#f5f5f5", day: top((d) => d.saved), value: "" },
-    { title: "Highest use", color: "#9aa4ff", day: top((d) => d.home), value: "" },
-    { title: "Most from the grid", color: "#8a8a90", day: top((d) => d.imp), value: "" },
+    { title: "Best solar day", color: COLOR.solar, day: top((d) => d.gen), value: "" },
+    { title: "Most self-sufficient", color: COLOR.good, day: top((d) => d.ss), value: "" },
+    { title: "Biggest saving", color: COLOR.ink, day: top((d) => d.saved), value: "" },
+    { title: "Highest use", color: COLOR.import, day: top((d) => d.home), value: "" },
+    { title: "Most from the grid", color: COLOR.fromGrid, day: top((d) => d.imp), value: "" },
   ];
   out[0].value = kWh(out[0].day.gen);
   out[1].value = `${Math.round(out[1].day.ss * 100)}%`;
@@ -213,7 +214,7 @@ export function standoutsOf(days: Day[]): Standout[] {
   if (best.n > 1)
     records.push({
       title: "Longest run off the grid",
-      color: "#3ee08f",
+      color: COLOR.good,
       day: best.from,
       value: `${best.n} days`,
       date: `From ${dayMonth(best.from.ts)}`,

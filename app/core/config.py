@@ -34,7 +34,8 @@ class Config:
     # ~20 MB of raw rows at 90 days; rollups add ~18 MB/year. 0 = keep raw rows forever.
     raw_retention_days: int = 90
 
-    # --- system
+    # --- system: only read once, to move an older install's values into the database (see
+    # SettingsStore.seed_system). They're changed in the dashboard (Settings → System) after that.
     # Solar array size (kW of panels). The inverter doesn't report this.
     pv_kw: float = 6.6
     # Battery capacity in kWh. 0 = read it from the inverter (register 5639).

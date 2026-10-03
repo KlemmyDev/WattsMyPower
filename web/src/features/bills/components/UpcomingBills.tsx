@@ -3,6 +3,7 @@ import { basisNote, billAmount, billSpread, spanLabel } from "~/features/bills/u
 import { StatGrid } from "~/features/bills/components/BillParts";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { DASH, dollars, kWhInt } from "~/features/common/formatting/utils/number";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** The next few bills, estimated, and the year ahead. */
 export function UpcomingBills({ bills }: { bills: Bills | undefined }) {
@@ -59,7 +60,7 @@ export function UpcomingBills({ bills }: { bills: Bills | undefined }) {
           {
             label: "Saved by solar and battery",
             value: ny ? dollars(ny.without_solar - ny.net_cost) : DASH,
-            color: "#3ee08f",
+            color: COLOR.good,
           },
         ]}
       />

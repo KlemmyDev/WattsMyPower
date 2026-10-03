@@ -31,11 +31,11 @@ const route = getRouteApi("/_app/history");
 const REFRESH = 10 * 60_000;
 
 const PILLS =
-  "flex max-w-full [scrollbar-width:none] gap-1 overflow-x-auto rounded-full border border-line-subtle bg-[#161616] p-1 [&::-webkit-scrollbar]:hidden";
+  "flex max-w-full [scrollbar-width:none] gap-1 overflow-x-auto rounded-full border border-line-subtle bg-tabs p-1 [&::-webkit-scrollbar]:hidden";
 const pill = (on: boolean) =>
   cn(
     "flex flex-none items-center gap-2 rounded-full border-0 px-4 py-[9px] text-sm font-medium whitespace-nowrap transition-colors duration-200 ease-[ease] max-sm:px-3.5",
-    on ? "bg-ink text-ink-inverse" : "bg-transparent text-[#a0a0a0] hover:text-ink",
+    on ? "bg-ink text-ink-inverse" : "bg-transparent text-ink-quiet hover:text-ink",
   );
 
 /** A total's figure and unit: "1,013" kWh, or "395" Wh under one. */
@@ -51,11 +51,11 @@ function Total({ label, value, unit, sub }: { label: string; value: string; unit
   return (
     <div className="flex min-w-0 flex-col gap-1.5 pt-6 pr-6 max-md:pt-5 max-md:pr-3">
       <span className="text-[13px] text-ink-dim">{label}</span>
-      <span className="text-[44px] leading-12 font-light tracking-[-2px] whitespace-nowrap text-white tabular-nums max-md:text-[32px] max-md:leading-9 max-md:tracking-[-1.2px]">
+      <span className="text-[44px] leading-12 font-light tracking-[-2px] whitespace-nowrap text-fg tabular-nums max-md:text-[32px] max-md:leading-9 max-md:tracking-[-1.2px]">
         {value}
-        <small className="ml-1.5 text-base font-normal tracking-normal text-[#7a7a7a]">{unit}</small>
+        <small className="ml-1.5 text-base font-normal tracking-normal text-ink-label">{unit}</small>
       </span>
-      <span className="text-xs text-[#7a7a7a] tabular-nums">{sub}</span>
+      <span className="text-xs text-ink-label tabular-nums">{sub}</span>
     </div>
   );
 }
@@ -157,13 +157,13 @@ export function HistoryPage() {
               </button>
             ))}
           </div>
-          <span className="pl-1 font-mono text-xs tracking-[1.5px] text-[#7a7a7a] uppercase">
+          <span className="pl-1 font-mono text-xs tracking-[1.5px] text-ink-label uppercase">
             {dmy(start)} to {dmy(last)}
           </span>
         </div>
 
         {loaded && (startsLate || !totals.days) && (
-          <div className="rounded-2xl border border-line-subtle bg-surface px-5 py-4 text-sm leading-[22px] text-pretty text-[#a0a0a0]">
+          <div className="rounded-2xl border border-line-subtle bg-surface px-5 py-4 text-sm leading-[22px] text-pretty text-ink-quiet">
             {totals.days
               ? `Your history starts on ${dmy(historyFrom!)}, so ${viewName} only covers part of the time.`
               : `There's no data for ${viewName} yet. Days fill in as your system records them.`}
@@ -172,7 +172,7 @@ export function HistoryPage() {
 
         {loaded && totals.days > 0 && (
           <>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-y-2 border-t border-white/8 max-md:grid-cols-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-y-2 border-t border-fg/8 max-md:grid-cols-2">
               <Total
                 label="Solar generated"
                 {...energy(totals.gen)}
@@ -238,7 +238,7 @@ export function HistoryPage() {
             <span className="max-md:hidden">
               {loaded && totals.days > 0 && `${label} per day · select a day to see it hour by hour`}
             </span>
-            <div className="flex items-center gap-[5px] text-xs text-[#7a7a7a]">
+            <div className="flex items-center gap-[5px] text-xs text-ink-label">
               Less
               {[0, 0.25, 0.5, 0.75, 1].map((v) => (
                 <i key={v} className="size-3.5 rounded-[4px]" style={{ background: heatColor(color, v) }} />

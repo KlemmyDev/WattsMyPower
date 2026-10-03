@@ -12,7 +12,7 @@ from app.features.inverters.sungrow import sg_d, sh_rs
 from app.features.live.ingest import CollectorIngest, load_cursor
 from app.features.live.reprocess import reprocess
 from app.features.live.service import LiveService
-from app.features.live.transform import Pv2Carry, snapshots
+from app.features.live.transform import Freeze, Pv2Carry, snapshots
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
@@ -78,7 +78,10 @@ def test_decode_second_inverter() -> None:
 
 
 def rows(ts: int, pv2: bool = True, exported: float = 14421.0) -> list[dict[str, Any]]:
-    out = [{"ts": ts, "device": "hybrid", "driver": "sungrow.sh_rs", "input": hybrid_words(exported)}]
+    """One poll. Like a live inverter's, its power factor (5035) differs from the last poll's: a
+    poll identical to the last is a frozen repeat and left out (see test_frozen.py)."""
+    words = {**hybrid_words(exported), "5035": 900 + ts // 60 % 90}
+    out = [{"ts": ts, "device": "hybrid", "driver": "sungrow.sh_rs", "input": words}]
     if pv2:
         out.append({"ts": ts, "device": "pv2", "driver": "sungrow.sg_d", "input": pv2_words()})
     return out
@@ -87,7 +90,7 @@ def rows(ts: int, pv2: bool = True, exported: float = 14421.0) -> list[dict[str,
 def test_snapshots_merge_the_second_inverter_and_carry_missed_reads() -> None:
     carry = Pv2Carry()
     feed = rows(DAY) + rows(DAY + 60, pv2=False) + [{"ts": DAY + 120, "device": "pv2", "input": pv2_words()}]
-    out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry)
+    out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry, freeze=Freeze())
     assert [ts for ts, _ in out] == [DAY, DAY + 60]  # the poll the hybrid missed isn't recorded
     first, carried = out[0][1], out[1][1]
     assert first["pv_power"] == 4120 + 1800 and first["pv1_power"] == 4120
@@ -98,23 +101,24 @@ def test_snapshots_merge_the_second_inverter_and_carry_missed_reads() -> None:
 
 def test_every_driver_implements_its_role() -> None:
     for d in drivers.HYBRIDS.values():
-        assert d.brand and callable(d.decode) and callable(d.decode_info)
+        assert d.brand and callable(d.decode) and callable(d.decode_info) and callable(d.frozen)
     for s in drivers.SOLAR.values():
         assert s.brand and callable(s.decode) and callable(s.decode_info)
 
 
 def test_rows_without_a_driver_use_the_default_and_unknown_drivers_are_skipped() -> None:
     untagged = [{k: v for k, v in r.items() if k != "driver"} for r in rows(DAY)]
-    assert (
-        snapshots(untagged, has_pv2=True, behind_meter=True, poll_interval=60, carry=Pv2Carry())[0][1]["pv2_power"]
-        == 1800
-    )
+    assert decoded(untagged, has_pv2=True)[0][1]["pv2_power"] == 1800
     unknown = [{**r, "driver": "acme.x1"} for r in rows(DAY, pv2=False)]
-    assert snapshots(unknown, has_pv2=False, behind_meter=True, poll_interval=60, carry=Pv2Carry()) == []
+    assert decoded(unknown, has_pv2=False) == []
+
+
+def decoded(feed: list[dict[str, Any]], has_pv2: bool) -> list[tuple[int, dict[str, Any]]]:
+    return snapshots(feed, has_pv2=has_pv2, behind_meter=True, poll_interval=60, carry=Pv2Carry(), freeze=Freeze())
 
 
 def test_without_a_second_inverter_nothing_is_merged() -> None:
-    (_, snap), = snapshots(rows(DAY, pv2=False), has_pv2=False, behind_meter=True, poll_interval=60, carry=Pv2Carry())  # fmt: skip
+    ((_, snap),) = decoded(rows(DAY, pv2=False), has_pv2=False)
     assert snap["pv_power"] == 4120 and "pv1_power" not in snap
 
 
@@ -180,7 +184,7 @@ def test_a_torn_32_bit_read_is_dropped() -> None:
     """-600 W is 0xFFFF_FDA8; read across an update with a fresh high word it comes out as +64,936 W."""
     torn = {"input": {**hybrid_words(), "13008": 0xFDA8, "13009": 0}}
     out = snapshots([{"ts": DAY, "device": "hybrid", **torn}], has_pv2=False, behind_meter=True,
-                    poll_interval=60, carry=Pv2Carry())  # fmt: skip
+                    poll_interval=60, carry=Pv2Carry(), freeze=Freeze())  # fmt: skip
     [(_, snap)] = out
     assert snap["load_power"] is None and snap["pv_power"] == 4120  # only the bad value goes
 
@@ -193,5 +197,5 @@ def test_a_garbled_second_inverter_reading_counts_as_missed() -> None:
     assert sg_d.decode({"input": {**pv2_words(), "5031": 0x2000, "5032": 0x0001}}) is None  # 73 kW from 5 kW
     carry = Pv2Carry()
     feed = [*rows(DAY), *rows(DAY + 60, pv2=False), {"ts": DAY + 60, "device": "pv2", "input": garbled}]
-    out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry)
+    out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry, freeze=Freeze())
     assert out[1][1]["pv2_power"] == 1800  # the last good values carried, as for a missed read

@@ -21,12 +21,15 @@ from app.features.insights.router import router as insights_router
 from app.features.integrations.router import router as integrations_router
 from app.features.live.router import health_router
 from app.features.live.router import router as live_router
+from app.features.meter.router import router as meter_router
 from app.features.onboarding.router import router as onboarding_router
 from app.features.plans.router import router as plans_router
 from app.features.readings.router import router as readings_router
 from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
 from app.features.tariffs.router import router as tariffs_router
+
+log = logging.getLogger(__name__)
 
 ROUTERS = [
     auth_router,
@@ -39,6 +42,7 @@ ROUTERS = [
     integrations_router,
     onboarding_router,
     bills_router,
+    meter_router,
     plans_router,
     health_router,
 ]
@@ -52,6 +56,17 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await asyncio.to_thread(services.db.migrate)
+        if await asyncio.to_thread(services.settings.seed_system):
+            c = services.config
+            log.info(
+                "Moved the system details into the database (solar array %g kW, battery capacity %s, backup reserve "
+                "%g%% if the inverter doesn't report one, maximum rate %g kW). They're changed in the dashboard from "
+                "now on (Settings → System); PV_KW, BATTERY_KWH, BATTERY_RESERVE and BATTERY_MAX_KW are no longer read.",
+                c.pv_kw,
+                f"{c.battery_kwh:g} kWh" if c.battery_kwh else "from the inverter",
+                c.battery_reserve,
+                c.battery_max_kw,
+            )
         await asyncio.to_thread(services.settings.load)
         await asyncio.to_thread(services.tariffs.load)
         if poll:

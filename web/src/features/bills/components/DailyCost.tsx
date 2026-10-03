@@ -5,11 +5,14 @@ import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Swatch } from "~/features/common/ui/components/Swatch";
 import { kWhInt, money } from "~/features/common/formatting/utils/number";
 import { dayMonth, parseYmd } from "~/features/common/formatting/utils/date";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 const addDays = (ymd: string, n: number) => {
   const d = parseYmd(ymd);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 };
+
+const CREDIT = alpha(COLOR.good, 0.6);
 
 /** What each day of this period cost, against the daily average, and the costliest days. */
 export function DailyCost({ bills }: { bills: Bills | undefined }) {
@@ -30,13 +33,13 @@ export function DailyCost({ bills }: { bills: Bills | undefined }) {
         />
         <div className="flex flex-wrap gap-4 text-xs text-ink-muted">
           <Key swatch={<i className="w-3.5 border-t border-dashed border-ink" />}>Daily average {money(avg)}</Key>
-          <Key swatch={<Swatch color="rgba(62,224,143,0.6)" size={10} />}>Credit day</Key>
+          <Key swatch={<Swatch color={CREDIT} size={10} />}>Credit day</Key>
         </div>
       </div>
       <div className="flex flex-wrap items-start gap-7">
         <div className="flex min-w-0 flex-[2_1_480px] flex-col gap-2">
           <div className="relative flex h-[200px] gap-0.5" role="img" aria-label="Daily cost this period">
-            <div className="absolute inset-x-0 h-px bg-white/14" style={{ top: `${sc.zero.toFixed(2)}%` }} />
+            <div className="absolute inset-x-0 h-px bg-fg/14" style={{ top: `${sc.zero.toFixed(2)}%` }} />
             {Array.from({ length: period.days }, (_, k) => {
               const d = days[k];
               const label = dayMonth(addDays(period.start, k).getTime() / 1000);
@@ -44,17 +47,17 @@ export function DailyCost({ bills }: { bills: Bills | undefined }) {
                 return (
                   <div key={k} title={`${label}: still to come`} className="relative min-w-0 flex-1">
                     <div
-                      className="absolute inset-x-0 h-[1%] rounded-[3px] bg-white/8"
+                      className="absolute inset-x-0 h-[1%] rounded-[3px] bg-fg/8"
                       style={{ top: `${(sc.zero - 0.5).toFixed(2)}%` }}
                     />
                   </div>
                 );
               const { top: y, height } = sc.bar(d.net_cost);
-              const color = d.net_cost < 0 ? "rgba(62,224,143,0.6)" : d.partial ? "#f5f5f5" : "#5a5a60";
+              const color = d.net_cost < 0 ? CREDIT : d.partial ? COLOR.ink : COLOR.bar;
               return (
                 <div
                   key={k}
-                  title={`${label}${d.partial ? " (today so far)" : ""}: ${money(d.net_cost)}`}
+                  title={`${label}${d.partial ? " (today so far)" : ""}: ${money(d.net_cost)}${d.source === "meter" ? ", from your meter" : ""}`}
                   className="relative min-w-0 flex-1"
                 >
                   <div

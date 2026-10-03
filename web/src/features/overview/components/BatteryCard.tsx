@@ -6,6 +6,7 @@ import { batteryOutlook } from "~/features/overview/utils/batteryOutlook";
 import { batteryState, reserveOf, type BatteryState } from "~/features/common/energy/utils";
 import { kW, pct } from "~/features/common/formatting/utils/number";
 import { BatteryHistory } from "~/features/overview/components/BatteryHistory";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** State of charge ring, time to full (or to reserve), and the last six hours. */
 export function BatteryCard({
@@ -68,7 +69,7 @@ function StatePill({ st, w }: { st: BatteryState | null; w: number | null | unde
           ? "bg-battery/14 text-link"
           : st === "discharge"
             ? "bg-solar/14 text-warn"
-            : "bg-white/6 text-ink-muted",
+            : "bg-fg/6 text-ink-muted",
       )}
     >
       {st == null ? (
@@ -95,24 +96,23 @@ function Ring({ p, s, discharging }: { p: Snapshot; s: SystemInfo | undefined; d
   return (
     <div className="relative size-[168px] flex-none max-sm:size-[140px]" title={`Backup reserve ${pct(reserve * 100)}`}>
       <svg viewBox="0 0 188 188" aria-hidden="true" className="absolute inset-0 size-full -rotate-90">
-        <circle cx="94" cy="94" r={R0} fill="none" stroke="#26262a" strokeWidth="10" />
+        <circle cx="94" cy="94" r={R0} fill="none" strokeWidth="10" style={{ stroke: COLOR.track }} />
         <circle
           className={cn(discharging && "animate-ring-drain")}
           cx="94"
           cy="94"
           r={R0}
           fill="none"
-          stroke={discharging ? "#ffb547" : "#6f8cff"}
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={`${(C0 * frac).toFixed(1)} ${C0.toFixed(1)}`}
-          style={{ transition: "stroke-dasharray 320ms ease" }}
+          style={{ stroke: discharging ? COLOR.solar : COLOR.battery, transition: "stroke-dasharray 320ms ease" }}
         />
         <circle
           cx={(94 + R0 * Math.cos(2 * Math.PI * reserve)).toFixed(1)}
           cy={(94 + R0 * Math.sin(2 * Math.PI * reserve)).toFixed(1)}
           r="3"
-          fill="#0a0a0a"
+          style={{ fill: COLOR.canvas }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">

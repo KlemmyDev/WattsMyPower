@@ -26,6 +26,10 @@ export const noise = (i: number) => {
   return s - Math.floor(s);
 };
 
+/**
+ * Energy line colours. The drawing keeps its own palette whichever theme is on: it's a picture of
+ * the sky, light by day and dark at night, so it doesn't follow the theme tokens.
+ */
 export const FLOW = { pv: "#ffb547", bat: "#6f8cff", grid: "#6b6f7a", car: "#3ee08f" };
 
 export type P3 = [x: number, y: number, z?: number];

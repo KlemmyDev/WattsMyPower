@@ -17,16 +17,16 @@ export function StandoutDays({ standouts, onSelect }: { standouts: Standout[]; o
             key={s.title}
             type="button"
             onClick={() => onSelect(s.day.ts)}
-            className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-line-subtle bg-surface p-[18px] text-left transition-colors duration-200 hover:border-white/25 max-sm:p-3.5"
+            className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-line-subtle bg-surface p-[18px] text-left transition-colors duration-200 hover:border-fg/25 max-sm:p-3.5"
           >
             <span className="flex items-center gap-2 text-[13px] text-ink-dim max-sm:text-xs">
               <i className="size-1.5 flex-none rounded-full" style={{ background: s.color }} />
               {s.title}
             </span>
-            <span className="text-[28px] leading-8 font-light tracking-[-1px] text-white tabular-nums max-sm:text-2xl">
+            <span className="text-[28px] leading-8 font-light tracking-[-1px] text-fg tabular-nums max-sm:text-2xl">
               {s.value}
             </span>
-            <span className="text-xs text-[#7a7a7a]">
+            <span className="text-xs text-ink-label">
               {s.date ?? fullDay.format(new Date(s.day.ts * 1000)).replace(/,/g, "")}
             </span>
           </button>

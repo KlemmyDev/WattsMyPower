@@ -10,6 +10,7 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { hhmm, longDate, weekdayLong } from "~/features/common/formatting/utils/date";
 import { energyParts, money, powerParts } from "~/features/common/formatting/utils/number";
 import { addDays } from "~/features/common/time/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { DayChart } from "~/features/history/components/DayChart";
 import { HCARD } from "~/features/history/components/parts";
@@ -42,9 +43,9 @@ function Stat({ label, value, unit, color }: { label: string; value: string; uni
         <i className="size-1.5 rounded-full" style={{ background: color }} />
         {label}
       </span>
-      <span className="text-[28px] leading-[30px] font-light tracking-[-1px] text-white tabular-nums">
+      <span className="text-[28px] leading-[30px] font-light tracking-[-1px] text-fg tabular-nums">
         {value}
-        {unit && <small className="ml-1 text-[13px] font-normal tracking-normal text-[#7a7a7a]">{unit}</small>}
+        {unit && <small className="ml-1 text-[13px] font-normal tracking-normal text-ink-label">{unit}</small>}
       </span>
     </div>
   );
@@ -64,19 +65,19 @@ function DayStats({ day, extremes }: { day: Day; extremes: ReturnType<typeof ext
   const [peakValue, peakUnit] = peak ? powerParts(peak.w) : ["—", ""];
   return (
     <>
-      <Stat label="Solar generated" {...energy(day.gen)} color="#ffb547" />
-      <Stat label="Home use" {...energy(day.home)} color="#f5f5f5" />
-      <Stat label="Self-sufficiency" value={String(Math.round(day.ss * 100))} unit="%" color="#3ee08f" />
-      <Stat label="Saved" value={money(day.saved)} color="#9aa4ff" />
-      <Stat label="From the grid" {...energy(day.imp)} color="#8a8a90" />
-      <Stat label="Sent to the grid" {...energy(day.exp)} color="#f2a65a" />
+      <Stat label="Solar generated" {...energy(day.gen)} color={COLOR.solar} />
+      <Stat label="Home use" {...energy(day.home)} color={COLOR.ink} />
+      <Stat label="Self-sufficiency" value={String(Math.round(day.ss * 100))} unit="%" color={COLOR.good} />
+      <Stat label="Saved" value={money(day.saved)} color={COLOR.import} />
+      <Stat label="From the grid" {...energy(day.imp)} color={COLOR.fromGrid} />
+      <Stat label="Sent to the grid" {...energy(day.exp)} color={COLOR.export} />
       <Stat
         label="Peak solar"
         value={peakValue}
         unit={peak ? `${peakUnit} at ${hhmm(peak.t)}` : undefined}
-        color="#ffb547"
+        color={COLOR.solar}
       />
-      <Stat label="Lowest battery" value={low != null ? String(Math.round(low)) : "—"} unit="%" color="#6f8cff" />
+      <Stat label="Lowest battery" value={low != null ? String(Math.round(low)) : "—"} unit="%" color={COLOR.battery} />
     </>
   );
 }
@@ -132,7 +133,7 @@ export function DayPanel({
           </span>
           <span
             id={dateId}
-            className="text-[36px] leading-10 font-light tracking-[-1.5px] text-balance text-white max-sm:text-[30px] max-sm:leading-[34px]"
+            className="text-[36px] leading-10 font-light tracking-[-1.5px] text-balance text-fg max-sm:text-[30px] max-sm:leading-[34px]"
           >
             {longDate.format(dt)}
           </span>
