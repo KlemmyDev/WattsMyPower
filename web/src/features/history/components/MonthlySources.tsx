@@ -2,12 +2,13 @@ import { useState } from "react";
 import { dollars, kWhInt } from "~/features/common/formatting/utils/number";
 import { cn } from "~/features/common/ui/utils";
 import { HCARD } from "~/features/history/components/parts";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Month } from "~/features/history/utils/year";
 
 const SOURCES = [
-  { label: "Solar used directly", color: "#ffb547" },
-  { label: "From the battery", color: "#6f8cff" },
-  { label: "From the grid", color: "#5a5a60" },
+  { label: "Solar used directly", color: COLOR.solar },
+  { label: "From the battery", color: COLOR.battery },
+  { label: "From the grid", color: COLOR.bar },
 ];
 
 /** A round top for the chart: the next multiple of a step that suits the size. */
@@ -24,16 +25,16 @@ export function MonthlySources({ months }: { months: Month[] }) {
   const top = niceMax(Math.max(...months.map((m) => m.home)));
   const pc = (v: number) => `${((v / top) * 100).toFixed(2)}%`;
   const rows: [string, string, string][] = [
-    ["Solar used directly", kWhInt(sel.direct), "#ffb547"],
-    ["From the battery", kWhInt(sel.battery), "#6f8cff"],
-    ["From the grid", kWhInt(sel.imp), "#5a5a60"],
-    ["Sent to the grid", kWhInt(sel.exp), "#f2a65a"],
+    ["Solar used directly", kWhInt(sel.direct), COLOR.solar],
+    ["From the battery", kWhInt(sel.battery), COLOR.battery],
+    ["From the grid", kWhInt(sel.imp), COLOR.bar],
+    ["Sent to the grid", kWhInt(sel.exp), COLOR.export],
     [
       "Self-sufficiency",
       sel.home > 0 ? `${Math.round(((sel.direct + sel.battery) / sel.home) * 100)}%` : "—",
-      "#3ee08f",
+      COLOR.good,
     ],
-    ["Saved", dollars(sel.saved), "#f5f5f5"],
+    ["Saved", dollars(sel.saved), COLOR.ink],
   ];
   return (
     <section aria-labelledby="h-months" className={cn(HCARD, "gap-6")}>
@@ -57,7 +58,7 @@ export function MonthlySources({ months }: { months: Month[] }) {
             {[1, 0.5].map((q) => (
               <div
                 key={q}
-                className="pointer-events-none absolute inset-x-0 border-t border-white/5"
+                className="pointer-events-none absolute inset-x-0 border-t border-fg/5"
                 style={{ top: `${(1 - q) * 100}%` }}
               >
                 <span className="absolute -top-[7px] right-0 font-mono text-[10px] leading-[14px] text-ink-faint">
@@ -81,7 +82,7 @@ export function MonthlySources({ months }: { months: Month[] }) {
                     on ? "opacity-100" : "opacity-45",
                   )}
                 >
-                  <span className="rounded-t-[4px] bg-[#5a5a60]" style={{ height: pc(m.imp) }} />
+                  <span className="rounded-t-[4px] bg-bar" style={{ height: pc(m.imp) }} />
                   <span className="bg-battery" style={{ height: pc(m.battery) }} />
                   <span className="rounded-b-[4px] bg-solar" style={{ height: pc(m.direct) }} />
                 </button>
@@ -104,13 +105,13 @@ export function MonthlySources({ months }: { months: Month[] }) {
         </div>
         <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-1">
           <span className="text-[15px] text-ink-dim">{sel.year}</span>
-          <span className="mb-2 text-[32px] leading-9 font-light tracking-[-1.2px] text-white">{sel.name}</span>
+          <span className="mb-2 text-[32px] leading-9 font-light tracking-[-1.2px] text-fg">{sel.name}</span>
           {rows.map(([label, value, color]) => (
             <div
               key={label}
               className="flex items-center justify-between gap-3 border-b border-line-subtle py-2.5 text-sm tabular-nums"
             >
-              <span className="flex items-center gap-2 text-[#a0a0a0]">
+              <span className="flex items-center gap-2 text-ink-quiet">
                 <i className="size-1.5 rounded-full" style={{ background: color }} />
                 {label}
               </span>

@@ -6,6 +6,7 @@ import { cn } from "~/features/common/ui/utils";
 import { batteryState, gridVerb } from "~/features/common/energy/utils";
 import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { HouseScene, houseAnchors, type Anchor } from "~/features/overview/components/HouseScene";
 
 /** The power flow drawing with live values, drawn under the current weather. */
@@ -23,7 +24,7 @@ export function PowerFlowHero({
   return (
     <section
       aria-label="Power flow"
-      className="relative col-span-12 overflow-hidden rounded-[28px] max-md:rounded-[20px] max-md:bg-surface"
+      className="relative col-span-12 overflow-hidden rounded-[28px] max-md:rounded-[20px] max-md:bg-surface light:border light:border-line-subtle"
     >
       {p ? (
         <Scene p={p} s={s} f={f} now={now} />
@@ -61,7 +62,7 @@ function Scene({
   const [pv, grid, home] = [parts(p.pv_power), parts(g), parts(l)];
   const st = batteryState(b);
   const batRate = st === "charge" ? `↑ ${kW(b)}` : st === "discharge" ? `↓ ${kW(b)}` : "0 W";
-  const batColor = st === "charge" ? "#8fa6ff" : st === "discharge" ? "#ffc777" : "rgba(255,255,255,0.6)";
+  const batColor = st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.6);
 
   return (
     <>
@@ -69,6 +70,7 @@ function Scene({
           around the rounded corners against a dark sky. */}
       <div className="relative aspect-[1200/600] w-full whitespace-nowrap max-md:aspect-[4/3]">
         <HouseScene flows={flows} sky={wx.mode} cover={wx.cover} />
+        {/* The heading and weather chip follow the sky (dark at night and in storms), not the theme. */}
         <div className="absolute top-7 left-8 z-1 flex max-w-[300px] flex-col items-start gap-3.5 whitespace-normal max-md:top-3 max-md:left-3.5">
           <div className="flex flex-col gap-1 max-md:hidden">
             <h2
@@ -107,7 +109,7 @@ function Scene({
           pos={labels.solar}
           className="max-md:order-1"
           icon={<Icon name="sun" size={18} />}
-          iconStyle={{ background: "#ff7a1a" }}
+          iconStyle={{ background: COLOR.solarDeep }}
           k="Solar"
           v={pv[0]}
           unit={pv[1]}
@@ -122,7 +124,7 @@ function Scene({
           pos={labels.grid}
           className="max-md:order-3"
           icon={<Icon name="grid" size={18} />}
-          iconStyle={{ background: "#3a3d44" }}
+          iconStyle={{ background: COLOR.grid }}
           k={gridVerb(g)}
           v={grid[0]}
           unit={grid[1]}
@@ -132,7 +134,7 @@ function Scene({
           pos={labels.home}
           className="max-md:order-2"
           icon={<Icon name="home" size={18} />}
-          iconStyle={{ background: "#ffffff", color: "#111111" }}
+          iconStyle={{ background: COLOR.pillInk, color: COLOR.pill }}
           k="Home"
           v={`${l != null && l < 0 ? "−" : ""}${home[0]}`}
           unit={home[1]}
@@ -142,18 +144,18 @@ function Scene({
           pos={labels.battery}
           className="max-md:order-4"
           icon={
-            <div className="flex size-[30px] items-center justify-center rounded-full bg-[#111111] max-md:bg-popover max-2xs:size-[25px]">
+            <div className="flex size-[30px] items-center justify-center rounded-full bg-pill text-pill-ink max-md:bg-popover max-2xs:size-[25px] light:max-md:bg-canvas">
               <Icon name="battery" size={18} />
             </div>
           }
           iconClassName="soc-ring"
-          iconStyle={{ "--ring": "#2f5bff", "--deg": `${(flows.soc * 360).toFixed(1)}deg` } as CSSProperties}
+          iconStyle={{ "--ring": COLOR.batteryRing, "--deg": `${(flows.soc * 360).toFixed(1)}deg` } as CSSProperties}
           k="Battery"
           v={String(Math.round(p.battery_soc ?? 0))}
           unit="%"
         >
           {/* the Battery card just below shows the charge rate, so phones drop this */}
-          <div className="ml-0.5 flex flex-col gap-[3px] border-l border-white/14 pl-3 leading-none max-md:hidden">
+          <div className="ml-0.5 flex flex-col gap-[3px] border-l border-fg/14 pl-3 leading-none max-md:hidden">
             <PillKey>{st === "charge" ? "Charging" : st === "discharge" ? "Discharging" : "Idle"}</PillKey>
             <b className="text-[17px] font-semibold tabular-nums" style={{ color: batColor }}>
               {batRate}
@@ -166,7 +168,7 @@ function Scene({
 }
 
 const PillKey = ({ children }: { children: ReactNode }) => (
-  <span className="font-mono text-[10px] tracking-[1px] text-white/70 uppercase">{children}</span>
+  <span className="font-mono text-[10px] tracking-[1px] text-pill-ink/70 uppercase">{children}</span>
 );
 
 /** A value pill; it sits at the left or right edge, level with where its leader line starts. */
@@ -200,9 +202,9 @@ function ValuePill({
       title={title}
       style={{ top: pos.top }}
       className={cn(
-        "pointer-events-auto absolute flex -translate-y-1/2 items-center gap-2.5 rounded-full border border-white/14 bg-[#111111] py-1.5 pr-4 pl-1.5 text-white shadow-pill max-xl:scale-80",
+        "pointer-events-auto absolute flex -translate-y-1/2 items-center gap-2.5 rounded-full border border-fg/14 bg-pill py-1.5 pr-4 pl-1.5 text-pill-ink shadow-pill max-xl:scale-80",
         side === "left" ? "left-6 origin-left" : "right-6 origin-right",
-        "max-md:static max-md:min-w-0 max-md:translate-y-0 max-md:scale-100 max-md:rounded-2xl max-md:border-white/8 max-md:bg-popover max-md:py-2 max-md:pr-3 max-md:pl-2 max-md:shadow-none max-2xs:gap-2",
+        "max-md:static max-md:min-w-0 max-md:translate-y-0 max-md:scale-100 max-md:rounded-2xl max-md:border-fg/8 max-md:bg-popover max-md:py-2 max-md:pr-3 max-md:pl-2 max-md:shadow-none max-2xs:gap-2 light:max-md:bg-canvas",
         className,
       )}
     >
@@ -219,7 +221,7 @@ function ValuePill({
         <PillKey>{k}</PillKey>
         <span className="text-[22px] font-semibold tracking-[-0.6px] tabular-nums max-md:text-xl max-2xs:text-lg">
           {v}
-          <small className="ml-[3px] text-[13px] font-medium tracking-normal text-white/70">{unit}</small>
+          <small className="ml-[3px] text-[13px] font-medium tracking-normal text-pill-ink/70">{unit}</small>
         </span>
       </div>
       {children}
