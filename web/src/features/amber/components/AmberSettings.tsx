@@ -12,20 +12,27 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { useToast } from "~/features/common/ui/components/Toast";
+import { cn } from "~/features/common/ui/utils";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 const day = (ts: number) => longDate.format(new Date(ts * 1000));
 
-function ConnectForm() {
+function ConnectForm({ className, onConnected }: { className?: string; onConnected?: (s: AmberStatus) => void }) {
   const { connect } = useAmberChange();
   const [key, setKey] = useState("");
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (key.trim()) connect.mutate(key.trim(), { onSuccess: () => setKey("") });
+    if (key.trim())
+      connect.mutate(key.trim(), {
+        onSuccess: (status) => {
+          setKey("");
+          onConnected?.(status);
+        },
+      });
   };
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 px-6 py-5">
+    <form onSubmit={submit} className={cn("flex flex-col gap-3", className)}>
       <Field
         label="API key"
         help={
@@ -56,11 +63,19 @@ function ConnectForm() {
   );
 }
 
-function SitePicker({ status }: { status: AmberStatus }) {
+function SitePicker({
+  status,
+  className,
+  onChosen,
+}: {
+  status: AmberStatus;
+  className?: string;
+  onChosen?: () => void;
+}) {
   const { site } = useAmberChange();
   if (status.sites.length < 2 && status.site_id) return null;
   return (
-    <div className="flex flex-col gap-2 border-b border-line-subtle px-6 py-5">
+    <div className={cn("flex flex-col gap-2", className)}>
       <Field
         label="Site"
         help={
@@ -71,7 +86,7 @@ function SitePicker({ status }: { status: AmberStatus }) {
           className="max-w-[420px]"
           value={status.site_id ?? ""}
           disabled={site.isPending}
-          onChange={(e) => e.target.value && site.mutate(e.target.value)}
+          onChange={(e) => e.target.value && site.mutate(e.target.value, { onSuccess: () => onChosen?.() })}
         >
           {!status.site_id && <option value="">Choose a site</option>}
           {status.sites.map((s) => (
@@ -83,6 +98,22 @@ function SitePicker({ status }: { status: AmberStatus }) {
       </Field>
       {site.isError && <HelpText tone="bad">{errorMessage(site.error)}</HelpText>}
     </div>
+  );
+}
+
+/**
+ * Connecting Amber in the set-up guide's plan step: the API key, then the site if the account has
+ * several. `onReady` runs once prices can be fetched, so the step can switch the rates to Amber.
+ */
+export function AmberConnect({ onReady }: { onReady: () => void }) {
+  const { data: status } = useQuery(amberQuery);
+  if (!status) return null;
+  if (!status.connected) return <ConnectForm onConnected={(s) => s.site_id && onReady()} />;
+  if (!status.site_id) return <SitePicker status={status} onChosen={onReady} />;
+  return (
+    <HelpText className="text-[13px]">
+      Connected to Amber (API key {status.key}). Its prices and the connection are in Settings → Tariffs.
+    </HelpText>
   );
 }
 
@@ -112,7 +143,7 @@ export function AmberSettings({ onUse }: { onUse: () => void }) {
       </div>
       {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking the connection…</div>}
       {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
-      {status && !status.connected && <ConnectForm />}
+      {status && !status.connected && <ConnectForm className="px-6 py-5" />}
       {status?.connected && (
         <>
           <IntegrationRow
@@ -172,7 +203,7 @@ export function AmberSettings({ onUse }: { onUse: () => void }) {
               </div>
             )}
           </IntegrationRow>
-          <SitePicker status={status} />
+          <SitePicker status={status} className="border-b border-line-subtle px-6 py-5" />
           {ready && (
             <div className="flex flex-col gap-4 px-6 py-5">
               {prices && (

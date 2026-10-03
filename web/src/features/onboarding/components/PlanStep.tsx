@@ -1,4 +1,5 @@
 import { useReducer, useRef, useState } from "react";
+import { AmberConnect } from "~/features/amber/components/AmberSettings";
 import { Button } from "~/features/common/ui/components/Button";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { StepBody, StepFooter, StepIntro, type StepProps } from "~/features/onboarding/components/StepParts";
@@ -19,12 +20,21 @@ export function PlanStep({ nav }: StepProps) {
   const { query, draft, dirty } = useRatesDraft(editor);
   const save = useSaveRates(dispatch);
   const [manual, setManual] = useState(false);
+  const [amber, setAmber] = useState(false);
   const ratesRef = useRef<HTMLDivElement>(null);
   // Rates saved before (going back to this step) are shown to check.
   const showRates = manual || dirty || !!query.data?.source;
 
   const importPlan = (plan: PlanTariff) => {
     dispatch({ type: "import", plan });
+    requestAnimationFrame(() => ratesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  // Amber connected: show the rates, switched to Amber's prices (saved with the step's button).
+  const switchToAmber = () => {
+    if (draft && draft.type !== "amber")
+      dispatch({ type: "edit", base: draft, edit: { type: "set-rate-type", value: "amber" } });
+    setManual(true);
     requestAnimationFrame(() => ratesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
@@ -39,6 +49,16 @@ export function PlanStep({ nav }: StepProps) {
         {!showRates && (
           <Button variant="link" className="self-start text-sm" onClick={() => setManual(true)}>
             Enter the rates yourself
+          </Button>
+        )}
+        {amber ? (
+          <div className="flex flex-col gap-3 border-t border-line-subtle pt-5">
+            <h3 className="text-[15px] font-semibold">Amber Electric</h3>
+            <AmberConnect onReady={switchToAmber} />
+          </div>
+        ) : (
+          <Button variant="link" className="self-start text-sm" onClick={() => setAmber(true)}>
+            With Amber Electric? Connect your account
           </Button>
         )}
       </StepBody>
