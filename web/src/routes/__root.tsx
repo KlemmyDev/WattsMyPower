@@ -5,6 +5,8 @@ import appCss from "~/styles/app.css?url";
 import { ToastProvider } from "~/features/common/ui/components/Toast";
 import { useThemeSync } from "~/features/common/theme/hooks";
 import { THEME_SCRIPT } from "~/features/common/theme/utils";
+import { useDisplaySync } from "~/features/common/display/hooks";
+import { DISPLAY_SCRIPT } from "~/features/common/display/utils";
 import type { RouterContext } from "~/router";
 
 const FAVICON =
@@ -35,6 +37,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function Root() {
   const { queryClient } = Route.useRouteContext();
   useThemeSync();
+  useDisplaySync();
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
@@ -46,7 +49,7 @@ function Root() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    // The theme script sets data-theme on <html> before React starts, so React mustn't mind it.
+    // The theme and display scripts set attributes on <html> before React starts, so React mustn't mind them.
     <html lang="en-AU" suppressHydrationWarning>
       <head>
         <HeadContent />
@@ -54,6 +57,9 @@ function RootDocument({ children }: { children: ReactNode }) {
             body renders, so a light page never flashes dark first. It's in the prerendered shell
             only, and removes itself once it has run. */}
         <ScriptOnce>{THEME_SCRIPT}</ScriptOnce>
+        {/* The same for the display choices (size, layout, contrast, motion), so the first paint is
+            already at the chosen size. */}
+        <ScriptOnce>{DISPLAY_SCRIPT}</ScriptOnce>
       </head>
       <body>
         {children}

@@ -67,7 +67,7 @@ export function SolarPerformance({ performance: P }: { performance: Insights["pe
       </div>
       {rated.length > 0 && (
         <>
-          <div className="relative flex h-40 items-end gap-1 max-sm:gap-0.5">
+          <div className="relative flex h-40 items-end gap-1 max-sm:gap-0.5 compact:h-28">
             <div className="pointer-events-none absolute inset-x-0 top-1/4 border-t border-dashed border-line-strong">
               <span className="absolute right-0 bottom-1 bg-surface pl-1.5 font-mono text-[10px] text-ink-faint">
                 100% of expected

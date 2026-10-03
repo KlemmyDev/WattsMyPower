@@ -37,7 +37,7 @@ function HourColumn({ hour, label, full, i }: { hour: ForecastHour; label: strin
         <Icon name={icon} size={20} />
       </div>
       <div className="text-xs tabular-nums">{hour.temp != null ? degrees(hour.temp, fahrenheit) : "–"}</div>
-      <div className="flex h-[120px] w-3.5 items-end rounded bg-canvas">
+      <div className="flex h-[120px] w-3.5 items-end rounded bg-canvas compact:h-[72px]">
         <div
           className="bar-grow w-full rounded bg-solar"
           style={{ height: `${Math.min(100, (hour.pv_kwh / full) * 100)}%`, "--i": i } as React.CSSProperties}

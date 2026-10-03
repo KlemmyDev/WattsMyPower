@@ -50,7 +50,7 @@ export function SolarTrend({ trend: t }: { trend: Insights["trend"] }) {
         <>
           {months.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <div className="flex h-[150px] items-end gap-2 max-sm:gap-[3px]">
+              <div className="flex h-[150px] items-end gap-2 max-sm:gap-[3px] compact:h-[110px]">
                 {months.map((m, k) => (
                   <div
                     key={m.month}

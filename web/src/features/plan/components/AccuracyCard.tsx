@@ -54,7 +54,7 @@ export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null |
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            <div className="flex h-28 items-end gap-1.5" onPointerLeave={() => setHover(null)}>
+            <div className="flex h-28 items-end gap-1.5 compact:h-20" onPointerLeave={() => setHover(null)}>
               {days.map((d, k) => (
                 <div
                   key={d.date}

@@ -87,7 +87,7 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    setWidth(r.width);
+    setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
     setHoverAt(day + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * (end - day));
   };
   const buy = hoverAt != null ? intervalAt(chart.buy, hoverAt) : null;
@@ -119,7 +119,7 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
         <span className="tabular-nums">Up to {priceLabel(chart.top)}</span>
       </div>
       <div
-        className="relative h-[160px] cursor-crosshair touch-pan-y max-sm:h-[130px]"
+        className="relative h-[160px] cursor-crosshair touch-pan-y max-sm:h-[130px] compact:h-[120px]"
         onPointerMove={onPoint}
         onPointerDown={onPoint}
         onPointerLeave={() => setHoverAt(null)}

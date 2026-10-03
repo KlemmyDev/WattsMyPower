@@ -2,6 +2,8 @@
 
 /* For the odd place the light theme needs more than a token swap, e.g. light:bg-canvas. */
 @custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+/* For the compact layout (Settings → Account → Display), e.g. a shorter chart: compact:h-[150px]. */
+@custom-variant compact (&:where([data-density="compact"], [data-density="compact"] *));
 
 /*
  * WattsMyPower design tokens ("Energy Dashboard v5"): Nunito headings, Geist text and Geist Mono
@@ -458,6 +460,91 @@
     animation-duration: 280ms;
     animation-timing-function: ease;
   }
+}
+
+/*
+ * Display choices (Settings → Account → Display, features/common/display), set on <html> before the
+ * first paint. Outside any layer, so they win over the utilities they adjust.
+ */
+
+/* Size: the whole page zooms, text, spacing and charts together, so nothing falls out of step. */
+:root[data-size="small"] {
+  zoom: 0.875;
+}
+:root[data-size="large"] {
+  zoom: 1.125;
+}
+:root[data-size="larger"] {
+  zoom: 1.25;
+}
+
+/*
+ * Compact: the spacing cards and sections are built from steps down a notch, headings shrink, and
+ * the main charts get shorter (each with its own compact: height), so more fits on screen.
+ */
+:root[data-density="compact"] {
+  .p-7 {
+    padding: calc(var(--spacing) * 5);
+  }
+  .p-6 {
+    padding: calc(var(--spacing) * 4.5);
+  }
+  .px-6 {
+    padding-inline: calc(var(--spacing) * 5);
+  }
+  .py-5 {
+    padding-block: calc(var(--spacing) * 3.5);
+  }
+  .gap-5 {
+    gap: calc(var(--spacing) * 3.5);
+  }
+  .gap-6 {
+    gap: calc(var(--spacing) * 4);
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 40px;
+  }
+  h2 {
+    font-size: 20px;
+    line-height: 26px;
+  }
+}
+
+/* More contrast: muted text and lines come closer to the main text colour, in either theme. */
+:root[data-contrast="more"]:not([data-theme="light"]) {
+  --color-ink-soft: #e2e2e2;
+  --color-ink-body: #dadada;
+  --color-ink-quiet: #c6c6c6;
+  --color-ink-muted: #c2c2c2;
+  --color-ink-sub: #bebec3;
+  --color-ink-dim: #bababa;
+  --color-ink-label: #b2b2b2;
+  --color-ink-faint: #a8a8a8;
+  --color-line-subtle: rgb(255 255 255 / 0.12);
+  --color-line: rgb(255 255 255 / 0.18);
+  --color-line-strong: rgb(255 255 255 / 0.34);
+}
+:root[data-theme="light"][data-contrast="more"] {
+  --color-ink-soft: #1d1d1f;
+  --color-ink-body: #232326;
+  --color-ink-quiet: #303034;
+  --color-ink-muted: #333337;
+  --color-ink-sub: #36363b;
+  --color-ink-dim: #3a3a3e;
+  --color-ink-label: #3e3e43;
+  --color-ink-faint: #45454a;
+  --color-line-subtle: rgb(17 17 17 / 0.14);
+  --color-line: rgb(17 17 17 / 0.2);
+  --color-line-strong: rgb(17 17 17 / 0.38);
+}
+
+/* Less motion, chosen here rather than on the device: the same as the device's setting, below. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation: none !important;
+  transition: none !important;
 }
 
 @keyframes wmpRise {

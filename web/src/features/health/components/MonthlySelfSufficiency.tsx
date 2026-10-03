@@ -15,7 +15,7 @@ export function MonthlySelfSufficiency({ months }: { months: Insights["months"] 
         title="Self-sufficiency by month"
         sub="Share of home use covered by solar and the battery"
       />
-      <div className="flex h-[220px] items-end gap-2 max-sm:gap-[3px]">
+      <div className="flex h-[220px] items-end gap-2 max-sm:gap-[3px] compact:h-[150px]">
         {months.map((m, k) => {
           const label = monthYear.format(parseYmd(m.month));
           const v = m.self_pct;

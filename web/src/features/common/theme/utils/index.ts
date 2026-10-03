@@ -1,3 +1,4 @@
+import { reducedMotion } from "~/features/common/display/utils";
 import { store, STORE_THEME } from "~/features/common/storage/utils";
 
 /*
@@ -69,9 +70,8 @@ export const themeChanged = () => listeners.forEach((l) => l());
 export function saveTheme(choice: ThemeChoice) {
   store.set(STORE_THEME, choice);
   // Cross-fade to the new theme where the browser can (the page's ::view-transition styles), unless
-  // motion is turned down; otherwise it switches at once.
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (document.startViewTransition && !still) {
+  // motion is turned down (on the device or in Settings → Account); otherwise it switches at once.
+  if (document.startViewTransition && !reducedMotion()) {
     const fade = document.startViewTransition(() => applyTheme(choice));
     // A fade cut short (another switch mid-fade, the page hidden) still applies the theme: nothing to report.
     fade.ready.catch(() => {});

@@ -216,7 +216,7 @@ export function PlanChart({
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    setWidth(r.width);
+    setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
     const t = c.start + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * c.span;
     setHover(c.rows.find((row) => row.t0 <= t && t < row.t1) ?? null);
   };
@@ -292,7 +292,7 @@ export function PlanChart({
             style={{ left: `${left(hover.t0)}%`, width: `${left(hover.t1) - left(hover.t0)}%` }}
           />
         )}
-        <div className="relative h-[200px] max-sm:h-[160px]">
+        <div className="relative h-[200px] max-sm:h-[160px] compact:h-[140px]">
           {["0%", "33%", "66%"].map((top) => (
             <div key={top} className="absolute right-0 left-0 border-t border-fg/5" style={{ top }} />
           ))}
@@ -322,7 +322,7 @@ export function PlanChart({
         <div className="mt-1 flex items-center justify-end text-[11px] text-ink-dim tabular-nums">
           Reserve {reserve}%
         </div>
-        <div className="relative h-16">
+        <div className="relative h-16 compact:h-12">
           <svg
             viewBox={`0 0 ${W} ${BH}`}
             preserveAspectRatio="none"
@@ -364,7 +364,7 @@ export function PlanChart({
             />
           </svg>
         </div>
-        <div className="relative mt-1 h-[64px]">
+        <div className="relative mt-1 h-[64px] compact:h-12">
           <div className="absolute inset-x-0 top-1/2 border-t border-fg/12" />
           {c.rows.map((r) => {
             const g = r.grid ?? 0;
