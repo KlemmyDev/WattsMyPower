@@ -12,6 +12,17 @@ export type WeatherHour = {
   pv_forecast: number | null; // kWh the day-ahead forecast expected in the hour
 };
 
+/** A day's weather summed up (GET /api/weather/days), for the weather heatmap. */
+export type WeatherDaySummary = {
+  date: string;
+  temp_min: number | null;
+  temp_max: number | null;
+  rain_mm: number | null;
+  cloud: number | null; // % over daylight
+  sunlight_kwh_m2: number | null;
+  code: number | null; // WMO weather code that sums up the day's daylight hours
+};
+
 export type WeatherDay = {
   date: string;
   hours: WeatherHour[];

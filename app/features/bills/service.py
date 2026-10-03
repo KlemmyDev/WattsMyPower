@@ -1,6 +1,7 @@
 """
-The Bills page: the current billing period so far and its expected total, the next few bills,
-past bills, and where this period's money went.
+The Bills page: the current billing period so far and its expected total, each of its days (and
+what the days still to come are expected to cost), ways to lower it (see tips), the next few
+bills, and past bills.
 
 Billing periods follow Settings > Billing: every 1, 2 or 3 months from a day of the month (1-28),
 in step with a month a bill starts in. Days are priced like /api/costs, at today's rates (on Amber,
@@ -21,6 +22,7 @@ from typing import Any
 from app.core.database import Database
 from app.features.amber.repository import PriceRepository
 from app.features.bills.repository import BillsRepository
+from app.features.bills.tips import baseload, tips
 from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
@@ -170,6 +172,18 @@ class BillsService:
                 past.append({**span(p, e), "recorded": len(parts), "meter_days": meter_days(parts), **totals(parts)})
             p = e
 
+        # The rest of this period, as expected; tomorrow on (today is already in `days`).
+        ahead = []
+        for d in _each_day(today + dt.timedelta(1), cur_e):
+            est, _ = estimate(d)
+            if est:
+                ahead.append(
+                    {"date": d.isoformat(), "net_cost": round(est["import_cost"] + supply - est["feed_in_credit"], 2)}
+                )
+
+        night = self.readings.rollups(now - RECENT * 86400, now, ["pv_power", "grid_power", "battery_power"])
+        ways = tips(t, tables, recent, (cur_e - cur_s).days, baseload(night))
+
         upcoming = []
         for k in range(1, UPCOMING + 1):
             s = add_months(cur_s, months * k)
@@ -202,13 +216,22 @@ class BillsService:
                     "net_cost": round(d["net_cost"], 2),
                     "import_kwh": round(d["import_kwh"], 2),
                     "export_kwh": round(d["export_kwh"], 2),
+                    "home_kwh": round(d["home_kwh"], 2),
                     "pv_kwh": pv.get(d["date"]),
+                    "import_cost": round(d["import_cost"], 2),
+                    "feed_in_credit": round(d["feed_in_credit"], 2),
+                    "supply": round(d["supply"], 2),
+                    "bands": [
+                        {"import_kwh": round(b["import_kwh"], 2), "cost": round(b["cost"], 2)} for b in d["bands"]
+                    ],
                     "source": d["source"],
                     "partial": d["date"] == today.isoformat(),
                 }
                 for d in so_far
             ],
+            "ahead": ahead,
             "bands": bands,
+            "tips": ways,
             "past": past,
             "upcoming": upcoming,
             "next_year": next_year,

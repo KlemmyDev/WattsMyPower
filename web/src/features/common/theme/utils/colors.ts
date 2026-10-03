@@ -46,3 +46,7 @@ export const COLOR = {
 /** A colour at an opacity, e.g. alpha(COLOR.good, 0.6). */
 export const alpha = (color: string, opacity: number) =>
   `color-mix(in srgb, ${color} ${+(opacity * 100).toFixed(1)}%, transparent)`;
+
+/** A heatmap colour: `color` blended into the empty-cell grey; `v` from 0 (least) to 1 (most). */
+export const heatColor = (color: string, v: number) =>
+  `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, ${COLOR.heatBase})`;

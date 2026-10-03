@@ -22,12 +22,59 @@ export type BillDay = {
   net_cost: number;
   import_kwh: number;
   export_kwh: number;
+  home_kwh: number;
   pv_kwh: number | null;
+  import_cost: number;
+  feed_in_credit: number;
+  supply: number;
+  /** Grid use and its cost in each rate, in the order of `Bills.bands`. */
+  bands: { import_kwh: number; cost: number }[];
   /** Today, still under way. */
   partial: boolean;
   /** Where import and export came from: imported smart-meter data, or the inverter. */
   source: "meter" | "inverter";
 };
+
+/**
+ * A way to lower the bill, worked out from the last 30 days at today's rates. `saving` is roughly what
+ * it's worth over a whole bill ($), or null where it can't be put in dollars. Rates are $/kWh.
+ */
+export type BillTip =
+  | {
+      kind: "peak";
+      saving: number;
+      /** Index of the dearest rate the grid is used in. */
+      band: number;
+      kwh_day: number;
+      rate: number;
+      /** "solar" (exported solar), or the name of the rate to move use into. */
+      to: string;
+      to_rate: number;
+      moved_kwh_day: number;
+    }
+  | {
+      kind: "solar";
+      saving: number;
+      export_kwh_day: number;
+      feed_in: number;
+      import_price: number;
+      moved_kwh_day: number;
+    }
+  | {
+      kind: "baseload";
+      saving: number;
+      watts: number;
+      kwh_day: number;
+      /** What it costs over a bill, at `price` a kWh. */
+      cost: number;
+      cut_watts: number;
+      /** The night rate for what came from the grid, and the feed-in rate for what the battery covered. */
+      price: number;
+      /** Of overnight use, the share from the grid (0 to 1). */
+      grid_share: number;
+      night_rate: number;
+    }
+  | { kind: "supply"; saving: null; share: number; cost: number; per_day: number };
 
 export type Bills = {
   generated_at: number;
@@ -39,7 +86,11 @@ export type Bills = {
     expected: (BillTotals & { basis: Basis }) | null;
   };
   days: BillDay[];
+  /** The rest of this period, from tomorrow: what each day is expected to cost. */
+  ahead: { date: string; net_cost: number }[];
   bands: { name: string; import_kwh: number; cost: number }[];
+  /** Ways to lower the bill, most valuable first. */
+  tips: BillTip[];
   past: (BillSpan & BillTotals & { recorded: number; meter_days: number })[];
   /** null where there isn't enough history to estimate that bill. */
   upcoming: ((BillSpan & BillTotals & { basis: Basis }) | null)[];

@@ -321,6 +321,12 @@ def test_a_days_weather_is_summed_up(db: Database, config: Config, settings: Set
     assert s["temp_min"] == 15 and s["temp_max"] == 26.5 and s["rain_mm"] == 3.0
     assert s["code"] == 61 and s["sunlight_kwh_m2"] == 5.0 and s["pv_forecast_kwh"] == 3.0
 
+    # Over a range, the same summary for each day that has weather (and none for days without).
+    day = dt.date.fromtimestamp(start)
+    (summed,) = weather.days(day - dt.timedelta(days=3), day + dt.timedelta(days=1))
+    assert summed == {"date": day.isoformat(), **{k: s[k] for k in summed if k != "date"}}
+    assert summed["code"] == 61 and summed["rain_mm"] == 3.0
+
 
 # ---------------------------------------------------------------------------------------- learning
 

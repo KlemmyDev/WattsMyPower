@@ -52,6 +52,18 @@ async def retrain(svc: ServicesDep):
     return {k: v for k, v in saved.items() if k != "model"}
 
 
+@router.get("/days")
+async def days(svc: ServicesDep, start: str, end: str):
+    """Each day's weather summed up, from `start` up to (not including) `end` (YYYY-MM-DD), for a heatmap."""
+    try:
+        first, last = dt.date.fromisoformat(start), dt.date.fromisoformat(end)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="start and end must be YYYY-MM-DD") from e
+    if not first < last <= first + dt.timedelta(days=370):
+        raise HTTPException(status_code=422, detail="end must be after start, and at most a year on")
+    return await asyncio.to_thread(svc.weather.days, first, last)
+
+
 @router.get("/day")
 async def day(svc: ServicesDep, date: str):
     """A day's weather hour by hour, summed up, with its day-ahead solar forecast."""
