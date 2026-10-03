@@ -4,7 +4,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
 ## What it does
 
-- **Live power flow:** solar, battery, home and grid, updated every minute, drawn as an animated house that follows the weather.
+- **Live power flow:** solar, battery, home and grid, updated every minute, drawn as an animated house that follows the weather. Make it look like yours in **Settings → System → Your house**: one or two storeys, no garage or a single or double one, and each inverter and battery on an outside wall or in the garage (as many as are connected are drawn).
 - **Today's cost and savings,** priced at your actual rates (single rate or time of use), split by rate.
 - **History:** a calendar-year heatmap; pick any day to see it in 5-minute steps, with that day's weather; CSV downloads.
 - **Forecast:** the next 24 hours of solar and battery level, from the local weather (Open-Meteo), calibrated to your own system. Every hour's weather is kept (and filled in for older days with readings), and the forecast learns from it how your roof turns sunshine into solar: its direction, shade through the year, heat and the inverter's limit. It switches to what it has learned only once that tests as more accurate. Units, the weather model and the panels' angle are in **Settings → Integrations → Weather**.

@@ -8,6 +8,7 @@ import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number"
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { HouseScene, houseAnchors, type Anchor } from "~/features/overview/components/HouseScene";
+import { houseOptions } from "~/features/overview/utils/house/options";
 
 /** The power flow drawing with live values, drawn under the current weather. */
 export function PowerFlowHero({
@@ -54,6 +55,8 @@ function Scene({
     soc: (p.battery_soc || 0) / 100,
     tesla: 0,
     conn: false,
+    // With a second inverter, each one's own share, so each gets its own line from the roof.
+    pvEach: p.pv2_power != null ? [(p.pv1_power ?? 0) / 1000, p.pv2_power / 1000] : undefined,
   };
   const { labels } = houseAnchors();
   const dark = wx.mode === "night" || wx.mode === "storm";
@@ -69,7 +72,7 @@ function Scene({
       {/* No background under the scene: it covers the box, and a light one would show as a fringe
           around the rounded corners against a dark sky. */}
       <div className="relative aspect-[1200/600] w-full whitespace-nowrap max-md:aspect-[4/3]">
-        <HouseScene flows={flows} sky={wx.mode} cover={wx.cover} />
+        <HouseScene flows={flows} sky={wx.mode} cover={wx.cover} house={houseOptions(s)} />
         {/* The heading and weather chip follow the sky (dark at night and in storms), not the theme. */}
         <div className="absolute top-7 left-8 z-1 flex max-w-[300px] flex-col items-start gap-3.5 whitespace-normal max-md:top-3 max-md:left-3.5">
           <div className="flex flex-col gap-1 max-md:hidden">

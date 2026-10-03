@@ -29,8 +29,17 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
         "best_match",
     ),
 }
+# Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
+# battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.
+LISTS: dict[str, tuple[tuple[str, ...], int]] = {
+    "inverter_places": (("wall", "garage"), 3),
+    "battery_places": (("wall", "garage"), 3),
+}
 # Settings that only take whole numbers.
-WHOLE = {"bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing"}
+WHOLE = {
+    "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
+    "house_storeys", "garage_spaces",
+}  # fmt: skip
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
 SYSTEM: dict[str, tuple[str, str]] = {
@@ -70,6 +79,10 @@ class SettingsStore:
             "panel_bearing": (0, 359, 0),
             # Let the forecast use what it has learned from weather history when that's more accurate (1).
             "forecast_learning": (0, 1, 1),
+            # The house as the Overview draws it (Settings → System → Your house): storeys, and car spaces in
+            # the garage (0 = none).
+            "house_storeys": (1, 2, 1),
+            "garage_spaces": (0, 2, 0),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}
@@ -78,7 +91,7 @@ class SettingsStore:
     def load(self) -> None:
         with self.db.reading() as conn:
             rows = conn.execute("SELECT key, value FROM settings").fetchall()
-            keys = [*TEXT, *CHOICES]
+            keys = [*TEXT, *CHOICES, *LISTS]
             marks = ",".join("?" * len(keys))
             text = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({marks})", keys).fetchall()
         with self._lock:
@@ -131,10 +144,14 @@ class SettingsStore:
         value = self.get_text(key)
         return value if value in allowed else default
 
+    def get_list(self, key: str) -> list[str]:
+        allowed, _ = LISTS[key]
+        return [v for v in (self.get_text(key) or "").split(",") if v in allowed]
+
     def all_values(self) -> dict[str, Any]:
         values = {k: self.get(k) for k in self.editable}
         whole = {k: int(v) for k, v in values.items() if k in WHOLE}
-        choices = {k: self.get_choice(k) for k in CHOICES}
+        choices = {k: self.get_choice(k) for k in CHOICES} | {k: self.get_list(k) for k in LISTS}
         return {**values, **whole, **{k: self.get_text(k) for k in TEXT}, **choices}
 
     def save(self, changes: dict[str, Any]) -> dict[str, Any]:
@@ -144,6 +161,12 @@ class SettingsStore:
         for key, raw in changes.items():
             if key in TEXT:
                 text[key] = str(raw or "").strip()[: TEXT[key]] or None
+                continue
+            if key in LISTS:
+                allowed, most = LISTS[key]
+                if not isinstance(raw, list) or len(raw) > most or any(v not in allowed for v in raw):
+                    raise ValueError(f"{key} must be a list of up to {most} of {', '.join(allowed)}")
+                text[key] = ",".join(raw) or None
                 continue
             if key in CHOICES:
                 allowed, default = CHOICES[key]
