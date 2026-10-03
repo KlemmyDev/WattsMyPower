@@ -52,7 +52,8 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
             {money(use.supply)}
           </DataRow>
           <DataRow label={`Feed-in credit · ${kWhInt(use.export_kwh)}`}>
-            {use.feed_in_credit > 0 ? `−${money(use.feed_in_credit)}` : money(0)}
+            {/* On Amber, a negative feed-in price makes exporting cost money. */}
+            {money(use.feed_in_credit ? -use.feed_in_credit : 0)}
           </DataRow>
           <DataRow label={exp ? "Expected total" : "Total so far"} total>
             {exp ? billAmount(use.net_cost) : billCents(use.net_cost)}

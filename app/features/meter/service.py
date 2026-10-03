@@ -40,8 +40,10 @@ class MeterDay:
     # Every channel's readings cover the whole day (so it can stand in for the inverter's figures).
     complete: bool = False
     estimated: int = 0  # readings that are estimated or substituted rather than actual
-    # The import readings as (interval start, minutes, kWh), for pricing by time of use.
+    # The import and export readings as (interval start, minutes, kWh), for pricing by time of use
+    # (and, on Amber, by the price of their time).
     imports: list[tuple[int, int, float]] = field(default_factory=list)
+    exports: list[tuple[int, int, float]] = field(default_factory=list)
 
 
 def _midnight(date: dt.date) -> int:
@@ -184,6 +186,7 @@ class MeterService:
                 day.imports.append((ts, minutes, kwh))
             else:
                 day.export_kwh += kwh
+                day.exports.append((ts, minutes, kwh))
             if not quality.startswith("A"):
                 day.estimated += 1
             chans = cover.setdefault(day.date, {})

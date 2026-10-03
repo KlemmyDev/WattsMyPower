@@ -5,7 +5,8 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     samples_5m   5-minute rollups of samples, kept up to date on every insert; used for
                  long ranges so a year's chart never touches raw rows
     settings     numeric settings saved from the dashboard (location, system cost)
-    kv           text values: the tariff (JSON), the location's place name, and the set-up guide's progress
+    kv           text values: the tariff (JSON), the location's place name, the set-up guide's progress,
+                 and the Amber connection
     users        the household account
     sessions     signed-in browsers (only a hash of each token is stored)
     meter_imports    smart-meter (NEM12) files imported from Settings → Billing
@@ -14,6 +15,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     alert_rules      alert rules switched on or off, or with changed thresholds (defaults aren't stored)
     alert_state      each rule's progress: a problem seen but not yet reported, an alert out, its cooldown
     alert_history    alerts sent and resolved, daily summaries, and whether each reached its channels
+    prices           dynamic electricity prices (from Amber), one row per channel and interval
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -155,6 +157,20 @@ def _alerts(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS alert_history_ts ON alert_history (ts)")
 
 
+def _prices(conn: sqlite3.Connection) -> None:
+    """Dynamic prices, for a tariff that follows Amber's wholesale prices (app.features.amber).
+
+    `ts` is the interval's start (unix seconds) and `duration` its length in seconds (300 or 1800).
+    `rate` is $/kWh including GST, as it lands on the bill: for `general` and `controlledLoad` what a
+    kWh imported costs, for `feedIn` what a kWh exported earns (negative when exporting costs money).
+    `actual` is 1 for a final price, 0 for a forecast (replaced by the final price once it's known)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS prices (channel TEXT NOT NULL, ts INTEGER NOT NULL, duration INTEGER NOT NULL,"
+        " rate REAL NOT NULL, actual INTEGER NOT NULL, fetched INTEGER NOT NULL, PRIMARY KEY (channel, ts))"
+        " WITHOUT ROWID"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -162,6 +178,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _drop_impossible_values,
     _meter_data,
     _alerts,
+    _prices,
 ]
 
 

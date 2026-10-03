@@ -34,6 +34,7 @@ from app.features.alerts.channels import KINDS, DeliveryError, Message, Send, cl
 from app.features.alerts.repository import AlertsRepository, Channel, RuleSettings
 from app.features.alerts.rules import BY_ID, RULES, Check, Facts, Rule, RuleState, Values
 from app.features.alerts.sun import daylight_since, elevation
+from app.features.amber.repository import PriceRepository
 from app.features.insights.service import InsightsService
 from app.features.live.ingest import NO_INVERTER
 from app.features.live.service import LiveService, Status
@@ -60,6 +61,7 @@ class AlertsService:
         tariffs: TariffStore,
         insights: InsightsService,
         send: Send = post,
+        prices: PriceRepository | None = None,
     ):
         self.repo = AlertsRepository(db)
         self.live = live
@@ -67,6 +69,7 @@ class AlertsService:
         self.readings = readings
         self.tariffs = tariffs
         self.insights = insights
+        self.prices = prices  # Amber's stored prices, for an Amber tariff
         self.send = send
         self._lock = threading.Lock()
         self._perf: tuple[str, dict[str, Any] | None] | None = None  # (hour checked, performance)
@@ -137,7 +140,8 @@ class AlertsService:
         end = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
         date = time.strftime("%Y-%m-%d", time.localtime(start))
         t, tables = self.tariffs.current()
-        day = next((d for d in daily_costs(self.readings, t, tables, start, end)["days"] if d["date"] == date), None)
+        costs = daily_costs(self.readings, t, tables, start, end, prices=self.prices)["days"]
+        day = next((d for d in costs if d["date"] == date), None)
         if day is None:
             return None
         pv = next((d.get("daily_pv") for d in self.readings.daily(start, end) if d["date"] == date), None)
@@ -150,6 +154,8 @@ class AlertsService:
             "cost": day["net_cost"],
             "credit": day["feed_in_credit"],
             "supply": day["supply"],
+            # On Amber: energy costed at the fallback rates because Amber had no price for its time.
+            "unpriced": day.get("unpriced_kwh") or 0.0,
         }
 
     # ------------------------------------------------------------------ evaluation

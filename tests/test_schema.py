@@ -12,7 +12,7 @@ def test_migrate_creates_every_table(db: Database) -> None:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         version = conn.execute("PRAGMA user_version").fetchone()[0]
     assert {"samples", "samples_5m", "settings", "kv", "users", "sessions",
-            "alert_channels", "alert_rules", "alert_state", "alert_history"} <= tables  # fmt: skip
+            "alert_channels", "alert_rules", "alert_state", "alert_history", "prices"} <= tables  # fmt: skip
     assert version == len(MIGRATIONS)
 
 

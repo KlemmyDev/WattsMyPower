@@ -310,16 +310,23 @@ def daily_summary(f: Facts, v: Values, s: RuleState) -> Check:
     y = f.yesterday()
     if not y:
         return Check("report", data={"date": yday})  # nothing recorded yesterday: nothing to say
+    # On Amber, feed-in can cost money while its price is below zero.
+    feed_in = (
+        f"after ${y['credit']:.2f} of feed-in credit"
+        if y["credit"] >= 0
+        else f"including ${-y['credit']:.2f} paid to send power to the grid"
+    )
     lines = [
         f"Solar: {_kwh(y['pv'])}",
         f"Home use: {_kwh(y['home'])}",
         f"Bought from the grid: {_kwh(y['imp'])}",
         f"Sold to the grid: {_kwh(y['exp'])}",
-        f"Cost: ${y['cost']:.2f}, including the ${y['supply']:.2f} supply charge, after ${y['credit']:.2f} "
-        "of feed-in credit"
+        f"Cost: ${y['cost']:.2f}, including the ${y['supply']:.2f} supply charge, {feed_in}"
         if y["cost"] >= 0
         else f"Credit: ${-y['cost']:.2f}, after the ${y['supply']:.2f} supply charge",
     ]
+    if y.get("unpriced", 0) >= 0.05:
+        lines.append(f"{_kwh(y['unpriced'])} was costed at your fallback rates, as Amber had no price for it yet")
     title = f"Yesterday: {_kwh(y['pv'])} of solar" if y["pv"] is not None else "Yesterday's summary"
     return Check("report", title, f"{day_name(yday)}\n" + "\n".join(lines), data={"date": yday})
 

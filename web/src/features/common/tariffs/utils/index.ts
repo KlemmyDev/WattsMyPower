@@ -79,6 +79,7 @@ export function liveBands(t: Tariff): { name: string; rate: number }[] {
 
 /** One line describing a tariff: "45c peak · 22c off-peak · 5c feed-in · $1.05 a day". */
 export function tariffDetail(t: Tariff): string {
+  if (t.type === "amber") return `Amber prices · ${money(num(t.supply_charge))} a day`;
   const usage =
     t.type === "tou"
       ? liveBands(t)

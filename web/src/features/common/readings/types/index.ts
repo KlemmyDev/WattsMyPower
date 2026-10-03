@@ -13,6 +13,8 @@ export type CostBand = {
   self_kwh: number;
   cost: number;
   saved: number;
+  /** On Amber: what this band's home use would have cost from the grid, at the prices of the time. */
+  home_cost?: number;
 };
 
 export type CostDay = {
@@ -27,6 +29,10 @@ export type CostDay = {
   net_cost: number;
   saved: number;
   bands: CostBand[];
+  /** On Amber: the average feed-in price earned (negative when exporting cost money). */
+  feed_in_rate?: number | null;
+  /** On Amber: kWh costed at the fallback rates because Amber had no price for their time. */
+  unpriced_kwh?: number;
 };
 
 export type CostsResponse = { type: Tariff["type"]; days: CostDay[] };

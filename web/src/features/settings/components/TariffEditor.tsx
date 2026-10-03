@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Dispatch, ReactNode, Ref } from "react";
+import { amberQuery } from "~/features/amber/api";
 import { useSaveTariff } from "~/features/common/tariffs/hooks";
 import { tariffQuery } from "~/features/common/tariffs/api";
 import type { PlanTariff } from "~/features/settings/types";
@@ -20,7 +21,15 @@ import { TariffTimeline } from "~/features/settings/components/TariffTimeline";
 const RATE_TYPES: { value: Tariff["type"]; label: string }[] = [
   { value: "flat", label: "Single rate" },
   { value: "tou", label: "Time of use" },
+  { value: "amber", label: "Amber" },
 ];
+
+const RATE_HELP: Record<Tariff["type"], string> = {
+  flat: "One price for grid electricity at any time of day.",
+  tou: "Different rates at different times of day, for example peak, shoulder, and off-peak.",
+  amber:
+    "Amber's own prices for every 5 or 30 minutes, from your Amber account. Grid power and feed-in are costed at the price of the time.",
+};
 
 const fieldGrid = "grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5";
 
@@ -157,7 +166,11 @@ export function RatesFields({
   dispatch: Dispatch<EditorAction>;
   saveLabel?: string;
 }) {
+  const amber = useQuery(amberQuery).data;
   const tou = draft.type === "tou";
+  const dynamic = draft.type === "amber";
+  // Amber is offered once it's connected (or while the rates already use it).
+  const types = RATE_TYPES.filter((r) => r.value !== "amber" || dynamic || !!amber?.site_id);
   const edit = (e: TariffEdit) => dispatch({ type: "edit", base: draft, edit: e });
   return (
     <>
@@ -171,24 +184,28 @@ export function RatesFields({
         <Segmented
           label="Rate type"
           className="self-start"
-          options={RATE_TYPES}
+          options={types}
           value={draft.type}
           onChange={(v) => v !== draft.type && edit({ type: "set-rate-type", value: v })}
         />
-        <HelpText>
-          {tou
-            ? "Different rates at different times of day, for example peak, shoulder, and off-peak."
-            : "One price for grid electricity at any time of day."}
-        </HelpText>
+        <HelpText>{RATE_HELP[draft.type]}</HelpText>
       </div>
+      {dynamic && (
+        <HelpText className="text-[13px] leading-5">
+          For any time Amber has no price for, such as before your prices were fetched or while Amber can't be reached,
+          the fallback rates below are used instead. The Overview says how much was costed that way.
+        </HelpText>
+      )}
       {tou ? (
         <ImportRates draft={draft} edit={edit} />
       ) : (
         <div className={fieldGrid}>
           <MoneyField
-            label="Grid import rate"
+            label={dynamic ? "Fallback import rate" : "Grid import rate"}
             unit="per kWh"
-            help="What you pay for electricity from the grid"
+            help={
+              dynamic ? "Used for grid power when Amber has no price" : "What you pay for electricity from the grid"
+            }
             value={draft.flat_rate}
             onChange={(value) => edit({ type: "set-field", field: "flat_rate", value })}
           />
@@ -196,16 +213,24 @@ export function RatesFields({
       )}
       <div className={fieldGrid}>
         <MoneyField
-          label="Feed-in tariff"
+          label={dynamic ? "Fallback feed-in tariff" : "Feed-in tariff"}
           unit="per kWh"
-          help="What you earn for solar sent to the grid"
+          help={
+            dynamic
+              ? "Used for solar sent to the grid when Amber has no price"
+              : "What you earn for solar sent to the grid"
+          }
           value={draft.feed_in_rate}
           onChange={(value) => edit({ type: "set-field", field: "feed_in_rate", value })}
         />
         <MoneyField
           label="Daily supply charge"
           unit="per day"
-          help="Fixed daily charge from your retailer"
+          help={
+            dynamic
+              ? "Amber's daily network charge plus its membership fee as a daily amount. Both are on your Amber bill."
+              : "Fixed daily charge from your retailer"
+          }
           value={draft.supply_charge}
           onChange={(value) => edit({ type: "set-field", field: "supply_charge", value })}
         />

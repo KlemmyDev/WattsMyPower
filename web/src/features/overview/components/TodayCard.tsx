@@ -8,6 +8,7 @@ import { Card, CardHeader } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
 import { centsShort, kWh, money } from "~/features/common/formatting/utils/number";
 import { minutesLabel } from "~/features/common/formatting/utils/date";
+import { priceLabel } from "~/features/amber/utils";
 import { bandColor, bandTable, tariffNumber, usedBands } from "~/features/common/tariffs/utils";
 import { dateKey, isWeekend, midnight } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
@@ -25,12 +26,12 @@ export function TodayCard({ tariff, now }: { tariff: Tariff | undefined; now: nu
         id="h-today"
         action={
           <ButtonLink to="/settings/tariffs" variant="chip">
-            {t ? (t.type === "tou" ? "Time of use" : "Single rate") : "Rates"}
+            {t ? RATE_TYPE[t.type] : "Rates"}
           </ButtonLink>
         }
       />
       {c && t ? <Figures c={c} /> : <Figures />}
-      {c && t && <RateTable c={c} t={t} now={now} />}
+      {c && t && (t.type === "amber" ? <AmberTable c={c} /> : <RateTable c={c} t={t} now={now} />)}
     </Card>
   );
 }
@@ -92,6 +93,8 @@ function Figure({ k, v, sub, good }: { k: string; v: string; sub: string; good?:
     </div>
   );
 }
+
+const RATE_TYPE: Record<Tariff["type"], string> = { flat: "Single rate", tou: "Time of use", amber: "Amber" };
 
 const COLS =
   "grid grid-cols-[minmax(0,1.6fr)_minmax(64px,0.8fr)_minmax(64px,0.8fr)_minmax(64px,0.8fr)] items-center gap-3 tabular-nums max-xs:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(52px,0.8fr))] max-xs:gap-2";
@@ -168,6 +171,77 @@ function RateTable({ c, t, now }: { c: CostDay; t: Tariff; now: number }) {
         <span className="text-right text-[15px] font-semibold text-ink">{money(c.net_cost)}</span>
         <span className="text-right text-[15px] font-medium text-good">{money(Math.max(0, c.saved))}</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Today on Amber prices: grid power at the prices of the time (with its average), anything costed at the
+ * fallback rate because Amber had no price, the supply charge, and feed-in at the prices of the time
+ * (which can cost money when the feed-in price is negative).
+ */
+function AmberTable({ c }: { c: CostDay }) {
+  const [priced, fallback] = c.bands;
+  const fit = c.feed_in_rate;
+  const unpriced = c.unpriced_kwh ?? 0;
+  return (
+    <div className="flex flex-col">
+      <div className={cn(COLS, "pb-2 font-mono text-[10px] tracking-[1px] text-ink-faint uppercase")}>
+        <span>Period</span>
+        <span className="text-right">From grid</span>
+        <span className="text-right">Cost</span>
+        <span className="text-right">Saved</span>
+      </div>
+      {priced && (
+        <Row
+          dot={COLOR.ink}
+          label="Amber prices"
+          sub={`${priced.import_kwh > 0 ? "Average" : "Today's average"} ${priceLabel(priced.rate)} per kWh`}
+          kwh={kWh(priced.import_kwh)}
+          cost={money(priced.cost)}
+          saved={money(Math.max(0, priced.saved))}
+          savedKwh={kWh(priced.self_kwh)}
+        />
+      )}
+      {fallback && (fallback.import_kwh > 0 || fallback.home_kwh > 0) && (
+        <Row
+          dot={COLOR.gridLine}
+          label="No Amber price"
+          sub={`Fallback rate ${centsShort(fallback.rate)} per kWh`}
+          kwh={kWh(fallback.import_kwh)}
+          cost={money(fallback.cost)}
+          saved={money(Math.max(0, fallback.saved))}
+          savedKwh={kWh(fallback.self_kwh)}
+        />
+      )}
+      <Row
+        dot={COLOR.barFaint}
+        label="Supply charge"
+        sub="Fixed daily charge"
+        cost={money(c.supply)}
+        saved="–"
+        savedOn={false}
+      />
+      <Row
+        dot={COLOR.solar}
+        label={c.feed_in_credit < 0 ? "Solar export cost" : "Solar credit"}
+        sub={fit != null ? `Exported at an average ${priceLabel(fit)} per kWh` : "Nothing exported yet"}
+        cost={money(-c.feed_in_credit)}
+        saved={money(c.feed_in_credit)}
+        savedOn={c.feed_in_credit >= 0}
+        savedKwh={kWh(c.export_kwh)}
+      />
+      <div className={cn(COLS, "border-t border-fg/14 pt-3")}>
+        <span className="text-sm font-semibold">Today</span>
+        <span />
+        <span className="text-right text-[15px] font-semibold text-ink">{money(c.net_cost)}</span>
+        <span className="text-right text-[15px] font-medium text-good">{money(Math.max(0, c.saved))}</span>
+      </div>
+      {unpriced >= 0.05 && (
+        <p className="mt-3 mb-0 text-xs leading-[18px] text-ink-faint">
+          {kWh(unpriced)} was costed at your fallback rates, because Amber had no price for those times yet.
+        </p>
+      )}
     </div>
   );
 }

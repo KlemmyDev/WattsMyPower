@@ -3,7 +3,8 @@ The Bills page: the current billing period so far and its expected total, the ne
 past bills, and where this period's money went.
 
 Billing periods follow Settings > Billing: every 1, 2 or 3 months from a day of the month (1-28),
-in step with a month a bill starts in. Days are priced like /api/costs, at today's rates. Days
+in step with a month a bill starts in. Days are priced like /api/costs, at today's rates (on Amber,
+at the prices of the time). Days
 still to come are estimated from the same week last year where there are complete days to go on,
 otherwise from the average complete day over the last 30 days.
 
@@ -18,6 +19,7 @@ import time
 from typing import Any
 
 from app.core.database import Database
+from app.features.amber.repository import PriceRepository
 from app.features.bills.repository import BillsRepository
 from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
@@ -64,8 +66,9 @@ def _each_day(a: dt.date, b: dt.date) -> list[dt.date]:
 
 
 def _without_solar(day: Day) -> float:
-    """What the day's home use would have cost from the grid alone (usage plus supply)."""
-    return float(sum(b["home_kwh"] * b["rate"] for b in day["bands"]) + day["supply"])
+    """What the day's home use would have cost from the grid alone (usage plus supply). On Amber, each band
+    carries its own `home_cost`, priced interval by interval."""
+    return float(sum(b.get("home_cost", b["home_kwh"] * b["rate"]) for b in day["bands"]) + day["supply"])
 
 
 def _average(rows: list[Day]) -> Day:
@@ -80,12 +83,14 @@ class BillsService:
         settings: SettingsStore,
         tariffs: TariffStore,
         meter: MeterService | None = None,
+        prices: PriceRepository | None = None,
     ):
         self.repo = BillsRepository(db)
         self.readings = readings
         self.settings = settings
         self.tariffs = tariffs
         self.meter = meter
+        self.prices = prices
 
     def build(self, now: int) -> dict[str, Any]:
         t, tables = self.tariffs.current()
@@ -98,7 +103,7 @@ class BillsService:
         cur_e = add_months(cur_s, months)
 
         first = min(add_months(cur_s, -12), today - dt.timedelta(LAST_YEAR + NEAR))
-        priced = daily_costs(self.readings, t, tables, _ts(first), now + 1, self.meter)["days"]
+        priced = daily_costs(self.readings, t, tables, _ts(first), now + 1, self.meter, self.prices)["days"]
         days = {d["date"]: {**d, "without_solar": _without_solar(d)} for d in priced}
         # Complete days: enough inverter readings, or covered by the meter's data.
         from_meter = {k for k, d in days.items() if d["source"] == "meter" and k < today.isoformat()}

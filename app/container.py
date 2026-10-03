@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from app.core.config import Config
 from app.core.database import Database
 from app.features.alerts.service import AlertsService
+from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.bills.service import BillsService
 from app.features.forecast.service import ForecastService
@@ -37,6 +38,7 @@ class Services:
     readings: ReadingsRepository
     settings: SettingsStore
     tariffs: TariffStore
+    amber: AmberService
     geocoder: Geocoder
     plans: PlansService
     forecast: ForecastService
@@ -57,6 +59,7 @@ def build_services(config: Config) -> Services:
     readings = ReadingsRepository(db, config.poll_interval, config.raw_retention_days)
     settings = SettingsStore(db, config)
     tariffs = TariffStore(db, config)
+    amber = AmberService(db, tariffs)
     plans = PlansService(tariffs)
     meter = MeterService(db, readings)
     live = LiveService(config, settings, tariffs)
@@ -72,16 +75,17 @@ def build_services(config: Config) -> Services:
         readings=readings,
         settings=settings,
         tariffs=tariffs,
+        amber=amber,
         geocoder=Geocoder(),
         plans=plans,
         forecast=ForecastService(config, readings, settings),
         insights=insights,
         meter=meter,
-        bills=BillsService(db, readings, settings, tariffs, meter),
+        bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),
         auth=AuthService(db, enabled=config.auth),
         integrations=integrations,
         onboarding=OnboardingService(config, db, integrations),
         live=live,
-        alerts=AlertsService(db, live, settings, readings, tariffs, insights),
+        alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo),
         source=source,
     )

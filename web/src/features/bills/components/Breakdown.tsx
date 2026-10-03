@@ -44,7 +44,7 @@ export function PaidFor({ bills }: { bills: Bills }) {
         <ShareRow
           color={COLOR.solar}
           label="Feed-in credit"
-          value={s.feed_in_credit > 0 ? `−${money(s.feed_in_credit)}` : money(0)}
+          value={money(s.feed_in_credit ? -s.feed_in_credit : 0)} // on Amber, a negative feed-in price costs money
         />
       </div>
     </Card>
@@ -53,6 +53,7 @@ export function PaidFor({ bills }: { bills: Bills }) {
 
 /** Grid spend this period by tariff rate, and where cutting use would help most. */
 export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | undefined }) {
+  if (tariff?.type === "amber") return <CostOnAmber bills={bills} />;
   const tou = tariff?.type === "tou" ? tariff : null;
   const used = tariff ? usedBands(tariff) : null;
   const parts = bills.bands
@@ -84,6 +85,40 @@ export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | u
           : priciest
             ? `${priciest.name} hours are ${pctOf(priciest.import_kwh, kwh)} of your grid use and ${pctOf(priciest.cost, cost)} of your grid spend. Using less power ${priciest.hours === "All other times" ? "at those times" : `from ${priciest.hours}`} lowers your bill the most.`
             : "You are on a flat rate, so grid power costs the same at any time of day."}
+      </Muted>
+    </Card>
+  );
+}
+
+/** On Amber prices: grid spend at Amber's prices, and anything costed at the fallback rate. */
+function CostOnAmber({ bills }: { bills: Bills }) {
+  const [priced, fallback] = bills.bands;
+  const parts = [
+    { ...priced, color: COLOR.ink, sub: "Priced every 5 or 30 minutes" },
+    { ...fallback, color: COLOR.gridLine, sub: "Fallback rate, where Amber had no price" },
+  ].filter((b) => b.name && (b === priced || b.import_kwh > 0));
+  const kwh = parts.reduce((a, b) => a + b.import_kwh, 0);
+  const cost = parts.reduce((a, b) => a + b.cost, 0);
+  return (
+    <Card aria-labelledby="h-tod">
+      <TitleBlock id="h-tod" title="Cost of grid power" sub="Grid spend this period so far, at Amber's prices" />
+      <ShareBar parts={parts.map((b) => ({ value: b.cost, color: b.color }))} />
+      <div>
+        {parts.map((b) => (
+          <ShareRow
+            key={b.name}
+            color={b.color}
+            label={b.name}
+            sub={`${b.sub} · ${kWhInt(b.import_kwh)}${b.import_kwh > 0 ? ` · average ${centsPerKwh(b.cost / b.import_kwh)}` : ""}`}
+            share={pctOf(b.cost, cost)}
+            value={money(b.cost)}
+          />
+        ))}
+      </div>
+      <Muted>
+        {kwh <= 0
+          ? "No power from the grid this period yet."
+          : "Your price changes through the day. Using grid power when prices are low, often the middle of the day, lowers your bill the most."}
       </Muted>
     </Card>
   );
