@@ -12,9 +12,13 @@ type TileProps = {
   /** The pill shows it as working. */
   on?: boolean;
   detail: ReactNode;
+  /** A card of its own (in a grid of them), rather than a row in a settings card. */
+  card?: boolean;
 };
 
 const ROW = "flex items-center gap-4 border-b border-line-subtle px-6 py-5 last:border-b-0 max-sm:px-5";
+const CARD =
+  "flex items-center gap-4 rounded-3xl border border-line-subtle bg-surface p-6 transition-colors max-sm:rounded-[20px] max-sm:p-5";
 
 /** Icon, name with a status pill, and a line of detail. */
 function TileBody({ icon, name, status, on, detail }: TileProps) {
@@ -39,11 +43,15 @@ function TileBody({ icon, name, status, on, detail }: TileProps) {
 }
 
 const TileAnchor = forwardRef<HTMLAnchorElement, TileProps & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children">>(
-  function TileAnchor({ icon, name, status, on, detail, className, ...rest }, ref) {
+  function TileAnchor({ icon, name, status, on, detail, card, className, ...rest }, ref) {
     return (
       <a
         ref={ref}
-        className={cn(ROW, "text-ink no-underline hover:bg-surface-inset hover:text-ink", className)}
+        className={cn(
+          card ? cn(CARD, "hover:border-line-strong") : ROW,
+          "text-ink no-underline hover:bg-surface-inset hover:text-ink",
+          className,
+        )}
         {...rest}
       >
         <TileBody icon={icon} name={name} status={status} on={on} detail={detail} />
@@ -61,9 +69,9 @@ export const IntegrationLink: LinkComponent<typeof TileAnchor> = (props) => (
 );
 
 /** The same row, for something that can't be opened yet. */
-export function IntegrationTile(props: TileProps) {
+export function IntegrationTile({ card, ...props }: TileProps) {
   return (
-    <div className={ROW}>
+    <div className={card ? CARD : ROW}>
       <TileBody {...props} />
     </div>
   );

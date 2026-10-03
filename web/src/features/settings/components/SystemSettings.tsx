@@ -1,6 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { SystemInfo } from "~/features/common/live/types";
-import { SettingRow } from "~/features/common/ui/components/DataRow";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -10,6 +9,7 @@ import { SYSTEM_SETTINGS, type Settings, type SystemSettingKey } from "~/feature
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
+import { cn } from "~/features/common/ui/utils";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { HouseSettings } from "~/features/settings/components/HouseSettings";
 import { OwnershipSettings } from "~/features/settings/components/OwnershipSettings";
@@ -25,6 +25,8 @@ function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
   );
 }
 
+const SECOND = "Second inverter";
+
 function systemRows(s: SystemInfo | undefined): [string, string][] {
   return [
     ["Site name", "Home"],
@@ -33,7 +35,7 @@ function systemRows(s: SystemInfo | undefined): [string, string][] {
     ["Battery", s?.inverter_battery_kwh ? `${s.inverter_battery_kwh} kWh` : "—"],
     ["Backup reserve", s?.inverter_reserve != null ? pct(s.inverter_reserve) : "—"],
     ["Grid connection", s?.phases || "—"],
-    ...(s?.pv2 ? [["Second inverter", secondInverter(s.pv2)] satisfies [string, string]] : []),
+    ...(s?.pv2 ? [[SECOND, secondInverter(s.pv2)] satisfies [string, string]] : []),
   ];
 }
 
@@ -51,12 +53,23 @@ export function SystemSettings() {
             sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
           />
         </div>
-        <div>
-          {systemRows(live?.system).map(([label, value]) => (
-            <SettingRow key={label} label={label}>
-              {value}
-            </SettingRow>
-          ))}
+        {/* Tiles: 2, 3 or 6 across, which the six always fill; a second inverter, a longer line, gets a row of
+            its own. Each draws its own lines on the right and below, and the edge ones are clipped. */}
+        <div className="overflow-hidden border-b border-line-subtle">
+          <dl className="m-0 -mr-px -mb-px grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+            {systemRows(live?.system).map(([label, value]) => (
+              <div
+                key={label}
+                className={cn(
+                  "flex min-w-0 flex-col gap-1 border-r border-b border-line-subtle px-6 py-4 max-sm:px-5",
+                  label === SECOND && "col-span-full",
+                )}
+              >
+                <dt className="text-xs text-ink-muted">{label}</dt>
+                <dd className="m-0 text-[15px] font-medium break-words tabular-nums">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
         <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
           These details come from your inverters over the local network. Inverters are connected in Settings →

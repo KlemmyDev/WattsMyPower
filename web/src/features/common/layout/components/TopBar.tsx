@@ -1,9 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
-import { useScrolled } from "~/features/common/layout/hooks";
+import { usePillIndicator, useScrolled } from "~/features/common/layout/hooks";
 import { cn } from "~/features/common/ui/utils";
 import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
@@ -77,25 +77,8 @@ function Nav() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = sectionOf(path);
   const navRef = useRef<HTMLElement>(null);
-  const [ind, setInd] = useState<{ left: number; width: number } | null>(null);
-
   // The white pill slides under the current page's link.
-  useLayoutEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const place = () => {
-      const cur = nav.querySelector<HTMLElement>('[aria-current="page"]');
-      if (!cur) return setInd(null);
-      setInd({ left: cur.offsetLeft, width: cur.offsetWidth });
-      if (cur.offsetLeft < nav.scrollLeft || cur.offsetLeft + cur.offsetWidth > nav.scrollLeft + nav.clientWidth)
-        cur.scrollIntoView({ block: "nearest", inline: "center" });
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    ro.observe(nav);
-    document.fonts?.ready.then(place);
-    return () => ro.disconnect();
-  }, [current, items.length]);
+  const ind = usePillIndicator(navRef, [current, items.length]);
 
   return (
     <nav

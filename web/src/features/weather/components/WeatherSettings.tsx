@@ -421,9 +421,7 @@ export function WeatherSettings() {
           </>
         }
       />
-      {status?.error && (
-        <Notice className="max-w-[880px]">{status.error}. The last forecast stored is shown meanwhile.</Notice>
-      )}
+      {status?.error && <Notice>{status.error}. The last forecast stored is shown meanwhile.</Notice>}
       <WeatherLocation />
       <Units />
       <Model status={status} />

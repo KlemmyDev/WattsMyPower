@@ -1,13 +1,13 @@
 import type { ComponentPropsWithRef, ReactNode } from "react";
 import { cn } from "~/features/common/ui/utils";
 
-/** A settings panel, narrower than a dashboard card. `padded` for forms; unpadded for edge-to-edge rows. */
+/** A settings panel, as wide as the page like a dashboard card. `padded` for forms; unpadded for edge-to-edge rows. */
 export function SettingsCard({ padded, className, ...rest }: ComponentPropsWithRef<"section"> & { padded?: boolean }) {
   return (
     <section
       className={cn(
-        "flex max-w-[880px] flex-col rounded-3xl border border-line-subtle bg-surface",
-        padded ? "gap-6 p-7" : "overflow-hidden",
+        "flex min-w-0 flex-col rounded-3xl border border-line-subtle bg-surface max-sm:rounded-[20px]",
+        padded ? "gap-6 p-7 max-sm:p-5" : "overflow-hidden",
         className,
       )}
       {...rest}
