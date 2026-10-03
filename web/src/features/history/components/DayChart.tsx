@@ -132,7 +132,7 @@ export function DayChart({
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    setWidth(r.width);
+    setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
     if (!chart?.readings.length) return;
     const t = chart.start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * chart.span;
     const best = nearest(chart.readings, t);
@@ -179,7 +179,7 @@ export function DayChart({
             }}
           />
         )}
-        <div className="relative h-[220px] max-sm:h-[180px]">
+        <div className="relative h-[220px] max-sm:h-[180px] compact:h-[160px]">
           {["0%", "33%", "66%", "100%"].map((top) => (
             <div key={top} className="absolute right-0 left-0 border-t border-fg/5" style={{ top }} />
           ))}
@@ -230,7 +230,7 @@ export function DayChart({
               );
             })()}
         </div>
-        <div className="relative h-[72px]">
+        <div className="relative h-[72px] compact:h-14">
           <div className="absolute inset-x-0 top-1/2 border-t border-fg/12" />
           <div className="absolute inset-0 flex gap-0.5">
             {hours.map((h, i) => {

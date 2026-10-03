@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-
-const REDUCED = "(prefers-reduced-motion: reduce)";
+import { reducedMotion } from "~/features/common/display/utils";
 
 /**
  * A number that glides to each new value instead of jumping (ease-out over `ms`), for live figures
- * that change every minute. The first value shows at once; with motion turned down, so does each.
+ * that change every minute. The first value shows at once; with motion turned down (on the device or
+ * in Settings → Account), so does each.
  */
 export function useTween(target: number | null | undefined, ms = 650): number | null {
   const [shown, setShown] = useState(target ?? null);
@@ -12,7 +12,7 @@ export function useTween(target: number | null | undefined, ms = 650): number | 
   useEffect(() => {
     if (target == null) return;
     const from = at.current;
-    const jump = from == null || from === target || matchMedia(REDUCED).matches;
+    const jump = from == null || from === target || reducedMotion();
     const t0 = performance.now();
     let frame = 0;
     const step = (t: number) => {

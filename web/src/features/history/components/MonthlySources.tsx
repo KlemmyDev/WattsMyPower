@@ -54,7 +54,7 @@ export function MonthlySources({ months }: { months: Month[] }) {
       </div>
       <div className="flex flex-wrap items-stretch gap-8">
         <div className="flex min-w-0 flex-[2_1_480px] flex-col gap-2">
-          <div className="relative flex h-[260px] gap-1.5 pr-16 max-sm:h-[200px] max-sm:gap-1 max-sm:pr-12">
+          <div className="relative flex h-[260px] gap-1.5 pr-16 max-sm:h-[200px] max-sm:gap-1 max-sm:pr-12 compact:h-[180px]">
             {[1, 0.5].map((q) => (
               <div
                 key={q}

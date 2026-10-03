@@ -70,7 +70,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
       ref={plot}
       onMouseMove={onMove}
       onMouseLeave={() => setHoverAt(null)}
-      className="relative mt-auto mb-0 h-[150px] cursor-crosshair"
+      className="relative mt-auto mb-0 h-[150px] cursor-crosshair compact:h-[110px]"
     >
       <svg
         viewBox={`0 0 ${B6W} ${B6H}`}

@@ -172,7 +172,7 @@ function Charts({ n }: { n: N24 }) {
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * 100;
-    setWidth(r.width);
+    setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
     if (n.points.length) setHover(n.points.reduce((a, b) => (Math.abs(b.left - x) < Math.abs(a.left - x) ? b : a)));
   };
   const nights = (h: number) =>
@@ -251,7 +251,7 @@ function Charts({ n }: { n: N24 }) {
           </span>
           <span className="tabular-nums">{n.guideKw} kW</span>
         </div>
-        <div className="relative h-[110px]">
+        <div className="relative h-[110px] compact:h-[84px]">
           <svg viewBox={`0 0 ${W} ${PH}`} preserveAspectRatio="none" aria-hidden="true" className={plot}>
             {nights(PH)}
             <line
@@ -282,7 +282,7 @@ function Charts({ n }: { n: N24 }) {
           </span>
           <span className="tabular-nums">Reserve {n.reserve}%</span>
         </div>
-        <div className="relative h-14">
+        <div className="relative h-14 compact:h-10">
           <svg viewBox={`0 0 ${W} ${BH}`} preserveAspectRatio="none" aria-hidden="true" className={plot}>
             {nights(BH)}
             <line
