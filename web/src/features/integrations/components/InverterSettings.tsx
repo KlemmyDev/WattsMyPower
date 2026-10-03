@@ -153,12 +153,42 @@ function InverterRow({
   );
 }
 
-/** Settings → Integrations: the inverters WattsMyPower reads, and connecting them. */
-export function InverterSettings() {
+/**
+ * The connected inverters, each with its live state, or why they can't be shown. The body of the
+ * Inverters card in Settings → Integrations, and of the set-up guide's first step.
+ */
+export function ConnectedInverters() {
   const { data, isPending, error } = useQuery(integrationsQuery);
   const live = useLive();
   const snapshot = useSnapshot();
   const now = useNow();
+  const readOnly = data?.read_only ?? true;
+
+  return (
+    <>
+      {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking what's connected…</div>}
+      {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
+      {data && !data.available && (
+        <div className="border-b border-line-subtle px-6 py-5 text-sm leading-[22px] text-ink-muted last:border-b-0">
+          {data.error}
+        </div>
+      )}
+      {data?.devices.map((d) => (
+        <InverterRow key={d.role} device={d} live={live} snapshot={snapshot} now={now} readOnly={readOnly} />
+      ))}
+      {data?.available && readOnly && (
+        <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
+          Read-only: this dashboard follows another server's collector (COLLECTOR_WRITES=false), so its inverters are
+          changed from that server's own dashboard.
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Settings → Integrations: the inverters WattsMyPower reads, and connecting them. */
+export function InverterSettings() {
+  const { data } = useQuery(integrationsQuery);
   const [open, setOpen] = useState(false);
   const devices = data?.devices ?? [];
   const hasHybrid = devices.some((d) => d.role === "hybrid");
@@ -179,22 +209,7 @@ export function InverterSettings() {
           </Button>
         )}
       </div>
-      {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking what's connected…</div>}
-      {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
-      {data && !data.available && (
-        <div className="border-b border-line-subtle px-6 py-5 text-sm leading-[22px] text-ink-muted last:border-b-0">
-          {data.error}
-        </div>
-      )}
-      {devices.map((d) => (
-        <InverterRow key={d.role} device={d} live={live} snapshot={snapshot} now={now} readOnly={readOnly} />
-      ))}
-      {data?.available && readOnly && (
-        <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-          Read-only: this dashboard follows another server's collector (COLLECTOR_WRITES=false), so its inverters are
-          changed from that server's own dashboard.
-        </div>
-      )}
+      <ConnectedInverters />
       {data?.available && !readOnly && !hasHybrid && (
         <div className="flex flex-col gap-1 px-6 pt-5">
           <span className="text-[15px] font-semibold">Connect your inverter</span>

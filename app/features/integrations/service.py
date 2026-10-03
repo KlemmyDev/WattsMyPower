@@ -122,6 +122,15 @@ class IntegrationsService:
             "network": self.suggest_network(devices, client_host),
         }
 
+    def has_hybrid(self) -> bool | None:
+        """Whether a main inverter is connected. None: there's no collector, or it can't be reached."""
+        if self.collector is None:
+            return None
+        try:
+            return any(d.get("role") == "hybrid" for d in self.collector.devices().get("devices", []))
+        except CollectorError:
+            return None
+
     def suggest_network(self, devices: list[dict[str, Any]], client_host: str | None) -> str:
         """Where to look: the connected inverters' network, else the browser's (when it's a home network)."""
         for host in [d["host"] for d in devices] + [client_host or ""]:
