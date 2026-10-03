@@ -300,7 +300,7 @@ export function PlanChart({
             viewBox={`0 0 ${W} ${PH}`}
             preserveAspectRatio="none"
             aria-hidden="true"
-            className="absolute inset-0 size-full overflow-visible"
+            className="absolute inset-0 size-full animate-reveal-x overflow-visible"
           >
             {c.band && <path d={c.band} style={{ fill: alpha(COLOR.solar, 0.16) }} />}
             {c.pvPastArea && <path d={c.pvPastArea} style={{ fill: alpha(COLOR.solarWash, 0.32) }} />}
@@ -327,7 +327,7 @@ export function PlanChart({
             viewBox={`0 0 ${W} ${BH}`}
             preserveAspectRatio="none"
             aria-hidden="true"
-            className="absolute inset-0 size-full overflow-visible"
+            className="absolute inset-0 size-full animate-reveal-x overflow-visible"
           >
             <line
               x1="0"

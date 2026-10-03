@@ -134,6 +134,17 @@
 
   --animate-pulse-soft: wmpPulse 2s ease-in-out infinite;
   --animate-ring-drain: ringDrain 2.4s ease-in-out infinite;
+
+  /* Entrances: a section rising into place, a quiet fade, a tooltip popping in, bars growing up from
+     their baseline, a fill sweeping across its track, and a chart drawing in from the left. Each fills
+     backwards only: it starts from its first frame while it waits its turn, and leaves nothing behind
+     once done (a transform held on a section would trap anything fixed-position inside it). */
+  --animate-rise: wmpRise 520ms var(--ease-out-soft) backwards;
+  --animate-fade: wmpFade 280ms ease backwards;
+  --animate-pop: wmpPop 160ms var(--ease-out-soft) backwards;
+  --animate-grow-y: wmpGrowY 720ms var(--ease-out-soft) backwards;
+  --animate-fill-x: wmpFillX 900ms var(--ease-out-soft) backwards;
+  --animate-reveal-x: wmpRevealX 1100ms var(--ease-out-soft) backwards;
 }
 
 /*
@@ -393,6 +404,107 @@
     .house-scene .leaders .ld {
       display: none;
     }
+  }
+  /*
+   * A page's sections rise into place one after another when it opens (AppShell keys the page by
+   * section, so this runs on arriving, not on every update); anything that appears later, once its
+   * data loads, rises as it arrives.
+   */
+  .page-rise > * {
+    animation: var(--animate-rise);
+  }
+  .page-rise > :nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .page-rise > :nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .page-rise > :nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .page-rise > :nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .page-rise > :nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .page-rise > :nth-child(n + 7) {
+    animation-delay: 240ms;
+  }
+  /* A part of a page with its own entrance (a settings tab): its sections rise, not it as a whole. */
+  .page-rise > .page-rise {
+    animation: none;
+  }
+
+  /* Bars in a row grow one after another: set --i to the bar's place in the row. */
+  .bar-grow {
+    transform-origin: bottom;
+    animation: var(--animate-grow-y);
+    animation-delay: calc(min(var(--i, 0), 24) * 18ms);
+  }
+
+  /* A placeholder while something loads: a soft band sweeping across. */
+  .skeleton {
+    background:
+      linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--color-fg) 6%, transparent) 50%, transparent 100%)
+        0 0 / 200% 100% no-repeat,
+      color-mix(in srgb, var(--color-fg) 4%, transparent);
+    animation: wmpShimmer 1.4s ease-in-out infinite;
+  }
+
+  /* Switching theme cross-fades the whole page (themes/utils saveTheme starts the view transition). */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 280ms;
+    animation-timing-function: ease;
+  }
+}
+
+@keyframes wmpRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes wmpFade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes wmpPop {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+}
+@keyframes wmpGrowY {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes wmpFillX {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes wmpRevealX {
+  from {
+    clip-path: inset(-20% 100% -20% 0);
+  }
+  to {
+    clip-path: inset(-20% 0 -20% 0);
+  }
+}
+@keyframes wmpShimmer {
+  from {
+    background-position:
+      150% 0,
+      0 0;
+  }
+  to {
+    background-position:
+      -50% 0,
+      0 0;
   }
 }
 

@@ -43,7 +43,7 @@ export function OutlookDays({
             aria-controls="plan-day"
             onClick={() => onSelect(i)}
             className={cn(
-              "flex min-w-0 cursor-pointer flex-col gap-4 rounded-2xl border bg-surface px-6 py-5 text-left transition-colors max-sm:px-5 max-sm:py-4",
+              "flex min-w-0 cursor-pointer flex-col gap-4 rounded-2xl border bg-surface px-6 py-5 text-left transition-[translate,border-color,box-shadow] duration-200 ease-out-soft hover:-translate-y-0.5 active:translate-y-0 max-sm:px-5 max-sm:py-4",
               on ? "border-brand shadow-[0_0_0_1px_var(--color-brand)]" : "border-line-subtle hover:border-line-strong",
             )}
           >

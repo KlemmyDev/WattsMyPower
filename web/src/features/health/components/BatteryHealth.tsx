@@ -3,6 +3,7 @@ import type { BatteryMonth, Insights } from "~/features/health/types";
 import type { SystemInfo } from "~/features/common/live/types";
 import { BigNumber, Card, Eyebrow, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
+import { cn } from "~/features/common/ui/utils";
 import { duration, monthYear, parseYmd } from "~/features/common/formatting/utils/date";
 import { DASH, kWhInt, pct } from "~/features/common/formatting/utils/number";
 
@@ -36,7 +37,7 @@ export function BatteryHealth({ insights: I, system }: { insights: Insights; sys
       </div>
       <div className="relative h-2.5 rounded-full bg-track">
         <div
-          className="h-full rounded-full bg-battery transition-[width] duration-[320ms] ease-out-soft"
+          className="h-full origin-left animate-fill-x rounded-full bg-battery transition-[width] duration-[320ms] ease-out-soft"
           style={{ width: `${soh ?? 0}%` }}
         />
         <i className="absolute -top-1 -bottom-1 left-[70%] w-0.5 bg-ink" />
@@ -123,7 +124,7 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-track">
             <div
-              className={used >= 90 ? "h-full rounded-full bg-warn" : "h-full rounded-full bg-battery"}
+              className={cn("h-full origin-left animate-fill-x rounded-full", used >= 90 ? "bg-warn" : "bg-battery")}
               style={{ width: `${used}%` }}
             />
           </div>

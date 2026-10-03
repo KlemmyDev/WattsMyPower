@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Causes, Insights } from "~/features/health/types";
 import { Card, Eyebrow, Footnote, TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
@@ -72,8 +73,8 @@ export function SolarPerformance({ performance: P }: { performance: Insights["pe
                 100% of expected
               </span>
             </div>
-            {days.map((d) => (
-              <DayBar key={d.date} day={d} />
+            {days.map((d, i) => (
+              <DayBar key={d.date} day={d} i={i} />
             ))}
           </div>
           <div className="flex justify-between font-mono text-[11px] text-ink-faint">
@@ -136,7 +137,7 @@ function LikelyCauses({ causes: c }: { causes: Causes }) {
   );
 }
 
-function DayBar({ day: d }: { day: Day }) {
+function DayBar({ day: d, i }: { day: Day; i: number }) {
   const label = shortDay.format(parseYmd(d.date));
   const base = "min-w-0 flex-1 rounded-[4px_4px_2px_2px]";
   if (d.ratio == null) return <div className={base} style={{ height: 0 }} title={`${label}: not enough readings`} />;
@@ -144,8 +145,8 @@ function DayBar({ day: d }: { day: Day }) {
   const h = Math.max(0.04, Math.min(1, (d.ratio - 0.7) / 0.4)) * 100;
   return (
     <div
-      className={cn(base, isLow(d) ? "bg-solar" : "bg-bar-muted")}
-      style={{ height: `${h.toFixed(1)}%` }}
+      className={cn(base, "bar-grow", isLow(d) ? "bg-solar" : "bg-bar-muted")}
+      style={{ height: `${h.toFixed(1)}%`, "--i": i } as CSSProperties}
       title={`${label}: ${pct(d.ratio * 100)} of expected (${kWh(d.actual_kwh)} of ${kWh(d.expected_kwh)})${d.clear ? "" : ", cloudy"}`}
     />
   );

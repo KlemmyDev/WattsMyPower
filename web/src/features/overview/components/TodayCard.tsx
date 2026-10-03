@@ -59,7 +59,10 @@ function Figures({ c }: { c?: CostDay }) {
       </div>
       <div className="flex flex-col gap-2.5">
         <div className="flex h-2 overflow-hidden rounded-full bg-track">
-          <div className="bg-ink transition-[width] duration-320 ease-out-soft" style={{ width: paid }} />
+          <div
+            className="origin-left animate-fill-x bg-ink transition-[width] duration-320 ease-out-soft"
+            style={{ width: paid }}
+          />
           <div className="flex-1 bg-good" />
         </div>
         <div className="flex justify-between gap-3 text-xs text-ink-label tabular-nums max-xs:flex-col max-xs:gap-1">

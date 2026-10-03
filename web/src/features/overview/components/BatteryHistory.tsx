@@ -76,7 +76,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
         viewBox={`0 0 ${B6W} ${B6H}`}
         preserveAspectRatio="none"
         aria-hidden="true"
-        className="absolute inset-0 block size-full"
+        className="absolute inset-0 block size-full animate-reveal-x"
       >
         {chart && last && (
           <>

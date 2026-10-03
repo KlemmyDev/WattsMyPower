@@ -15,16 +15,21 @@ export function useScrolled(threshold = 4): boolean {
 }
 
 /**
- * Where the highlight under a row of pill links should sit: under the link marked aria-current="page",
- * kept in view when the row scrolls sideways. Re-measured on resize and once web fonts load.
+ * Where the highlight under a row of pills should sit: under the one `selector` picks (by default the
+ * link marked aria-current="page"), kept in view when the row scrolls sideways. Re-measured on resize
+ * and once web fonts load.
  */
-export function usePillIndicator(row: RefObject<HTMLElement | null>, deps: unknown[]) {
+export function usePillIndicator(
+  row: RefObject<HTMLElement | null>,
+  deps: unknown[],
+  selector = '[aria-current="page"]',
+) {
   const [ind, setInd] = useState<{ left: number; width: number } | null>(null);
   useLayoutEffect(() => {
     const nav = row.current;
     if (!nav) return;
     const place = () => {
-      const cur = nav.querySelector<HTMLElement>('[aria-current="page"]');
+      const cur = nav.querySelector<HTMLElement>(selector);
       if (!cur) return setInd(null);
       setInd({ left: cur.offsetLeft, width: cur.offsetWidth });
       if (cur.offsetLeft < nav.scrollLeft || cur.offsetLeft + cur.offsetWidth > nav.scrollLeft + nav.clientWidth)

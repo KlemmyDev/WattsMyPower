@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { ForecastAccuracy } from "~/features/common/weather/types";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, CardHeader, Muted } from "~/features/common/ui/components/Card";
@@ -55,7 +55,7 @@ export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null |
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex h-28 items-end gap-1.5" onPointerLeave={() => setHover(null)}>
-              {days.map((d) => (
+              {days.map((d, k) => (
                 <div
                   key={d.date}
                   className="flex h-full min-w-0 flex-1 cursor-default items-end justify-center gap-0.5 rounded-md"
@@ -64,12 +64,20 @@ export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null |
                   aria-label={`${shortDay.format(parseYmd(d.date))}: forecast ${kWh(d.forecast_kwh)}, made ${kWh(d.actual_kwh)}`}
                 >
                   <span
-                    className="w-full max-w-2.5 rounded-t-[3px] border border-b-0"
-                    style={{ height: `${(d.forecast_kwh / top) * 100}%`, borderColor: COLOR.solar }}
+                    className="bar-grow w-full max-w-2.5 rounded-t-[3px] border border-b-0"
+                    style={
+                      {
+                        height: `${(d.forecast_kwh / top) * 100}%`,
+                        borderColor: COLOR.solar,
+                        "--i": k,
+                      } as CSSProperties
+                    }
                   />
                   <span
-                    className="w-full max-w-2.5 rounded-t-[3px]"
-                    style={{ height: `${(d.actual_kwh / top) * 100}%`, background: COLOR.solar }}
+                    className="bar-grow w-full max-w-2.5 rounded-t-[3px]"
+                    style={
+                      { height: `${(d.actual_kwh / top) * 100}%`, background: COLOR.solar, "--i": k } as CSSProperties
+                    }
                   />
                 </div>
               ))}

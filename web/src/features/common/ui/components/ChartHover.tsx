@@ -47,7 +47,7 @@ export function ChartTooltip({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute top-2 z-2 flex w-[200px] flex-col gap-1.5 rounded-xl border border-line bg-popover px-3.5 py-3 text-[13px] tabular-nums shadow-pop",
+        "pointer-events-none absolute top-2 z-2 flex w-[200px] animate-pop flex-col gap-1.5 rounded-xl border border-line bg-popover px-3.5 py-3 text-[13px] tabular-nums shadow-pop",
         className,
       )}
       style={{ left: tipLeft(left, flip, width) }}

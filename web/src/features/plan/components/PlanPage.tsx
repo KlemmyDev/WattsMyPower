@@ -8,6 +8,7 @@ import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, Footnote, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
+import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useForecast, useForecastAccuracy } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -87,9 +88,15 @@ export function PlanPage() {
           </div>
         </Card>
       ) : !forecast || !day || !times ? (
-        <Card>
-          <div className="text-sm text-ink-faint">Loading the forecast</div>
-        </Card>
+        // Shaped like the page to come: the three days, then the chosen day's chart.
+        <div role="status" aria-label="Loading the forecast" className="flex flex-col gap-5">
+          <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+            {[0, 1, 2].map((k) => (
+              <Skeleton key={k} className="h-[214px]" />
+            ))}
+          </div>
+          <Skeleton className="h-[420px] rounded-3xl" />
+        </div>
       ) : (
         <>
           {notes.length > 0 && (
@@ -103,7 +110,8 @@ export function PlanPage() {
             </div>
           )}
           <OutlookDays days={days} selected={selected} onSelect={setSelected} now={now} />
-          <Card id="plan-day" role="tabpanel" aria-labelledby={`plan-tab-${selected}`}>
+          {/* Keyed by day, so choosing another rises it into place afresh, chart drawing in. */}
+          <Card key={day.key} id="plan-day" role="tabpanel" aria-labelledby={`plan-tab-${selected}`}>
             <TitleBlock
               title={`${day.label}, ${shortDay.format(new Date(day.start * 1000))}`}
               sub={
@@ -129,7 +137,7 @@ export function PlanPage() {
               </div>
             </div>
           </Card>
-          <Card aria-labelledby="h-hbh">
+          <Card key={`hours-${day.key}`} aria-labelledby="h-hbh">
             <TitleBlock
               id="h-hbh"
               title="Hour by hour"

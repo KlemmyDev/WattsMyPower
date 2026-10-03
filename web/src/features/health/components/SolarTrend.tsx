@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Insights } from "~/features/health/types";
 import { Card, Eyebrow, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
@@ -58,8 +59,11 @@ export function SolarTrend({ trend: t }: { trend: Insights["trend"] }) {
                   >
                     <span className="font-mono text-[10px] text-ink-faint tabular-nums">{pct(m.ratio * 100)}</span>
                     <i
-                      className={cn("block w-full max-w-9 rounded-md", k === last ? "bg-solar" : "bg-bar-muted")}
-                      style={{ height: `${((m.ratio / top) * 100).toFixed(1)}%` }}
+                      className={cn(
+                        "bar-grow block w-full max-w-9 rounded-md",
+                        k === last ? "bg-solar" : "bg-bar-muted",
+                      )}
+                      style={{ height: `${((m.ratio / top) * 100).toFixed(1)}%`, "--i": k } as CSSProperties}
                     />
                   </div>
                 ))}

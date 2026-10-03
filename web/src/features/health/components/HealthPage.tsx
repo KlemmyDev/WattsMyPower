@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { insightsQuery } from "~/features/health/api";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
+import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { BatteryHealth } from "~/features/health/components/BatteryHealth";
 import { BatterySize } from "~/features/health/components/BatterySize";
 import { Checkup } from "~/features/health/components/Checkup";
@@ -35,10 +36,17 @@ export function HealthPage() {
             <BatterySize sizing={data.sizing} />
           </div>
         </>
+      ) : // A failed refresh keeps showing the last figures; this only appears before the first load.
+      isError ? (
+        <div className="text-sm text-ink-faint">The figures could not be loaded. Try again shortly.</div>
       ) : (
-        // A failed refresh keeps showing the last figures; this only appears before the first load.
-        <div className="text-sm text-ink-faint">
-          {isError ? "The figures could not be loaded. Try again shortly." : "Loading"}
+        <div role="status" aria-label="Loading" className="flex flex-col gap-5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">
+            {[0, 1, 2].map((k) => (
+              <Skeleton key={k} className="h-[150px] rounded-3xl" />
+            ))}
+          </div>
+          <Skeleton className="h-[360px] rounded-3xl" />
         </div>
       )}
     </>
