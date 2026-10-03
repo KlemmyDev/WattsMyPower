@@ -36,7 +36,7 @@ from app.features.forecast.repository import ForecastRepository
 from app.features.readings.repository import ReadingsRepository, Snapshot
 from app.features.settings.store import SettingsStore
 from app.features.weather.repository import local_date
-from app.features.weather.service import WeatherService
+from app.features.weather.service import WeatherService, main_code
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,9 @@ RETRAIN_ON_NEW = 7 * 24  # hours of weather history added since training (filled
 # Rough typical home use (kW) by hour, used until we have our own history for that hour.
 DEFAULT_LOAD = [0.4, 0.35, 0.35, 0.35, 0.35, 0.4, 0.8, 1.5, 1.2, 0.7, 0.6, 0.6,
                 0.7, 0.8, 0.7, 0.7, 0.9, 1.4, 2.2, 2.4, 2.0, 1.4, 0.8, 0.5]  # fmt: skip
+
+OUTLOOK_DAYS = 3  # today and the next two: as far as the stored weather forecast reaches
+MIN_RANGE_DAYS = 7  # days of day-ahead forecast against actual solar before a likely range is given
 
 RAIN_CODES = set(range(51, 68)) | set(range(80, 83)) | set(range(95, 100))
 
@@ -94,6 +97,69 @@ def simulate(steps: list[Hour], soc: float, cap: float, reserve: float, max_kw: 
             s["grid_kwh"] = -net - dis
             s["full_frac"] = None
         s["soc_end"] = min(1.0, max(0.0, soc))
+
+
+def day_start(ts: int, days: int = 0) -> int:
+    """Local midnight `days` days after the day `ts` falls in."""
+    lt = time.localtime(ts)
+    return int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + days, 0, 0, 0, 0, 0, -1)))
+
+
+def summarise_days(steps: list[Hour], now: int, soc0: float) -> list[dict[str, Any]]:
+    """Each local day the steps reach (today from now on): its totals, when the battery fills, and its weather.
+
+    The weather code sums up its daylight hours as the History page's weather does.
+    """
+    out = []
+    for d in range(OUTLOOK_DAYS):
+        start, end = day_start(now, d), day_start(now, d + 1)
+        day = [s for s in steps if start <= s["start"] < end]
+        if not day:
+            continue
+
+        full_now = d == 0 and soc0 >= 0.995
+        full_at = None
+        for s in day:
+            if s["soc_end"] >= 0.995 and not full_now:
+                frac = s["full_frac"] if s["full_frac"] is not None else 1
+                full_at = int(s["start"] + s["dur"] * min(1, frac))
+                break
+        lit = [s for s in day if s.get("is_day")] or day
+        temps = [s["temp"] for s in day if s.get("temp") is not None]
+        out.append(
+            {
+                "date": time.strftime("%Y-%m-%d", time.localtime(start)),
+                "start": start,
+                "from": day[0]["start"],
+                "pv_kwh": round(sum(s["pv_kw"] * s["dur"] for s in day) / 3600, 2),
+                "load_kwh": round(sum(s["load_kw"] * s["dur"] for s in day) / 3600, 2),
+                "import_kwh": round(sum(max(0.0, s["grid_kwh"]) for s in day), 2),
+                "export_kwh": round(sum(max(0.0, -s["grid_kwh"]) for s in day), 2),
+                "full_at": full_at,
+                "full_now": full_now,
+                "max_soc": round(max(s["soc_end"] for s in day) * 100, 1),
+                "min_soc": round(min(s["soc_end"] for s in day) * 100, 1),
+                "code": main_code([s["code"] for s in lit if s.get("code") is not None]),
+                "temp_min": min(temps) if temps else None,
+                "temp_max": max(temps) if temps else None,
+                "precip": max((s.get("precip") or 0) for s in lit),
+            }
+        )
+    return out
+
+
+def solar_range(days: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """How far actual solar has strayed from the day-ahead forecast: the 10th and 90th percentile of
+    actual / forecast across days, so most days (8 in 10) land between forecast * low and forecast * high.
+    None until there are enough days to say."""
+    ratios = sorted(d["actual_kwh"] / d["forecast_kwh"] for d in days if d["forecast_kwh"] >= 0.5)
+    if len(ratios) < MIN_RANGE_DAYS:
+        return None
+
+    def at(q: float) -> float:
+        return ratios[round(q * (len(ratios) - 1))]
+
+    return {"low": round(min(1.0, at(0.1)), 2), "high": round(max(1.0, at(0.9)), 2), "days": len(ratios)}
 
 
 def describe_morning(hours: list[Hour], lt: time.struct_time) -> str:
@@ -262,6 +328,7 @@ class ForecastService:
             "mae_kwh": round(sum(abs(d["forecast_kwh"] - d["actual_kwh"]) for d in out) / n, 2) if n else None,
             "bias_kwh": round(sum(d["forecast_kwh"] - d["actual_kwh"] for d in out) / n, 2) if n else None,
             "actual_mean": round(sum(d["actual_kwh"] for d in out) / n, 2) if n else None,
+            "range": solar_range(out),
         }
 
     # ------------------------------------------------------------------ model
@@ -343,11 +410,12 @@ class ForecastService:
         model = self._active_model()
         prof = self._load_profile(now)
 
-        # Steps: the rest of the current hour, then whole hours for ~36 h.
+        # Steps: the rest of the current hour, then whole hours to the end of the day after tomorrow.
+        horizon = day_start(now, OUTLOOK_DAYS)
         steps = []
         for h in hours:
             end = h["ts"] + 3600
-            if end <= now or h["ts"] > now + 36 * 3600:
+            if end <= now or h["ts"] >= horizon:
                 continue
             start = max(h["ts"], now)
             hr = time.localtime(h["ts"]).tm_hour
@@ -402,4 +470,5 @@ class ForecastService:
                 "min_soc_tonight": round(min(night) * 100) if night else None,
                 "tomorrow_morning": tomorrow_morning,
             },
+            "days": summarise_days(steps, now, soc0),
         }

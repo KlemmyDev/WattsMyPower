@@ -59,7 +59,7 @@ def _local_midnight(date: dt.date) -> int:
     return int(time.mktime((date.year, date.month, date.day, 0, 0, 0, 0, 0, -1)))
 
 
-def _main_code(codes: list[int]) -> int | None:
+def main_code(codes: list[int]) -> int | None:
     """The weather code that sums up a day's daylight hours: the worst that lasted, or the usual one."""
     if not codes:
         return None
@@ -67,7 +67,9 @@ def _main_code(codes: list[int]) -> int | None:
         hits = [c for c in codes if c in band]
         if len(hits) >= 2:
             return Counter(hits).most_common(1)[0][0]
-    return round(statistics.fmean(codes))  # clear (0) to overcast (3)
+    # Clear (0) to overcast (3). A lone shower or foggy hour doesn't sum up the day, nor join the average.
+    sky = [c for c in codes if c <= 3]
+    return round(statistics.fmean(sky)) if sky else max(codes)
 
 
 def _summary(hours: list[dict[str, Any]]) -> dict[str, Any]:
@@ -83,7 +85,7 @@ def _summary(hours: list[dict[str, Any]]) -> dict[str, Any]:
         "rain_mm": round(sum(rain), 1) if rain else None,
         "cloud": round(sum(clouds) / len(clouds)) if clouds else None,
         "sunlight_kwh_m2": round(sum(sun) / 1000, 2) if sun else None,
-        "code": _main_code([h["code"] for h in daylight if h["code"] is not None]),
+        "code": main_code([h["code"] for h in daylight if h["code"] is not None]),
     }
 
 

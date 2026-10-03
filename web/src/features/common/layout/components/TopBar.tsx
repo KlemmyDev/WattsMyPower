@@ -9,14 +9,14 @@ import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
 
 type NavItem = {
-  to: "/" | "/history" | "/forecast" | "/insights" | "/bills" | "/tesla";
+  to: "/" | "/history" | "/plan" | "/insights" | "/bills" | "/tesla";
   label: string;
   icon: IconName;
 };
 const NAV: NavItem[] = [
   { to: "/", label: "Overview", icon: "layout" },
   { to: "/history", label: "History", icon: "chart" },
-  { to: "/forecast", label: "Forecast", icon: "cloudSun" },
+  { to: "/plan", label: "Plan", icon: "cloudSun" },
   { to: "/insights", label: "Insights", icon: "pulse" },
   { to: "/bills", label: "Bills", icon: "dollar" },
   { to: "/tesla", label: "Tesla", icon: "car" },

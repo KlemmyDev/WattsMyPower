@@ -1,3 +1,5 @@
+import type { ForecastAccuracy } from "~/features/common/weather/types";
+
 /** A day's weather hour by hour (GET /api/weather/day). Temperatures in °C, rain in mm, sunlight in W/m². */
 export type WeatherHour = {
   ts: number; // start of the hour
@@ -84,10 +86,5 @@ export type WeatherStatus = {
     min_days: number;
     backtest: (Backtest & { per_day?: { day: string; actual: number; learned: number; simple: number }[] }) | null;
   };
-  accuracy: {
-    days: { date: string; forecast_kwh: number; actual_kwh: number }[];
-    mae_kwh: number | null;
-    bias_kwh: number | null;
-    actual_mean: number | null;
-  };
+  accuracy: ForecastAccuracy;
 };
