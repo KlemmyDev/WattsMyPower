@@ -10,6 +10,10 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     sessions     signed-in browsers (only a hash of each token is stored)
     meter_imports    smart-meter (NEM12) files imported from Settings → Billing
     meter_intervals  their readings: grid import or export per meter interval, in kWh
+    alert_channels   where alerts are sent (ntfy, a webhook, Pushover), one row per kind, with its secrets
+    alert_rules      alert rules switched on or off, or with changed thresholds (defaults aren't stored)
+    alert_state      each rule's progress: a problem seen but not yet reported, an alert out, its cooldown
+    alert_history    alerts sent and resolved, daily summaries, and whether each reached its channels
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -129,12 +133,35 @@ def _meter_data(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS meter_intervals_by_import ON meter_intervals (import_id)")
 
 
+def _alerts(conn: sqlite3.Connection) -> None:
+    """Alerts and notifications (app.features.alerts). New tables only: nothing existing changes."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS alert_channels (kind TEXT PRIMARY KEY, enabled INTEGER NOT NULL,"
+        " config TEXT NOT NULL, updated_at INTEGER NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS alert_rules (rule TEXT PRIMARY KEY, enabled INTEGER NOT NULL, settings TEXT NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS alert_state (rule TEXT PRIMARY KEY, pending_since INTEGER, active_since INTEGER,"
+        " last_fired INTEGER, delivered INTEGER NOT NULL DEFAULT 0, retry_at INTEGER, event_id INTEGER,"
+        " data TEXT NOT NULL DEFAULT '{}')"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS alert_history (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, rule TEXT NOT NULL,"
+        " kind TEXT NOT NULL, title TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL, error TEXT,"
+        " resolved_at INTEGER)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS alert_history_ts ON alert_history (ts)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
     _drop_impossible_values,
     _meter_data,
+    _alerts,
 ]
 
 

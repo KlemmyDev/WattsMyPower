@@ -35,7 +35,7 @@ src/
     _app/…                 one file per page
   features/
     <feature>/             one module per page or capability (overview, history, forecast, insights,
-      components/          savings, tesla, settings, auth): everything it needs lives here, so
+      components/          savings, tesla, settings, alerts, auth): everything it needs lives here, so
       hooks/               deleting the folder (and its route) removes the feature
       api/                 query options for its endpoints
       types/               its API response types
