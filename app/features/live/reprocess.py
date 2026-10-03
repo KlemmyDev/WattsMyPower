@@ -34,7 +34,8 @@ def reprocess(config: Config, db: Database, client: Feed, since: int | None = No
     conn = db.connect()
     try:
         conn.execute("DELETE FROM samples WHERE ts >= ?", (start,))
-        conn.execute("DELETE FROM samples_5m WHERE ts >= ?", (start,))
+        # Imported history stays: rebuilt rollups replace it only where there are real samples.
+        conn.execute("DELETE FROM samples_5m WHERE ts >= ? AND import_id IS NULL", (start,))
         conn.commit()
         cursor, polls, newest = start - 1, 0, None
         while True:

@@ -3,7 +3,10 @@ The SQLite schema: every table the app uses, and the migrations that create and 
 
     samples      one row per poll (raw snapshots), keyed on unix-seconds `ts`
     samples_5m   5-minute rollups of samples, kept up to date on every insert; used for
-                 long ranges so a year's chart never touches raw rows
+                 long ranges so a year's chart never touches raw rows. Rows imported from
+                 another source (iSolarCloud) carry their import's id in `import_id`; a rollup
+                 rebuilt from real samples replaces them, clearing it
+    imports      each import of history from a file, so it can be listed and removed
     settings     numeric settings saved from the dashboard (location, system cost)
     kv           text values: the tariff (JSON), the location's place name, the set-up guide's progress,
                  and the Amber connection
@@ -171,6 +174,17 @@ def _prices(conn: sqlite3.Connection) -> None:
     )
 
 
+def _imports(conn: sqlite3.Connection) -> None:
+    """History imported from files: a record per import, and its id on each rollup it wrote."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS imports (id INTEGER PRIMARY KEY, label TEXT NOT NULL, files INTEGER NOT NULL,"
+        " created_at INTEGER NOT NULL)"
+    )
+    if not any(r[1] == "import_id" for r in conn.execute("PRAGMA table_info(samples_5m)")):
+        conn.execute("ALTER TABLE samples_5m ADD COLUMN import_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS samples_5m_import ON samples_5m (import_id) WHERE import_id IS NOT NULL")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -179,6 +193,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _meter_data,
     _alerts,
     _prices,
+    _imports,
 ]
 
 

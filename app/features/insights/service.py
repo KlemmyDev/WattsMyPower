@@ -121,6 +121,10 @@ class InsightsService:
         data = self._cache.get_or_load(_RESULT, CACHE_SECONDS, self._history)
         return {**data, "lifetime": lifetime(latest, battery_kwh)}
 
+    def forget_history(self) -> None:
+        """Recompute the history figures on the next request (after history was imported or removed)."""
+        self._cache.forget(_RESULT)
+
     def _history(self) -> dict[str, Any]:
         now = int(time.time())
         months = _last_months(now)
