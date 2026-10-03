@@ -20,6 +20,7 @@ import { Route as AppSavingsRouteImport } from './routes/_app/savings'
 import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsAlertsRouteImport } from './routes/_app/settings/alerts'
 import { Route as AppSettingsBillingRouteImport } from './routes/_app/settings/billing'
 import { Route as AppSettingsIntegrationsRouteImport } from './routes/_app/settings/integrations'
 import { Route as AppSettingsSystemRouteImport } from './routes/_app/settings/system'
@@ -81,6 +82,11 @@ const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
+const AppSettingsAlertsRoute = AppSettingsAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
 const AppSettingsBillingRoute = AppSettingsBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/insights': typeof AppInsightsRoute
   '/savings': typeof AppSavingsRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
   '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/savings': typeof AppSavingsRoute
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
   '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/_app/savings': typeof AppSavingsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/alerts': typeof AppSettingsAlertsRoute
   '/_app/settings/billing': typeof AppSettingsBillingRoute
   '/_app/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/_app/settings/system': typeof AppSettingsSystemRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/savings'
     | '/settings/account'
+    | '/settings/alerts'
     | '/settings/billing'
     | '/settings/integrations'
     | '/settings/system'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/savings'
     | '/'
     | '/settings/account'
+    | '/settings/alerts'
     | '/settings/billing'
     | '/settings/integrations'
     | '/settings/system'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/_app/savings'
     | '/_app/'
     | '/_app/settings/account'
+    | '/_app/settings/alerts'
     | '/_app/settings/billing'
     | '/_app/settings/integrations'
     | '/_app/settings/system'
@@ -308,6 +320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsAccountRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/alerts': {
+      id: '/_app/settings/alerts'
+      path: '/alerts'
+      fullPath: '/settings/alerts'
+      preLoaderRoute: typeof AppSettingsAlertsRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/billing': {
       id: '/_app/settings/billing'
       path: '/billing'
@@ -355,6 +374,7 @@ declare module '@tanstack/react-router' {
 
 interface AppSettingsRouteRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsAlertsRoute: typeof AppSettingsAlertsRoute
   AppSettingsBillingRoute: typeof AppSettingsBillingRoute
   AppSettingsIntegrationsRoute: typeof AppSettingsIntegrationsRoute
   AppSettingsSystemRoute: typeof AppSettingsSystemRoute
@@ -364,6 +384,7 @@ interface AppSettingsRouteRouteChildren {
 
 const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsAlertsRoute: AppSettingsAlertsRoute,
   AppSettingsBillingRoute: AppSettingsBillingRoute,
   AppSettingsIntegrationsRoute: AppSettingsIntegrationsRoute,
   AppSettingsSystemRoute: AppSettingsSystemRoute,

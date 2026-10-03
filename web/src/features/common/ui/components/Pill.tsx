@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "~/features/common/ui/utils";
 
-export type PillTone = "ok" | "neutral" | "brand" | "inverse" | "good";
+export type PillTone = "ok" | "neutral" | "brand" | "inverse" | "good" | "bad";
 
 const tones: Record<PillTone, string> = {
   ok: "bg-good-subtle text-good",
@@ -9,6 +9,7 @@ const tones: Record<PillTone, string> = {
   neutral: "bg-surface-raised text-ink-muted",
   brand: "bg-brand-subtle text-brand",
   inverse: "bg-ink text-ink-inverse",
+  bad: "bg-bad-subtle text-bad",
 };
 
 export function Pill({
