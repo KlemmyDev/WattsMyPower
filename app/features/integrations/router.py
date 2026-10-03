@@ -36,7 +36,8 @@ async def _changed(svc: Services) -> None:
 @router.get("")
 async def overview(svc: ServicesDep, request: Request):
     """The connected inverters, the kinds that can be connected, the latest scan, and a network to scan."""
-    return await asyncio.to_thread(svc.integrations.overview, request.client.host if request.client else None)
+    client = request.client.host if request.client else None
+    return await asyncio.to_thread(svc.integrations.overview, client, request.url.hostname)
 
 
 @router.get("/scan")

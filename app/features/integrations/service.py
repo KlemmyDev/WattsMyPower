@@ -9,7 +9,10 @@ says in words what the collector's raw identity registers mean, and adds each de
 
 from __future__ import annotations
 
+import functools
 import ipaddress
+import os
+import socket
 from typing import Any
 
 from app.core.config import Config
@@ -56,6 +59,19 @@ def _slash24(host: str) -> str | None:
     return str(ipaddress.ip_network(f"{ip}/24", strict=False))
 
 
+@functools.cache
+def _container_networks() -> frozenset[str]:
+    """The /24s of this container's own addresses (none outside Docker). A browser there is Docker handing a
+    connection on, not a browser: Docker Desktop (Mac, Windows) does that for every connection."""
+    if not os.path.exists("/.dockerenv"):
+        return frozenset()
+    try:
+        addresses = socket.gethostbyname_ex(socket.gethostname())[2]
+    except OSError:
+        return frozenset()
+    return frozenset(net for a in addresses if (net := _slash24(a)))
+
+
 class IntegrationsService:
     def __init__(self, config: Config, collector: Devices | None, live: LiveService):
         self.config = config
@@ -98,7 +114,7 @@ class IntegrationsService:
             out["behind_meter"] = setting if isinstance(setting, bool) else self.config.pv2_behind_meter
         return out
 
-    def overview(self, client_host: str | None = None) -> dict[str, Any]:
+    def overview(self, client_host: str | None = None, server_host: str | None = None) -> dict[str, Any]:
         """The connected inverters, the kinds that can be connected, the last scan, and a network to scan."""
         kinds = [{"driver": k, "role": v.role, "brand": v.brand, "label": v.label, "via": v.via, "example": v.example}
                  for k, v in KINDS.items()]  # fmt: skip
@@ -119,7 +135,7 @@ class IntegrationsService:
             "devices": devices,
             "kinds": [k for k in kinds if k["driver"] in (listed.get("drivers") or {})],
             "scan": self._scan(scan, devices),
-            "network": self.suggest_network(devices, client_host),
+            "network": self.suggest_network(devices, client_host, server_host),
         }
 
     def has_hybrid(self) -> bool | None:
@@ -131,12 +147,16 @@ class IntegrationsService:
         except CollectorError:
             return None
 
-    def suggest_network(self, devices: list[dict[str, Any]], client_host: str | None) -> str:
-        """Where to look: the connected inverters' network, else the browser's (when it's a home network)."""
-        for host in [d["host"] for d in devices] + [client_host or ""]:
+    def suggest_network(
+        self, devices: list[dict[str, Any]], client_host: str | None, server_host: str | None = None
+    ) -> str:
+        """Where to look: the connected inverters' network, else the one the dashboard was opened at
+        (http://192.168.1.50:8080), else the browser's. Only home networks, and not Docker's own."""
+        for host in [d["host"] for d in devices] + [server_host or ""]:
             if net := _slash24(host):
                 return net
-        return DEFAULT_NETWORK
+        net = _slash24(client_host or "")
+        return net if net and net not in _container_networks() else DEFAULT_NETWORK
 
     # -- scanning -------------------------------------------------------------
     def _scan(self, state: dict[str, Any], devices: list[dict[str, Any]]) -> dict[str, Any]:
