@@ -196,10 +196,10 @@ export function RatesFields({
           the fallback rates below are used instead. The Overview says how much was costed that way.
         </HelpText>
       )}
-      {tou ? (
-        <ImportRates draft={draft} edit={edit} />
-      ) : (
-        <div className={fieldGrid}>
+      {tou && <ImportRates draft={draft} edit={edit} />}
+      {/* On a single rate or Amber, its import rate sits beside feed-in and the supply charge. */}
+      <div className={fieldGrid}>
+        {!tou && (
           <MoneyField
             label={dynamic ? "Fallback import rate" : "Grid import rate"}
             unit="per kWh"
@@ -209,9 +209,7 @@ export function RatesFields({
             value={draft.flat_rate}
             onChange={(value) => edit({ type: "set-field", field: "flat_rate", value })}
           />
-        </div>
-      )}
-      <div className={fieldGrid}>
+        )}
         <MoneyField
           label={dynamic ? "Fallback feed-in tariff" : "Feed-in tariff"}
           unit="per kWh"

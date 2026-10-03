@@ -1,53 +1,62 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { usePillIndicator } from "~/features/common/layout/hooks";
+import { Icon, type IconName } from "~/features/common/ui/components/Icon";
+import { cn } from "~/features/common/ui/utils";
 
 const TABS = [
-  { to: "/settings/system", label: "System" },
-  { to: "/settings/tariffs", label: "Tariffs" },
-  { to: "/settings/billing", label: "Billing" },
-  { to: "/settings/integrations", label: "Integrations" },
-  { to: "/settings/alerts", label: "Alerts" },
-  { to: "/settings/account", label: "Account" },
-] as const;
+  { to: "/settings/system", label: "System", icon: "home" },
+  { to: "/settings/tariffs", label: "Tariffs", icon: "tag" },
+  { to: "/settings/billing", label: "Billing", icon: "calendar" },
+  { to: "/settings/integrations", label: "Integrations", icon: "plug" },
+  { to: "/settings/alerts", label: "Alerts", icon: "bell" },
+  { to: "/settings/account", label: "Account", icon: "user" },
+] as const satisfies readonly { to: string; label: string; icon: IconName }[];
 
-/** Settings: a tab row over the System, Tariffs, Billing, Integrations, Alerts and Account pages. */
+/** Settings: a row of tabs over the System, Tariffs, Billing, Integrations, Alerts and Account pages. */
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsLayout,
 });
 
 function SettingsLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const tabs = useRef<HTMLElement>(null);
-  // Keep the current tab in view when the row is scrolled sideways (on a phone, Alerts and Account start off-screen).
-  useEffect(() => {
-    const row = tabs.current;
-    const tab = row?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!row || !tab) return;
-    if (tab.offsetLeft < row.scrollLeft || tab.offsetLeft + tab.offsetWidth > row.scrollLeft + row.clientWidth)
-      row.scrollLeft = tab.offsetLeft - (row.clientWidth - tab.offsetWidth) / 2;
-  }, [path]);
+  const current: string | undefined = TABS.find((t) => path === t.to || path.startsWith(`${t.to}/`))?.to;
+  const row = useRef<HTMLElement>(null);
+  // The highlight slides under the current tab, as in the main navigation.
+  const ind = usePillIndicator(row, [current]);
 
   return (
     <>
       <PageHeader title="Settings" sub="System details, rates, billing, connected services and alerts" />
-      {/* On a phone the tabs don't all fit: the row scrolls sideways on its own, not the page. The baseline is
-          an inset shadow rather than a border, so the current tab's underline sits on it without overflowing. */}
+      {/* On a phone the tabs don't all fit: the row scrolls sideways on its own, not the page. */}
       <nav
-        ref={tabs}
+        ref={row}
         aria-label="Settings"
-        className="flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain shadow-[inset_0_-1px_0_var(--color-line)] max-sm:gap-0 [&::-webkit-scrollbar]:hidden"
+        className="relative -mt-1 flex max-w-full [scrollbar-width:none] items-center gap-0.5 self-start overflow-x-auto overscroll-x-contain rounded-full border border-chip-line bg-chip p-1 [&::-webkit-scrollbar]:hidden"
       >
-        {TABS.map((t) => (
-          <Link
-            key={t.to}
-            to={t.to}
-            className="flex-none border-b-2 border-transparent px-4 py-3 text-sm font-semibold whitespace-nowrap text-ink-muted no-underline hover:text-ink max-sm:px-3"
-            activeProps={{ className: "border-ink! text-ink!" }}
-          >
-            {t.label}
-          </Link>
-        ))}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1 bottom-1 rounded-full bg-ink transition-[left,width,opacity] duration-[380ms,380ms,200ms] ease-spring"
+          style={{ left: ind?.left ?? 4, width: ind?.width ?? 0, opacity: ind ? 1 : 0 }}
+        />
+        {TABS.map((t) => {
+          const on = t.to === current;
+          return (
+            <Link
+              key={t.to}
+              to={t.to}
+              aria-current={on ? "page" : undefined}
+              className={cn(
+                "relative z-1 flex h-9 flex-none items-center gap-2 rounded-full px-4 text-sm font-medium whitespace-nowrap no-underline transition-[color,transform] duration-[260ms,160ms] active:scale-95 max-sm:px-3",
+                on ? "text-ink-inverse hover:text-ink-inverse" : "text-ink-muted hover:text-ink",
+              )}
+            >
+              <Icon name={t.icon} size={16} />
+              {t.label}
+            </Link>
+          );
+        })}
       </nav>
       <Outlet />
     </>

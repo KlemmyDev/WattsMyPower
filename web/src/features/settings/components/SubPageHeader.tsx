@@ -35,7 +35,7 @@ export function SubPageHeader({
   sub: ReactNode;
 }) {
   return (
-    <div className="flex max-w-[880px] flex-col gap-3 pt-1">
+    <div className="flex flex-col gap-3 pt-1">
       {back}
       <SettingsTitle id={id} title={title} sub={sub} />
     </div>

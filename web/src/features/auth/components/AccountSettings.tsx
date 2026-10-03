@@ -12,6 +12,7 @@ import { useChangePassword } from "~/features/auth/hooks/useChangePassword";
 import { useLogout } from "~/features/auth/hooks/useLogout";
 import { useThemeChoice } from "~/features/common/theme/hooks";
 import { THEME_OPTIONS } from "~/features/common/theme/utils";
+import { SettingsCard } from "~/features/settings/components/SettingsCard";
 
 /** Settings → Account: who's signed in, how the dashboard looks, change password, sign out. */
 export function AccountSettings() {
@@ -22,19 +23,19 @@ export function AccountSettings() {
   if (session && !session.auth_enabled)
     return (
       <>
-        <section className="flex max-w-[880px] flex-col gap-2 rounded-3xl border border-line-subtle bg-surface p-7">
+        <SettingsCard padded className="gap-2">
           <TitleBlock title="Account" />
           <p className="m-0 text-sm text-ink-muted">
             This server doesn't ask anyone to sign in, so there's no account to manage here.
           </p>
-        </section>
+        </SettingsCard>
         <Appearance />
       </>
     );
 
   return (
     <>
-      <section className="flex max-w-[880px] flex-wrap items-center justify-between gap-4 rounded-3xl border border-line-subtle bg-surface p-7">
+      <SettingsCard padded className="flex-row flex-wrap items-center justify-between gap-4">
         <TitleBlock title="Account" sub={session?.username ? `Signed in as ${session.username}` : undefined} />
         <Button
           variant="outline"
@@ -46,7 +47,7 @@ export function AccountSettings() {
         >
           Sign out
         </Button>
-      </section>
+      </SettingsCard>
       <Appearance />
       <ChangePassword />
     </>
@@ -57,17 +58,14 @@ export function AccountSettings() {
 function Appearance() {
   const [theme, setTheme] = useThemeChoice();
   return (
-    <section
-      aria-labelledby="h-theme"
-      className="flex max-w-[880px] flex-wrap items-center justify-between gap-4 rounded-3xl border border-line-subtle bg-surface p-7"
-    >
+    <SettingsCard padded aria-labelledby="h-theme" className="flex-row flex-wrap items-center justify-between gap-4">
       <TitleBlock
         id="h-theme"
         title="Appearance"
         sub="Saved in this browser. System matches your device's light or dark setting."
       />
       <Segmented label="Theme" options={THEME_OPTIONS} value={theme} onChange={setTheme} />
-    </section>
+    </SettingsCard>
   );
 }
 
@@ -98,7 +96,7 @@ function ChangePassword() {
     <form
       onSubmit={submit}
       aria-labelledby="h-pw"
-      className="flex max-w-[880px] flex-col gap-6 rounded-3xl border border-line-subtle bg-surface p-7"
+      className="flex min-w-0 flex-col gap-6 rounded-3xl border border-line-subtle bg-surface p-7 max-sm:rounded-[20px] max-sm:p-5"
     >
       <TitleBlock id="h-pw" title="Change password" sub="Changing it signs out every other browser." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">

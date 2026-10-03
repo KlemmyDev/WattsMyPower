@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import { amberQuery } from "~/features/amber/api";
 import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
@@ -9,19 +8,6 @@ import { useForecast } from "~/features/common/weather/hooks";
 import { IntegrationLink, IntegrationTile } from "~/features/integrations/components/IntegrationLink";
 import { useInverters } from "~/features/integrations/hooks";
 import type { InverterState } from "~/features/integrations/utils";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
-
-/** A heading over a group of integrations. */
-function Group({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  return (
-    <section aria-labelledby={id} className="flex max-w-[880px] flex-col gap-2.5">
-      <h2 id={id} className="px-1 font-sans text-[13px] leading-5 font-semibold tracking-normal text-ink-muted">
-        {title}
-      </h2>
-      <SettingsCard>{children}</SettingsCard>
-    </section>
-  );
-}
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -61,6 +47,7 @@ function SungrowLink() {
       : sungrowStatus(inverters);
   return (
     <IntegrationLink
+      card
       to="/settings/integrations/sungrow"
       icon="sun"
       name="Sungrow"
@@ -76,6 +63,7 @@ function WeatherLink() {
   const forecast = useForecast();
   return (
     <IntegrationLink
+      card
       to="/settings/integrations/weather"
       icon="cloudSun"
       name="Weather"
@@ -110,6 +98,7 @@ function AmberLink() {
             ];
   return (
     <IntegrationLink
+      card
       to="/settings/integrations/amber"
       icon="dollar"
       name="Amber Electric"
@@ -120,25 +109,23 @@ function AmberLink() {
   );
 }
 
-/** Settings → Integrations: each integration with how it's doing, opening to its own page. */
+/**
+ * Settings → Integrations: each integration as a card with how it's doing, opening to its own page. Your
+ * inverters first, then the services, then what's coming; two across where there's room.
+ */
 export function IntegrationSettings() {
   return (
-    <div className="flex flex-col gap-6">
-      <Group id="h-system" title="Your system">
-        <SungrowLink />
-      </Group>
-      <Group id="h-services" title="Services">
-        <WeatherLink />
-        <AmberLink />
-      </Group>
-      <Group id="h-soon" title="Coming soon">
-        <IntegrationTile
-          icon="car"
-          name="Tesla"
-          status="Coming soon"
-          detail="Charge your car with excess solar while keeping enough for the home battery"
-        />
-      </Group>
-    </div>
+    <section aria-label="Integrations" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,480px),1fr))] gap-4">
+      <SungrowLink />
+      <WeatherLink />
+      <AmberLink />
+      <IntegrationTile
+        card
+        icon="car"
+        name="Tesla"
+        status="Coming soon"
+        detail="Charge your car with excess solar while keeping enough for the home battery"
+      />
+    </section>
   );
 }
