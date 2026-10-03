@@ -8,6 +8,7 @@ import datetime as dt
 from fastapi import APIRouter, HTTPException
 
 from app.dependencies import ServicesDep
+from app.features.forecast.learning import MIN_BACKTEST_DAYS
 
 router = APIRouter(prefix="/api/weather")
 
@@ -27,6 +28,7 @@ async def status(svc: ServicesDep):
                 "days": learned.get("days", 0),
                 "first_day": learned.get("first_day"),
                 "better": bool(learned.get("better")),
+                "min_days": MIN_BACKTEST_DAYS,  # back-test days it needs before it can be used
                 "backtest": learned.get("backtest"),
             },
             "accuracy": svc.forecast.accuracy(),

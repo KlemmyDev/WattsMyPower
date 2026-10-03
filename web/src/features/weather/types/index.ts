@@ -53,6 +53,7 @@ export type WeatherStatus = {
     days: number;
     first_day: string | null;
     better: boolean;
+    min_days: number;
     backtest: (Backtest & { per_day?: { day: string; actual: number; learned: number; simple: number }[] }) | null;
   };
   accuracy: {
