@@ -15,6 +15,7 @@ from app.features.alerts.service import AlertsService
 from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.bills.service import BillsService
+from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
 from app.features.imports.service import ImportService
 from app.features.insights.service import InsightsService
@@ -46,6 +47,7 @@ class Services:
     weather: WeatherService
     forecast: ForecastService
     insights: InsightsService
+    car: CarService
     meter: MeterService
     bills: BillsService
     imports: ImportService
@@ -72,7 +74,8 @@ def build_services(config: Config) -> Services:
         CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
     weather = WeatherService(config, db, settings)
-    forecast = ForecastService(config, readings, settings, weather)
+    car = CarService(db, settings)
+    forecast = ForecastService(config, readings, settings, weather, car)
     insights = InsightsService(db, readings, settings, weather, forecast, tariffs, amber.repo)
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
@@ -88,6 +91,7 @@ def build_services(config: Config) -> Services:
         weather=weather,
         forecast=forecast,
         insights=insights,
+        car=car,
         meter=meter,
         bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),
         imports=ImportService(db),

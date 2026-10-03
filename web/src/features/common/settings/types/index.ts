@@ -44,7 +44,15 @@ export type Settings = {
   battery_installed: number;
   battery_warranty_years: number;
   battery_warranty_mwh: number;
+  /** The car, for planning its charges (the Plan page): battery kWh, charging efficiency %, usual amps, phases and volts. */
+  car_battery_kwh: number;
+  car_efficiency: number;
+  car_amps: number;
+  car_phases: number;
+  car_voltage: number;
 };
+
+export const CAR_SETTINGS = ["car_battery_kwh", "car_efficiency", "car_amps", "car_phases", "car_voltage"] as const;
 
 export type OwnershipKey =
   "system_cost" | "system_installed" | "battery_installed" | "battery_warranty_years" | "battery_warranty_mwh";

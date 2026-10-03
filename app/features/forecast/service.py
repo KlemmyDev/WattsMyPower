@@ -30,6 +30,7 @@ from itertools import pairwise
 from typing import Any
 
 from app.core.config import Config
+from app.features.car.service import CarService, Charge
 from app.features.forecast import learning
 from app.features.forecast.learning import Backtest, Sample, SolarModel
 from app.features.forecast.repository import ForecastRepository
@@ -78,10 +79,16 @@ def trimmed_mean(values: list[float], cut: float = 0.2) -> float:
 
 
 def simulate(steps: list[Hour], soc: float, cap: float, reserve: float, max_kw: float) -> None:
-    """Step the battery forward; writes soc_end (and grid) into each step. reserve is a fraction."""
+    """Step the battery forward; writes soc_end (and grid) into each step. reserve is a fraction.
+
+    A step's planned car charging (car_kw, of which car_own_kw the home battery mustn't supply) adds to
+    what the house draws. Solar goes to the house first, then the car; the battery covers what's left of
+    the house and, where it's allowed to, of the car.
+    """
     for s in steps:
         dt = s["dur"] / 3600
-        net = (s["pv_kw"] - s["load_kw"]) * dt  # kWh
+        car = s.get("car_kw", 0.0)
+        net = (s["pv_kw"] - s["load_kw"] - car) * dt  # kWh
         if net >= 0:
             room = max(0.0, (1 - soc) * cap)
             rate_limited = min(net, max_kw * dt)
@@ -91,12 +98,32 @@ def simulate(steps: list[Hour], soc: float, cap: float, reserve: float, max_kw: 
             # share of the step it took to fill up, if it filled up in this step
             s["full_frac"] = charge / rate_limited if soc >= 0.999 and rate_limited > 0 else None
         else:
+            # The car's shortfall after solar, and the part of it the battery may not cover.
+            car_short = min(car, max(0.0, car - (s["pv_kw"] - s["load_kw"]))) * dt
+            barred = car_short * (s.get("car_own_kw", 0.0) / car) if car > 0 else 0.0
             avail = max(0.0, (soc - reserve) * cap)
-            dis = min(-net, avail, max_kw * dt)
+            dis = min(-net - barred, avail, max_kw * dt)
             soc -= dis / cap
             s["grid_kwh"] = -net - dis
             s["full_frac"] = None
         s["soc_end"] = min(1.0, max(0.0, soc))
+
+
+def add_car(steps: list[Hour], charges: list[Charge]) -> None:
+    """Spread planned car charges over the steps they overlap: each step's average car draw (car_kw), and
+    the part of it the home battery isn't to supply (car_own_kw)."""
+    for s in steps:
+        a, b = s["start"], s["start"] + s["dur"]
+        kwh = own = 0.0
+        for c in charges:
+            overlap = min(b, c.end) - max(a, c.start)
+            if overlap > 0:
+                e = c.power_w / 1000 * overlap / 3600
+                kwh += e
+                own += 0 if c.battery_helps else e
+        if kwh:
+            s["car_kw"] = kwh / (s["dur"] / 3600)
+            s["car_own_kw"] = own / (s["dur"] / 3600)
 
 
 def day_start(ts: int, days: int = 0) -> int:
@@ -133,6 +160,7 @@ def summarise_days(steps: list[Hour], now: int, soc0: float) -> list[dict[str, A
                 "from": day[0]["start"],
                 "pv_kwh": round(sum(s["pv_kw"] * s["dur"] for s in day) / 3600, 2),
                 "load_kwh": round(sum(s["load_kw"] * s["dur"] for s in day) / 3600, 2),
+                "car_kwh": round(sum(s.get("car_kw", 0.0) * s["dur"] for s in day) / 3600, 2),
                 "import_kwh": round(sum(max(0.0, s["grid_kwh"]) for s in day), 2),
                 "export_kwh": round(sum(max(0.0, -s["grid_kwh"]) for s in day), 2),
                 "full_at": full_at,
@@ -182,11 +210,19 @@ def describe_morning(hours: list[Hour], lt: time.struct_time) -> str:
 
 
 class ForecastService:
-    def __init__(self, config: Config, readings: ReadingsRepository, settings: SettingsStore, weather: WeatherService):
+    def __init__(
+        self,
+        config: Config,
+        readings: ReadingsRepository,
+        settings: SettingsStore,
+        weather: WeatherService,
+        car: CarService | None = None,
+    ):
         self.config = config
         self.readings = readings
         self.settings = settings
         self.weather = weather
+        self.car = car  # planned car charges, counted as home use
         self.repo = ForecastRepository(readings.db)
         self._model_lock = threading.Lock()
         self._learned: dict[str, Any] | None = None  # MODEL_KEY's value, once read
@@ -423,6 +459,9 @@ class ForecastService:
                 {**h, "start": start, "dur": end - start, "pv_kw": self._pv_kw(h, k, model), "load_kw": prof[hr]}
             )
 
+        if self.car is not None and steps:
+            add_car(steps, self.car.charges(steps[0]["start"], horizon))
+
         cap = battery_kwh or 10.0
         soc_pct = (latest or {}).get("battery_soc")
         soc0 = (soc_pct if soc_pct is not None else 50) / 100
@@ -455,6 +494,7 @@ class ForecastService:
                     "pv_kwh": round(s["pv_kw"] * s["dur"] / 3600, 2),
                     "pv_kw": round(s["pv_kw"], 2),
                     "load_kw": round(s["load_kw"], 2),
+                    "car_kw": round(s.get("car_kw", 0.0), 2),
                     "soc": round(s["soc_end"] * 100, 1),
                     "grid_kwh": round(s["grid_kwh"], 2),
                     "temp": s["temp"],

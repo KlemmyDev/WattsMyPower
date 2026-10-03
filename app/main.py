@@ -18,6 +18,7 @@ from app.features.amber.router import router as amber_router
 from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
 from app.features.bills.router import router as bills_router
+from app.features.car.router import router as car_router
 from app.features.forecast.router import router as forecast_router
 from app.features.imports.router import router as imports_router
 from app.features.insights.router import router as insights_router
@@ -52,6 +53,7 @@ ROUTERS = [
     meter_router,
     imports_router,
     plans_router,
+    car_router,
     health_router,
 ]
 
