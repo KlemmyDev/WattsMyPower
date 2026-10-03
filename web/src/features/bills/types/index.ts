@@ -25,6 +25,8 @@ export type BillDay = {
   pv_kwh: number | null;
   /** Today, still under way. */
   partial: boolean;
+  /** Where import and export came from: imported smart-meter data, or the inverter. */
+  source: "meter" | "inverter";
 };
 
 export type Bills = {
@@ -32,12 +34,13 @@ export type Bills = {
   months: number;
   period: BillSpan & { day: number };
   current: {
-    so_far: BillTotals & { days: number };
+    /** meter_days: how many of the days use imported smart-meter data rather than the inverter's figures. */
+    so_far: BillTotals & { days: number; meter_days: number };
     expected: (BillTotals & { basis: Basis }) | null;
   };
   days: BillDay[];
   bands: { name: string; import_kwh: number; cost: number }[];
-  past: (BillSpan & BillTotals & { recorded: number })[];
+  past: (BillSpan & BillTotals & { recorded: number; meter_days: number })[];
   /** null where there isn't enough history to estimate that bill. */
   upcoming: ((BillSpan & BillTotals & { basis: Basis }) | null)[];
   next_year: { net_cost: number; without_solar: number } | null;

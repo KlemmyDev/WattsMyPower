@@ -7,4 +7,21 @@ export type Settings = {
   bill_day: number;
   bill_anchor: number;
   location_name: string | null;
+  /**
+   * What the inverter can't report (Settings → System): the array size in kW, the battery's capacity in kWh
+   * (0 = what the inverter reports), the reserve (%) used when the inverter doesn't report one, and its maximum rate in kW.
+   */
+  pv_kw: number;
+  battery_kwh_override: number;
+  battery_reserve_fallback: number;
+  battery_max_kw: number;
 };
+
+export type SystemSettingKey = "pv_kw" | "battery_kwh_override" | "battery_reserve_fallback" | "battery_max_kw";
+
+export const SYSTEM_SETTINGS: SystemSettingKey[] = [
+  "pv_kw",
+  "battery_kwh_override",
+  "battery_reserve_fallback",
+  "battery_max_kw",
+];

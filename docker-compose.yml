@@ -51,6 +51,8 @@ services:
       POLL_INTERVAL: ${POLL_INTERVAL:-60}
       RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}
       TZ: ${TZ:-Australia/Brisbane}
+      # Set in the dashboard (Settings → System) and stored in data/wattsmypower.db. These only move
+      # an older install's values into it, the first time.
       PV_KW: ${PV_KW:-6.6}
       BATTERY_KWH: ${BATTERY_KWH:-0}
       IMPORT_RATE: ${IMPORT_RATE:-0.32}

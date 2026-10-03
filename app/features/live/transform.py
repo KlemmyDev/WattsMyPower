@@ -1,7 +1,7 @@
 """
 Turn the collector's raw rows into snapshots: decode each device's reading with the driver it's
-tagged with, then fold the second inverter into the hybrid's figures. Pure, so live ingest and
-`reprocess` give the same result.
+tagged with, leave out the hybrid's frozen repeats, then fold the second inverter into the
+hybrid's figures. Pure, so live ingest and `reprocess` give the same result.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any
 from app.features.inverters import drivers
 from app.features.inverters.limits import clean, outside
 from app.features.inverters.merge import merge_pv2
-from app.features.inverters.types import Snapshot, SolarValues
+from app.features.inverters.types import HybridDriver, Snapshot, SolarValues
 
 log = logging.getLogger(__name__)
 
@@ -24,10 +24,12 @@ Row = dict[str, Any]  # one device's reading, as served by the collector (see co
 _unknown: set[str] = set()
 
 
+def _when(ts: int) -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
+
+
 def _garbled(ts: int, device: str, what: str) -> None:
-    log.info(
-        "Dropped a garbled %s reading at %s: %s", device, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)), what
-    )
+    log.info("Dropped a garbled %s reading at %s: %s", device, _when(ts), what)
 
 
 def _note_outside(ts: int, device: str, values: dict[str, Any]) -> None:
@@ -72,10 +74,41 @@ class Pv2Carry:
         return {**vals, "pv2_power": 0, "pv2_dc_power": 0}
 
 
+@dataclass
+class Freeze:
+    """
+    The hybrid's last fresh poll, to tell a frozen repeat of it from a new reading.
+
+    A gateway that stops refreshing its registers keeps answering with the same words (the
+    driver's `frozen`). Those polls aren't stored, as if missed: charts show a gap rather than a
+    flat line, and rollups, the forecast's calibration and solar performance aren't fed figures
+    from minutes ago (with the second inverter's live output merged into them). The meter's
+    lifetime counters still count energy across the gap once fresh readings resume.
+    """
+
+    last: tuple[int, Row] | None = None  # (ts, row) of the last fresh poll
+    since: int | None = None  # while frozen: when the reading being repeated was taken
+    repeats: int = 0  # frozen polls left out, in total
+
+    def check(self, ts: int, row: Row, driver: HybridDriver) -> bool:
+        """Whether this poll repeats the last fresh one (left out). Otherwise it becomes the last."""
+        if self.last is not None and driver.frozen(self.last[1], row):
+            if self.since is None:
+                self.since = self.last[0]
+                log.info("The inverter's readings are frozen at those from %s: leaving them out", _when(self.since))
+            self.repeats += 1
+            return True
+        if self.since is not None:
+            log.info("The inverter's readings are moving again at %s", _when(ts))
+        self.last, self.since = (ts, row), None
+        return False
+
+
 def snapshots(
-    rows: list[Row], *, has_pv2: bool, behind_meter: bool, poll_interval: int, carry: Pv2Carry
+    rows: list[Row], *, has_pv2: bool, behind_meter: bool, poll_interval: int, carry: Pv2Carry, freeze: Freeze
 ) -> list[tuple[int, Snapshot]]:
-    """(ts, snapshot) for each poll the hybrid answered, oldest first. Updates `carry` as it goes."""
+    """(ts, snapshot) for each fresh poll the hybrid answered, oldest first. Updates `carry` and
+    `freeze` as it goes, so a batch picks up where the last one left off."""
     out: list[tuple[int, Snapshot]] = []
     for ts, polled in groupby(sorted(rows, key=lambda r: (r["ts"], r["device"])), key=lambda r: int(r["ts"])):
         by_device = {r["device"]: r for r in polled}
@@ -95,6 +128,8 @@ def snapshots(
         if (main := drivers.hybrid(row.get("driver"))) is None:
             _unknown_driver("hybrid", row.get("driver"))
             continue
+        if freeze.check(ts, row, main):
+            continue  # the second inverter's reading still counted towards its carry, above
         snap = main.decode(row)
         _note_outside(ts, "hybrid", snap)
         snap = clean(snap)

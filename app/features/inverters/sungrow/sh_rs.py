@@ -105,6 +105,10 @@ DEVICE_TYPES = {
 FLOW_BATTERY_CHARGING = 1 << 1
 FLOW_BATTERY_DISCHARGING = 1 << 2
 
+# Input registers the collector reads only on start and every 6 hours (serial, type and nominal
+# power, battery capacity): left out when comparing one poll with the last.
+INFO_INPUT = frozenset([*range(4990, 5003), 5639])
+
 
 def derive(values: dict[str, float | None]) -> Snapshot:
     """Turn raw register values into the snapshot shape stored in the DB."""
@@ -130,6 +134,24 @@ def decode(raw: Raw) -> Snapshot:
     """A snapshot from one poll's input registers. Registers that weren't read come out as None."""
     w = words(raw)
     return derive({r.key: value(r, w) for r in REGISTERS})
+
+
+def frozen(previous: Raw, raw: Raw) -> bool:
+    """
+    Whether this poll is the previous one served again: every word read each poll identical.
+
+    The WiNet-S/S2 answers from its own copy of the registers, refreshed every 30-60 s, and at
+    times (at start-up, after a hiccup) stops refreshing it for minutes while still answering.
+    A live inverter doesn't repeat the whole block: reactive power (5033) and power factor (5035)
+    move on nearly every poll, day and night, even while solar, the battery or home use hold
+    steady. Over a day of real SH5.0RS polls, at least two words changed between every pair,
+    while solar alone held one value for 54 polls at midday, home use for 62 at night, and the
+    whole 13000 block for two polls running. So single figures standing still prove nothing; the
+    whole block standing still does. A poll missing words (a range that couldn't be read) never
+    counts as a repeat.
+    """
+    now = {a: w for a, w in words(raw).items() if a not in INFO_INPUT}
+    return bool(now) and now == {a: w for a, w in words(previous).items() if a not in INFO_INPUT}
 
 
 def decode_info(raw: Raw) -> Info:

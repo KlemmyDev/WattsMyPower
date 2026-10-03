@@ -51,6 +51,9 @@ export type SystemInfo = {
   battery_kwh: number | null;
   battery_reserve: number | null; // %
   battery_max_kw: number | null;
+  /** What the inverter itself reports (battery_kwh and battery_reserve fall back to Settings → System). */
+  inverter_battery_kwh: number | null;
+  inverter_reserve: number | null; // %
   forecast: boolean;
   tariff: Tariff;
   pv2: SecondInverter | null;
@@ -65,4 +68,6 @@ export type LiveStatus = {
   poll_interval: number;
   last_success: number | null;
   error: string | null;
+  /** While the inverter's dongle keeps serving the same registers: when the reading it repeats was taken. The repeats aren't recorded, so `snapshot` stays at that reading. */
+  frozen_since?: number | null;
 };

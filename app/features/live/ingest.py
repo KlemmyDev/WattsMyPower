@@ -19,7 +19,7 @@ from app.core.database import Database
 from app.features.inverters import drivers
 from app.features.live.client import Feed
 from app.features.live.service import LiveService
-from app.features.live.transform import Pv2Carry, behind_meter, snapshots
+from app.features.live.transform import Freeze, Pv2Carry, behind_meter, snapshots
 from app.features.readings.repository import ReadingsRepository
 
 log = logging.getLogger(__name__)
@@ -55,6 +55,7 @@ class CollectorIngest:
         self.live = live
         self.client = client
         self.carry = Pv2Carry()
+        self.freeze = Freeze()
         self.has_pv2 = False
         self.behind_meter = config.pv2_behind_meter
         self._hybrid: tuple[Any, Any] | None = None  # (host, driver) the details in live.info are from
@@ -87,9 +88,13 @@ class CollectorIngest:
         h = devices.get("hybrid")
         if h is None:  # none connected yet (or it was removed): nothing to show about one
             self.live.last_success, self.live.last_error, self.live.info = None, NO_INVERTER, {}
+            self.freeze = Freeze()
+            self.live.frozen_since = None
         else:
             if (h.get("host"), h.get("driver")) != self._hybrid:  # another inverter: the old one's details don't apply
                 self._hybrid, self.live.info = (h.get("host"), h.get("driver")), {}
+                self.freeze = Freeze()
+                self.live.frozen_since = None
             self.live.last_success = h.get("last_success")
             self.live.last_error = h.get("error")
             main = drivers.hybrid(h.get("driver"))
@@ -122,8 +127,10 @@ class CollectorIngest:
             behind_meter=self.behind_meter,
             poll_interval=self.config.poll_interval,
             carry=self.carry,
+            freeze=self.freeze,
         )
         self.readings.insert_many(conn, snaps)
+        self.live.frozen_since = self.freeze.since
         if snaps:
             self.live.latest = self.readings.with_metered_today({"ts": snaps[-1][0], **snaps[-1][1]})
         newest = max(int(r["ts"]) for r in rows)

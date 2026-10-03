@@ -16,6 +16,10 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "bill_months": 3,
         "bill_day": 1,
         "bill_anchor": 1,
+        "pv_kw": config.pv_kw,
+        "battery_kwh_override": config.battery_kwh,
+        "battery_reserve_fallback": config.battery_reserve,
+        "battery_max_kw": config.battery_max_kw,
         "location_name": None,
     }
 

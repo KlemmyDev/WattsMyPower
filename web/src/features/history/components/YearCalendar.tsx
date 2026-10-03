@@ -5,6 +5,9 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import type { Cell } from "~/features/history/utils/year";
 
+/** The selected day: a canvas-coloured gap, then a full-contrast ring. */
+const RING = "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_3.5px_var(--color-fg)]";
+
 type GridProps = {
   cells: Cell[];
   /** Blank cells before the first day, so weeks run Monday to Sunday. */
@@ -34,8 +37,7 @@ function DayCell({
   const base = cn("border-0 p-0 transition-[background] duration-240 ease-[ease]", SHAPE[shape], className);
   // Padding before the first day keeps its space but isn't drawn.
   if (!cell) return <span className={cn(base, "invisible")} />;
-  if (!cell.label)
-    return <span className={cn(base, "bg-transparent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]")} />;
+  if (!cell.label) return <span className={cn(base, "bg-transparent inset-ring inset-ring-fg/3")} />;
   return (
     <button
       type="button"
@@ -45,9 +47,7 @@ function DayCell({
       className={cn(
         base,
         !cell.fill && "bg-transparent",
-        selected
-          ? "relative z-1 shadow-[0_0_0_2px_#0a0a0a,0_0_0_3.5px_#ffffff]"
-          : !cell.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
+        selected ? cn("relative z-1", RING) : !cell.fill && "inset-ring inset-ring-fg/6",
       )}
       style={cell.fill ? { background: cell.fill } : undefined}
     />
@@ -76,7 +76,7 @@ export const YearHeatmap = memo(function YearHeatmap({ cells, lead, selected, on
           {months.map((m) => (
             <span
               key={m.col}
-              className="absolute font-mono text-[11px] text-[#7a7a7a]"
+              className="absolute font-mono text-[11px] text-ink-label"
               style={{ left: `${((m.col / nWeeks) * 100).toFixed(2)}%` }}
             >
               {m.label}
@@ -107,7 +107,6 @@ export const YearHeatmap = memo(function YearHeatmap({ cells, lead, selected, on
 });
 
 const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"];
-const RING = "shadow-[0_0_0_2px_#0a0a0a,0_0_0_3.5px_#ffffff]";
 
 /**
  * Phones: one month at a time, Monday to Sunday across, with each day's date on its cell.
@@ -191,10 +190,8 @@ export function MonthCalendar({
           const c = byDate.get(num);
           const base = "size-8 rounded-md border-0 p-0";
           // Outside the view (before it starts, or after today): just a faint outline.
-          if (!c)
-            return <span key={`out${num}`} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]")} />;
-          if (!c.label)
-            return <span key={c.i} className={cn(base, "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]")} />;
+          if (!c) return <span key={`out${num}`} className={cn(base, "inset-ring inset-ring-fg/9")} />;
+          if (!c.label) return <span key={c.i} className={cn(base, "inset-ring inset-ring-fg/9")} />;
           return (
             <button
               key={c.i}
@@ -206,9 +203,7 @@ export function MonthCalendar({
               className={cn(
                 base,
                 !c.fill && "bg-transparent",
-                c.i === selected
-                  ? cn("relative z-1", RING)
-                  : !c.fill && "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]",
+                c.i === selected ? cn("relative z-1", RING) : !c.fill && "inset-ring inset-ring-fg/16",
               )}
               style={c.fill ? { background: c.fill } : undefined}
             />

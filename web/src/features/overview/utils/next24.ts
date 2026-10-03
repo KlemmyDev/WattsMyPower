@@ -5,6 +5,7 @@ import { kWh, kWhInt, money } from "~/features/common/formatting/utils/number";
 import { bandAt, tariffNumber } from "~/features/common/tariffs/utils";
 import { reserveOf } from "~/features/common/energy/utils";
 import { isWet } from "~/features/common/weather/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 /* The figures behind the Overview's "Next 24 hours" card: headline, key moments, chart geometry, and totals. */
 
@@ -109,27 +110,28 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   const wetEnd = k0 < 0 ? -1 : hrs.findIndex((h, k) => k > k0 && !wet(h));
   const showers = k0 < 0 ? null : { t: hrs[k0].start, until: wetEnd < 0 ? last.ts + 3600 : hrs[wetEnd].ts };
   const moments: Moment[] = [];
-  if (fullAt) moments.push({ t: fullAt, title: "Battery full", sub: "Extra solar goes to the grid", color: "#6f8cff" });
+  if (fullAt)
+    moments.push({ t: fullAt, title: "Battery full", sub: "Extra solar goes to the grid", color: COLOR.battery });
   if (sunDrop)
     moments.push({
       t: sunDrop.ts,
       title: "Solar drops below home use",
       sub: "Battery starts powering your home",
-      color: "#ffb547",
+      color: COLOR.solar,
     });
   if (resAt)
     moments.push({
       t: resAt,
       title: "Battery reaches reserve",
       sub: "Your home runs on the grid until morning",
-      color: "#b0b0b5",
+      color: COLOR.gridSoft,
     });
   if (showers)
     moments.push({
       t: showers.t,
       title: `Showers until ${hhmm(showers.until)}`,
       sub: new Date(showers.t * 1000).getHours() < 12 ? "Lower solar early in the day" : "Lower solar while it rains",
-      color: "#9fb2ff",
+      color: COLOR.link,
     });
   moments.sort((a, b) => a.t - b.t);
   const today = new Date(now * 1000).toDateString();
@@ -157,10 +159,10 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
       ) + tariffNumber(t.supply_charge)
     : null;
   const stats: [label: string, value: string, color: string][] = [
-    ["Solar forecast", kWhInt(f.summary.pv_kwh_24h), "#ffb547"],
-    ["Expected use", kWhInt(use), "#f5f5f5"],
-    ["From the grid", kWh(imp), "#f5f5f5"],
-    ["Expected cost", money(cost), cost != null && cost < 0 ? "#3ee08f" : "#f5f5f5"],
+    ["Solar forecast", kWhInt(f.summary.pv_kwh_24h), COLOR.solar],
+    ["Expected use", kWhInt(use), COLOR.ink],
+    ["From the grid", kWh(imp), COLOR.ink],
+    ["Expected cost", money(cost), cost != null && cost < 0 ? COLOR.good : COLOR.ink],
   ];
 
   return {

@@ -8,10 +8,12 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     kv           text values: the tariff (JSON) and the location's place name
     users        the household account
     sessions     signed-in browsers (only a hash of each token is stored)
-    alert_channels  where alerts are sent (ntfy, a webhook, Pushover), one row per kind, with its secrets
-    alert_rules     alert rules switched on or off, or with changed thresholds (defaults aren't stored)
-    alert_state     each rule's progress: a problem seen but not yet reported, an alert out, its cooldown
-    alert_history   alerts sent and resolved, daily summaries, and whether each reached its channels
+    meter_imports    smart-meter (NEM12) files imported from Settings → Billing
+    meter_intervals  their readings: grid import or export per meter interval, in kWh
+    alert_channels   where alerts are sent (ntfy, a webhook, Pushover), one row per kind, with its secrets
+    alert_rules      alert rules switched on or off, or with changed thresholds (defaults aren't stored)
+    alert_state      each rule's progress: a problem seen but not yet reported, an alert out, its cooldown
+    alert_history    alerts sent and resolved, daily summaries, and whether each reached its channels
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -109,6 +111,28 @@ def _drop_impossible_values(conn: sqlite3.Connection) -> None:
         conn.execute(ROLLUP_SQL, (b, b + ROLLUP))
 
 
+def _meter_data(conn: sqlite3.Connection) -> None:
+    """Smart-meter interval data imported from NEM12 files (app.features.meter).
+
+    One row per meter channel and interval, keyed so re-importing the same interval replaces it.
+    `ts` is when the interval starts (unix seconds) and `minutes` how long it is (5, 15 or 30);
+    `direction` is "import" or "export"; `quality` is the file's flag and method ("A" actual,
+    "E52" estimated, "S53" substituted…). Each row remembers the import it came from, so an
+    import can be removed again.
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS meter_imports (id INTEGER PRIMARY KEY, filename TEXT NOT NULL,"
+        " imported_at INTEGER NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS meter_intervals (nmi TEXT NOT NULL, suffix TEXT NOT NULL, ts INTEGER NOT NULL,"
+        " minutes INTEGER NOT NULL, direction TEXT NOT NULL, kwh REAL NOT NULL, quality TEXT NOT NULL,"
+        " import_id INTEGER NOT NULL, PRIMARY KEY (nmi, suffix, ts)) WITHOUT ROWID"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS meter_intervals_by_time ON meter_intervals (ts)")
+    conn.execute("CREATE INDEX IF NOT EXISTS meter_intervals_by_import ON meter_intervals (import_id)")
+
+
 def _alerts(conn: sqlite3.Connection) -> None:
     """Alerts and notifications (app.features.alerts). New tables only: nothing existing changes."""
     conn.execute(
@@ -136,6 +160,7 @@ def _alerts(conn: sqlite3.Connection) -> None:
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
     _drop_impossible_values,
+    _meter_data,
     _alerts,
 ]
 

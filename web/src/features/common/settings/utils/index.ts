@@ -15,10 +15,14 @@ const FIELD_NAMES: Record<string, string> = {
   bill_anchor: "Month a period starts",
 };
 
-/** The settings endpoint's range errors ("latitude must be between -90 and 90") as a sentence. */
+/**
+ * The settings endpoint's range errors ("latitude must be between -90 and 90") as a sentence. Ones it
+ * already writes as sentences ("Solar array size must be a number.") are shown as they are.
+ */
 export function friendly(detail: string | null): string {
   const m = /^(\w+) must be between (.+) and (.+)$/.exec(detail || "");
-  return m ? `${FIELD_NAMES[m[1]] || m[1]} must be between ${m[2]} and ${m[3]}.` : "Invalid value.";
+  if (m) return `${FIELD_NAMES[m[1]] || m[1]} must be between ${m[2]} and ${m[3]}.`;
+  return detail && /^[A-Z].*\.$/.test(detail) ? detail : "Invalid value.";
 }
 
 /** Why saving settings failed: the range error as a sentence, or that the server couldn't be reached. */
