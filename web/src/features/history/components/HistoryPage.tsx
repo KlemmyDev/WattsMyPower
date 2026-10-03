@@ -6,10 +6,14 @@ import { dailyQuery, statsQuery } from "~/features/history/api";
 import { PageBody } from "~/features/common/layout/components/AppShell";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useNow } from "~/features/common/time/hooks";
+import { ButtonLink } from "~/features/common/ui/components/Button";
 import { cn } from "~/features/common/ui/utils";
+import { heatColor } from "~/features/common/theme/utils/colors";
 import { dayMonth } from "~/features/common/formatting/utils/date";
 import { dollars, energyParts, kWh } from "~/features/common/formatting/utils/number";
-import { addDays, fromDateKey, midnight } from "~/features/common/time/utils";
+import { addDays, dateKey, fromDateKey, midnight } from "~/features/common/time/utils";
+import { useFahrenheit } from "~/features/common/weather/hooks";
+import { weatherDaysQuery } from "~/features/weather/api";
 import { DayPanel } from "~/features/history/components/DayPanel";
 import { MonthlySources } from "~/features/history/components/MonthlySources";
 import { StandoutDays } from "~/features/history/components/StandoutDays";
@@ -18,11 +22,13 @@ import { daySearch, lastDay, METRIC_KEYS, rangeOf, yearOf, type Metric } from "~
 import {
   buildDays,
   heatCells,
-  heatColor,
-  METRICS,
   monthsOf,
+  SKIES,
+  skyCounts,
   standoutsOf,
+  TABS,
   totalsOf,
+  weatherCells,
 } from "~/features/history/utils/year";
 
 const route = getRouteApi("/_app/history");
@@ -61,7 +67,7 @@ function Total({ label, value, unit, sub }: { label: string; value: string; unit
 }
 
 /**
- * Recorded history for the last 12 months or a calendar year: totals, where each month's power
+ * Recorded history for a calendar year, January to December: totals, where each month's power
  * came from, every day as a heatmap (pick what to colour by), standout days, and one day in detail.
  */
 export function HistoryPage() {
@@ -69,33 +75,48 @@ export function HistoryPage() {
   const navigate = route.useNavigate();
   const today = midnight(useNow(60_000));
   const thisYear = yearOf(today);
-  const year = search.year;
+  const year = search.year; // undefined: this year
   const metric = search.metric ?? "gen";
   const range = useMemo(() => rangeOf(year, today), [year, today]);
   const last = lastDay(range);
   const dayTs = search.day ? fromDateKey(search.day) : last;
   const { start, end } = range;
+  // Readings only go up to today: the rest of this year is drawn empty.
+  const until = Math.min(end, addDays(today, 1));
 
   const refetchInterval = end > today ? REFRESH : false;
-  const daily = useQuery({ ...dailyQuery(start, end), refetchInterval });
-  const costs = useQuery({ ...costsQuery(start, end), refetchInterval });
+  const daily = useQuery({ ...dailyQuery(start, until), refetchInterval });
+  const costs = useQuery({ ...costsQuery(start, until), refetchInterval });
   const historyFrom = useQuery(statsQuery).data?.history_from ?? null;
+  const showWeather = metric === "weather";
+  const weather = useQuery({
+    ...weatherDaysQuery(dateKey(start), dateKey(until)),
+    enabled: showWeather,
+    refetchInterval: end > today ? REFRESH : false,
+  });
+  const fahrenheit = useFahrenheit();
 
   const days = useMemo(
     () => buildDays(start, end, today, daily.data, costs.data?.days),
     [start, end, today, daily.data, costs.data],
   );
-  const cells = useMemo(() => heatCells(days, metric), [days, metric]);
+  const cells = useMemo(
+    () => (metric === "weather" ? weatherCells(days, weather.data, fahrenheit) : heatCells(days, metric)),
+    [days, metric, weather.data, fahrenheit],
+  );
+  const skies = useMemo(() => skyCounts(days, weather.data), [days, weather.data]);
+  const weatherKnown = Object.values(skies).reduce((a, n) => a + n, 0);
   const totals = useMemo(() => totalsOf(days), [days]);
   const months = useMemo(() => monthsOf(days), [days]);
   const standouts = useMemo(() => standoutsOf(days), [days]);
   const loaded = !!(daily.data && costs.data);
   const lead = (new Date(start * 1000).getDay() + 6) % 7;
   const selected = Math.round((dayTs - start) / 86400);
-  const { label, color } = METRICS[metric];
+  const { label, color } = TABS[metric];
+  const perDay = showWeather ? "The weather each day" : `${label} per day`;
   const firstYear = historyFrom ? Math.min(thisYear, yearOf(historyFrom)) : thisYear;
   const years = Array.from({ length: thisYear - firstYear + 1 }, (_, k) => thisYear - k);
-  const viewName = year === undefined ? "the last 12 months" : String(year);
+  const viewName = String(year ?? thisYear);
   const startsLate = historyFrom != null && midnight(historyFrom) > start;
 
   // The view lives in the URL, but changing it isn't a new page: resetScroll: false keeps the
@@ -120,8 +141,8 @@ export function HistoryPage() {
     },
     [select],
   );
-  const setYear = (y: number | undefined) =>
-    navigate({ search: (prev) => ({ year: y, metric: prev.metric }), resetScroll: false });
+  const setYear = (y: number) =>
+    navigate({ search: (prev) => ({ year: y === thisYear ? undefined : y, metric: prev.metric }), resetScroll: false });
   const setMetric = (m: Metric) =>
     navigate({
       search: (prev) => ({ ...prev, metric: m === "gen" ? undefined : m }),
@@ -135,23 +156,14 @@ export function HistoryPage() {
       <PageBody className="gap-10 max-md:gap-8">
         <div className="flex max-w-full min-w-0 flex-col gap-2.5">
           <div role="tablist" aria-label="Period" className={cn(PILLS, "self-start")}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={year === undefined}
-              onClick={() => setYear(undefined)}
-              className={pill(year === undefined)}
-            >
-              Last 12 months
-            </button>
             {years.map((y) => (
               <button
                 key={y}
                 type="button"
                 role="tab"
-                aria-selected={year === y}
+                aria-selected={(year ?? thisYear) === y}
                 onClick={() => setYear(y)}
-                className={pill(year === y)}
+                className={pill((year ?? thisYear) === y)}
               >
                 {y}
               </button>
@@ -222,29 +234,49 @@ export function HistoryPage() {
                 onClick={() => setMetric(k)}
                 className={pill(k === metric)}
               >
-                <i className="size-[7px] rounded-full" style={{ background: METRICS[k].color }} />
-                {METRICS[k].label}
+                <i className="size-[7px] rounded-full" style={{ background: TABS[k].color }} />
+                {TABS[k].label}
               </button>
             ))}
           </div>
+          {showWeather && weather.data && loaded && weatherKnown < totals.days / 2 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line-subtle bg-surface px-5 py-4 text-sm text-pretty text-ink-quiet">
+              <span>
+                {weatherKnown
+                  ? `Weather is stored for ${weatherKnown} of the ${totals.days} days with readings.`
+                  : "No weather is stored for these days yet."}{" "}
+                Past weather can be filled in from Open-Meteo.
+              </span>
+              <ButtonLink to="/settings/integrations/weather" variant="link" size="sm">
+                Fill in past weather
+              </ButtonLink>
+            </div>
+          )}
           <YearHeatmap cells={cells} lead={lead} selected={selected} onSelect={select} />
-          <MonthCalendar
-            cells={cells}
-            selected={selected}
-            onSelect={selectAndShow}
-            sub={`${label} per day · select a day`}
-          />
+          <MonthCalendar cells={cells} selected={selected} onSelect={selectAndShow} sub={`${perDay} · select a day`} />
           <div className="ml-9 flex flex-wrap items-center justify-between gap-4 text-[13px] text-ink-dim max-md:ml-0 max-md:justify-end">
             <span className="max-md:hidden">
-              {loaded && totals.days > 0 && `${label} per day · select a day to see it hour by hour`}
+              {loaded && totals.days > 0 && `${perDay} · select a day to see it hour by hour`}
             </span>
-            <div className="flex items-center gap-[5px] text-xs text-ink-label">
-              Less
-              {[0, 0.25, 0.5, 0.75, 1].map((v) => (
-                <i key={v} className="size-3.5 rounded-[4px]" style={{ background: heatColor(color, v) }} />
-              ))}
-              More
-            </div>
+            {showWeather ? (
+              <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1.5 text-xs text-ink-label">
+                {SKIES.map((s) => (
+                  <span key={s.key} className="flex items-center gap-1.5 tabular-nums">
+                    <i className="size-3.5 rounded-[4px]" style={{ background: s.fill }} />
+                    {s.label}
+                    {weather.data ? ` · ${skies[s.key]}` : ""}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-[5px] text-xs text-ink-label">
+                Less
+                {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+                  <i key={v} className="size-3.5 rounded-[4px]" style={{ background: heatColor(color, v) }} />
+                ))}
+                More
+              </div>
+            )}
           </div>
         </div>
 

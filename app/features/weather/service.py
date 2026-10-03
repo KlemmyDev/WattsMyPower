@@ -70,6 +70,23 @@ def _main_code(codes: list[int]) -> int | None:
     return round(statistics.fmean(codes))  # clear (0) to overcast (3)
 
 
+def _summary(hours: list[dict[str, Any]]) -> dict[str, Any]:
+    """A day's weather from its hours: temperature range, rain, daylight cloud, sunlight, and a code for it."""
+    temps = [h["temp"] for h in hours if h["temp"] is not None]
+    daylight = [h for h in hours if h.get("is_day")]
+    rain = [h["precip"] for h in hours if h["precip"] is not None]
+    clouds = [h["cloud"] for h in daylight if h["cloud"] is not None]
+    sun = [h["ghi"] for h in hours if h["ghi"] is not None]
+    return {
+        "temp_min": min(temps) if temps else None,
+        "temp_max": max(temps) if temps else None,
+        "rain_mm": round(sum(rain), 1) if rain else None,
+        "cloud": round(sum(clouds) / len(clouds)) if clouds else None,
+        "sunlight_kwh_m2": round(sum(sun) / 1000, 2) if sun else None,
+        "code": _main_code([h["code"] for h in daylight if h["code"] is not None]),
+    }
+
+
 class WeatherService:
     def __init__(
         self,
@@ -293,11 +310,6 @@ class WeatherService:
         end = _local_midnight(date + dt.timedelta(days=1))
         hours = self.repo.hours(start, end)
         forecasts = self.repo.forecasts(start, end)
-        temps = [h["temp"] for h in hours if h["temp"] is not None]
-        daylight = [h for h in hours if h.get("is_day")]
-        rain = [h["precip"] for h in hours if h["precip"] is not None]
-        clouds = [h["cloud"] for h in daylight if h["cloud"] is not None]
-        sun = [h["ghi"] for h in hours if h["ghi"] is not None]
         return {
             "date": date.isoformat(),
             "hours": [
@@ -306,16 +318,18 @@ class WeatherService:
                 for h in hours
             ],
             "summary": {
-                "temp_min": min(temps) if temps else None,
-                "temp_max": max(temps) if temps else None,
-                "rain_mm": round(sum(rain), 1) if rain else None,
-                "cloud": round(sum(clouds) / len(clouds)) if clouds else None,
-                "sunlight_kwh_m2": round(sum(sun) / 1000, 2) if sun else None,
-                "code": _main_code([h["code"] for h in daylight if h["code"] is not None]),
+                **_summary(hours),
                 "pv_forecast_kwh": round(sum(forecasts.values()), 1) if forecasts else None,
                 "source": hours[0]["source"] if hours else None,
             },
         }
+
+    def days(self, first: dt.date, end: dt.date) -> list[dict[str, Any]]:
+        """Each day from `first` up to `end` that has weather, summed up (for a heatmap of the weather)."""
+        by_date: dict[str, list[dict[str, Any]]] = {}
+        for h in self.repo.hours(_local_midnight(first), _local_midnight(end)):
+            by_date.setdefault(local_date(h["ts"]), []).append(h)
+        return [{"date": d, **_summary(hours)} for d, hours in sorted(by_date.items())]
 
     def status(self) -> dict[str, Any]:
         today = dt.date.fromtimestamp(self.clock())

@@ -1,43 +1,44 @@
 import { addDays, dateKey, fromDateKey, midnight, nowS } from "~/features/common/time/utils";
 
-export const METRIC_KEYS = ["gen", "ss", "imp", "saved"] as const;
+export const METRIC_KEYS = ["gen", "ss", "imp", "saved", "weather"] as const;
 export type Metric = (typeof METRIC_KEYS)[number];
 
 /**
- * The History page's URL state. Defaults are left out: the last 12 months, its last day, and Solar.
- * `year` shows that calendar year instead.
+ * The History page's URL state. Defaults are left out: this year, its last day so far, and Solar.
+ * `year` shows an earlier calendar year instead.
  */
 export type HistorySearch = { year?: number; day?: string; metric?: Metric };
 
-/** The days a view covers, [start, end) in local-midnight unix seconds. */
-export type Range = { start: number; end: number };
+/**
+ * The days a view covers, [start, end) in local-midnight unix seconds: always 1 January to 31 December,
+ * so the heatmap runs January to December. `last` is its last day that has happened (today, this year).
+ */
+export type Range = { start: number; end: number; last: number };
 
 /** 1 January of `year`, local midnight in unix seconds. */
 export const yearStart = (year: number) => new Date(year, 0, 1).getTime() / 1000;
 
 export const yearOf = (ts: number) => new Date(ts * 1000).getFullYear();
 
-/** The last 12 months up to today, or a calendar year (up to today, for this one). */
+/** A calendar year: this one when `year` is left out. */
 export function rangeOf(year: number | undefined, today: number): Range {
-  if (year === undefined) {
-    const d = new Date(today * 1000);
-    return {
-      start: new Date(d.getFullYear() - 1, d.getMonth(), d.getDate() + 1).getTime() / 1000,
-      end: addDays(today, 1),
-    };
-  }
-  return { start: yearStart(year), end: Math.min(yearStart(year + 1), addDays(today, 1)) };
+  const y = year ?? yearOf(today);
+  const end = yearStart(y + 1);
+  return { start: yearStart(y), end, last: Math.min(addDays(end, -1), today) };
 }
 
-/** The last day a view covers, which it opens on. */
-export const lastDay = (r: Range) => addDays(r.end, -1);
+/** The last day of a view that has happened, which it opens on. */
+export const lastDay = (r: Range) => r.last;
 
 const isMetric = (v: unknown): v is Metric => METRIC_KEYS.includes(v as Metric);
 
 export function validateHistorySearch(raw: Record<string, unknown>): HistorySearch {
   const today = midnight(nowS());
-  const y = Number(raw.year);
-  const year = Number.isInteger(y) && y >= 1970 && y <= yearOf(today) ? y : undefined;
+  // A day on its own (a link from Bills, say) opens its own year.
+  const linked = typeof raw.day === "string" ? Number(raw.day.slice(0, 4)) : NaN;
+  const y = raw.year === undefined ? linked : Number(raw.year);
+  // This year is the default, so it's left out.
+  const year = Number.isInteger(y) && y >= 1970 && y < yearOf(today) ? y : undefined;
   const range = rangeOf(year, today);
   let day: string | undefined;
   if (typeof raw.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.day)) {

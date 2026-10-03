@@ -3,8 +3,10 @@ import type { DailyRow } from "~/features/history/types";
 import { dayMonth, monthLong, monthShort } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { addDays, dateKey } from "~/features/common/time/utils";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { COLOR, heatColor } from "~/features/common/theme/utils/colors";
 import type { Metric } from "~/features/history/utils/search";
+import type { WeatherDaySummary } from "~/features/weather/types";
+import { codeName, degrees } from "~/features/common/weather/utils";
 
 type DayBase = { i: number; ts: number; key: string };
 export type DataDay = DayBase & {
@@ -73,8 +75,11 @@ export function buildDays(start: number, end: number, today: number, rows?: Dail
   });
 }
 
+/** What the heatmap can colour days by, other than the weather (which is a kind of day, not an amount). */
+export type Amount = Exclude<Metric, "weather">;
+
 export const METRICS: Record<
-  Metric,
+  Amount,
   { label: string; value: (d: DataDay) => number; format: (v: number) => string; color: string }
 > = {
   gen: { label: "Solar", value: (d) => d.gen, format: kWh, color: COLOR.solar },
@@ -83,14 +88,59 @@ export const METRICS: Record<
   saved: { label: "Saved", value: (d) => d.saved, format: money, color: COLOR.ink },
 };
 
-/** A metric colour blended into the empty-cell grey; `v` from 0 (least) to 1 (most). */
-export const heatColor = (color: string, v: number) =>
-  `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, ${COLOR.heatBase})`;
-
 /** One calendar cell. Without a label it's an empty placeholder; without a fill, a day with no readings. */
 export type Cell = { i: number; ts: number; label: string | null; fill: string | null };
 
-export function heatCells(days: Day[], metric: Metric): Cell[] {
+/** Each heatmap tab's name and colour. */
+export const TABS: Record<Metric, { label: string; color: string }> = {
+  ...METRICS,
+  weather: { label: "Weather", color: COLOR.lilac },
+};
+
+/** Kinds of day, for the weather heatmap, from a day's WMO weather code. */
+export const SKIES = [
+  { key: "sunny", label: "Sunny", fill: heatColor(COLOR.solar, 1) },
+  { key: "partly", label: "Partly cloudy", fill: heatColor(COLOR.solar, 0.42) },
+  { key: "cloudy", label: "Cloudy", fill: heatColor(COLOR.gridLine, 0.55) },
+  { key: "rain", label: "Rain", fill: heatColor(COLOR.battery, 0.9) },
+  { key: "storm", label: "Storms", fill: heatColor(COLOR.lilac, 1) },
+] as const;
+export type Sky = (typeof SKIES)[number]["key"];
+
+export function skyOf(code: number): Sky {
+  if (code >= 95) return "storm";
+  if (code >= 51) return "rain"; // drizzle, rain, snow and showers
+  if (code >= 3) return "cloudy"; // overcast and fog
+  return code === 2 ? "partly" : "sunny";
+}
+
+/** The weather heatmap: each day coloured by its kind of weather, with the weather in words on it. */
+export function weatherCells(days: Day[], weather: WeatherDaySummary[] | undefined, fahrenheit: boolean): Cell[] {
+  const byDate = new Map(weather?.map((w) => [w.date, w]));
+  const fill = new Map<Sky, string>(SKIES.map((s) => [s.key, s.fill]));
+  return days.map((d) => {
+    const base = { i: d.i, ts: d.ts };
+    if (d.kind === "future" || d.kind === "pending" || !weather) return { ...base, label: null, fill: null };
+    const w = byDate.get(d.key);
+    if (!w || w.code == null) return { ...base, label: `${dayMonth(d.ts)}: no weather stored`, fill: null };
+    const temps =
+      w.temp_min != null && w.temp_max != null
+        ? `, ${degrees(w.temp_min, fahrenheit).slice(0, -1)}–${degrees(w.temp_max, fahrenheit)}`
+        : "";
+    const rain = w.rain_mm ? `, ${w.rain_mm} mm of rain` : "";
+    return { ...base, label: `${dayMonth(d.ts)}: ${codeName(w.code)}${rain}${temps}`, fill: fill.get(skyOf(w.code))! };
+  });
+}
+
+/** How many days of each kind the weather heatmap shows (days with readings so far). */
+export function skyCounts(days: Day[], weather: WeatherDaySummary[] | undefined): Record<Sky, number> {
+  const out = Object.fromEntries(SKIES.map((s) => [s.key, 0])) as Record<Sky, number>;
+  const inView = new Set(days.filter((d) => d.kind !== "future").map((d) => d.key));
+  for (const w of weather ?? []) if (w.code != null && inView.has(w.date)) out[skyOf(w.code)]++;
+  return out;
+}
+
+export function heatCells(days: Day[], metric: Amount): Cell[] {
   const { value, format, color } = METRICS[metric];
   // Colour by where each day sits between the view's lowest and highest (whole days only).
   const vals = wholeDays(days).map(value);
