@@ -49,6 +49,11 @@ class HybridDriver(Protocol):
         """The device's details, from the info registers the collector reads every few hours."""
         ...
 
+    def frozen(self, previous: Raw, raw: Raw) -> bool:
+        """Whether this poll is the previous one served again by a gateway that stopped refreshing
+        its registers (rather than a fresh reading): such polls are left out, like missed ones."""
+        ...
+
 
 class SolarDriver(Protocol):
     """A second, AC-coupled solar inverter (no battery, no meter)."""

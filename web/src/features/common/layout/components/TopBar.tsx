@@ -141,6 +141,9 @@ function HeaderClock() {
   else if (!isFresh(st, now)) {
     state = st?.error ? "error" : "stale";
     status = `No new readings since ${hhmm(last)}`;
+  } else if (st?.frozen_since) {
+    state = "stale";
+    status = `Readings frozen since ${hhmm(st.frozen_since)}`;
   }
   const d = new Date(now * 1000);
   return (

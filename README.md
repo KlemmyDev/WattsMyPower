@@ -83,6 +83,8 @@ Run these from the `wattsmypower` folder:
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
 
+> **Frozen readings.** Now and then (often just after starting up) the WiNet-S2 keeps answering with exactly the same registers for a few minutes instead of fresh ones. Those repeats aren't recorded, so charts show a short gap rather than a flat line, and the dashboard says "Readings frozen since …" until fresh readings arrive. A live inverter always changes some of its registers between polls (reactive power and power factor move even when solar, the battery and home use hold steady), so only a poll identical to the last in every register counts as frozen. Readings recorded before this was caught are rebuilt without the frozen ones by `python -m app reprocess` (as far back as the collector holds).
+
 ## Pages in detail
 
 The dashboard implements the "Energy Dashboard v5" design from Claude Design: a dark theme with Nunito headings and Geist type. Pages have their own addresses (`/history`, `/settings/tariffs`), and links from the old dashboard (`#/history`) still work. The header has the page navigation (a white pill slides to the current page), the live status with the date and time, and a gear for Settings. The Tesla page only appears in the navigation once a Tesla is connected.
