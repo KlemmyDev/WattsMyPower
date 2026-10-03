@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ImportSettings } from "~/features/imports/components/ImportSettings";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Importing moved to Settings → Integrations → Sungrow: old links and bookmarks land there. */
 export const Route = createFileRoute("/_app/settings/import")({
-  head: () => ({ meta: [{ title: "Settings · WattsMyPower" }] }),
-  component: ImportSettings,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/integrations/sungrow/import", replace: true });
+  },
 });

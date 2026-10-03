@@ -47,8 +47,8 @@ function DayRow({ day }: { day: ReconcileDay }) {
 }
 
 const integrations = (
-  <Link to="/settings/integrations" className="text-link hover:text-link-hover">
-    Settings → Integrations
+  <Link to="/settings/integrations/sungrow" className="text-link hover:text-link-hover">
+    Settings → Integrations → Sungrow
   </Link>
 );
 

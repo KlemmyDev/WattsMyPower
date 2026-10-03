@@ -58,7 +58,7 @@ export function SystemSettings() {
         </div>
         <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
           These details come from your inverters over the local network. Inverters are connected in Settings →
-          Integrations.
+          Integrations → Sungrow.
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-6 py-4">
           <span className="min-w-[200px] flex-1 text-[13px] leading-5 text-ink-muted">

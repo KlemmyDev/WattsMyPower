@@ -8,13 +8,14 @@ import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
 import { tariffQuery } from "~/features/common/tariffs/api";
 import { useNow } from "~/features/common/time/hooks";
-import { Button } from "~/features/common/ui/components/Button";
+import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const day = (ts: number) => longDate.format(new Date(ts * 1000));
 
@@ -112,16 +113,16 @@ export function AmberConnect({ onReady }: { onReady: () => void }) {
   if (!status.site_id) return <SitePicker status={status} onChosen={onReady} />;
   return (
     <HelpText className="text-[13px]">
-      Connected to Amber (API key {status.key}). Its prices and the connection are in Settings → Tariffs.
+      Connected to Amber (API key {status.key}). The connection is in Settings → Integrations → Amber Electric.
     </HelpText>
   );
 }
 
 /**
- * Settings → Tariffs: connecting Amber Electric, whose prices change every 5 or 30 minutes. Optional:
- * until a key is pasted here, nothing calls Amber and no cost uses its prices.
+ * Connecting Amber Electric, whose prices change every 5 or 30 minutes. Optional: until a key is pasted
+ * here, nothing calls Amber and no cost uses its prices.
  */
-export function AmberSettings({ onUse }: { onUse: () => void }) {
+function AmberAccount() {
   const now = useNow();
   const { data: status, isPending, error } = useQuery(amberQuery);
   const tariff = useQuery(tariffQuery).data;
@@ -134,13 +135,6 @@ export function AmberSettings({ onUse }: { onUse: () => void }) {
 
   return (
     <SettingsCard aria-labelledby="h-amber">
-      <div className="border-b border-line-subtle p-6">
-        <SettingsTitle
-          id="h-amber"
-          title="Amber Electric"
-          sub="With Amber, the price of power changes every 5 or 30 minutes. Connect your account to cost your power at the price of the time."
-        />
-      </div>
       {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking the connection…</div>}
       {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
       {status && !status.connected && <ConnectForm className="px-6 py-5" />}
@@ -222,9 +216,9 @@ export function AmberSettings({ onUse }: { onUse: () => void }) {
               {tariff && tariff.type !== "amber" && (
                 <Notice tone="info" className="flex flex-wrap items-center justify-between gap-3">
                   <span>Your rates don't use Amber's prices yet.</span>
-                  <Button size="sm" variant="outline" onClick={onUse}>
-                    Use Amber prices
-                  </Button>
+                  <ButtonLink to="/settings/tariffs" size="sm" variant="outline">
+                    Use them in Tariffs
+                  </ButtonLink>
                 </Notice>
               )}
             </div>
@@ -232,5 +226,20 @@ export function AmberSettings({ onUse }: { onUse: () => void }) {
         </>
       )}
     </SettingsCard>
+  );
+}
+
+/** Settings → Integrations → Amber Electric: the API key and site, and whether the rates use its prices. */
+export function AmberSettings() {
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        id="h-amber"
+        title="Amber Electric"
+        sub="With Amber, the price of power changes every 5 or 30 minutes. Connect your account to cost your power at the price of the time."
+      />
+      <AmberAccount />
+    </>
   );
 }

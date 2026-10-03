@@ -24,11 +24,17 @@ import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/a
 import { Route as AppSettingsAlertsRouteImport } from './routes/_app/settings/alerts'
 import { Route as AppSettingsBillingRouteImport } from './routes/_app/settings/billing'
 import { Route as AppSettingsImportRouteImport } from './routes/_app/settings/import'
-import { Route as AppSettingsIntegrationsRouteImport } from './routes/_app/settings/integrations'
 import { Route as AppSettingsSystemRouteImport } from './routes/_app/settings/system'
 import { Route as AppSettingsTariffsRouteImport } from './routes/_app/settings/tariffs'
 import { Route as AppTeslaIndexRouteImport } from './routes/_app/tesla/index'
 import { Route as AppTeslaSetupRouteImport } from './routes/_app/tesla/setup'
+import { Route as AppSettingsIntegrationsIndexRouteImport } from './routes/_app/settings/integrations/index'
+import { Route as AppSettingsIntegrationsAmberRouteImport } from './routes/_app/settings/integrations/amber'
+import { Route as AppSettingsIntegrationsWeatherRouteImport } from './routes/_app/settings/integrations/weather'
+import { Route as AppSettingsIntegrationsSungrowIndexRouteImport } from './routes/_app/settings/integrations/sungrow/index'
+import { Route as AppSettingsIntegrationsSungrowRoleRouteImport } from './routes/_app/settings/integrations/sungrow/$role'
+import { Route as AppSettingsIntegrationsSungrowConnectRouteImport } from './routes/_app/settings/integrations/sungrow/connect'
+import { Route as AppSettingsIntegrationsSungrowImportRouteImport } from './routes/_app/settings/integrations/sungrow/import'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -104,11 +110,6 @@ const AppSettingsImportRoute = AppSettingsImportRouteImport.update({
   path: '/import',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
-const AppSettingsIntegrationsRoute = AppSettingsIntegrationsRouteImport.update({
-  id: '/integrations',
-  path: '/integrations',
-  getParentRoute: () => AppSettingsRouteRoute,
-} as any)
 const AppSettingsSystemRoute = AppSettingsSystemRouteImport.update({
   id: '/system',
   path: '/system',
@@ -129,6 +130,48 @@ const AppTeslaSetupRoute = AppTeslaSetupRouteImport.update({
   path: '/tesla/setup',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsIntegrationsIndexRoute =
+  AppSettingsIntegrationsIndexRouteImport.update({
+    id: '/integrations/',
+    path: '/integrations/',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
+const AppSettingsIntegrationsAmberRoute =
+  AppSettingsIntegrationsAmberRouteImport.update({
+    id: '/integrations/amber',
+    path: '/integrations/amber',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
+const AppSettingsIntegrationsWeatherRoute =
+  AppSettingsIntegrationsWeatherRouteImport.update({
+    id: '/integrations/weather',
+    path: '/integrations/weather',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
+const AppSettingsIntegrationsSungrowIndexRoute =
+  AppSettingsIntegrationsSungrowIndexRouteImport.update({
+    id: '/integrations/sungrow/',
+    path: '/integrations/sungrow/',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
+const AppSettingsIntegrationsSungrowRoleRoute =
+  AppSettingsIntegrationsSungrowRoleRouteImport.update({
+    id: '/integrations/sungrow/$role',
+    path: '/integrations/sungrow/$role',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
+const AppSettingsIntegrationsSungrowConnectRoute =
+  AppSettingsIntegrationsSungrowConnectRouteImport.update({
+    id: '/integrations/sungrow/connect',
+    path: '/integrations/sungrow/connect',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
+const AppSettingsIntegrationsSungrowImportRoute =
+  AppSettingsIntegrationsSungrowImportRouteImport.update({
+    id: '/integrations/sungrow/import',
+    path: '/integrations/sungrow/import',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -144,12 +187,18 @@ export interface FileRoutesByFullPath {
   '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
   '/settings/import': typeof AppSettingsImportRoute
-  '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
   '/settings/tariffs': typeof AppSettingsTariffsRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/tesla/': typeof AppTeslaIndexRoute
+  '/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
+  '/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
+  '/settings/integrations/': typeof AppSettingsIntegrationsIndexRoute
+  '/settings/integrations/sungrow/$role': typeof AppSettingsIntegrationsSungrowRoleRoute
+  '/settings/integrations/sungrow/connect': typeof AppSettingsIntegrationsSungrowConnectRoute
+  '/settings/integrations/sungrow/import': typeof AppSettingsIntegrationsSungrowImportRoute
+  '/settings/integrations/sungrow/': typeof AppSettingsIntegrationsSungrowIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -164,12 +213,18 @@ export interface FileRoutesByTo {
   '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
   '/settings/import': typeof AppSettingsImportRoute
-  '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
   '/settings/tariffs': typeof AppSettingsTariffsRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/settings': typeof AppSettingsIndexRoute
   '/tesla': typeof AppTeslaIndexRoute
+  '/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
+  '/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
+  '/settings/integrations': typeof AppSettingsIntegrationsIndexRoute
+  '/settings/integrations/sungrow/$role': typeof AppSettingsIntegrationsSungrowRoleRoute
+  '/settings/integrations/sungrow/connect': typeof AppSettingsIntegrationsSungrowConnectRoute
+  '/settings/integrations/sungrow/import': typeof AppSettingsIntegrationsSungrowImportRoute
+  '/settings/integrations/sungrow': typeof AppSettingsIntegrationsSungrowIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -187,12 +242,18 @@ export interface FileRoutesById {
   '/_app/settings/alerts': typeof AppSettingsAlertsRoute
   '/_app/settings/billing': typeof AppSettingsBillingRoute
   '/_app/settings/import': typeof AppSettingsImportRoute
-  '/_app/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/_app/settings/system': typeof AppSettingsSystemRoute
   '/_app/settings/tariffs': typeof AppSettingsTariffsRoute
   '/_app/tesla/setup': typeof AppTeslaSetupRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/tesla/': typeof AppTeslaIndexRoute
+  '/_app/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
+  '/_app/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
+  '/_app/settings/integrations/': typeof AppSettingsIntegrationsIndexRoute
+  '/_app/settings/integrations/sungrow/$role': typeof AppSettingsIntegrationsSungrowRoleRoute
+  '/_app/settings/integrations/sungrow/connect': typeof AppSettingsIntegrationsSungrowConnectRoute
+  '/_app/settings/integrations/sungrow/import': typeof AppSettingsIntegrationsSungrowImportRoute
+  '/_app/settings/integrations/sungrow/': typeof AppSettingsIntegrationsSungrowIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -210,12 +271,18 @@ export interface FileRouteTypes {
     | '/settings/alerts'
     | '/settings/billing'
     | '/settings/import'
-    | '/settings/integrations'
     | '/settings/system'
     | '/settings/tariffs'
     | '/tesla/setup'
     | '/settings/'
     | '/tesla/'
+    | '/settings/integrations/amber'
+    | '/settings/integrations/weather'
+    | '/settings/integrations/'
+    | '/settings/integrations/sungrow/$role'
+    | '/settings/integrations/sungrow/connect'
+    | '/settings/integrations/sungrow/import'
+    | '/settings/integrations/sungrow/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -230,12 +297,18 @@ export interface FileRouteTypes {
     | '/settings/alerts'
     | '/settings/billing'
     | '/settings/import'
-    | '/settings/integrations'
     | '/settings/system'
     | '/settings/tariffs'
     | '/tesla/setup'
     | '/settings'
     | '/tesla'
+    | '/settings/integrations/amber'
+    | '/settings/integrations/weather'
+    | '/settings/integrations'
+    | '/settings/integrations/sungrow/$role'
+    | '/settings/integrations/sungrow/connect'
+    | '/settings/integrations/sungrow/import'
+    | '/settings/integrations/sungrow'
   id:
     | '__root__'
     | '/_app'
@@ -252,12 +325,18 @@ export interface FileRouteTypes {
     | '/_app/settings/alerts'
     | '/_app/settings/billing'
     | '/_app/settings/import'
-    | '/_app/settings/integrations'
     | '/_app/settings/system'
     | '/_app/settings/tariffs'
     | '/_app/tesla/setup'
     | '/_app/settings/'
     | '/_app/tesla/'
+    | '/_app/settings/integrations/amber'
+    | '/_app/settings/integrations/weather'
+    | '/_app/settings/integrations/'
+    | '/_app/settings/integrations/sungrow/$role'
+    | '/_app/settings/integrations/sungrow/connect'
+    | '/_app/settings/integrations/sungrow/import'
+    | '/_app/settings/integrations/sungrow/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -373,13 +452,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsImportRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
-    '/_app/settings/integrations': {
-      id: '/_app/settings/integrations'
-      path: '/integrations'
-      fullPath: '/settings/integrations'
-      preLoaderRoute: typeof AppSettingsIntegrationsRouteImport
-      parentRoute: typeof AppSettingsRouteRoute
-    }
     '/_app/settings/system': {
       id: '/_app/settings/system'
       path: '/system'
@@ -408,6 +480,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTeslaSetupRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/integrations/': {
+      id: '/_app/settings/integrations/'
+      path: '/integrations'
+      fullPath: '/settings/integrations/'
+      preLoaderRoute: typeof AppSettingsIntegrationsIndexRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/integrations/amber': {
+      id: '/_app/settings/integrations/amber'
+      path: '/integrations/amber'
+      fullPath: '/settings/integrations/amber'
+      preLoaderRoute: typeof AppSettingsIntegrationsAmberRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/integrations/weather': {
+      id: '/_app/settings/integrations/weather'
+      path: '/integrations/weather'
+      fullPath: '/settings/integrations/weather'
+      preLoaderRoute: typeof AppSettingsIntegrationsWeatherRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/integrations/sungrow/': {
+      id: '/_app/settings/integrations/sungrow/'
+      path: '/integrations/sungrow'
+      fullPath: '/settings/integrations/sungrow/'
+      preLoaderRoute: typeof AppSettingsIntegrationsSungrowIndexRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/integrations/sungrow/$role': {
+      id: '/_app/settings/integrations/sungrow/$role'
+      path: '/integrations/sungrow/$role'
+      fullPath: '/settings/integrations/sungrow/$role'
+      preLoaderRoute: typeof AppSettingsIntegrationsSungrowRoleRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/integrations/sungrow/connect': {
+      id: '/_app/settings/integrations/sungrow/connect'
+      path: '/integrations/sungrow/connect'
+      fullPath: '/settings/integrations/sungrow/connect'
+      preLoaderRoute: typeof AppSettingsIntegrationsSungrowConnectRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/integrations/sungrow/import': {
+      id: '/_app/settings/integrations/sungrow/import'
+      path: '/integrations/sungrow/import'
+      fullPath: '/settings/integrations/sungrow/import'
+      preLoaderRoute: typeof AppSettingsIntegrationsSungrowImportRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
   }
 }
 
@@ -416,10 +537,16 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsAlertsRoute: typeof AppSettingsAlertsRoute
   AppSettingsBillingRoute: typeof AppSettingsBillingRoute
   AppSettingsImportRoute: typeof AppSettingsImportRoute
-  AppSettingsIntegrationsRoute: typeof AppSettingsIntegrationsRoute
   AppSettingsSystemRoute: typeof AppSettingsSystemRoute
   AppSettingsTariffsRoute: typeof AppSettingsTariffsRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+  AppSettingsIntegrationsAmberRoute: typeof AppSettingsIntegrationsAmberRoute
+  AppSettingsIntegrationsWeatherRoute: typeof AppSettingsIntegrationsWeatherRoute
+  AppSettingsIntegrationsIndexRoute: typeof AppSettingsIntegrationsIndexRoute
+  AppSettingsIntegrationsSungrowRoleRoute: typeof AppSettingsIntegrationsSungrowRoleRoute
+  AppSettingsIntegrationsSungrowConnectRoute: typeof AppSettingsIntegrationsSungrowConnectRoute
+  AppSettingsIntegrationsSungrowImportRoute: typeof AppSettingsIntegrationsSungrowImportRoute
+  AppSettingsIntegrationsSungrowIndexRoute: typeof AppSettingsIntegrationsSungrowIndexRoute
 }
 
 const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
@@ -427,10 +554,20 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAlertsRoute: AppSettingsAlertsRoute,
   AppSettingsBillingRoute: AppSettingsBillingRoute,
   AppSettingsImportRoute: AppSettingsImportRoute,
-  AppSettingsIntegrationsRoute: AppSettingsIntegrationsRoute,
   AppSettingsSystemRoute: AppSettingsSystemRoute,
   AppSettingsTariffsRoute: AppSettingsTariffsRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
+  AppSettingsIntegrationsAmberRoute: AppSettingsIntegrationsAmberRoute,
+  AppSettingsIntegrationsWeatherRoute: AppSettingsIntegrationsWeatherRoute,
+  AppSettingsIntegrationsIndexRoute: AppSettingsIntegrationsIndexRoute,
+  AppSettingsIntegrationsSungrowRoleRoute:
+    AppSettingsIntegrationsSungrowRoleRoute,
+  AppSettingsIntegrationsSungrowConnectRoute:
+    AppSettingsIntegrationsSungrowConnectRoute,
+  AppSettingsIntegrationsSungrowImportRoute:
+    AppSettingsIntegrationsSungrowImportRoute,
+  AppSettingsIntegrationsSungrowIndexRoute:
+    AppSettingsIntegrationsSungrowIndexRoute,
 }
 
 const AppSettingsRouteRouteWithChildren =
