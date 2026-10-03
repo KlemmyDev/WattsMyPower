@@ -3,7 +3,7 @@ Solar and battery forecast for the next ~24 hours.
 
 Weather comes from Open-Meteo (free, no API key). Solar per hour is modelled as
     pv_kwh = k * radiation_kwh_per_m2
-where k starts at PV_KW * 0.8 and is then calibrated against what the inverter
+where k starts at the array size (Settings → System) * 0.8 and is then calibrated against what the inverter
 actually produced over the last week (so orientation, shading and clipping are
 absorbed without needing to be configured). Home use per hour comes from what
 the house used in that hour of day over the last two weeks. The battery is then
@@ -156,7 +156,7 @@ class ForecastService:
         so it starts adapting after ~30 minutes of daylight data instead of whole hours.
         Returns (k, hours of data it was fitted on).
         """
-        pv_kw = self.config.pv_kw
+        pv_kw = self.settings.get("pv_kw")
         default = pv_kw * 0.8
         past = [h for h in hours if h["ts"] < now]
         if len(past) < 2:
@@ -232,7 +232,7 @@ class ForecastService:
         cap = battery_kwh or 10.0
         soc_pct = (latest or {}).get("battery_soc")
         soc0 = (soc_pct if soc_pct is not None else 50) / 100
-        simulate(steps, soc0, cap, reserve_pct / 100, self.config.battery_max_kw)
+        simulate(steps, soc0, cap, reserve_pct / 100, self.settings.get("battery_max_kw"))
 
         # When does it reach full? Interpolate inside the hour it tops out.
         full_at = None
