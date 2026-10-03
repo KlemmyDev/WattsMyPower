@@ -6,13 +6,16 @@ import { TitleBlock } from "~/features/common/ui/components/Card";
 import { BillsOverTime } from "~/features/bills/components/BillsOverTime";
 import { BillPace, CostByTime, CostPerKwh, PaidFor } from "~/features/bills/components/Breakdown";
 import { CurrentBill } from "~/features/bills/components/CurrentBill";
+import { GridCostHeatmap } from "~/features/bills/components/GridCostHeatmap";
+import { Payback } from "~/features/bills/components/Payback";
 import { PeriodCalendar } from "~/features/bills/components/PeriodCalendar";
 import { UpcomingBills } from "~/features/bills/components/UpcomingBills";
 import { WaysToSave } from "~/features/bills/components/WaysToSave";
 
 /**
- * The current billing period first: the bill and its pace, every day of it as a calendar, and ways
- * to lower it; then where its money went; then the bills ahead and behind.
+ * The current billing period first: the bill and its pace, every day of it as a calendar, ways to lower
+ * it and when on the clock grid power costs most; then where its money went; then the bills ahead and
+ * behind, and what the system has saved over its life.
  */
 export function BillsPage() {
   const { data: bills, isError } = useQuery(billsQuery);
@@ -31,6 +34,7 @@ export function BillsPage() {
         <>
           <PeriodCalendar bills={bills} tariff={tariff} />
           <WaysToSave bills={bills} tariff={tariff} />
+          <GridCostHeatmap />
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,360px),1fr))] items-stretch gap-5">
             <PaidFor bills={bills} />
             <CostByTime bills={bills} tariff={tariff} />
@@ -43,6 +47,7 @@ export function BillsPage() {
           />
           <UpcomingBills bills={bills} />
           <BillsOverTime bills={bills} />
+          <Payback />
         </>
       )}
     </>

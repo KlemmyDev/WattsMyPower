@@ -71,9 +71,9 @@ def build_services(config: Config) -> Services:
     source: CollectorIngest | Simulator = (
         CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
-    insights = InsightsService(db, readings, settings)
     weather = WeatherService(config, db, settings)
     forecast = ForecastService(config, readings, settings, weather)
+    insights = InsightsService(db, readings, settings, weather, forecast, tariffs, amber.repo)
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
     return Services(

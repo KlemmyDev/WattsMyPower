@@ -373,7 +373,7 @@ def test_the_learned_model_finds_the_roofs_direction_and_shade_and_beats_the_pla
     assert saved["better"] and forecast._active_model() is not None
 
     model = learning.SolarModel.from_json(saved["model"])
-    afternoon = [s for s in forecast._samples(days_ago(3), days_ago(2)) if s.actual and shaded(s.ts)]
+    afternoon = [s for s in forecast.samples(days_ago(3), days_ago(2)) if s.actual and shaded(s.ts)]
     assert afternoon and all(abs(model.predict(s) - s.actual) < 0.3 for s in afternoon if s.actual)
 
     settings.save({"forecast_learning": 0})

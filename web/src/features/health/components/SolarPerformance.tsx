@@ -1,9 +1,9 @@
-import type { Insights } from "~/features/insights/types";
+import type { Causes, Insights } from "~/features/health/types";
 import { Card, Eyebrow, Footnote, TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
-import { DASH, kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kWh, pct, plural } from "~/features/common/formatting/utils/number";
 import { listDays, monthShort, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { Figure } from "~/features/insights/components/Kpis";
+import { Figure } from "~/features/health/components/Kpis";
 
 type Performance = NonNullable<Insights["performance"]>;
 type Day = Performance["days"][number];
@@ -87,12 +87,52 @@ export function SolarPerformance({ performance: P }: { performance: Insights["pe
         <i className={cn("mt-[7px] size-2 flex-none rounded-full", noteDot[tone])} />
         <span className="text-sm leading-[22px] text-pretty">{note}</span>
       </div>
+      {P?.causes && <LikelyCauses causes={P.causes} />}
       {P && P.fitted_hours >= 24 && (
         <Footnote>
           {`Expected output is learned from ${P.fitted_hours.toLocaleString("en-AU")} daylight hours of your inverter's output against past weather from Open-Meteo, so 100% is how your system usually performs.`}
         </Footnote>
       )}
     </Card>
+  );
+}
+
+/** What's likely holding output back over the last 30 days, in plain words, with what to do about it. */
+function LikelyCauses({ causes: c }: { causes: Causes }) {
+  const items: [title: string, body: string][] = [];
+  if (c.dust) {
+    const d = parseYmd(c.dust.date);
+    items.push([
+      "Dust on the panels",
+      `After ${c.dust.rain_mm} mm of rain on ${d.getDate()} ${monthShort.format(d)}, clear-day output rose from ${pct(c.dust.before * 100)} to ${pct(c.dust.after * 100)} of expected. If it's been dry a while since, a clean may be worth it.`,
+    ]);
+  }
+  if (c.shade)
+    items.push([
+      `New shade in the ${c.shade.part}`,
+      `${c.shade.part === "afternoon" ? "Afternoons" : "Mornings"} are ${pct(c.shade.drop * 100)} down on the rest of the day over the last two weeks, against the weeks before. A growing tree or something new nearby can do this; the sun's path shifting with the seasons can too, a little.`,
+    ]);
+  if (c.capped && c.capped.days)
+    items.push([
+      "The inverter's limit",
+      `On ${c.capped.days} ${plural(c.capped.days, "day")}, output was held at about ${c.capped.limit_kw} kW while the sun could have given more: about ${kWh(c.capped.kwh)} in all. That's normal with more panels than inverter, and nothing's wrong.`,
+    ]);
+  if (!items.length) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <Eyebrow>Likely causes, last 30 days</Eyebrow>
+      <dl className="flex flex-col">
+        {items.map(([title, body]) => (
+          <div
+            key={title}
+            className="flex flex-col gap-0.5 border-t border-line-subtle py-3 first:border-t-0 first:pt-1"
+          >
+            <dt className="text-sm font-medium text-ink">{title}</dt>
+            <dd className="text-[13px] leading-5 text-pretty text-ink-muted">{body}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 

@@ -125,7 +125,7 @@ class AlertsService:
         )
 
     def _performance(self) -> dict[str, Any] | None:
-        """Solar performance from Insights (whole days only change once a day: checked hourly)."""
+        """Solar performance from the Health page's figures (whole days only change once a day: checked hourly)."""
         hour = time.strftime("%Y-%m-%d %H")
         if self._perf and self._perf[0] == hour:
             return self._perf[1]

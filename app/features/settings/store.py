@@ -40,7 +40,7 @@ LISTS: dict[str, tuple[tuple[str, ...], int]] = {
 # Settings that only take whole numbers.
 WHOLE = {
     "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
-    "house_storeys", "garage_spaces",
+    "house_storeys", "garage_spaces", "system_installed", "battery_installed",
 }  # fmt: skip
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
@@ -50,6 +50,16 @@ SYSTEM: dict[str, tuple[str, str]] = {
     "battery_reserve_fallback": ("Backup reserve", "%"),
     "battery_max_kw": ("Maximum charge and discharge rate", " kW"),
 }
+# What the system cost, when it went in, and the battery's warranty (Settings → System): named the same
+# way, but only ever entered from the dashboard, never seeded from the environment.
+OWNERSHIP: dict[str, tuple[str, str]] = {
+    "system_cost": ("What the system cost", ""),
+    "system_installed": ("When the system was installed", ""),
+    "battery_installed": ("When the battery was installed", ""),
+    "battery_warranty_years": ("Battery warranty", " years"),
+    "battery_warranty_mwh": ("Battery warranty energy", " MWh"),
+}
+NAMED = SYSTEM | OWNERSHIP
 # kv marker: the system details have been copied from the environment (see seed_system).
 SYSTEM_SEEDED = "system_seeded"
 
@@ -85,6 +95,14 @@ class SettingsStore:
             # the garage (0 = none).
             "house_storeys": (1, 2, 1),
             "garage_spaces": (0, 2, 0),
+            # What the system cost (dollars, after rebates) and when it went in, for payback on the Bills
+            # page; when the battery went in (if later) and its warranty, for Health. 0 = not set. Dates
+            # are unix seconds at local midnight.
+            "system_cost": (0, 500_000, 0),
+            "system_installed": (0, 4_102_444_800, 0),
+            "battery_installed": (0, 4_102_444_800, 0),
+            "battery_warranty_years": (0, 30, 0),
+            "battery_warranty_mwh": (0, 1000, 0),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}
@@ -178,8 +196,8 @@ class SettingsStore:
                 continue
             if key not in self.editable:
                 raise ValueError(f"Unknown setting: {key}")
-            name, unit = SYSTEM.get(key, (key, ""))
-            end = "." if key in SYSTEM else ""
+            name, unit = NAMED.get(key, (key, ""))
+            end = "." if key in NAMED else ""
             try:
                 value = float(raw)
             except (TypeError, ValueError):

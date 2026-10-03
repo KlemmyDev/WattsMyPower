@@ -1,15 +1,19 @@
 """
-Longer-term figures for the Insights page.
+Longer-term figures for the Health page (the insights feature).
 
 Everything comes from our own history (5-minute rollups and the inverter's
 daily counters) plus the inverter's lifetime counters in the latest snapshot.
 Solar performance compares each day's output with what the weather allowed,
 using past hourly radiation from Open-Meteo and a model of this system fitted
-on the last ~90 days (so "100%" means "as well as this system usually does").
+on the last ~90 days (so "100%" means "as well as this system usually does"),
+with the likely causes of a shortfall and a monthly trend (see performance.py).
+The battery's health and efficiency month by month, its warranty, and whether a
+bigger one would pay are in battery.py.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 from typing import Any
@@ -17,14 +21,18 @@ from typing import Any
 from app.core.cache import TTLCache
 from app.core.database import Database
 from app.core.http import get_json
+from app.features.amber.repository import PriceRepository
+from app.features.forecast.service import ForecastService
+from app.features.insights import battery, performance
 from app.features.insights.repository import InsightsRepository
 from app.features.readings.repository import ReadingsRepository, Snapshot
 from app.features.settings.store import SettingsStore
+from app.features.tariffs.costs import Pricer
+from app.features.tariffs.store import TariffStore
+from app.features.weather.service import WeatherService
 
 log = logging.getLogger(__name__)
 
-# Average Australian grid emissions, kg CO2-e per kWh (National Greenhouse Accounts, scope 2).
-CO2_KG_PER_KWH = 0.68
 CACHE_SECONDS = 600
 RAD_CACHE_SECONDS = 6 * 3600
 RAD_RETRY_SECONDS = 600  # after a failed fetch, keep serving the last radiation this long before trying again
@@ -105,21 +113,40 @@ def lifetime(latest: Snapshot | None, cap: float) -> dict[str, Any]:
         "discharge_kwh": dis,
         "cycles": round(dis / cap) if dis and cap else None,
         "round_trip_pct": round(dis / chg * 100, 1) if dis and chg else None,
-        "co2_t": round(pv * CO2_KG_PER_KWH / 1000, 1) if pv else None,
     }
 
 
 class InsightsService:
-    def __init__(self, db: Database, readings: ReadingsRepository, settings: SettingsStore):
+    def __init__(
+        self,
+        db: Database,
+        readings: ReadingsRepository,
+        settings: SettingsStore,
+        weather: WeatherService | None = None,
+        forecast: ForecastService | None = None,
+        tariffs: TariffStore | None = None,
+        prices: PriceRepository | None = None,
+    ):
         self.repo = InsightsRepository(db)
         self.readings = readings
         self.settings = settings
+        self.weather = weather  # stored weather: rain for the dust check
+        self.forecast = forecast  # stored weather hours with what the panels made: the monthly trend
+        self.tariffs = tariffs  # rates, for what a bigger battery would save
+        self.prices = prices  # Amber's stored prices, for an Amber tariff
         self._cache = TTLCache()
+        self._battery_kwh = 0.0  # the capacity and backup reserve in use, as last asked for
+        self._reserve: float | None = None
 
-    def build(self, latest: Snapshot | None, battery_kwh: float) -> dict[str, Any]:
+    def build(self, latest: Snapshot | None, battery_kwh: float, reserve: float | None = None) -> dict[str, Any]:
         # The history figures are cached; lifetime counters come from the latest snapshot every time.
+        if battery_kwh:
+            self._battery_kwh = battery_kwh
+        if reserve is not None:
+            self._reserve = reserve
         data = self._cache.get_or_load(_RESULT, CACHE_SECONDS, self._history)
-        return {**data, "lifetime": lifetime(latest, battery_kwh)}
+        life = lifetime(latest, battery_kwh)
+        return {**data, "lifetime": life, "warranty": self._warranty(life, int(time.time()))}
 
     def forget_history(self) -> None:
         """Recompute the history figures on the next request (after history was imported or removed)."""
@@ -137,12 +164,11 @@ class InsightsService:
         last30 = [r for r in daily if r["date"] >= d30]
         prev30 = [r for r in daily if dprev <= r["date"] < d30]
 
-        heat = self.repo.heatmap(start12, now + 1)
         month_rows = []
         for y, m in months:
             key = f"{y}-{m:02d}"
             e = energy([r for r in daily if r["date"].startswith(key)])
-            month_rows.append({"month": key, "days": e["days"], "self_pct": e["self_pct"], "heat": heat.get(key)})
+            month_rows.append({"month": key, "days": e["days"], "self_pct": e["self_pct"]})
 
         bat = self.repo.battery_days(start30, _ts(lt.tm_year, lt.tm_mon, lt.tm_mday))  # whole days only
         try:
@@ -150,10 +176,25 @@ class InsightsService:
         except Exception as e:  # never let the performance model take the page down
             log.warning("Solar performance failed: %s", e)
             perf = None
+        try:
+            trend = self._trend(now, perf)
+        except Exception as e:
+            log.warning("Solar trend failed: %s", e)
+            trend = None
+        cap = self._battery_kwh or self.settings.get("battery_kwh_override")
+        soh = {m: v for m, v in self.repo.monthly_soh(start12, now + 1).items()}
+        battery_months = [
+            battery.month_row(key, [r for r in daily if r["date"].startswith(key)], soh.get(key), cap)
+            for key in (f"{y}-{m:02d}" for y, m in months)
+        ]
+        try:
+            sizing = self._sizing(now, cap)
+        except Exception as e:
+            log.warning("Battery sizing failed: %s", e)
+            sizing = None
 
         return {
             "generated_at": now,
-            "co2_kg_per_kwh": CO2_KG_PER_KWH,
             "last30": energy(last30),
             "prev30": energy(prev30),
             "months": month_rows,
@@ -161,8 +202,11 @@ class InsightsService:
                 "days": len(bat),
                 "avg_swing": round(sum(b["swing"] for b in bat) / len(bat), 1) if bat else None,
                 "avg_full_min": round(sum(b["full_min"] for b in bat) / len(bat)) if bat else None,
+                "months": battery_months,
             },
             "performance": perf,
+            "trend": trend,
+            "sizing": sizing,
         }
 
     # ------------------------------------------------------------------ solar performance
@@ -210,31 +254,91 @@ class InsightsService:
                 k = sum(a for a, _ in free) / sum(r for _, r in free)
 
         by_day: dict[str, dict[str, Any]] = {}
+        modelled: list[tuple[int, float, float | None]] = []  # (hour, kWh without the limit, kWh made)
         for t, r in hours:
             day = by_day.setdefault(_day(t), {"actual": 0.0, "expected": 0.0, "rad": 0.0, "sun_hours": 0, "covered": 0})
             day["rad"] += r
             if r >= 0.05:
                 day["sun_hours"] += 1
+                modelled.append((t, k * r, actual.get(t)))
                 if t in actual:
                     day["covered"] += 1
                     day["actual"] += actual[t]
                     day["expected"] += min(k * r, clip)
 
         lt = time.localtime(now)  # the last `days` days, today included (judged on the hours so far)
+        since = _ts(lt.tm_year, lt.tm_mon, lt.tm_mday - days + 1)
         window = [_day(_ts(lt.tm_year, lt.tm_mon, lt.tm_mday - days + 1 + i)) for i in range(days)]
         brightest = max((by_day[d]["rad"] for d in window if d in by_day), default=0)
-        out = []
-        for d in window:
+
+        def row(d: str) -> dict[str, Any]:
             v = by_day.get(d)
             ok = v and v["sun_hours"] and v["covered"] >= 0.8 * v["sun_hours"] and v["expected"] >= 0.5
-            out.append(
-                {
-                    "date": d,
-                    "actual_kwh": round(v["actual"], 2) if ok and v else None,
-                    "expected_kwh": round(v["expected"], 2) if ok and v else None,
-                    "ratio": round(v["actual"] / v["expected"], 3) if ok and v else None,
-                    # Overcast days are too noisy to judge against modelled radiation.
-                    "clear": bool(ok and v and brightest and v["rad"] >= 0.6 * brightest),
-                }
-            )
-        return {"fitted_hours": len(pairs), "kwh_per_kwh_m2": round(k, 2), "limit_kw": round(clip, 2), "days": out}
+            return {
+                "date": d,
+                "actual_kwh": round(v["actual"], 2) if ok and v else None,
+                "expected_kwh": round(v["expected"], 2) if ok and v else None,
+                "ratio": round(v["actual"] / v["expected"], 3) if ok and v else None,
+                # Overcast days are too noisy to judge against modelled radiation.
+                "clear": bool(ok and v and brightest and v["rad"] >= 0.6 * brightest),
+            }
+
+        # Shade shows in hours the inverter wasn't limiting, bright enough to judge.
+        unlimited = [(t, m, a) for t, m, a in modelled if m >= 0.2 * clip and m < 0.9 * clip]
+        causes = {
+            "capped": performance.capped(modelled, clip, since),
+            "dust": performance.dust([row(d) for d in sorted(by_day)], self._rain(hours[0][0], now), window[0]),
+            "shade": performance.shade(unlimited, now - performance.RECENT_DAYS * 86400),
+        }
+        return {
+            "fitted_hours": len(pairs),
+            "kwh_per_kwh_m2": round(k, 2),
+            "limit_kw": round(clip, 2),
+            "days": [row(d) for d in window],
+            "causes": causes,
+        }
+
+    def _rain(self, start: int, end: int) -> dict[str, float]:
+        """Each day's rain (mm) from the stored weather."""
+        if self.weather is None:
+            return {}
+        days = self.weather.days(dt.date.fromtimestamp(start), dt.date.fromtimestamp(end) + dt.timedelta(1))
+        return {d["date"]: d["rain_mm"] for d in days if d.get("rain_mm") is not None}
+
+    # ------------------------------------------------------------------ the longer run
+    def _trend(self, now: int, perf: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The performance ratio month by month over the last year, and its change per year."""
+        if self.forecast is None:
+            return None
+        lt = time.localtime(now)
+        start = _ts(lt.tm_year - 1, lt.tm_mon + 1)
+        pv_kw = self.settings.get("pv_kw")
+        cap = perf.get("limit_kw") if perf else None
+        months = performance.monthly(self.forecast.samples(start, now), pv_kw, cap)
+        return {"months": months, "per_year": performance.trend(months), "pv_kw": pv_kw}
+
+    def _sizing(self, now: int, cap: float) -> dict[str, Any] | None:
+        """How the battery's size suits the house over the last 90 days, and what a bigger one would save."""
+        if not cap:
+            return None
+        start = now - battery.SIZING_DAYS * 86400
+        rows = self.readings.rollups(start, now, ["grid_power", "battery_soc"])
+        if not rows:
+            return None
+        pricer = None
+        if self.tariffs is not None:
+            t, tables = self.tariffs.current()
+            pricer = Pricer(t, tables, self.prices, start, now)
+        reserve = self._reserve if self._reserve is not None else self.settings.get("battery_reserve_fallback")
+        return battery.sizing(rows, cap, self.settings.get("battery_max_kw"), reserve, pricer)
+
+    def _warranty(self, life: dict[str, Any], now: int) -> dict[str, Any] | None:
+        """How much of the battery's warranty is used: by years since it went in, and by energy delivered."""
+        installed = self.settings.get("battery_installed") or self.settings.get("system_installed")
+        return battery.warranty(
+            installed or None,
+            self.settings.get("battery_warranty_years") or None,
+            self.settings.get("battery_warranty_mwh") or None,
+            life.get("discharge_kwh"),
+            now,
+        )

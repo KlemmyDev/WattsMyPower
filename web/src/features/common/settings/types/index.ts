@@ -34,7 +34,28 @@ export type Settings = {
   garage_spaces: number;
   inverter_places: ("wall" | "garage")[];
   battery_places: ("wall" | "garage")[];
+  /**
+   * Cost and warranty (Settings → System): what the system cost in dollars, and when it went in, for payback on Bills;
+   * when the battery went in if later, and its warranty in years and in MWh delivered, for Health. 0 = not set. Dates
+   * are unix seconds at local midnight.
+   */
+  system_cost: number;
+  system_installed: number;
+  battery_installed: number;
+  battery_warranty_years: number;
+  battery_warranty_mwh: number;
 };
+
+export type OwnershipKey =
+  "system_cost" | "system_installed" | "battery_installed" | "battery_warranty_years" | "battery_warranty_mwh";
+
+export const OWNERSHIP_SETTINGS: OwnershipKey[] = [
+  "system_cost",
+  "system_installed",
+  "battery_installed",
+  "battery_warranty_years",
+  "battery_warranty_mwh",
+];
 
 export type WeatherModel = "best_match" | "ecmwf_ifs025" | "gfs_seamless" | "icon_seamless";
 

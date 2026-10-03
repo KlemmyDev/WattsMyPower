@@ -96,3 +96,29 @@ export type Bills = {
   upcoming: ((BillSpan & BillTotals & { basis: Basis }) | null)[];
   next_year: { net_cost: number; without_solar: number } | null;
 };
+
+/** Grid use by hour of the day (GET /api/bills/grid-hours): per day on average, each month. */
+export type GridHours = {
+  type: "flat" | "tou" | "amber";
+  months: { month: string; hours: ({ kwh: number; cost: number } | null)[] | null }[];
+  /** On time of use: the dearest band and the hours of a weekday it covers. */
+  dearest: { name: string; hours: number[] } | null;
+};
+
+/** What the system has saved and when it pays for itself (GET /api/bills/payback). */
+export type Payback = {
+  cost: number | null;
+  installed: number | null;
+  co2_t: number | null;
+  recorded_from: string | null;
+  recorded_days?: number;
+  saved_recorded?: number;
+  /** Before readings began, from the install date, at today's rate. */
+  saved_before?: number | null;
+  saved_total?: number;
+  per_year?: number | null;
+  paid_pct?: number;
+  paid_off?: boolean;
+  payback_at?: number;
+  payback_years?: number;
+};

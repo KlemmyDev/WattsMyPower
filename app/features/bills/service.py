@@ -26,7 +26,7 @@ from app.features.bills.tips import baseload, tips
 from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
-from app.features.tariffs.costs import daily_costs
+from app.features.tariffs.costs import KWH_PER_W_5MIN, Pricer, daily_costs
 from app.features.tariffs.store import TariffStore
 
 COMPLETE = 230  # 5-minute readings (of 288) for a day to count as complete
@@ -35,6 +35,9 @@ NEAR = 3  # days either side of that to average over
 MIN_NEAR = 3  # complete days needed there to go on last year
 RECENT = 30  # days of recent use to fall back on
 UPCOMING = 3  # bills estimated ahead
+GRID_MONTHS = 12  # months of grid use by hour
+MIN_RATE_DAYS = 30  # days of savings before a yearly rate (and payback) is worked out
+CO2_KG_PER_KWH = 0.68  # average Australian grid emissions (National Greenhouse Accounts, scope 2)
 
 Day = dict[str, Any]
 # Per-day figures that add up over a period. without_solar includes the day's supply charge.
@@ -236,3 +239,91 @@ class BillsService:
             "upcoming": upcoming,
             "next_year": next_year,
         }
+
+    # ------------------------------------------------------------------ grid use by hour
+    def grid_hours(self, now: int) -> dict[str, Any]:
+        """What each hour of the day costs in grid power, on an average day of each of the last 12 months
+        (kWh and dollars), and the hours in the dearest time-of-use band, to see when the money goes."""
+        t, tables = self.tariffs.current()
+        today = dt.date.fromtimestamp(now)
+        start = _ts(_month(today.year, today.month - GRID_MONTHS + 1, 1))
+        pricer = Pricer(t, tables, self.prices, start, now)
+        cells: dict[str, list[list[float]]] = {}  # month -> hour -> [kWh, $, readings]
+        for ts, grid in self.readings.rollups(start, now, ["grid_power"], not_null="grid_power"):
+            lt = time.localtime(ts + 150)
+            month = cells.setdefault(time.strftime("%Y-%m", lt), [[0.0, 0.0, 0] for _ in range(24)])
+            kwh = max(grid, 0) * KWH_PER_W_5MIN
+            c = month[lt.tm_hour]
+            c[0] += kwh
+            c[1] += kwh * pricer.buy(ts) if kwh else 0.0
+            c[2] += 1
+        months = []
+        for k in range(GRID_MONTHS):
+            d = _month(today.year, today.month - GRID_MONTHS + 1 + k, 1)
+            key = f"{d.year}-{d.month:02d}"
+            hours = cells.get(key)
+            months.append(
+                {
+                    "month": key,
+                    # Per day: a whole hour has 12 readings.
+                    "hours": [
+                        {"kwh": round(c[0] * 12 / c[2], 3), "cost": round(c[1] * 12 / c[2], 3)} if c[2] >= 6 else None
+                        for c in hours
+                    ]
+                    if hours
+                    else None,
+                }
+            )
+        dearest = None
+        if t["type"] == "tou":
+            top = max(b["rate"] for b in tables.bands)
+            dearest = {
+                "name": next(b["name"] for b in tables.bands if b["rate"] == top),
+                "hours": [h for h in range(24) if tables.bands[tables.at(False, h * 60 + 30)]["rate"] == top],
+            }
+        return {"type": t["type"], "months": months, "dearest": dearest}
+
+    # ------------------------------------------------------------------ payback
+    def payback(self, now: int, total_pv: float | None) -> dict[str, Any]:
+        """What the system has saved since readings began (and, from when it was installed if that's
+        earlier, at the same rate), what it saves a year, and when it pays for itself."""
+        cost = self.settings.get("system_cost") or None
+        installed = self.settings.get("system_installed") or None
+        first = self.repo.first_reading()
+        co2 = round(total_pv * CO2_KG_PER_KWH / 1000, 1) if total_pv else None
+        out: dict[str, Any] = {"cost": cost, "installed": installed, "co2_t": co2, "recorded_from": None}
+        if first is None:
+            return out
+        t, tables = self.tariffs.current()
+        start = _ts(dt.date.fromtimestamp(first))
+        priced = daily_costs(self.readings, t, tables, start, now + 1, self.meter, self.prices)["days"]
+        today = dt.date.fromtimestamp(now).isoformat()
+        whole = [d for d in priced if d["date"] < today]
+        if not whole:
+            return out
+        recorded = sum(d["saved"] for d in priced)
+        year_ago = (dt.date.fromtimestamp(now) - dt.timedelta(365)).isoformat()
+        recent = [d for d in whole if d["date"] >= year_ago]
+        per_day = sum(d["saved"] for d in recent) / len(recent) if len(recent) >= MIN_RATE_DAYS else None
+        # Days between installation and the first reading, saved at today's rate.
+        unrecorded = max(0, (start - installed) // 86400) if installed else 0
+        before = per_day * unrecorded if per_day and unrecorded else 0.0
+        total = recorded + before
+        out |= {
+            "recorded_from": whole[0]["date"],
+            "recorded_days": len(whole),
+            "saved_recorded": round(recorded, 2),
+            "saved_before": round(before, 2) if before else None,
+            "saved_total": round(total, 2),
+            "per_year": round(per_day * 365, 0) if per_day else None,
+        }
+        if cost:
+            out["paid_pct"] = round(min(100.0, total / cost * 100), 1)
+            if total >= cost:
+                out["paid_off"] = True
+            elif per_day and per_day > 0:
+                out["paid_off"] = False
+                out["payback_at"] = int(now + (cost - total) / per_day * 86400)
+                start_at = installed or start
+                out["payback_years"] = round((out["payback_at"] - start_at) / (365.25 * 86400), 1)
+        return out
