@@ -30,7 +30,7 @@ export function Switch({
       <span
         aria-hidden="true"
         className={cn(
-          "block size-6 rounded-full bg-white shadow-sm transition-transform duration-200",
+          "block size-6 rounded-full bg-ink shadow-[0_1px_3px_var(--color-shadow-pill)] transition-transform duration-200 light:bg-surface",
           on ? "translate-x-5" : "translate-x-0",
         )}
       />
