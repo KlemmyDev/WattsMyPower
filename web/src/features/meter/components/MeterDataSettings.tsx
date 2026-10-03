@@ -15,10 +15,13 @@ import {
   removeMeterImport,
 } from "~/features/meter/api";
 import type { MeterImport, MeterPreview } from "~/features/meter/types";
-import { dateSpan, intervalName, readings, ymdSpan } from "~/features/meter/utils";
+import { channelLabel, dateSpan, intervalName, readings, ymdSpan } from "~/features/meter/utils";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 const ROW = "border-b border-line-subtle px-6 py-5 last:border-b-0 max-sm:px-4";
+// Channels other than each meter's general import and export, such as E2 controlled load: the retailer
+// bills them at their own rate and the inverter doesn't see them, so they're kept but not counted.
+const STORED_ONLY = "stored, not included in bills";
 
 /** What a chosen file holds, with the button that imports it. */
 function Preview({ file, preview, onDone }: { file: File; preview: MeterPreview; onDone: () => void }) {
@@ -33,6 +36,7 @@ function Preview({ file, preview, onDone }: { file: File; preview: MeterPreview;
     },
   });
   const minutes = [...new Set(preview.channels.map((c) => c.minutes))];
+  const multi = preview.nmis.length > 1;
 
   return (
     <div className={`flex flex-col gap-4 bg-canvas ${ROW}`}>
@@ -49,7 +53,7 @@ function Preview({ file, preview, onDone }: { file: File; preview: MeterPreview;
           <div key={dir} className="flex flex-col gap-0.5 rounded-xl bg-surface px-4 py-3">
             <span className="text-xs text-ink-muted">{dir === "import" ? "From the grid" : "To the grid"}</span>
             <span className="text-lg font-semibold tabular-nums">
-              {preview.channels.some((c) => c.direction === dir)
+              {preview.channels.some((c) => c.included && c.direction === dir)
                 ? kWhInt(dir === "import" ? preview.import_kwh : preview.export_kwh)
                 : "Not in this file"}
             </span>
@@ -58,11 +62,18 @@ function Preview({ file, preview, onDone }: { file: File; preview: MeterPreview;
       </div>
       <ul className="flex flex-col gap-1 text-[13px] leading-5 text-ink-muted">
         {preview.channels.map((c) => (
-          <li key={`${c.nmi}-${c.suffix}`}>
-            {c.suffix} ({c.direction === "import" ? "from the grid" : "to the grid"}, in {c.unit}):{" "}
-            {readings(c.readings)} over {c.days} {plural(c.days, "day")}
-            {c.estimated > 0 && `, ${c.estimated} estimated or substituted`}
-            {c.missing > 0 && `, ${c.missing} missing`}
+          <li key={`${c.nmi}-${c.suffix}`} className={c.included ? undefined : "text-ink-faint"}>
+            <span className={c.included ? "font-medium text-ink" : undefined}>{channelLabel(c)}</span>
+            {multi && ` on ${c.nmi}`}: {kWhInt(c.kwh)} ·{" "}
+            {c.included ? (
+              <>
+                {readings(c.readings)} over {c.days} {plural(c.days, "day")}
+                {c.estimated > 0 && `, ${c.estimated} estimated or substituted`}
+                {c.missing > 0 && `, ${c.missing} missing`}
+              </>
+            ) : (
+              STORED_ONLY
+            )}
           </li>
         ))}
         {preview.missing > 0 && <li>Days with missing readings keep using the inverter's figures.</li>}
@@ -114,9 +125,17 @@ function ImportRow({ item }: { item: MeterImport }) {
           )}
         </div>
         <span className="text-[13px] text-ink-muted">
-          {span} · {kWhInt(item.import_kwh)} from the grid, {kWhInt(item.export_kwh)} to it · imported{" "}
-          {dayMonth(item.imported_at)}
+          {span} · imported {dayMonth(item.imported_at)}
         </span>
+        <ul className="flex flex-col text-[13px] leading-5 text-ink-muted">
+          {item.channels.map((c) => (
+            <li key={`${c.nmi}-${c.suffix}`} className={c.included ? undefined : "text-ink-faint"}>
+              {channelLabel(c)}
+              {item.nmis.length > 1 && ` on ${c.nmi}`}: {kWhInt(c.kwh)}
+              {!c.included && ` · ${STORED_ONLY}`}
+            </li>
+          ))}
+        </ul>
       </div>
       {confirming ? (
         <div className="flex items-center gap-3">

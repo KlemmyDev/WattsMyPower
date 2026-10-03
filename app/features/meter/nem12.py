@@ -25,6 +25,13 @@ them from the network's side (E as "export" from the network to the home), which
 letters look backwards. Other channels (Q and K reactive energy, and so on) aren't energy that's
 billed per kWh, and are skipped.
 
+Only each NMI's general channels count as grid import and export: the lowest-numbered E and B
+suffix it has (usually E1 and B1). A second import register (E2…) is almost always controlled
+load, such as off-peak hot water on its own circuit: retailers bill it at its own rate, which the
+tariff model doesn't have, and the inverter's meter usually doesn't see that circuit. So other
+channels are stored and shown, but kept out of bills, costs and the comparison with the dashboard
+(see `general_channels`), as controlled load was before meter data could be imported.
+
 Quality flags: A actual, E forward estimated, S substituted, F final substituted, N null (no
 reading). Estimated and substituted readings are kept and counted as they're what the bill uses
 until replaced; null intervals are left out, so a day with any is not treated as complete.
@@ -35,6 +42,7 @@ from __future__ import annotations
 import calendar
 import csv
 import datetime as dt
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 NEM_OFFSET = 10 * 3600  # NEM time is UTC+10 all year
@@ -87,6 +95,26 @@ class Nem12File:
     channels: list[Channel]
     # Channels left out, and anything else worth saying about the file, as readable sentences.
     notes: list[str]
+
+
+def _suffix_order(suffix: str) -> tuple[int, str]:
+    """E1 before E2 before E10; a suffix without a number after the numbered ones."""
+    rest = suffix[1:]
+    return (int(rest) if rest.isdigit() else 1_000, suffix)
+
+
+def general_channels(channels: Iterable[tuple[str, str, str]]) -> set[tuple[str, str]]:
+    """
+    Of (nmi, direction, suffix) channels, the (nmi, suffix) of each NMI's general import and
+    export channel: the lowest-numbered of each direction. Those are grid import and export;
+    the others (E2 controlled load and the like) are stored but not counted.
+    """
+    best: dict[tuple[str, str], str] = {}
+    for nmi, direction, suffix in channels:
+        have = best.get((nmi, direction))
+        if have is None or _suffix_order(suffix) < _suffix_order(have):
+            best[(nmi, direction)] = suffix
+    return {(nmi, suffix) for (nmi, _), suffix in best.items()}
 
 
 def day_start(day: dt.date) -> int:

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Config
 from app.core.database import Database
 from app.features.bills.service import BillsService
-from app.features.meter.nem12 import Nem12Error, parse
+from app.features.meter.nem12 import Nem12Error, general_channels, parse
 from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
@@ -357,3 +357,82 @@ def test_meter_data_through_the_api(config: Config) -> None:
         assert client.delete(f"/api/meter/imports/{made['id']}").json() == {"removed": True}
         assert client.delete(f"/api/meter/imports/{made['id']}").status_code == 404
         assert client.get("/api/meter/reconcile").json() == {"summary": None, "days": []}
+
+
+# ---------------------------------------------------------------------------------------------- other channels
+def test_the_general_channels_are_the_lowest_numbered_of_each_direction() -> None:
+    stored = {(NMI, "import", "E2"), (NMI, "import", "E10"), (NMI, "import", "E1"), (NMI, "export", "B1"),
+              ("3120000002", "import", "E2")}  # fmt: skip
+    # Only E2 for the second NMI: it's that meter's general channel.
+    assert general_channels(stored) == {(NMI, "E1"), (NMI, "B1"), ("3120000002", "E2")}
+
+
+def _with_controlled_load(meter: MeterService, readings: ReadingsRepository, d1: dt.date, d2: dt.date) -> None:
+    """The inverter sees 500 W from the grid all day (12 kWh). The meter agrees on E1 and B1, and also has
+    2.4 kWh a day of controlled load (hot water, 22:00 to midnight) on E2, a circuit the inverter doesn't see."""
+    _grid(readings, _local(d1), _local(d2 + dt.timedelta(1)), 500)
+    days = {d1: 0.25, d2: 0.25}
+    hot_water: list[float | str] = [0.0] * 44 + [0.6] * 4
+    data = nem12(
+        channel("E1", days), channel("E2", dict.fromkeys(days, hot_water)), channel("B1", dict.fromkeys(days, 0.0))
+    )
+    meter.import_file(data, "with-cl.csv", 1)
+
+
+def test_controlled_load_is_stored_and_listed_but_not_counted(
+    meter: MeterService, readings: ReadingsRepository
+) -> None:
+    d1, d2 = JULY_1, JULY_1 + dt.timedelta(1)
+    data = nem12(channel("E1", {d1: 0.25}), channel("E2", {d1: 0.05}), channel("B1", {d1: 0.1}))
+    preview = meter.preview(data, "cl.csv")
+    assert [(c["suffix"], c["included"], c["kwh"]) for c in preview["channels"]] == [
+        ("E1", True, 12.0), ("E2", False, 2.4), ("B1", True, 4.8)]  # fmt: skip
+    assert (preview["import_kwh"], preview["export_kwh"]) == (12.0, 4.8)
+
+    _with_controlled_load(meter, readings, d1, d2)
+    (item,) = meter.imports()
+    assert (item["import_kwh"], item["export_kwh"]) == (24.0, 0.0)
+    assert [(c["suffix"], c["included"], c["kwh"]) for c in item["channels"]] == [
+        ("B1", True, 0.0), ("E1", True, 24.0), ("E2", False, 4.8)]  # fmt: skip
+    assert {k: (d.import_kwh, d.complete) for k, d in meter.days(0, 2**40).items()} == {
+        "2026-07-01": (12.0, True), "2026-07-02": (12.0, True)}  # fmt: skip
+
+    # The comparison with the dashboard leaves it out too, so the days agree.
+    out = meter.reconcile(None, None)
+    assert [(d["meter_import"], d["notable"]) for d in out["days"]] == [(12.0, False), (12.0, False)]
+    assert out["summary"]["notable_days"] == 0
+
+
+def test_bills_and_costs_leave_out_controlled_load(
+    db: Database, config: Config, meter: MeterService, readings: ReadingsRepository
+) -> None:
+    d1, d2 = JULY_1, JULY_1 + dt.timedelta(1)
+    _with_controlled_load(meter, readings, d1, d2)
+    start = int(_local(d1).timestamp())
+    one, two = daily_costs(readings, TOU, rate_tables(TOU), start, start + 2 * 86400, meter)["days"]
+    assert one["source"] == two["source"] == "meter"
+    # E1 only: 0.25 kWh each half hour, 2.5 kWh of it in the 16:00-21:00 peak. Not E2's 22:00 hot water.
+    peak, off = one["bands"]
+    assert (one["import_kwh"], peak["import_kwh"], off["import_kwh"]) == pytest.approx((12.0, 2.5, 9.5))
+
+    settings = SettingsStore(db, config)
+    settings.load()
+    settings.save({"bill_months": 1, "bill_day": 1})
+    tariffs = TariffStore(db, config)
+    tariffs.load()
+    tariffs.save({"type": "flat", "flat_rate": 0.3, "feed_in_rate": 0.05, "supply_charge": 1.0, "bands": []})
+    now = int(_local(d2, 23).timestamp())
+    so_far = BillsService(db, readings, settings, tariffs, meter).build(now)["current"]["so_far"]
+    assert so_far["meter_days"] == 1  # the 1st; the 2nd is today, so still the inverter's
+    assert so_far["import_kwh"] == pytest.approx(12 + 11.5, abs=0.1)
+
+
+def test_only_general_channels_is_unchanged(meter: MeterService) -> None:
+    data = nem12(channel("E1", {JULY_1: 0.25}), channel("B1", {JULY_1: 0.1}))
+    preview = meter.preview(data, "plain.csv")
+    assert [c["included"] for c in preview["channels"]] == [True, True]
+    meter.import_file(data, "plain.csv", 1)
+    (item,) = meter.imports()
+    assert (item["import_kwh"], item["export_kwh"]) == (12.0, 4.8)
+    (day,) = meter.days(0, 2**40).values()
+    assert (day.import_kwh, day.export_kwh, day.complete) == (12.0, 4.8, True)

@@ -48,32 +48,22 @@ class MeterRepository:
         with self.db.reading() as conn:
             return {d for (d,) in conn.execute(sql, (nmi, suffix, first, last))}
 
-    def imports(self) -> list[dict[str, Any]]:
-        """Each import still holding readings, newest first, with what it covers."""
+    def import_channels(self) -> list[tuple[Any, ...]]:
+        """Per import still holding readings (newest first) and channel: (id, filename, imported_at, nmi,
+        suffix, direction, readings, first start, last end, kWh, readings not actual)."""
         sql = (
-            "SELECT i.id, i.filename, i.imported_at, GROUP_CONCAT(DISTINCT m.nmi), COUNT(*), MIN(m.ts),"
-            " MAX(m.ts + m.minutes * 60), SUM(CASE WHEN m.direction = 'import' THEN m.kwh ELSE 0 END),"
-            " SUM(CASE WHEN m.direction = 'export' THEN m.kwh ELSE 0 END), SUM(m.quality NOT LIKE 'A%')"
+            "SELECT i.id, i.filename, i.imported_at, m.nmi, m.suffix, m.direction, COUNT(*), MIN(m.ts),"
+            " MAX(m.ts + m.minutes * 60), SUM(m.kwh), SUM(m.quality NOT LIKE 'A%')"
             " FROM meter_imports i JOIN meter_intervals m ON m.import_id = i.id"
-            " GROUP BY i.id ORDER BY i.imported_at DESC, i.id DESC"
+            " GROUP BY i.id, m.nmi, m.suffix ORDER BY i.imported_at DESC, i.id DESC, m.nmi, m.suffix"
         )
         with self.db.reading() as conn:
-            rows = conn.execute(sql).fetchall()
-        return [
-            {
-                "id": r[0],
-                "filename": r[1],
-                "imported_at": r[2],
-                "nmis": sorted((r[3] or "").split(",")),
-                "intervals": r[4],
-                "start": r[5],
-                "end": r[6],
-                "import_kwh": round(r[7], 2),
-                "export_kwh": round(r[8], 2),
-                "estimated": r[9],
-            }
-            for r in rows
-        ]
+            return conn.execute(sql).fetchall()
+
+    def channels(self) -> set[tuple[str, str, str]]:
+        """Every (nmi, direction, suffix) with readings stored."""
+        with self.db.reading() as conn:
+            return set(conn.execute("SELECT DISTINCT nmi, direction, suffix FROM meter_intervals"))
 
     def remove(self, import_id: int) -> bool:
         """Delete an import and its readings. False if there was no such import."""
@@ -95,10 +85,3 @@ class MeterRepository:
         with self.db.reading() as conn:
             first, last = conn.execute("SELECT MIN(ts), MAX(ts + minutes * 60) FROM meter_intervals").fetchone()
         return (first, last) if first is not None else None
-
-    def has_export(self) -> bool:
-        """Whether any meter imported so far has an export channel (a home without solar may not)."""
-        with self.db.reading() as conn:
-            return (
-                conn.execute("SELECT 1 FROM meter_intervals WHERE direction = 'export' LIMIT 1").fetchone() is not None
-            )

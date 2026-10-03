@@ -5,6 +5,11 @@ export type MeterChannel = {
   /** The meter's channel, e.g. E1 (import) or B1 (export). */
   suffix: string;
   direction: "import" | "export";
+  /**
+   * Counted as grid import or export: each meter's lowest-numbered E and B channel (E1, B1). Others, such as
+   * E2 controlled load, are stored but left out of bills, costs and the comparison.
+   */
+  included: boolean;
   unit: string;
   minutes: number;
   days: number;
@@ -43,9 +48,11 @@ export type MeterImport = {
   intervals: number;
   start: number;
   end: number;
+  /** Grid import and export: the included channels only. */
   import_kwh: number;
   export_kwh: number;
   estimated: number;
+  channels: Pick<MeterChannel, "nmi" | "suffix" | "direction" | "kwh" | "included">[];
 };
 
 export type ReconcileDay = {

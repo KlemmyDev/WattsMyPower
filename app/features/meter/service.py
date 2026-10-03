@@ -6,6 +6,10 @@ The meter at the grid connection is what the retailer bills from, so where it co
 its figures are used for bills and costs instead of the inverter's (app.features.tariffs.costs).
 The inverter's meter can disagree with it: a second inverter wired outside the inverter's meter,
 a CT clamp on the wrong wire, or gaps in the readings. Comparing the two day by day shows which.
+
+Only each NMI's general channels (E1 and B1, usually) count as grid import and export. Others,
+such as E2 controlled load, are stored and listed with `included: false`, but left out of the
+daily figures, and so out of bills, costs and the comparison (see nem12.general_channels).
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.database import Database
-from app.features.meter.nem12 import Nem12File, day_start, parse
+from app.features.meter.nem12 import Nem12File, day_start, general_channels, parse
 from app.features.meter.repository import MeterRepository
 from app.features.readings.repository import ReadingsRepository
 
@@ -45,13 +49,15 @@ def _midnight(date: dt.date) -> int:
     return int(time.mktime((date.year, date.month, date.day, 0, 0, 0, 0, 0, -1)))
 
 
-def _summary(parsed: Nem12File) -> dict[str, Any]:
-    """What a file holds, per channel and in total."""
+def _summary(parsed: Nem12File, general: set[tuple[str, str]]) -> dict[str, Any]:
+    """What a file holds, per channel and in total. The totals only count the `general` channels."""
     channels: list[dict[str, Any]] = [
         {
             "nmi": ch.nmi,
             "suffix": ch.suffix,
             "direction": ch.direction,
+            # Counted as grid import or export (E1, B1…), rather than stored only (E2 controlled load…).
+            "included": (ch.nmi, ch.suffix) in general,
             "unit": ch.unit,
             "minutes": ch.minutes,
             "days": len(ch.days),
@@ -69,8 +75,8 @@ def _summary(parsed: Nem12File) -> dict[str, Any]:
         "first": min(days).isoformat(),
         "last": max(days).isoformat(),
         "days": len(days),
-        "import_kwh": round(sum(c["kwh"] for c in channels if c["direction"] == "import"), 2),
-        "export_kwh": round(sum(c["kwh"] for c in channels if c["direction"] == "export"), 2),
+        "import_kwh": round(sum(c["kwh"] for c in channels if c["included"] and c["direction"] == "import"), 2),
+        "export_kwh": round(sum(c["kwh"] for c in channels if c["included"] and c["direction"] == "export"), 2),
         "estimated": sum(c["estimated"] for c in channels),
         "missing": sum(c["missing"] for c in channels),
         "notes": parsed.notes,
@@ -98,28 +104,65 @@ class MeterService:
             days = {d.toordinal() - EPOCH for d in filled}
             stored = self.repo.stored_days(ch.nmi, ch.suffix, day_start(min(filled)), day_start(max(filled)) + 86400)
             replaces |= days & stored
-        return {"filename": clean_filename(filename), **_summary(parsed), "replaces_days": len(replaces)}
+        general = general_channels(self.repo.channels() | {(c.nmi, c.direction, c.suffix) for c in parsed.channels})
+        return {"filename": clean_filename(filename), **_summary(parsed, general), "replaces_days": len(replaces)}
 
     def import_file(self, data: bytes, filename: str | None, now: int) -> dict[str, Any]:
         """Store a file's readings, replacing any already imported for the same days. Raises Nem12Error."""
         parsed = parse(data)
         name = clean_filename(filename)
         import_id = self.repo.store(name, parsed, now)
-        return {"id": import_id, "filename": name, **_summary(parsed)}
+        return {"id": import_id, "filename": name, **_summary(parsed, general_channels(self.repo.channels()))}
 
     def imports(self) -> list[dict[str, Any]]:
-        return self.repo.imports()
+        """Each import still holding readings, newest first: what it covers, and each of its channels."""
+        general = general_channels(self.repo.channels())
+        out: dict[int, dict[str, Any]] = {}
+        for i, filename, at, nmi, suffix, direction, n, first, last, kwh, estimated in self.repo.import_channels():
+            item = out.setdefault(
+                i,
+                {
+                    "id": i,
+                    "filename": filename,
+                    "imported_at": at,
+                    "nmis": [],
+                    "intervals": 0,
+                    "start": first,
+                    "end": last,
+                    "import_kwh": 0.0,
+                    "export_kwh": 0.0,
+                    "estimated": 0,
+                    "channels": [],
+                },
+            )
+            included = (nmi, suffix) in general
+            if nmi not in item["nmis"]:
+                item["nmis"].append(nmi)
+            item["intervals"] += n
+            item["start"], item["end"] = min(item["start"], first), max(item["end"], last)
+            item["estimated"] += estimated
+            if included:
+                item[f"{direction}_kwh"] += kwh
+            item["channels"].append(
+                {"nmi": nmi, "suffix": suffix, "direction": direction, "kwh": round(kwh, 2), "included": included}
+            )
+        for item in out.values():
+            item["import_kwh"], item["export_kwh"] = round(item["import_kwh"], 2), round(item["export_kwh"], 2)
+        return list(out.values())
 
     def remove(self, import_id: int) -> bool:
         return self.repo.remove(import_id)
 
     # ------------------------------------------------------------------ per day
     def days(self, start: int, end: int) -> dict[str, MeterDay]:
-        """Each local day with meter readings in [start, end), keyed on YYYY-MM-DD."""
+        """Each local day with grid import or export readings in [start, end), keyed on YYYY-MM-DD.
+        Only the general channels count (not controlled load and the like)."""
         rows = self.repo.intervals(start, end)
         if not rows:
             return {}
-        has_export = self.repo.has_export()
+        stored = self.repo.channels()
+        general = general_channels(stored)
+        has_export = any(direction == "export" for _, direction, _ in stored)
         out: dict[str, MeterDay] = {}
         # Seconds of readings per day, direction and channel: a day is complete when each channel covers it.
         cover: dict[str, dict[tuple[str, str, str], int]] = {}
@@ -127,6 +170,8 @@ class MeterService:
         day: MeterDay | None = None
         lo = hi = 0
         for ts, minutes, direction, kwh, quality, nmi, suffix in rows:
+            if (nmi, suffix) not in general:
+                continue
             if not lo <= ts < hi:  # rows are in time order: only look up the local day when it changes
                 date = dt.date.fromtimestamp(ts)
                 lo, hi = _midnight(date), _midnight(date + dt.timedelta(1))

@@ -1,5 +1,6 @@
 import { dayMonth, parseYmd } from "~/features/common/formatting/utils/date";
 import { intAU, plural } from "~/features/common/formatting/utils/number";
+import type { MeterChannel } from "~/features/meter/types";
 
 /** How often a channel reads: "half-hourly", "five-minute", "15-minute". */
 export const intervalName = (minutes: number) =>
@@ -23,6 +24,21 @@ export function versusMeter(dashboard: number, meter: number): string {
   if (Math.abs(share) < 2) return "within 2% of your meter";
   return `${Math.round(Math.abs(share))}% ${share > 0 ? "more" : "less"} than your meter`;
 }
+
+/**
+ * A meter channel's name: "Grid import (E1)", "Grid export (B1)", or for channels kept out of grid figures,
+ * "Controlled load (E2)" (a second import register is almost always controlled load) or "Other export (B2)".
+ */
+export const channelLabel = (c: Pick<MeterChannel, "suffix" | "direction" | "included">) =>
+  `${
+    c.included
+      ? c.direction === "import"
+        ? "Grid import"
+        : "Grid export"
+      : c.direction === "import"
+        ? "Controlled load"
+        : "Other export"
+  } (${c.suffix})`;
 
 /** "120 readings" with thousands separators. */
 export const readings = (n: number) => `${intAU(n)} ${plural(n, "reading")}`;
