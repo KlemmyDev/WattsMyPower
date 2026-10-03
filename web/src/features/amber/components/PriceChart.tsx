@@ -6,12 +6,14 @@ import { cn } from "~/features/common/ui/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH } from "~/features/common/formatting/utils/number";
 import { addDays } from "~/features/common/time/utils";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 const W = 1000;
 const H = 160;
 const PAD = 8;
-export const BUY = "#f5f5f5";
-export const SELL = "#ffb547";
+// Buying follows the charts' home-use line (ink), feed-in their solar colour; both follow the theme.
+export const BUY = COLOR.ink;
+export const SELL = COLOR.solar;
 
 const STROKE = {
   fill: "none",
@@ -69,7 +71,7 @@ function plot(p: AmberPrices, start: number, end: number) {
 
 const Dot = ({ left, top, color }: { left: number; top: number; color: string }) => (
   <span
-    className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_#141414]"
+    className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
     style={{ left: `${left}%`, top: `${top}%`, background: color }}
   />
 );
@@ -122,12 +124,12 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
         onPointerDown={onPoint}
         onPointerLeave={() => setHoverAt(null)}
       >
-        <div className="absolute inset-x-0 top-0 border-t border-white/5" />
-        <div className="absolute inset-x-0 top-1/2 border-t border-white/5" />
+        <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
+        <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
         {shown && (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 rounded-[3px] bg-white/8"
+            className="pointer-events-none absolute inset-y-0 rounded-[3px] bg-fg/8"
             style={{
               left: `${chart.leftOf(shown.start).toFixed(3)}%`,
               width: `max(3px, ${(chart.leftOf(shown.end) - chart.leftOf(shown.start)).toFixed(3)}%)`,
@@ -146,8 +148,8 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
               x2={W}
               y1={chart.zeroY.toFixed(1)}
               y2={chart.zeroY.toFixed(1)}
-              stroke="rgba(255,255,255,0.22)"
               vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.fg, 0.22) }}
             />
           )}
           {chart.sellPaths.map((s, i) => (
@@ -155,10 +157,10 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
               key={`s${i}`}
               d={s.d}
               {...STROKE}
-              stroke={SELL}
               strokeWidth="2"
               strokeDasharray={s.forecast ? "4 4" : undefined}
               strokeOpacity={s.forecast ? 0.75 : 1}
+              style={{ stroke: SELL }}
             />
           ))}
           {chart.buyPaths.map((s, i) => (
@@ -166,10 +168,10 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
               key={`b${i}`}
               d={s.d}
               {...STROKE}
-              stroke={BUY}
               strokeWidth="2"
               strokeDasharray={s.forecast ? "4 4" : undefined}
               strokeOpacity={s.forecast ? 0.75 : 1}
+              style={{ stroke: BUY }}
             />
           ))}
         </svg>

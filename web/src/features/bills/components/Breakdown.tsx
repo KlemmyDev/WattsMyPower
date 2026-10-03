@@ -94,8 +94,8 @@ export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | u
 function CostOnAmber({ bills }: { bills: Bills }) {
   const [priced, fallback] = bills.bands;
   const parts = [
-    { ...priced, color: "#f5f5f5", sub: "Priced every 5 or 30 minutes" },
-    { ...fallback, color: "#9a9aa3", sub: "Fallback rate, where Amber had no price" },
+    { ...priced, color: COLOR.ink, sub: "Priced every 5 or 30 minutes" },
+    { ...fallback, color: COLOR.gridLine, sub: "Fallback rate, where Amber had no price" },
   ].filter((b) => b.name && (b === priced || b.import_kwh > 0));
   const kwh = parts.reduce((a, b) => a + b.import_kwh, 0);
   const cost = parts.reduce((a, b) => a + b.cost, 0);

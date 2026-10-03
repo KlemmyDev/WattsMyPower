@@ -194,7 +194,7 @@ function AmberTable({ c }: { c: CostDay }) {
       </div>
       {priced && (
         <Row
-          dot="#f5f5f5"
+          dot={COLOR.ink}
           label="Amber prices"
           sub={`${priced.import_kwh > 0 ? "Average" : "Today's average"} ${priceLabel(priced.rate)} per kWh`}
           kwh={kWh(priced.import_kwh)}
@@ -205,7 +205,7 @@ function AmberTable({ c }: { c: CostDay }) {
       )}
       {fallback && (fallback.import_kwh > 0 || fallback.home_kwh > 0) && (
         <Row
-          dot="#9a9aa3"
+          dot={COLOR.gridLine}
           label="No Amber price"
           sub={`Fallback rate ${centsShort(fallback.rate)} per kWh`}
           kwh={kWh(fallback.import_kwh)}
@@ -215,7 +215,7 @@ function AmberTable({ c }: { c: CostDay }) {
         />
       )}
       <Row
-        dot="#3a3a40"
+        dot={COLOR.barFaint}
         label="Supply charge"
         sub="Fixed daily charge"
         cost={money(c.supply)}
@@ -223,7 +223,7 @@ function AmberTable({ c }: { c: CostDay }) {
         savedOn={false}
       />
       <Row
-        dot="#ffb547"
+        dot={COLOR.solar}
         label={c.feed_in_credit < 0 ? "Solar export cost" : "Solar credit"}
         sub={fit != null ? `Exported at an average ${priceLabel(fit)} per kWh` : "Nothing exported yet"}
         cost={money(-c.feed_in_credit)}
@@ -231,7 +231,7 @@ function AmberTable({ c }: { c: CostDay }) {
         savedOn={c.feed_in_credit >= 0}
         savedKwh={kWh(c.export_kwh)}
       />
-      <div className={cn(COLS, "border-t border-white/14 pt-3")}>
+      <div className={cn(COLS, "border-t border-fg/14 pt-3")}>
         <span className="text-sm font-semibold">Today</span>
         <span />
         <span className="text-right text-[15px] font-semibold text-ink">{money(c.net_cost)}</span>

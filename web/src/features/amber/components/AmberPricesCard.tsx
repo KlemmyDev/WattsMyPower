@@ -21,7 +21,7 @@ function Now({ label, rate, until, sell }: { label: string; rate: number | null;
       <span className="text-[44px] leading-12 font-light tracking-[-1.8px] tabular-nums max-xs:text-[34px] max-xs:leading-10">
         {rate == null ? DASH : priceLabel(rate)}
       </span>
-      <span className={cn("text-[13px] tabular-nums", costs ? "text-warn" : "text-[#7a7a7a]")}>
+      <span className={cn("text-[13px] tabular-nums", costs ? "text-warn" : "text-ink-label")}>
         {rate == null ? "No price right now" : costs ? "Sending power to the grid costs you" : `per kWh · ${until}`}
       </span>
     </div>
