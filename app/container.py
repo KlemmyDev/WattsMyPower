@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from app.core.config import Config
 from app.core.database import Database
+from app.features.alerts.service import AlertsService
 from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.bills.service import BillsService
@@ -48,6 +49,7 @@ class Services:
     integrations: IntegrationsService
     onboarding: OnboardingService
     live: LiveService
+    alerts: AlertsService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -65,6 +67,7 @@ def build_services(config: Config) -> Services:
     source: CollectorIngest | Simulator = (
         CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
+    insights = InsightsService(db, readings, settings)
     integrations = IntegrationsService(config, collector, live)
     return Services(
         config=config,
@@ -76,12 +79,13 @@ def build_services(config: Config) -> Services:
         geocoder=Geocoder(),
         plans=plans,
         forecast=ForecastService(config, readings, settings),
-        insights=InsightsService(db, readings, settings),
+        insights=insights,
         meter=meter,
         bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),
         auth=AuthService(db, enabled=config.auth),
         integrations=integrations,
         onboarding=OnboardingService(config, db, integrations),
         live=live,
+        alerts=AlertsService(db, live, settings, readings, tariffs, insights),
         source=source,
     )

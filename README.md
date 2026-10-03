@@ -11,6 +11,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 - **Insights:** self-sufficiency, battery health and cycles, when you use grid power, and whether your panels are performing as they should.
 - **Savings:** this quarter's bill, system payback, and a comparison of every current plan from a retailer against your real usage.
 - **A second, older Sungrow inverter** (for example an SG5K-D on an AC-coupled system) can be added, so both systems count.
+- **Alerts** to your phone (ntfy or Pushover) or any webhook: the inverter not answering, the battery low or not charging in the sun, solar underperforming, and an optional daily summary.
 - Works on desktop and phones.
 
 ## What you need
@@ -102,7 +103,7 @@ The dashboard implements the "Energy Dashboard v5" design from Claude Design: a 
 - **Insights:** four headline figures (30-day self-sufficiency and share of solar used at home, battery cycles, lifetime CO₂ avoided), self-sufficiency by month for the last 12 months, battery health (state of health reported by the battery, depth of discharge, round-trip efficiency, time at full charge), a heatmap of grid import by hour and month, and solar performance: each of the last 30 days' output compared with what the weather allowed, flagging clear days more than 10% below expected. Sections fill in as history builds up; the lifetime figures come from the inverter's own counters, so they're right from the first reading.
 - **Savings:** this quarter's bill (so far, and estimated for the whole quarter from your average full day over the last 30 days, with what it would be without solar and the battery); system payback (enter what the system cost on the card; savings since install are estimated from the inverter's lifetime counters at today's rates, and the payoff date from your average monthly saving); a plan comparison that prices a year of your actual usage on every current plan from a retailer you choose; and the cost to drive 100 km from solar, the grid, or petrol.
 - **Tesla:** "not connected" state and the connection screen. Tesla sign-in needs a Tesla Fleet API app, which isn't set up yet.
-- **Settings:** system details read from the inverter (model, serial, battery, backup reserve, grid connection) and the ones it can't report (the solar array's size, and optionally the battery's capacity, a backup reserve to fall back on, and its maximum charge and discharge rate), electricity rates, and connected services, including the weather location. Change the weather location by searching for a suburb, town or address (OpenStreetMap's Nominatim service); only the suburb-level name and its coordinates are saved, never a street address. Coordinates can still be entered directly, and get a place name looked up automatically. The Forecast page shows which place the outlook is for.
+- **Settings:** system details read from the inverter (model, serial, battery, backup reserve, grid connection) and the ones it can't report (the solar array's size, and optionally the battery's capacity, a backup reserve to fall back on, and its maximum charge and discharge rate), electricity rates, connected services, including the weather location, and alerts (see below). Change the weather location by searching for a suburb, town or address (OpenStreetMap's Nominatim service); only the suburb-level name and its coordinates are saved, never a street address. Coordinates can still be entered directly, and get a place name looked up automatically. The Forecast page shows which place the outlook is for.
 
 ### Tariffs
 
@@ -188,6 +189,30 @@ These older dongles accept Modbus TCP on port 502 but only answer Sungrow's encr
 ### How plan comparison works
 
 Grid import for every 5-minute slot of a weekday and a weekend day is averaged over complete days (at least 80% of readings) from the last year, scaled to the inverter's daily counters. Each plan's rates are applied slot by slot, weighting weekdays and weekends 5:2, plus a year of supply charge, minus a year of feed-in at the plan's rate. It needs at least 3 complete days. Plans with controlled load or demand charges are left out. Plans whose conversion had to simplify something (a feed-in rate that changes through the day, stepped or seasonal rates) are marked **Approximate** and never recommended as the cheapest. Duplicate listings of the same plan for different network areas are shown once.
+
+### Alerts
+
+**Settings → Alerts** tells you when something needs attention, so you don't have to keep checking. Alerts are off until you set up somewhere to send them:
+
+- **ntfy:** free push notifications through the [ntfy](https://ntfy.sh) app. Enter a topic address such as `https://ntfy.sh/a-hard-to-guess-name` (on ntfy.sh anyone who knows the topic can read it) and subscribe to the same topic in the app. A self-hosted ntfy server works too, with an access token or `username:password` if it needs signing in.
+- **Pushover:** your user key, and the API token of an application you create in Pushover.
+- **Webhook:** any address, sent each alert as JSON (`event` is `alert`, `resolved`, `summary` or `test`, plus `rule`, `title`, `message`, `ts` and `urgent`), with an optional bearer token. Handy for Home Assistant.
+
+**Send a test** tries what's in the form before you save it, and says what went wrong if it doesn't arrive. Tokens, keys and webhook addresses are stored in the dashboard's database and only ever shown masked.
+
+Each alert can be switched off, and its thresholds changed:
+
+| Alert | When | Default |
+|---|---|---|
+| Inverter not answering | no reading from the main inverter (the collector's last successful read, so a dongle serving stale values doesn't trip it) | after 15 minutes |
+| Readings stuck | the inverter answers, but with the same readings over and over (the WiNet-S2 does this for a few minutes now and then), so nothing new is recorded | after 30 minutes |
+| Second inverter not answering | the second inverter has stopped answering while the sun is up. The sun's height is worked out from the forecast location, so it never fires at night, when it sleeps | after 30 minutes in daylight |
+| Battery low | battery charge at or below a level | 10% |
+| Battery not charging in the sun | exporting at least 500 W while the battery isn't full and isn't charging | for 30 minutes |
+| Solar underperforming | clear days well below what the system usually makes in that weather, judged the same way as Insights' solar performance | below 75% on 2 clear days in a row |
+| Daily summary | yesterday's solar, home use, grid bought and sold, and cost | off; 7 am when on |
+
+A problem has to last before it's reported, so a passing blip stays quiet. Each alert is sent once, then not repeated for a while (an hour for the inverter, up to three days for solar performance) even if the problem comes and goes, and a follow-up says when it's fixed. If an alert can't be delivered (often the same outage that took the internet down), it's tried again every 5 minutes while the problem lasts. Where each alert is up to is kept in the database, so restarting or updating the dashboard doesn't send them again. Recent alerts, and whether they arrived, are listed on the same page.
 
 ### How solar performance works
 
@@ -299,7 +324,7 @@ app/
     config.py           settings from environment variables
     database.py         SQLite connections and migrations
     schema.py           every table, and the versioned migrations that create and change them
-    http.py, cache.py   outbound JSON requests, and a TTL cache for slow lookups
+    http.py, cache.py   outbound HTTP requests, and a TTL cache for slow lookups
     spa.py              serves the built dashboard
   features/<name>/      one module per capability, each with its router, service and SQL:
     inverters/          what the readings mean: the driver interface (types.py) and registry
@@ -315,6 +340,8 @@ app/
     insights/           Insights page figures, including solar performance against past weather
     savings/            quarterly bill, payback, plan comparison
     plans/              Energy Made Easy / CDR plan search and plan-to-tariff conversion (retailers.json)
+    alerts/             alert rules (rules.py), the sun's position (sun.py), ntfy / Pushover / webhook
+                        delivery (channels.py), and the background task that checks them (service.py)
     auth/               sign-in: the household account, sessions, and the /api guard
     onboarding/         the first-run set-up guide's progress, and spotting installs already set up
 tests/                  pytest suite

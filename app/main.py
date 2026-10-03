@@ -13,6 +13,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.container import build_services
 from app.core.config import Config
 from app.core.spa import mount_spa
+from app.features.alerts.router import router as alerts_router
 from app.features.amber.router import router as amber_router
 from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
@@ -42,6 +43,7 @@ ROUTERS = [
     forecast_router,
     insights_router,
     integrations_router,
+    alerts_router,
     onboarding_router,
     bills_router,
     meter_router,
@@ -74,6 +76,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
         await asyncio.to_thread(services.amber.load)
         if poll:
             await services.source.start()
+            await services.alerts.start()  # follows the live status the source publishes
             await services.amber.start()  # does nothing until an Amber account is connected
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
@@ -81,6 +84,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
         if poll:
             naming.cancel()
             await services.amber.stop()
+            await services.alerts.stop()
             await services.source.stop()
 
     app = FastAPI(title="WattsMyPower", lifespan=lifespan)
