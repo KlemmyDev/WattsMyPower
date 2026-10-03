@@ -10,6 +10,7 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, pct } from "~/features/common/formatting/utils/number";
 import { hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import { BH, next24, PH, W } from "~/features/overview/utils/next24";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 type N24 = NonNullable<ReturnType<typeof next24>>;
 type Point = N24["points"][number];
@@ -20,7 +21,7 @@ const line = { vectorEffect: "non-scaling-stroke", strokeLinejoin: "round" } as 
 /** A dot on a chart line at the hovered point. `top` is a percentage of the plot's height. */
 const Dot = ({ left, top, color }: { left: number; top: number; color: string }) => (
   <span
-    className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_#141414]"
+    className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
     style={{ left: `${left}%`, top: `${top}%`, background: color }}
   />
 );
@@ -45,9 +46,9 @@ function PointTooltip({ point, width }: { point: Point; width: number }) {
           {h.temp != null ? `${Math.round(h.temp)}°` : ""}
         </span>
       </div>
-      <TooltipRow label="Solar" value={kW(point.pv * 1000)} color="#ffb547" />
-      <TooltipRow label="Home use" value={kW(point.load * 1000)} color="#f5f5f5" />
-      <TooltipRow label="Battery" value={pct(point.soc)} color="#6f8cff" />
+      <TooltipRow label="Solar" value={kW(point.pv * 1000)} color={COLOR.solar} />
+      <TooltipRow label="Home use" value={kW(point.load * 1000)} color={COLOR.ink} />
+      <TooltipRow label="Battery" value={pct(point.soc)} color={COLOR.battery} />
       <TooltipRow
         label={g > 0.05 ? "From the grid" : g < -0.05 ? "To the grid" : "Grid"}
         value={Math.abs(g) > 0.05 ? kW(g * 1000) : "Idle"}
@@ -81,7 +82,7 @@ export function Next24Card({
         }
       />
       {!n ? (
-        <div className="text-[15px] leading-[23px] text-pretty text-[#c8c8c8]">
+        <div className="text-[15px] leading-[23px] text-pretty text-ink-body">
           {f === undefined
             ? "Loading forecast"
             : "Forecast unavailable. The server could not reach the Open-Meteo weather service, or the forecast is turned off."}
@@ -113,7 +114,7 @@ function Coverage({ n }: { n: N24 }) {
     <div className="flex flex-col gap-2.5">
       <div className="text-lg leading-[26px] font-medium text-pretty text-ink">{n.headline}</div>
       <div className="flex flex-col gap-1.5">
-        <div className="flex h-2 overflow-hidden rounded-full bg-[#3a3a3e]">
+        <div className="flex h-2 overflow-hidden rounded-full bg-bar-faint">
           <div className="bg-battery" style={{ width: `${n.cover.toFixed(1)}%` }} />
         </div>
         <div className="flex justify-between gap-3 text-xs text-ink-dim tabular-nums">
@@ -146,7 +147,7 @@ function Moments({ n }: { n: N24 }) {
           <Num num={m.num} color={m.color} className="size-6 text-xs" />
           <span className="flex flex-col gap-px">
             <span className="text-[17px] leading-5 font-medium text-ink tabular-nums">{m.time}</span>
-            <span className="text-[11px] text-[#7a7a7a]">{m.day}</span>
+            <span className="text-[11px] text-ink-label">{m.day}</span>
           </span>
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="text-sm leading-[19px] font-medium text-ink">{m.title}</span>
@@ -170,10 +171,24 @@ function Charts({ n }: { n: N24 }) {
   };
   const nights = (h: number) =>
     n.nights.map((r) => (
-      <rect key={r.x} x={r.x.toFixed(1)} y="0" width={r.w.toFixed(1)} height={h} fill="rgba(255,255,255,0.025)" />
+      <rect
+        key={r.x}
+        x={r.x.toFixed(1)}
+        y="0"
+        width={r.w.toFixed(1)}
+        height={h}
+        style={{ fill: alpha(COLOR.fg, 0.025) }}
+      />
     ));
   const base = (h: number) => (
-    <line x1="0" x2={W} y1={h - 2} y2={h - 2} stroke="rgba(255,255,255,0.12)" vectorEffect="non-scaling-stroke" />
+    <line
+      x1="0"
+      x2={W}
+      y1={h - 2}
+      y2={h - 2}
+      vectorEffect="non-scaling-stroke"
+      style={{ stroke: alpha(COLOR.fg, 0.12) }}
+    />
   );
   return (
     <div className="flex flex-col gap-2">
@@ -202,7 +217,7 @@ function Charts({ n }: { n: N24 }) {
         {hover && (
           <div
             aria-hidden
-            className="pointer-events-none absolute top-6 bottom-0 -translate-x-1/2 rounded-[3px] bg-white/8"
+            className="pointer-events-none absolute top-6 bottom-0 -translate-x-1/2 rounded-[3px] bg-fg/8"
             style={{ left: `${hover.left.toFixed(3)}%`, width: `max(4px, ${n.stepWidth.toFixed(3)}%)` }}
           />
         )}
@@ -220,7 +235,7 @@ function Charts({ n }: { n: N24 }) {
         <div className="flex items-center justify-between gap-3 text-xs text-ink-dim">
           <span className="flex gap-3.5">
             <span className="flex items-center gap-1.5">
-              <i className="size-2.5 rounded-[3px] bg-solar/60" />
+              <i className="size-2.5 rounded-[3px] bg-solar-wash/60" />
               Solar
             </span>
             <span className="flex items-center gap-1.5">
@@ -238,19 +253,19 @@ function Charts({ n }: { n: N24 }) {
               x2={W}
               y1={n.guideY.toFixed(1)}
               y2={n.guideY.toFixed(1)}
-              stroke="rgba(255,255,255,0.08)"
               strokeDasharray="3 4"
               vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.fg, 0.08) }}
             />
-            <path d={`${n.pvPath} L${W} ${PH - 2} L0 ${PH - 2} Z`} fill="rgba(255,181,71,0.32)" />
-            <path d={n.pvPath} fill="none" stroke="#ffb547" strokeWidth="1.75" {...line} />
-            <path d={n.loadPath} fill="none" stroke="#f5f5f5" strokeWidth="1.5" {...line} />
+            <path d={`${n.pvPath} L${W} ${PH - 2} L0 ${PH - 2} Z`} style={{ fill: alpha(COLOR.solarWash, 0.32) }} />
+            <path d={n.pvPath} fill="none" strokeWidth="1.75" {...line} style={{ stroke: COLOR.solar }} />
+            <path d={n.loadPath} fill="none" strokeWidth="1.5" {...line} style={{ stroke: COLOR.ink }} />
             {base(PH)}
           </svg>
           {hover && (
             <>
-              <Dot left={hover.left} top={hover.pvTop} color="#ffb547" />
-              <Dot left={hover.left} top={hover.loadTop} color="#f5f5f5" />
+              <Dot left={hover.left} top={hover.pvTop} color={COLOR.solar} />
+              <Dot left={hover.left} top={hover.loadTop} color={COLOR.ink} />
             </>
           )}
         </div>
@@ -269,23 +284,23 @@ function Charts({ n }: { n: N24 }) {
               x2={W}
               y1={n.fullY}
               y2={n.fullY}
-              stroke="rgba(255,255,255,0.08)"
               vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.fg, 0.08) }}
             />
-            <path d={`${n.socPath} L${W} ${BH - 2} L0 ${BH - 2} Z`} fill="rgba(111,140,255,0.2)" />
-            <path d={n.socPath} fill="none" stroke="#6f8cff" strokeWidth="2.25" {...line} />
+            <path d={`${n.socPath} L${W} ${BH - 2} L0 ${BH - 2} Z`} style={{ fill: alpha(COLOR.battery, 0.2) }} />
+            <path d={n.socPath} fill="none" strokeWidth="2.25" {...line} style={{ stroke: COLOR.battery }} />
             <line
               x1="0"
               x2={W}
               y1={n.reserveY.toFixed(1)}
               y2={n.reserveY.toFixed(1)}
-              stroke="rgba(255,255,255,0.3)"
               strokeDasharray="3 4"
               vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.fg, 0.3) }}
             />
             {base(BH)}
           </svg>
-          {hover && <Dot left={hover.left} top={hover.socTop} color="#6f8cff" />}
+          {hover && <Dot left={hover.left} top={hover.socTop} color={COLOR.battery} />}
         </div>
         {hover && <PointTooltip point={hover} width={width} />}
       </div>
@@ -294,7 +309,7 @@ function Charts({ n }: { n: N24 }) {
           <span
             key={tk.left}
             className={cn(
-              "absolute font-mono text-[10px] whitespace-nowrap text-[#7a7a7a]",
+              "absolute font-mono text-[10px] whitespace-nowrap text-ink-label",
               i === 0 ? "" : i === n.ticks.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
             )}
             style={{ left: `${tk.left}%` }}

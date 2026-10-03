@@ -1,4 +1,5 @@
 import type { SVGProps } from "react";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 // Lucide icon paths, as used in the design.
 type Shape =
@@ -106,7 +107,11 @@ export function Icon({ name, size = 22, style, ...rest }: Props) {
 export function BrandMark({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={(size * 20) / 18} viewBox="0 0 16 18" aria-hidden="true" style={{ display: "block" }}>
-      <path d="M9.6 0.8 L2.2 10.2 H7.4 L6.4 17.2 L13.8 7.8 H8.6 Z" fill="#ffb547" strokeLinejoin="round" />
+      <path
+        d="M9.6 0.8 L2.2 10.2 H7.4 L6.4 17.2 L13.8 7.8 H8.6 Z"
+        strokeLinejoin="round"
+        style={{ fill: COLOR.solar }}
+      />
     </svg>
   );
 }

@@ -5,15 +5,16 @@ import { cn } from "~/features/common/ui/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Hour } from "~/features/history/utils/day";
 
 const W = 1000;
 const H = 220;
-const SOLAR = "#ffb547";
-const HOME = "#f5f5f5";
-const BATTERY = "#6f8cff";
-const FROM_GRID = "#8a8a90";
-const TO_GRID = "#f2a65a";
+const SOLAR = COLOR.solar;
+const HOME = COLOR.ink;
+const BATTERY = COLOR.battery;
+const FROM_GRID = COLOR.fromGrid;
+const TO_GRID = COLOR.export;
 
 type Row = { t: number; pv: number | null; load: number | null; soc: number | null; grid: number | null };
 type Key = "pv" | "load" | "soc";
@@ -106,7 +107,7 @@ function ReadingTooltip({ r, step, left, width }: { r: Row; step: number; left: 
 const Dot = ({ left, top, color }: { left: number; top: number | null; color: string }) =>
   top == null ? null : (
     <span
-      className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_#141414]"
+      className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
       style={{ left: `${left}%`, top: `${top}%`, background: color }}
     />
   );
@@ -171,7 +172,7 @@ export function DayChart({
         {hover && chart && (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 -translate-x-1/2 rounded-[3px] bg-white/8"
+            className="pointer-events-none absolute inset-y-0 -translate-x-1/2 rounded-[3px] bg-fg/8"
             style={{
               left: `${chart.at(hover).left.toFixed(3)}%`,
               width: `max(4px, ${((chart.step / chart.span) * 100).toFixed(3)}%)`,
@@ -180,7 +181,7 @@ export function DayChart({
         )}
         <div className="relative h-[220px] max-sm:h-[180px]">
           {["0%", "33%", "66%", "100%"].map((top) => (
-            <div key={top} className="absolute right-0 left-0 border-t border-white/5" style={{ top }} />
+            <div key={top} className="absolute right-0 left-0 border-t border-fg/5" style={{ top }} />
           ))}
           {chart && (
             <svg
@@ -191,21 +192,21 @@ export function DayChart({
             >
               <defs>
                 <linearGradient id="hyPv" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor={SOLAR} stopOpacity="0.35" />
-                  <stop offset="1" stopColor={SOLAR} stopOpacity="0" />
+                  <stop offset="0" stopOpacity="0.35" style={{ stopColor: COLOR.solarWash }} />
+                  <stop offset="1" stopOpacity="0" style={{ stopColor: COLOR.solarWash }} />
                 </linearGradient>
               </defs>
               {chart.solar.map((s, i) => (
                 <g key={i}>
                   <path d={s.area} fill="url(#hyPv)" />
-                  <path d={s.d} {...STROKE} stroke={SOLAR} strokeWidth="2" />
+                  <path d={s.d} {...STROKE} strokeWidth="2" style={{ stroke: SOLAR }} />
                 </g>
               ))}
               {chart.home.map((d, i) => (
-                <path key={i} d={d} {...STROKE} stroke={HOME} strokeWidth="1.5" />
+                <path key={i} d={d} {...STROKE} strokeWidth="1.5" style={{ stroke: HOME }} />
               ))}
               {chart.soc.map((d, i) => (
-                <path key={i} d={d} {...STROKE} stroke={BATTERY} strokeWidth="1.5" strokeDasharray="5 5" />
+                <path key={i} d={d} {...STROKE} strokeWidth="1.5" strokeDasharray="5 5" style={{ stroke: BATTERY }} />
               ))}
             </svg>
           )}
@@ -228,7 +229,7 @@ export function DayChart({
             })()}
         </div>
         <div className="relative h-[72px]">
-          <div className="absolute inset-x-0 top-1/2 border-t border-white/12" />
+          <div className="absolute inset-x-0 top-1/2 border-t border-fg/12" />
           <div className="absolute inset-0 flex gap-0.5">
             {hours.map((h, i) => {
               const g = h.grid ?? 0;

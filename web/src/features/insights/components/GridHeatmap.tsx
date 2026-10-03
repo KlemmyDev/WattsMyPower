@@ -5,12 +5,13 @@ import { cn } from "~/features/common/ui/utils";
 import { reserveOf } from "~/features/common/energy/utils";
 import { hourLabel, monthLong, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 type Month = Insights["months"][number];
 type Busiest = { cell: NonNullable<HeatCell>; hour: number; month: Month };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
-const heatShade = (v: number) => `rgba(245,245,245,${(0.04 + 0.84 * v).toFixed(2)})`;
+const heatShade = (v: number) => alpha(COLOR.ink, +(0.04 + 0.84 * v).toFixed(2));
 const emptyCell = "bg-transparent shadow-[inset_0_0_0_1px_var(--color-line)]";
 
 /** The hour and month with the most grid import (the first one, on a tie). */
@@ -42,7 +43,7 @@ export function GridHeatmap({ months, system }: { months: Month[]; system: Syste
       <TitleBlock
         id="h-hm"
         title="When you use grid power"
-        sub="Average grid import by hour and month, last 12 months. Darker cells mean more energy from the grid."
+        sub="Average grid import by hour and month, last 12 months. Bolder cells mean more energy from the grid."
       />
       <div className="overflow-x-auto">
         <div className="flex min-w-[760px] flex-col gap-[3px]">

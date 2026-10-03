@@ -44,7 +44,7 @@ export function TopBar() {
           aria-label="WattsMyPower, overview"
           className="flex flex-none items-center gap-3 text-ink no-underline hover:text-ink"
         >
-          <span className="flex size-12 items-center justify-center rounded-2xl border border-white/8 bg-linear-160 from-[#242424] to-[#121212] max-sm:size-10 max-sm:rounded-[13px] max-2xs:size-9">
+          <span className="flex size-12 items-center justify-center rounded-2xl border border-fg/8 bg-linear-160 from-mark-from to-mark-to max-sm:size-10 max-sm:rounded-[13px] max-2xs:size-9">
             <BrandMark />
           </span>
           <span className="font-display text-xl font-semibold tracking-[-0.4px] whitespace-nowrap max-xl:hidden">
@@ -59,7 +59,7 @@ export function TopBar() {
             aria-label="Settings"
             title="Settings"
             activeProps={{ "aria-current": "page", className: "bg-ink! text-ink-inverse!" }}
-            className="flex size-12 items-center justify-center rounded-full border border-white/8 bg-chip text-ink-muted transition-colors duration-200 hover:border-white/20 hover:text-ink max-sm:size-10 max-2xs:size-9"
+            className="flex size-12 items-center justify-center rounded-full border border-fg/8 bg-chip text-ink-muted transition-colors duration-200 hover:border-fg/20 hover:text-ink max-sm:size-10 max-2xs:size-9"
           >
             <Icon name="settings" size={18} />
           </Link>

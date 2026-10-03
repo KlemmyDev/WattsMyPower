@@ -4,6 +4,7 @@ import { Key } from "~/features/bills/components/BillParts";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Swatch } from "~/features/common/ui/components/Swatch";
 import { dollars } from "~/features/common/formatting/utils/number";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 type Kind = "past" | "current" | "upcoming";
 
@@ -42,15 +43,15 @@ export function BillsOverTime({ bills }: { bills: Bills | undefined }) {
           sub="Past bills use your inverter data and current rates, so they may differ slightly from what your retailer charged"
         />
         <div className="flex flex-wrap gap-4 text-xs text-ink-muted">
-          <Key swatch={<Swatch color="#3a3a3e" size={10} />}>Past bills</Key>
-          <Key swatch={<Swatch color="#f5f5f5" size={10} />}>This bill</Key>
-          <Key swatch={<i className="size-2.5 rounded-xs border border-dashed border-white/50" />}>Estimated</Key>
-          <Key swatch={<Swatch color="rgba(62,224,143,0.5)" size={10} />}>Credit</Key>
+          <Key swatch={<Swatch color={COLOR.barFaint} size={10} />}>Past bills</Key>
+          <Key swatch={<Swatch color={COLOR.ink} size={10} />}>This bill</Key>
+          <Key swatch={<i className="size-2.5 rounded-xs border border-dashed border-fg/50" />}>Estimated</Key>
+          <Key swatch={<Swatch color={alpha(COLOR.good, 0.5)} size={10} />}>Credit</Key>
         </div>
       </div>
       <div className="flex flex-col gap-2">
         <div className="relative flex h-60 gap-2" role="img" aria-label="Bills over time">
-          <div className="absolute inset-x-0 h-px bg-white/14" style={{ top: `${sc.zero.toFixed(2)}%` }} />
+          <div className="absolute inset-x-0 h-px bg-fg/14" style={{ top: `${sc.zero.toFixed(2)}%` }} />
           {series.map((s) => {
             const { top, height } = sc.bar(s.v);
             const neg = s.v < 0;
@@ -59,11 +60,11 @@ export function BillsOverTime({ bills }: { bills: Bills | undefined }) {
                 ? "transparent"
                 : s.kind === "current"
                   ? neg
-                    ? "#3ee08f"
-                    : "#f5f5f5"
+                    ? COLOR.good
+                    : COLOR.ink
                   : neg
-                    ? "rgba(62,224,143,0.5)"
-                    : "#3a3a3e";
+                    ? alpha(COLOR.good, 0.5)
+                    : COLOR.barFaint;
             return (
               <div
                 key={s.span.start}
@@ -77,9 +78,7 @@ export function BillsOverTime({ bills }: { bills: Bills | undefined }) {
                     height: `${height.toFixed(2)}%`,
                     background: fill,
                     border:
-                      s.kind === "upcoming"
-                        ? `1px dashed ${neg ? "rgba(62,224,143,0.7)" : "rgba(255,255,255,0.45)"}`
-                        : 0,
+                      s.kind === "upcoming" ? `1px dashed ${neg ? alpha(COLOR.good, 0.7) : alpha(COLOR.fg, 0.45)}` : 0,
                   }}
                 />
                 <span

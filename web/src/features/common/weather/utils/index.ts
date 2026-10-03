@@ -1,6 +1,7 @@
 import type { Forecast, ForecastHour } from "~/features/common/weather/types";
 import type { Snapshot } from "~/features/common/live/types";
 import type { IconName } from "~/features/common/ui/components/Icon";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 // WMO weather codes (Open-Meteo).
 const isRain = (c: number) => (c >= 51 && c <= 67) || (c >= 80 && c <= 82);
@@ -18,7 +19,8 @@ export function hourIcon(h: ForecastHour): IconName {
 }
 
 /** Colour for an hour icon: amber sun, blue rain, grey otherwise. */
-export const hourIconColor = (icon: IconName) => (icon === "sun" ? "#ffb547" : icon === "rain" ? "#9fb2ff" : "#9a9a9a");
+export const hourIconColor = (icon: IconName) =>
+  icon === "sun" ? COLOR.solar : icon === "rain" ? COLOR.link : COLOR.inkMuted;
 
 /** The forecast hour containing `at`, if any. */
 export const hourAt = (f: Forecast, at: number) => f.hours.find((x) => x.ts <= at && at < x.ts + 3600);

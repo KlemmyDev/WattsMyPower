@@ -42,7 +42,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
         aria-labelledby="h-login"
       >
         <div className="flex flex-col items-start gap-5">
-          <span className="flex size-12 items-center justify-center rounded-2xl border border-white/8 bg-linear-160 from-[#242424] to-[#121212]">
+          <span className="flex size-12 items-center justify-center rounded-2xl border border-fg/8 bg-linear-160 from-mark-from to-mark-to">
             <BrandMark />
           </span>
           <div className="flex flex-col gap-1">
