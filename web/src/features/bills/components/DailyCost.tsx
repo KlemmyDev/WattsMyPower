@@ -57,7 +57,7 @@ export function DailyCost({ bills }: { bills: Bills | undefined }) {
               return (
                 <div
                   key={k}
-                  title={`${label}${d.partial ? " (today so far)" : ""}: ${money(d.net_cost)}`}
+                  title={`${label}${d.partial ? " (today so far)" : ""}: ${money(d.net_cost)}${d.source === "meter" ? ", from your meter" : ""}`}
                   className="relative min-w-0 flex-1"
                 >
                   <div

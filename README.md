@@ -119,6 +119,14 @@ Plan lists are cached for 6 hours and plan details for a day. The retailer list 
 
 Costs are worked out on the server for every 5-minute reading, so each kWh is priced at the rate in force at that moment. Each day's totals are then scaled to match the inverter's own daily import and export counters. The whole history is priced with the current tariff, so saving new rates reprices past days too. "Today so far" shows the day's bill so far: grid usage (per rate on time of use), plus the daily supply charge, minus the feed-in credit, giving a cost (or credit) for today. History's "Saved" uses the same per-day figures.
 
+### Smart meter data (NEM12)
+
+Your electricity meter is what the retailer bills you on, so its readings are the most accurate figures for grid import and export. Most distributors and retailers let you download them as a **NEM12** file (a CSV of half-hourly or five-minute readings), often under "usage data" or "download my data". Upload it in **Settings → Billing → Smart meter data**: a preview shows the dates, the meter's channels (E1 and so on for import, B1 for export), the totals, and any estimated, substituted or missing readings before anything is saved. Only each meter's general channels count as grid import and export: the lowest-numbered E and B (usually E1 and B1). Other channels, most often E2 controlled load (off-peak hot water on its own circuit), are stored and listed, labelled "stored, not included in bills": retailers bill controlled load at its own rate, which the tariffs here don't have, and the inverter doesn't see that circuit. Importing a file that overlaps earlier ones replaces those days, so a newer download with fewer estimates wins. Each import can be removed again.
+
+Wherever the meter's data covers a whole day, bills and costs use its import and export instead of the inverter's, with each interval priced at the rate in force for it, and the Bills page says how many days came from the meter. Days without meter data (including today) keep using the inverter. NEM12 times are Australian Eastern Standard Time all year, with each value covering the interval ending at its slot; they're converted to the dashboard's time zone, so with daylight saving a NEM day spans two local days. Days with missing readings stay with the inverter's figures.
+
+Below the imports, **Meter and dashboard compared** sets each day's import and export from the meter against the dashboard's, and lists the days that differ by more than half a kWh and 10%. A dashboard that consistently counts less export than the meter usually means a second inverter is wired outside the main inverter's meter (see below).
+
 Register map and quirks come from [berndverhofstadt/sungrow-poc](https://github.com/berndverhofstadt/sungrow-poc) (MIT).
 
 ## Configuration
@@ -235,6 +243,9 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/plans/compare?brand=&postcode=` | a year of your usage priced on each of a retailer's current plans, cheapest first |
 | `GET /api/tariff`, `PUT /api/tariff` | read or replace the tariff (JSON; validated, including overlapping windows) |
 | `GET /api/costs?start=&end=` | per-day import, export, cost, and savings, split by rate |
+| `POST /api/meter/preview?filename=` | what a NEM12 file (the raw request body) holds, without importing it |
+| `POST /api/meter/imports?filename=`, `GET /api/meter/imports`, `DELETE /api/meter/imports/{id}` | import a NEM12 file, list imports, remove one |
+| `GET /api/meter/reconcile?start=&end=` | each day's import and export from the meter against the dashboard's |
 | `GET /api/plans/brands` | retailers that publish plans |
 | `GET /api/plans/search?brand=&postcode=&q=` | a retailer's current residential electricity plans for a postcode, with prices incl. GST |
 | `GET /api/plans/tariff?brand=&plan=` | one plan converted to a tariff, plus notes (not saved) |
@@ -295,6 +306,7 @@ app/
                         (transform.py), reprocessing, mock mode, and the live event stream
     readings/           samples and 5-minute rollups: history, daily totals, CSV export
     tariffs/            tariff model and validation, the saved tariff, and time-of-use cost maths
+    meter/              smart-meter data: reading NEM12 files, storing imports, comparing with the dashboard
     settings/           forecast location (and place name) and system cost; OpenStreetMap place search
     forecast/           Open-Meteo forecast, self-calibration, battery projection
     insights/           Insights page figures, including solar performance against past weather

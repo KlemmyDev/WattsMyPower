@@ -20,6 +20,7 @@ from app.features.live.client import CollectorClient
 from app.features.live.ingest import CollectorIngest
 from app.features.live.service import LiveService
 from app.features.live.simulator import Simulator
+from app.features.meter.service import MeterService
 from app.features.plans.service import PlansService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.geocode import Geocoder
@@ -38,6 +39,7 @@ class Services:
     plans: PlansService
     forecast: ForecastService
     insights: InsightsService
+    meter: MeterService
     bills: BillsService
     auth: AuthService
     integrations: IntegrationsService
@@ -52,6 +54,7 @@ def build_services(config: Config) -> Services:
     settings = SettingsStore(db, config)
     tariffs = TariffStore(db, config)
     plans = PlansService(tariffs)
+    meter = MeterService(db, readings)
     live = LiveService(config, settings, tariffs)
     collector = None if config.mock else CollectorClient(config.collector_url, config.collector_token)
     source: CollectorIngest | Simulator = (
@@ -67,7 +70,8 @@ def build_services(config: Config) -> Services:
         plans=plans,
         forecast=ForecastService(config, readings, settings),
         insights=InsightsService(db, readings, settings),
-        bills=BillsService(db, readings, settings, tariffs),
+        meter=meter,
+        bills=BillsService(db, readings, settings, tariffs, meter),
         auth=AuthService(db, enabled=config.auth),
         integrations=IntegrationsService(config, collector, live),
         live=live,

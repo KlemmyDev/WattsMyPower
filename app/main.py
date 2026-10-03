@@ -21,6 +21,7 @@ from app.features.insights.router import router as insights_router
 from app.features.integrations.router import router as integrations_router
 from app.features.live.router import health_router
 from app.features.live.router import router as live_router
+from app.features.meter.router import router as meter_router
 from app.features.plans.router import router as plans_router
 from app.features.readings.router import router as readings_router
 from app.features.settings.router import name_location
@@ -39,6 +40,7 @@ ROUTERS = [
     insights_router,
     integrations_router,
     bills_router,
+    meter_router,
     plans_router,
     health_router,
 ]
