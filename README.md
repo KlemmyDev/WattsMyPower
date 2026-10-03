@@ -21,7 +21,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 - A **computer on the same network that stays on**, to run it in Docker:
   - **Linux** (the best fit): a Proxmox LXC container or VM, a Raspberry Pi, or any Debian or Ubuntu box. The install script sets up Docker on it if needed.
   - **A Mac**, with Docker Desktop.
-  - **Windows 10 or 11**, with Docker Desktop and WSL (Windows' built-in Linux).
+  - **Windows 11**, in WSL (Windows' built-in Linux), set up for you by the Windows installer.
 - Optional: a second, older Sungrow inverter with a Wi-Fi dongle (found by the same scan).
 
 ## How it fits together
@@ -33,7 +33,7 @@ Two services, run together by Docker Compose:
 
 ## Install
 
-The same install script runs everywhere; only getting ready for it differs. Follow the steps for your computer, then [open the dashboard](#open-the-dashboard).
+Follow the steps for your computer, then [open the dashboard](#open-the-dashboard). On Linux and a Mac you run the install script; on Windows a PowerShell script sets up WSL and runs it there for you.
 
 ### Linux
 
@@ -69,37 +69,35 @@ The same install script runs everywhere; only getting ready for it differs. Foll
 
 ### Windows
 
-WattsMyPower runs on Windows inside WSL (Windows Subsystem for Linux), with Docker Desktop. Its files live on WSL's Linux disk rather than on `C:`, because its databases aren't reliable on a Windows drive shared into Docker.
+Windows 11 (22H2 or later). WattsMyPower runs in its own WSL (Windows Subsystem for Linux) distribution, called `WattsMyPower`, with Docker inside it. It starts with Windows, even before anyone signs in, and doesn't need Docker Desktop.
 
-1. **Install WSL and Ubuntu.** Open **PowerShell as administrator** (right-click the Start button → **Terminal (Admin)**, or **Windows PowerShell (Admin)** on Windows 10) and run:
+1. **Open PowerShell** (Start → type *PowerShell*) and run:
 
    ```powershell
-   wsl --install
+   irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1 | iex
    ```
 
-   Restart when it asks, then open **Ubuntu** from the Start menu and choose a Linux username and password when it asks.
+   It asks for administrator permission. If WSL isn't installed yet, it installs it and asks to restart; after you sign in again it carries on by itself (approve the administrator prompt again).
 
-2. **Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)** and open it. In its **Settings**:
-   - **General:** keep **Use the WSL 2 based engine** and **Start Docker Desktop when you sign in to your computer** turned on. WattsMyPower only records while Docker Desktop is running.
-   - **Resources → WSL integration:** turn it on for **Ubuntu**, then **Apply & restart**.
+2. **It sets everything up,** with no questions:
+   - creates the `WattsMyPower` distribution (Ubuntu 24.04) with systemd, so Docker runs as a service in it
+   - turns on WSL's mirrored networking (`networkingMode=mirrored` in `.wslconfig`), so the dashboard is at this PC's own address. This applies to any other WSL distributions you have too.
+   - runs [install.sh](install.sh) in it, which installs Docker and WattsMyPower, takes the time zone from Windows, and uses port 8080
+   - lets the dashboard's port through the firewall
+   - adds a scheduled task, `WattsMyPower`, that starts it with Windows and keeps it running
+   - offers to stop the PC sleeping while it's plugged in, since it only records while the PC is awake
 
-3. **Run the installer in the Ubuntu window,** from your Linux home folder (it refuses a Windows drive such as `/mnt/c`):
+   It finishes by printing the dashboard's address, for example `http://192.168.1.50:8080`.
 
-   ```bash
-   cd ~
-   ```
+To update, run the same command again. For everything in [Everyday use](#everyday-use), open the distribution with `wsl -d WattsMyPower`, then `cd ~/wattsmypower`. Its files are at `\\wsl$\WattsMyPower\root\wattsmypower` in File Explorer, for example to copy a backup.
 
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
-   ```
+If creating the distribution fails because virtualization is off, turn it on in the PC's BIOS or UEFI settings (often called Intel VT-x, AMD-V or SVM). Windows 10 isn't supported: it doesn't have mirrored networking, which lets other devices reach the dashboard.
 
-   Docker Desktop is started if it isn't running. Then see [what the installer does](#what-the-installer-does). The address it prints is this PC's address on your network.
+To remove it, in PowerShell as administrator (this deletes its data, so copy `data/` out first if you want to keep it):
 
-4. **Let other devices reach it.** If Windows Firewall asks whether Docker Desktop may accept connections, allow it on **private networks**. Your home network has to be set as private for that: **Settings → Network & internet →** your connection **→ Private network**.
-
-5. **Keep the PC on.** In **Settings → System → Power & battery** (**Power & sleep** on Windows 10), set sleep to **Never** when plugged in. After a restart, Docker Desktop starts once you sign in to Windows, and WattsMyPower with it.
-
-To reach the files from Windows (for example to copy a backup), open `\\wsl$\Ubuntu\home\<your Linux username>\wattsmypower` in File Explorer.
+```powershell
+Unregister-ScheduledTask WattsMyPower -Confirm:$false; Remove-NetFirewallHyperVRule -Name WattsMyPower; wsl --unregister WattsMyPower
+```
 
 ### What the installer does
 
@@ -125,13 +123,13 @@ Everything in it is also in Settings (Integrations, Tariffs and Billing), and **
 
 ## Everyday use
 
-Run these from the `wattsmypower` folder (in Terminal on a Mac, and in Ubuntu on Windows):
+Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `wsl -d WattsMyPower`, then `cd ~/wattsmypower`):
 
 | Command | What it does |
 |---|---|
 | `bash install.sh` | update to the latest version (backs up both databases first) |
 | `bash install.sh --configure` | change your settings (time zone, port) and restart. Inverters are changed in **Settings → Integrations**, and the array size and battery in **Settings → System**. |
-| `bash start.sh` | start it, and Docker (or Docker Desktop) if needed, without updating or rebuilding |
+| `bash start.sh` | start it, and Docker (or Docker Desktop on a Mac) if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
@@ -408,5 +406,6 @@ app/
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
+install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
 ```

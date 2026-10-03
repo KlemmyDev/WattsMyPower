@@ -4,8 +4,8 @@
 #   Install:  curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
 #   Update:   cd wattsmypower && bash install.sh
 #
-# Runs on Linux (Docker is installed if it's missing), on a Mac with Docker Desktop, and on
-# Windows in WSL (Ubuntu) with Docker Desktop. Docker Desktop is started if it isn't running.
+# Runs on Linux and in WSL (Docker is installed if it's missing), and on a Mac with Docker
+# Desktop (started if it isn't running). On Windows, install.ps1 sets up WSL and runs this.
 #
 # Run from anywhere other than a WattsMyPower folder, it downloads WattsMyPower into
 # ./wattsmypower (installing git first if needed) and carries on from there. Run inside
@@ -85,9 +85,6 @@ case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*) OS=windows ;;
   *) if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then OS=wsl; else OS=linux; fi ;;
 esac
-# Docker Desktop for Windows, which WSL uses when its WSL integration is on.
-DESKTOP_EXE="/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe"
-
 SUDO=""  # Docker Desktop (Mac) runs as you: nothing here needs root there
 if [ "$OS" != mac ] && [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then SUDO="sudo"; fi
 
@@ -112,7 +109,7 @@ if [ "$HELP" = 1 ]; then
 fi
 
 if [ "$OS" = windows ]; then
-  die "On Windows, WattsMyPower runs in WSL (Ubuntu) with Docker Desktop: open Ubuntu and run the install command there. The README's Windows steps cover setting them up."
+  die "On Windows, install it with install.ps1 instead, which sets up WSL and runs this there. In PowerShell: irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1 | iex"
 fi
 
 if [ -z "$SELF_DIR" ] || ! is_app "$SELF_DIR"; then
@@ -158,24 +155,19 @@ fi
 
 # ---------------------------------------------------------------- Docker
 say "Checking Docker"
-# Docker Desktop (on a Mac, and on Windows for WSL) is an app: start it if it isn't running.
-start_docker_desktop() {
-  case "$OS" in
-    mac) open -ga Docker 2>/dev/null ;;  # -g: in the background
-    wsl) [ -f "$DESKTOP_EXE" ] && powershell.exe -NoProfile -Command "Start-Process '$(wslpath -w "$DESKTOP_EXE")'" >/dev/null 2>&1 ;;
-    *) return 1 ;;
-  esac
-}
-if [ "$OS" != linux ] && ! docker info >/dev/null 2>&1 && start_docker_desktop; then
+# On a Mac, Docker Desktop is an app: start it if it isn't running.
+if [ "$OS" = mac ] && ! docker info >/dev/null 2>&1 && open -ga Docker 2>/dev/null; then  # -g: in the background
   info "Starting Docker Desktop (this can take a minute)"
   for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
 fi
 if ! command -v docker >/dev/null 2>&1; then
   [ "$OS" = mac ] && die "Docker isn't installed. Install Docker Desktop (https://docs.docker.com/desktop/setup/install/mac-install/), open it once, and run this again."
-  [ "$OS" = wsl ] && die "Docker isn't available in WSL. Install Docker Desktop for Windows (https://docs.docker.com/desktop/setup/install/windows-install/), then turn on its WSL integration for ${WSL_DISTRO_NAME:-this distro} (Settings → Resources → WSL integration), and run this again."
+  # Docker runs as a service, so WSL needs systemd (install.ps1 turns it on).
+  [ "$OS" = wsl ] && [ ! -d /run/systemd/system ] && die "Docker needs systemd, which is off in this WSL distribution. install.ps1 sets WSL up for WattsMyPower (see the README); or add [boot] systemd=true to /etc/wsl.conf, run 'wsl --shutdown' in Windows, and run this again."
   warn "Docker isn't installed."
   if confirm "Install it now with Docker's official install script (get.docker.com)?"; then
     command -v curl >/dev/null 2>&1 || die "curl is needed to download it: run 'apt install curl' and try again."
+    [ "$OS" = wsl ] && info "(It suggests Docker Desktop when it sees WSL, and waits 20 seconds: carry on, it isn't needed here.)"
     curl -fsSL https://get.docker.com | $SUDO sh
   else
     die "Install Docker (https://docs.docker.com/engine/install/) and run this again."
@@ -191,7 +183,7 @@ if command -v systemctl >/dev/null 2>&1 && systemctl cat docker.service >/dev/nu
 fi
 if ! docker info >/dev/null 2>&1; then
   if [ -n "$SUDO" ] && $SUDO docker info >/dev/null 2>&1; then DOCKER="$SUDO docker"
-  elif [ "$OS" = linux ]; then die "Docker is installed but isn't running, or this user can't use it. Start it (systemctl start docker) or run this as root."
+  elif [ "$OS" != mac ]; then die "Docker is installed but isn't running, or this user can't use it. Start it (systemctl start docker) or run this as root."
   else die "Docker Desktop isn't running yet. Start it, wait until it says it's running, and run this again."; fi
 fi
 if $DOCKER compose version >/dev/null 2>&1; then DC="$DOCKER compose"
@@ -205,7 +197,7 @@ lan_ip() {
     mac)
       iface="$(route -n get default 2>/dev/null | awk '/interface:/ { print $2 }' || true)"
       ip="$(ipconfig getifaddr "${iface:-en0}" 2>/dev/null || true)" ;;
-    wsl)  # WSL's own address is private to this PC: ask Windows for its address instead
+    wsl)  # ask Windows: WSL's own address can be private to this PC
       ip="$(powershell.exe -NoProfile -Command "(Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway -and \$_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1).IPv4Address.IPAddress" 2>/dev/null | tr -d '\r' || true)" ;;
   esac
   [ -n "$ip" ] || ip="$( (hostname -I 2>/dev/null || true) | awk '{ print $1 }')"
@@ -224,7 +216,7 @@ wait_and_report() {
     local port; port="$(get_env PORT)"
     say "WattsMyPower is running: http://${ip:-localhost}:${port:-8080}"
     info "New install? Connect your inverter there: Settings → Integrations finds it on your network."
-    if [ "$OS" != linux ]; then
+    if [ "$OS" = mac ]; then
       info "It only records while Docker Desktop is running: keep 'Start Docker Desktop when you sign in to your computer'"
       info "on (Docker Desktop → Settings → General), and stop this computer sleeping."
     fi
