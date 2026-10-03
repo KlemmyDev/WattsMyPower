@@ -46,7 +46,7 @@ function Scene({
   f: Forecast | null | undefined;
   now: number;
 }) {
-  const wx = liveWeather(p, f, now);
+  const wx = liveWeather(p, f, now, !!s?.temp_unit_f);
   const flows = {
     pv: (p.pv_power || 0) / 1000,
     grid: (p.grid_power || 0) / 1000,

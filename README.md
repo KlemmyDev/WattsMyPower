@@ -6,11 +6,11 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
 - **Live power flow:** solar, battery, home and grid, updated every minute, drawn as an animated house that follows the weather.
 - **Today's cost and savings,** priced at your actual rates (single rate or time of use), split by rate.
-- **History:** a calendar-year heatmap; pick any day to see it in 5-minute steps; CSV downloads.
-- **Forecast:** the next 24 hours of solar and battery level, from the local weather (Open-Meteo), calibrated to your own system.
+- **History:** a calendar-year heatmap; pick any day to see it in 5-minute steps, with that day's weather; CSV downloads.
+- **Forecast:** the next 24 hours of solar and battery level, from the local weather (Open-Meteo), calibrated to your own system. Every hour's weather is kept (and filled in for older days with readings), and the forecast learns from it how your roof turns sunshine into solar: its direction, shade through the year, heat and the inverter's limit. It switches to what it has learned only once that tests as more accurate. Units, the weather model and the panels' angle are in **Settings → Integrations → Weather**.
 - **Insights:** self-sufficiency, battery health and cycles, when you use grid power, and whether your panels are performing as they should.
 - **Savings:** this quarter's bill, system payback, and a comparison of every current plan from a retailer against your real usage.
-- **Imported history:** bring in the days before it was set up (or fill gaps) from iSolarCloud's 5-minute power-curve exports, under **Settings → Import**, which also explains what to export.
+- **Imported history:** bring in the days before it was set up (or fill gaps) from iSolarCloud's 5-minute power-curve exports, under **Settings → Integrations → Sungrow → Import history from iSolarCloud**, which also explains what to export.
 - **A second, older Sungrow inverter** (for example an SG5K-D on an AC-coupled system) can be added, so both systems count.
 - **Alerts** to your phone (ntfy or Pushover) or any webhook: the inverter not answering, the battery low or not charging in the sun, solar underperforming, and an optional daily summary.
 - Works on desktop and phones.
@@ -100,7 +100,7 @@ The dashboard implements the "Energy Dashboard v5" design from Claude Design: a 
 - **Battery card:** when the battery is discharging, the pill and charge ring turn amber and the ring pulses. The estimate switches to time until the backup reserve, how much of the home the battery is covering, and when solar is forecast to start charging it again.
 - **Next 24 hours:** a one-line summary (when the battery fills, when solar drops below home use, whether the battery reaches its reserve, tomorrow morning's weather), weather every 3 hours, a chart of forecast solar, home use and battery level with markers for "Full" and "Reserve", and totals for solar, use, grid import and expected cost.
 - **History:** a calendar year as a heatmap (January to December, with arrows to step back through earlier years), coloured by solar, self-sufficiency, grid import or savings, with totals for the year. On phones it turns on its side: a row per week with the days of the week across the top. Select a day (or step with the arrows) to see its solar, home use and battery level in 5-minute steps, its totals, and a CSV download for that day.
-- **Forecast:** solar, battery full time, lowest overnight battery, tomorrow morning's weather, and an hour-by-hour strip.
+- **Forecast:** solar, battery full time, lowest overnight battery, tomorrow morning's weather, and an hour-by-hour strip. **Settings → Integrations → Weather** shows how the forecast learned from weather history is doing, and how close the day-ahead forecast has come to what the panels made.
 - **Insights:** four headline figures (30-day self-sufficiency and share of solar used at home, battery cycles, lifetime CO₂ avoided), self-sufficiency by month for the last 12 months, battery health (state of health reported by the battery, depth of discharge, round-trip efficiency, time at full charge), a heatmap of grid import by hour and month, and solar performance: each of the last 30 days' output compared with what the weather allowed, flagging clear days more than 10% below expected. Sections fill in as history builds up; the lifetime figures come from the inverter's own counters, so they're right from the first reading.
 - **Savings:** this quarter's bill (so far, and estimated for the whole quarter from your average full day over the last 30 days, with what it would be without solar and the battery); system payback (enter what the system cost on the card; savings since install are estimated from the inverter's lifetime counters at today's rates, and the payoff date from your average monthly saving); a plan comparison that prices a year of your actual usage on every current plan from a retailer you choose; and the cost to drive 100 km from solar, the grid, or petrol.
 - **Tesla:** "not connected" state and the connection screen. Tesla sign-in needs a Tesla Fleet API app, which isn't set up yet.
@@ -153,7 +153,7 @@ All settings are environment variables (see `.env.example`):
 | `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Settings → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
 | `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Settings → Tariffs**. |
-| `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Settings → Integrations → Change location.** |
+| `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Settings → Integrations → Weather.** |
 | `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
 | `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
 
@@ -170,7 +170,7 @@ A driver has two halves with the same id. The collector's reader (`collector/dev
 
 ### Connecting inverters
 
-**Settings → Integrations → Connect an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle. Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
+**Settings → Integrations → Sungrow → Add an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle. Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
 
 The collector does the scanning and stores the connected inverters in `data/collector.db`, since it's the only part that talks to them and keeps recording while the dashboard updates. Changes apply from its next poll, without a restart. Inverters already connected aren't probed during a scan, because the WiNet-S2 copes badly with a second Modbus client. Installs from before this kept their inverters in `.env` (`INVERTER_HOST`, `PV2_HOST`): the first time the updated collector starts, it moves them into its database, once, and they're managed in the dashboard from then on.
 

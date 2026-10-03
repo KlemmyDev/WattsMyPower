@@ -16,6 +16,12 @@ export type ForecastHour = {
 export type Forecast = {
   generated_at: number;
   calibration: { kwh_per_kwh_m2: number; fitted_hours: number };
+  /** Which solar model made it: the plain one, or the one learned from weather history (with how it back-tested). */
+  model?: {
+    kind: "learned" | "simple";
+    days: number;
+    backtest: { days: number; learned_mae: number | null; simple_mae: number | null };
+  };
   hours: ForecastHour[];
   summary: {
     pv_kwh_24h: number;

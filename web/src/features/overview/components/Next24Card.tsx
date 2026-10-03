@@ -9,7 +9,8 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, pct } from "~/features/common/formatting/utils/number";
-import { hourIcon, hourIconColor } from "~/features/common/weather/utils";
+import { useFahrenheit } from "~/features/common/weather/hooks";
+import { degrees, hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import { BH, next24, PH, W } from "~/features/overview/utils/next24";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
@@ -31,6 +32,7 @@ const Dot = ({ left, top, color }: { left: number; top: number; color: string })
 function PointTooltip({ point, width }: { point: Point; width: number }) {
   const { h } = point;
   const icon = hourIcon(h);
+  const fahrenheit = useFahrenheit();
   const tomorrow = new Date(point.t * 1000).toDateString() !== new Date().toDateString();
   const g = point.grid;
   return (
@@ -44,7 +46,7 @@ function PointTooltip({ point, width }: { point: Point; width: number }) {
           <span style={{ color: hourIconColor(icon) }}>
             <Icon name={icon} size={14} />
           </span>
-          {h.temp != null ? `${Math.round(h.temp)}°` : ""}
+          {h.temp != null ? degrees(h.temp, fahrenheit) : ""}
         </span>
       </div>
       <TooltipRow label="Solar" value={kW(point.pv * 1000)} color={COLOR.solar} />
@@ -164,6 +166,7 @@ function Moments({ n }: { n: N24 }) {
 
 /** Weather, then solar / home use and battery level on a shared time axis, with the moments marked across both. */
 function Charts({ n }: { n: N24 }) {
+  const fahrenheit = useFahrenheit();
   const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
@@ -204,7 +207,7 @@ function Charts({ n }: { n: N24 }) {
                 <Icon name={icon} size={18} />
               </span>
               <span className="text-xs text-ink-soft tabular-nums">
-                {h.temp != null ? `${Math.round(h.temp)}°` : "–"}
+                {h.temp != null ? degrees(h.temp, fahrenheit) : "–"}
               </span>
             </div>
           );

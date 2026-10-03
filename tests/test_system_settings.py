@@ -19,6 +19,7 @@ from app.core.database import Database
 from app.features.forecast.service import ForecastService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SYSTEM_SEEDED, SettingsStore
+from app.features.weather.service import WeatherService
 from app.main import create_app
 
 # What the SH5.0RS reports about itself.
@@ -222,9 +223,8 @@ def test_the_forecast_follows_a_changed_array_size(
     settings = SettingsStore(db, replace(config, pv_kw=13.2))
     settings.seed_system()
     settings.load()
-    forecast = ForecastService(config, readings, settings)
     data = weather(int(time.time()))
-    monkeypatch.setattr(forecast, "_fetch_weather", lambda: data)
+    forecast = ForecastService(config, readings, settings, WeatherService(config, db, settings, get=lambda _: data))
 
     # No history yet, so solar comes from the array size alone: 80% of it per kW/m².
     first = forecast.build(None, 16.0, 5.0)
@@ -240,9 +240,8 @@ def test_the_forecast_charges_at_the_rate_set(
 ) -> None:
     settings = SettingsStore(db, replace(config, pv_kw=13.2))
     settings.load()
-    forecast = ForecastService(config, readings, settings)
     data = weather(int(time.time()))
-    monkeypatch.setattr(forecast, "_fetch_weather", lambda: data)
+    forecast = ForecastService(config, readings, settings, WeatherService(config, db, settings, get=lambda _: data))
 
     def soc_after_an_hour() -> float:
         out = forecast.build({"battery_soc": 20.0}, 100.0, 5.0)  # a battery big enough not to fill

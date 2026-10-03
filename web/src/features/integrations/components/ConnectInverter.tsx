@@ -10,6 +10,7 @@ import { connectInverter, scanQuery, startScan } from "~/features/integrations/a
 import type {
   ConnectedInverter,
   ConnectRequest,
+  ConnectResult,
   FoundDevice,
   IntegrationsOverview,
   InverterRole,
@@ -17,7 +18,7 @@ import type {
 import { deviceName, ROLE_NAME } from "~/features/integrations/utils";
 
 /** Connect an inverter, then refresh what's connected (and the scan, which marks it connected). */
-function useConnect(onConnected: () => void) {
+function useConnect(onConnected: (device: ConnectResult) => void) {
   const qc = useQueryClient();
   const toast = useToast();
   return useMutation({
@@ -28,7 +29,7 @@ function useConnect(onConnected: () => void) {
         `Connected the ${id.model && id.supported ? [id.brand, id.model].filter(Boolean).join(" ") : deviceName(device)}.`,
       );
       qc.invalidateQueries({ queryKey: ["integrations"] });
-      onConnected();
+      onConnected(device);
     },
   });
 }
@@ -293,14 +294,14 @@ function Manual({
   );
 }
 
-/** Settings → Integrations → Connect an inverter: by scanning the network, or by address. */
+/** Connecting an inverter, by scanning the network or by address (Settings → Integrations → Sungrow, and the set-up guide). */
 export function ConnectInverter({
   overview,
   onConnected,
   className,
 }: {
   overview: IntegrationsOverview;
-  onConnected: () => void;
+  onConnected: (device: ConnectResult) => void;
   className?: string;
 }) {
   const connect = useConnect(onConnected);

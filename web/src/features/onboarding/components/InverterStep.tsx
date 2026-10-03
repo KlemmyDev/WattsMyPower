@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "~/features/common/ui/components/Button";
 import { integrationsQuery } from "~/features/integrations/api";
 import { ConnectInverter } from "~/features/integrations/components/ConnectInverter";
-import { ConnectedInverters } from "~/features/integrations/components/InverterSettings";
+import { ConnectedInverters } from "~/features/integrations/components/ConnectedInverters";
 import { StepFooter, StepIntro, type StepProps } from "~/features/onboarding/components/StepParts";
 
 /** Step 1: find the main inverter and connect it, then (optionally) a second one. */

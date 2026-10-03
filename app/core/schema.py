@@ -19,6 +19,11 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     alert_state      each rule's progress: a problem seen but not yet reported, an alert out, its cooldown
     alert_history    alerts sent and resolved, daily summaries, and whether each reached its channels
     prices           dynamic electricity prices (from Amber), one row per channel and interval
+    weather_hours    the weather each hour (Open-Meteo): the latest forecast for hours to come, and the
+                     best estimate of what it was for hours past, kept so History can show it and the
+                     forecast can learn from it
+    forecast_hours   the solar forecast for each hour as it stood the day before, to measure it against
+                     what the panels really made
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -185,6 +190,25 @@ def _imports(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS samples_5m_import ON samples_5m (import_id) WHERE import_id IS NOT NULL")
 
 
+def _weather(conn: sqlite3.Connection) -> None:
+    """Weather history and the day-ahead solar forecast (app.features.weather). New tables only.
+
+    `weather_hours.ts` is the start of the hour; the sunlight figures (W/m², on flat ground) are means over
+    the hour, the rest are at its start. `source` is "forecast" for an hour still to come, "recent" for one
+    past as the forecast service last estimated it, or "archive" for one filled in later from its history.
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS weather_hours (ts INTEGER PRIMARY KEY, latitude REAL NOT NULL,"
+        " longitude REAL NOT NULL, ghi REAL, dni REAL, dhi REAL, temp REAL, cloud REAL, code INTEGER,"
+        " precip REAL, precip_prob REAL, wind REAL, is_day INTEGER, source TEXT NOT NULL,"
+        " fetched_at INTEGER NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS forecast_hours (ts INTEGER PRIMARY KEY, pv_kwh REAL NOT NULL,"
+        " issued_at INTEGER NOT NULL, model TEXT NOT NULL)"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -194,6 +218,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _alerts,
     _prices,
     _imports,
+    _weather,
 ]
 
 

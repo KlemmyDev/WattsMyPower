@@ -15,7 +15,30 @@ export type Settings = {
   battery_kwh_override: number;
   battery_reserve_fallback: number;
   battery_max_kw: number;
+  /**
+   * Weather (Settings → Integrations → Weather): temperatures in °F (1) or °C (0); Open-Meteo's weather model; how the
+   * panels sit (tilt from flat, 0 = flat or not known, and the compass bearing they face, 0 = north); and whether the
+   * forecast may use what it has learned from weather history (1).
+   */
+  temp_unit_f: number;
+  weather_model: WeatherModel;
+  panel_tilt: number;
+  panel_bearing: number;
+  forecast_learning: number;
 };
+
+export type WeatherModel = "best_match" | "ecmwf_ifs025" | "gfs_seamless" | "icon_seamless";
+
+/** Settings the weather is fetched for, or the forecast's solar depends on. */
+export const WEATHER_SETTINGS: (keyof Settings)[] = [
+  "latitude",
+  "longitude",
+  "weather_model",
+  "panel_tilt",
+  "panel_bearing",
+  "pv_kw",
+  "forecast_learning",
+];
 
 export type SystemSettingKey = "pv_kw" | "battery_kwh_override" | "battery_reserve_fallback" | "battery_max_kw";
 

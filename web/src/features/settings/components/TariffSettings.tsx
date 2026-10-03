@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useReducer, useRef } from "react";
-import { AmberSettings } from "~/features/amber/components/AmberSettings";
+import { AmberTariffRow } from "~/features/amber/components/AmberTariffRow";
 import { tariffQuery } from "~/features/common/tariffs/api";
 import type { PlanTariff } from "~/features/settings/types";
 import { PlanFinder } from "~/features/settings/components/PlanFinder";
@@ -8,8 +8,8 @@ import { TariffEditor } from "~/features/settings/components/TariffEditor";
 import { EDITOR_START, editorReducer } from "~/features/settings/utils";
 
 /**
- * Settings → Tariffs: connecting Amber, the plan finder (which loads a published plan into the rates
- * editor below it), and the rates editor.
+ * Settings → Tariffs: Amber Electric (switching the rates to its prices), the plan finder (which loads a
+ * published plan into the rates editor below it), and the rates editor.
  */
 export function TariffSettings() {
   const [editor, dispatch] = useReducer(editorReducer, EDITOR_START);
@@ -31,7 +31,7 @@ export function TariffSettings() {
 
   return (
     <>
-      <AmberSettings onUse={switchToAmber} />
+      <AmberTariffRow onUse={switchToAmber} />
       <PlanFinder onImport={importPlan} />
       <TariffEditor ref={editorRef} state={editor} dispatch={dispatch} />
     </>

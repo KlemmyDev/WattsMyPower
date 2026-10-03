@@ -5,14 +5,15 @@ import { historyQuery } from "~/features/common/readings/api";
 import { Button } from "~/features/common/ui/components/Button";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { useNow } from "~/features/common/time/hooks";
-import { useForecast } from "~/features/common/weather/hooks";
+import { useFahrenheit, useForecast } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { hhmm, longDate, weekdayLong } from "~/features/common/formatting/utils/date";
 import { energyParts, money, powerParts } from "~/features/common/formatting/utils/number";
-import { addDays } from "~/features/common/time/utils";
+import { addDays, dateKey } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { DayChart } from "~/features/history/components/DayChart";
+import { DayWeather, DayWeatherChip } from "~/features/history/components/DayWeather";
 import { HCARD } from "~/features/history/components/parts";
 import { cn } from "~/features/common/ui/utils";
 import { extremesOf, hoursOf } from "~/features/history/utils/day";
@@ -25,8 +26,9 @@ function WeatherChip() {
   const p = useSnapshot();
   const forecast = useForecast();
   const now = useNow();
+  const fahrenheit = useFahrenheit();
   if (!p) return null;
-  const wx = liveWeather(p, forecast, now);
+  const wx = liveWeather(p, forecast, now, fahrenheit);
   return (
     <div className="flex items-center gap-2 rounded-full bg-surface-raised py-1.5 pr-3 pl-2 text-[13px] text-ink-soft">
       {/* This chip has always shown a plain moon after dark, whatever the cloud. */}
@@ -116,7 +118,7 @@ export function DayPanel({
     >
       <div className="flex flex-col gap-6">
         <div className="flex min-h-9 items-center justify-between gap-3">
-          {partial && <WeatherChip />}
+          {partial ? <WeatherChip /> : <DayWeatherChip date={dateKey(day.ts)} />}
           <div className="ml-auto flex gap-1.5">
             <Button variant="round" aria-label="Previous day" onClick={onPrev} disabled={!onPrev}>
               <Icon name="chevL" size={18} />
@@ -150,7 +152,10 @@ export function DayPanel({
           Download this day as CSV
         </a>
       </div>
-      <DayChart series={q.data?.series} hours={hours} placeholder={q.isPlaceholderData} />
+      <div className="flex min-w-0 flex-col gap-4">
+        <DayChart series={q.data?.series} hours={hours} placeholder={q.isPlaceholderData} />
+        <DayWeather date={dateKey(day.ts)} made={day.kind === "data" && !partial ? day.gen : null} />
+      </div>
     </section>
   );
 }

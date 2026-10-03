@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiSend } from "~/features/common/api/utils";
 import { liveQuery, patchSystem } from "~/features/common/live/api";
-import { SYSTEM_SETTINGS, type Settings } from "~/features/common/settings/types";
+import { SYSTEM_SETTINGS, WEATHER_SETTINGS, type Settings } from "~/features/common/settings/types";
 
 /** Save the forecast location, billing period or system details, and refresh what depends on it. */
 export function useSaveSettings() {
@@ -10,7 +10,10 @@ export function useSaveSettings() {
     mutationFn: (changes: Partial<Settings>) => apiSend<Settings>("PUT", "settings", changes),
     onSuccess: (saved, changes) => {
       patchSystem(qc, saved);
-      if ("latitude" in changes || "longitude" in changes) qc.invalidateQueries({ queryKey: ["forecast"] });
+      if (WEATHER_SETTINGS.some((k) => k in changes)) {
+        qc.invalidateQueries({ queryKey: ["forecast"] });
+        qc.invalidateQueries({ queryKey: ["weather"] });
+      }
       if ("bill_months" in changes || "bill_day" in changes || "bill_anchor" in changes)
         qc.invalidateQueries({ queryKey: ["bills"] });
       if (SYSTEM_SETTINGS.some((k) => k in changes)) {
