@@ -82,7 +82,9 @@ def test_an_existing_install_never_sees_the_guide_after_upgrading(
         "readings recorded",
         "readings rolled up",  # raw readings pruned past retention
         "rates saved",
-        "settings saved",
+        "location saved",
+        "billing period saved",
+        "rates saved by an older version",
     ],
 )
 def test_any_sign_of_use_counts_as_set_up(
@@ -103,9 +105,29 @@ def test_any_sign_of_use_counts_as_set_up(
             conn.execute("INSERT INTO samples_5m (ts, pv_power) VALUES (1750000000, 100)")
         elif sign == "rates saved":
             conn.execute("INSERT INTO kv (key, value) VALUES ('tariff', ?)", (TARIFF,))
-        elif sign == "settings saved":
+        elif sign == "location saved":
+            conn.execute("INSERT INTO settings (key, value) VALUES ('latitude', -33.87)")
+        elif sign == "billing period saved":
             conn.execute("INSERT INTO settings (key, value) VALUES ('bill_day', 15)")
+        elif sign == "rates saved by an older version":
+            conn.execute("INSERT INTO settings (key, value) VALUES ('import_rate', 0.29)")
     assert open_app().get("/api/onboarding").json()["complete"] is True
+
+
+def test_what_startup_writes_by_itself_doesnt_count(db: Database, open_app: Callable[..., TestClient]) -> None:
+    """A new install, after startup has run: system details seeded from the environment into settings
+    (with their kv marker), the default location's place name looked up, and the collector's cursor.
+    None of it was entered by a person, so the guide still shows."""
+    with db.writing() as conn:
+        conn.executemany(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            [("pv_kw", 6.6), ("battery_kwh_override", 0), ("battery_reserve_fallback", 10), ("battery_max_kw", 5)],
+        )
+        conn.executemany(
+            "INSERT INTO kv (key, value) VALUES (?, ?)",
+            [("system_seeded", "1760000000"), ("location_name", "Brisbane City, QLD"), ("collector_cursor", "0")],
+        )
+    assert open_app().get("/api/onboarding").json()["show"] is True
 
 
 def test_a_fresh_install_is_guided_until_it_finishes(

@@ -2,8 +2,9 @@
 The first-run guide (/welcome): whether it's finished or put off, and which steps were done or skipped.
 
 Stored as JSON in the kv table. An install that was already set up before the guide existed (an
-inverter connected, readings recorded, or rates or settings saved) is marked finished the first time
-it's asked, so upgrading never shows it. That's decided once and stored: connecting the inverter
+inverter connected, readings recorded, or rates, location or billing period saved) is marked finished
+the first time it's asked, so upgrading never shows it. Only what a person enters counts, never what
+the app writes by itself at startup, or a new install would skip the guide. That's decided once and stored: connecting the inverter
 part-way through the guide doesn't end it.
 """
 
@@ -22,6 +23,14 @@ from app.features.integrations.service import IntegrationsService
 KEY = "onboarding"
 STEPS = ("inverter", "plan", "location", "billing")
 MARKS = ("done", "skipped")
+# Settings rows only a person saving from the dashboard writes: the forecast location, the billing
+# period, and older versions' flat rates and system cost. Not any row: values copied in automatically
+# at startup (such as system details seeded from the environment) are there on a new install too.
+# Nor kv's location_name, which startup looks up for the default location.
+ENTERED = (
+    "latitude", "longitude", "bill_months", "bill_day", "bill_anchor",
+    "import_rate", "feed_in_rate", "supply_charge", "system_cost",
+)  # fmt: skip
 
 
 class OnboardingService:
@@ -48,7 +57,8 @@ class OnboardingService:
         with self.db.reading() as conn:
             if any(conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone() for t in SAMPLE_TABLES):
                 return True
-            if conn.execute("SELECT 1 FROM settings LIMIT 1").fetchone():
+            marks = ",".join("?" * len(ENTERED))
+            if conn.execute(f"SELECT 1 FROM settings WHERE key IN ({marks}) LIMIT 1", ENTERED).fetchone():
                 return True
             if conn.execute("SELECT 1 FROM kv WHERE key = 'tariff'").fetchone():
                 return True

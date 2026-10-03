@@ -57,7 +57,7 @@ Two services, run together by Docker Compose:
    - **Where you live:** your suburb, for the weather forecast.
    - **Your billing period:** how often you're billed and when a period starts.
 
-   Everything in it is also in Settings (Integrations, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates or settings saved) never shows it.
+   Everything in it is also in Settings (Integrations, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
 
 If you're running Docker inside an unprivileged Proxmox LXC container, first turn on `nesting=1` in the container's **Options → Features**.
 
