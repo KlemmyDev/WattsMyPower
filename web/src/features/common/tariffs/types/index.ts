@@ -17,8 +17,12 @@ export type TariffSource = {
   updated?: string;
 };
 
+/**
+ * "amber" costs grid power and feed-in at Amber's price for each 5 or 30 minutes (see features/amber);
+ * its flat_rate and feed_in_rate stand in for any time Amber has no price for.
+ */
 export type Tariff = {
-  type: "flat" | "tou";
+  type: "flat" | "tou" | "amber";
   flat_rate: number | "";
   feed_in_rate: number | "";
   supply_charge: number | "";

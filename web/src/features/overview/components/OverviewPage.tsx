@@ -1,3 +1,5 @@
+import { AmberPricesCard } from "~/features/amber/components/AmberPricesCard";
+import { useAmberPrices } from "~/features/amber/hooks";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useForecast } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
@@ -14,6 +16,7 @@ export function OverviewPage() {
   const p = useSnapshot();
   const s = useSystem();
   const f = useForecast();
+  const prices = useAmberPrices(now);
   return (
     <>
       <PageHeader title={greeting(new Date(now * 1000))} sub="Here is how your home is running right now" />
@@ -21,8 +24,9 @@ export function OverviewPage() {
         <PowerFlowHero p={p} s={s} f={f} now={now} />
         <BatteryCard p={p} s={s} f={f} now={now} />
         <TodayCard tariff={s?.tariff} now={now} />
+        {prices && <AmberPricesCard prices={prices} now={now} />}
       </div>
-      <Next24Card p={p} s={s} f={f} now={now} />
+      <Next24Card p={p} s={s} f={f} now={now} prices={prices} />
     </>
   );
 }

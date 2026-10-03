@@ -1,3 +1,5 @@
+import type { AmberPrices } from "~/features/amber/types";
+import { averageOver } from "~/features/amber/utils";
 import type { Forecast, ForecastHour } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { hhmm } from "~/features/common/formatting/utils/date";
@@ -18,7 +20,8 @@ const STEP = 300; // the hover readout's step: 5 minutes
 type V = { t: number; v: number };
 type Moment = { t: number; title: string; sub: string; color: string };
 
-export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefined, now: number) {
+/** `prices`: Amber's forecast, used for the expected cost when the rates follow Amber's prices. */
+export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefined, now: number, prices?: AmberPrices) {
   const end = now + DAY;
   const t = s?.tariff;
   const reserve = reserveOf(s);
@@ -147,14 +150,15 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
   const use = hrs.reduce((a, h) => a + kwhOf(h, h.load_kw), 0);
   const imp = hrs.reduce((a, h) => a + Math.max(0, h.grid_kwh), 0);
   const cover = use > 0 ? Math.max(0, Math.min(1, 1 - imp / use)) : 1;
+  // On Amber, each hour at its forecast prices (the fallback rates where there's no forecast yet).
+  const amber = t?.type === "amber" ? prices : undefined;
+  const buyAt = (h: ForecastHour) =>
+    (amber && averageOver(amber.general, h.start, h.ts + 3600)) ?? (t ? bandAt(t, h.start).rate : 0);
+  const sellAt = (h: ForecastHour) =>
+    (amber && averageOver(amber.feed_in, h.start, h.ts + 3600)) ?? (t ? tariffNumber(t.feed_in_rate) : 0);
   const cost = t
-    ? hrs.reduce(
-        (a, h) =>
-          a +
-          Math.max(0, h.grid_kwh) * bandAt(t, h.start).rate -
-          Math.max(0, -h.grid_kwh) * tariffNumber(t.feed_in_rate),
-        0,
-      ) + tariffNumber(t.supply_charge)
+    ? hrs.reduce((a, h) => a + Math.max(0, h.grid_kwh) * buyAt(h) - Math.max(0, -h.grid_kwh) * sellAt(h), 0) +
+      tariffNumber(t.supply_charge)
     : null;
   const stats: [label: string, value: string, color: string][] = [
     ["Solar forecast", kWhInt(f.summary.pv_kwh_24h), "#ffb547"],

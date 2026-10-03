@@ -1,4 +1,5 @@
 import { useState, type PointerEvent } from "react";
+import type { AmberPrices } from "~/features/amber/types";
 import type { Forecast } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -62,13 +63,15 @@ export function Next24Card({
   s,
   f,
   now,
+  prices,
 }: {
   p: Snapshot | null;
   s: SystemInfo | undefined;
   f: Forecast | null | undefined;
   now: number;
+  prices?: AmberPrices;
 }) {
-  const n = f ? next24(f, p, s, now) : null;
+  const n = f ? next24(f, p, s, now, prices) : null;
   return (
     <Card aria-labelledby="h-next">
       <CardHeader
