@@ -17,3 +17,7 @@ class BillsRepository:
         )
         with self.db.reading() as conn:
             return {d for d, n in conn.execute(sql, (start, end)) if n >= min_readings}
+
+    def first_reading(self) -> int | None:
+        with self.db.reading() as conn:
+            return conn.execute("SELECT MIN(ts) FROM samples_5m WHERE grid_power IS NOT NULL").fetchone()[0]

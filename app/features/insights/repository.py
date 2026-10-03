@@ -1,7 +1,8 @@
-"""Aggregates over the 5-minute rollups for the Insights page."""
+"""Aggregates over the 5-minute rollups for the Health page."""
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Any
 
 from app.core.database import Database
@@ -22,25 +23,6 @@ class InsightsRepository:
             rows = conn.execute(sql, (start, end)).fetchall()
         return [{"date": d, "swing": swing, "full_min": full * 5} for d, swing, full, n in rows if n >= 230]
 
-    def heatmap(self, start: int, end: int) -> dict[str, list[dict[str, Any] | None]]:
-        """Average grid import (kWh in the hour) and battery level for each month x hour of day."""
-        sql = (
-            "SELECT strftime('%Y-%m', ts, 'unixepoch', 'localtime') AS m, "
-            "CAST(strftime('%H', ts, 'unixepoch', 'localtime') AS INTEGER) AS h, "
-            "AVG(MAX(grid_power, 0)), AVG(battery_soc), COUNT(*) FROM samples_5m "
-            "WHERE ts >= ? AND ts < ? AND grid_power IS NOT NULL GROUP BY m, h"
-        )
-        with self.db.reading() as conn:
-            rows = conn.execute(sql, (start, end)).fetchall()
-        out: dict[str, list[dict[str, Any] | None]] = {}
-        for m, h, imp, soc, n in rows:
-            if n >= 6:  # at least half an hour of readings for that cell
-                out.setdefault(m, [None] * 24)[h] = {
-                    "kwh": round(imp / 1000, 3),
-                    "soc": round(soc, 1) if soc is not None else None,
-                }
-        return out
-
     def hourly_pv(self, offset: int, start: int, end: int) -> dict[int, float]:
         """
         Average PV output (kW) per hour, keyed by hour start, for hours with at least
@@ -54,3 +36,31 @@ class InsightsRepository:
         )
         with self.db.reading() as conn:
             return {h: pv / 1000 for h, pv, n in conn.execute(sql, (start, end)) if n >= 10}
+
+    def monthly_soh(self, start: int, end: int) -> dict[str, float]:
+        """The battery's average reported state of health for each month."""
+        sql = (
+            "SELECT strftime('%Y-%m', ts, 'unixepoch', 'localtime') AS m, AVG(battery_soh) FROM samples_5m "
+            "WHERE ts >= ? AND ts < ? AND battery_soh IS NOT NULL GROUP BY m"
+        )
+        with self.db.reading() as conn:
+            return {m: round(v, 1) for m, v in conn.execute(sql, (start, end)) if v is not None}
+
+    def coverage(self, start: int, end: int) -> dict[str, Any] | None:
+        """How many of the 5-minute readings in [start, end) were recorded (from the first one, if later),
+        and the longest gap between two."""
+        with self.db.reading() as conn:
+            ts = [
+                t
+                for (t,) in conn.execute("SELECT ts FROM samples_5m WHERE ts >= ? AND ts < ? ORDER BY ts", (start, end))
+            ]
+        if not ts:
+            return None
+        expected = max(1, (end - ts[0]) // 300)
+        gaps = [(b - a, a) for a, b in pairwise(ts)] + [(end - ts[-1], ts[-1])]
+        seconds, at = max(gaps)
+        return {
+            "days": max(1, round((end - ts[0]) / 86400)),
+            "share": min(1.0, len(ts) / expected),
+            "longest": {"seconds": seconds, "at": at} if seconds > 900 else None,
+        }

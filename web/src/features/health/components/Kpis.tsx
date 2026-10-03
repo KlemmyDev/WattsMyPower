@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import type { Insights } from "~/features/insights/types";
+import type { Insights } from "~/features/health/types";
 import type { SystemInfo } from "~/features/common/live/types";
 import { Eyebrow, Muted } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
@@ -73,15 +73,6 @@ export function Kpis({ insights: I, system }: { insights: Insights; system: Syst
           cyclesPerDay != null
             ? `About ${cyclesPerDay.toFixed(1)} full cycles a day over the last ${n30 === 1 ? "day" : `${n30} days`}`
             : "Full charge-discharge cycles since the battery was installed"
-        }
-      />
-      <Kpi
-        label="CO₂ avoided · lifetime"
-        value={L.co2_t == null ? DASH : `${L.co2_t.toLocaleString("en-AU")} t`}
-        note={
-          L.pv_kwh
-            ? `From ${(L.pv_kwh / 1000).toFixed(1)} MWh of solar, at the average Australian grid emissions factor`
-            : "Based on the average Australian grid emissions factor"
         }
       />
     </div>

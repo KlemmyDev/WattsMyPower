@@ -147,7 +147,7 @@ class ForecastService:
                 self._learned = json.loads(row[0]) if row else {}
             return self._learned or None
 
-    def _samples(self, start: int, end: int) -> list[Sample]:
+    def samples(self, start: int, end: int) -> list[Sample]:
         """Stored weather hours in [start, end) as the model sees them, with what the panels made in each."""
         panels = self.weather.panels()
         rows = self.weather.hours(start, end)
@@ -175,7 +175,7 @@ class ForecastService:
         """Fit the model on stored weather and readings, back-test it, and save both. Blocking."""
         now = int(now or time.time())
         pv_kw = self.settings.get("pv_kw")
-        samples = [s for s in self._samples(now - TRAIN_DAYS * 86400, now) if s.ts + 3600 <= now]
+        samples = [s for s in self.samples(now - TRAIN_DAYS * 86400, now) if s.ts + 3600 <= now]
         model = learning.fit(samples, pv_kw)
         test = learning.backtest(samples, pv_kw) if model else Backtest()
         days = {s.day for s in samples if s.actual is not None}
@@ -241,7 +241,7 @@ class ForecastService:
         end = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
         start = end - days * 86400 - 3600
         forecasts = self.weather.repo.forecasts(start, end)
-        samples = {s.ts: s for s in self._samples(start, end)}
+        samples = {s.ts: s for s in self.samples(start, end)}
         by_day: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # forecast, actual, hours
         for ts, kwh in forecasts.items():
             s = samples.get(ts)

@@ -15,6 +15,7 @@ import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppBillsRouteImport } from './routes/_app/bills'
 import { Route as AppForecastRouteImport } from './routes/_app/forecast'
+import { Route as AppHealthRouteImport } from './routes/_app/health'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppInsightsRouteImport } from './routes/_app/insights'
 import { Route as AppSavingsRouteImport } from './routes/_app/savings'
@@ -63,6 +64,11 @@ const AppBillsRoute = AppBillsRouteImport.update({
 const AppForecastRoute = AppForecastRouteImport.update({
   id: '/forecast',
   path: '/forecast',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHealthRoute = AppHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHistoryRoute = AppHistoryRouteImport.update({
@@ -180,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRouteRouteWithChildren
   '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
+  '/health': typeof AppHealthRoute
   '/history': typeof AppHistoryRoute
   '/insights': typeof AppInsightsRoute
   '/savings': typeof AppSavingsRoute
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
+  '/health': typeof AppHealthRoute
   '/history': typeof AppHistoryRoute
   '/insights': typeof AppInsightsRoute
   '/savings': typeof AppSavingsRoute
@@ -234,6 +242,7 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRouteRouteWithChildren
   '/_app/bills': typeof AppBillsRoute
   '/_app/forecast': typeof AppForecastRoute
+  '/_app/health': typeof AppHealthRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/insights': typeof AppInsightsRoute
   '/_app/savings': typeof AppSavingsRoute
@@ -264,6 +273,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/bills'
     | '/forecast'
+    | '/health'
     | '/history'
     | '/insights'
     | '/savings'
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/bills'
     | '/forecast'
+    | '/health'
     | '/history'
     | '/insights'
     | '/savings'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/bills'
     | '/_app/forecast'
+    | '/_app/health'
     | '/_app/history'
     | '/_app/insights'
     | '/_app/savings'
@@ -387,6 +399,13 @@ declare module '@tanstack/react-router' {
       path: '/forecast'
       fullPath: '/forecast'
       preLoaderRoute: typeof AppForecastRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/health': {
+      id: '/_app/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof AppHealthRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/history': {
@@ -577,6 +596,7 @@ interface AppRouteChildren {
   AppSettingsRouteRoute: typeof AppSettingsRouteRouteWithChildren
   AppBillsRoute: typeof AppBillsRoute
   AppForecastRoute: typeof AppForecastRoute
+  AppHealthRoute: typeof AppHealthRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppInsightsRoute: typeof AppInsightsRoute
   AppSavingsRoute: typeof AppSavingsRoute
@@ -589,6 +609,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRouteRoute: AppSettingsRouteRouteWithChildren,
   AppBillsRoute: AppBillsRoute,
   AppForecastRoute: AppForecastRoute,
+  AppHealthRoute: AppHealthRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppInsightsRoute: AppInsightsRoute,
   AppSavingsRoute: AppSavingsRoute,

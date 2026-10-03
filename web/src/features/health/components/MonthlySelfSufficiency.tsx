@@ -1,4 +1,4 @@
-import type { Insights } from "~/features/insights/types";
+import type { Insights } from "~/features/health/types";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
 import { monthShort, monthYear, parseYmd } from "~/features/common/formatting/utils/date";

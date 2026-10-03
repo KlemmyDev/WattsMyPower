@@ -329,3 +329,36 @@ def _metered(c: dict[str, Any]) -> tuple[float, float, float]:
     ce = c.get("daily_export") or 0.0
     ch = max(0.0, (c.get("daily_pv") or 0) + ci - ce + (c.get("daily_discharge") or 0) - (c.get("daily_charge") or 0))
     return ci, ce, ch
+
+
+class Pricer:
+    """The price to buy grid power and the feed-in earned ($/kWh) at any moment from start to end: the
+    time-of-use band or single rate in force, or on Amber its price for the time (the fallback rates
+    where it has none)."""
+
+    def __init__(self, t: Tariff, tables: RateTables, prices: PriceRepository | None, start: int, end: int):
+        self.t = t
+        self.tables = tables
+        amber = t["type"] == "amber" and prices is not None
+        self._general = prices.lookup("general", start, end) if amber and prices else None
+        self._feed_in = prices.lookup("feedIn", start, end) if amber and prices else None
+
+    def buy(self, ts: int) -> float:
+        if self._general is not None and (p := self._general.at(ts)) is not None:
+            return p
+        if self.t["type"] == "amber":
+            return float(self.t["flat_rate"])
+        lt = time.localtime(ts)
+        return float(self.tables.bands[self.tables.at(lt.tm_wday >= 5, lt.tm_hour * 60 + lt.tm_min)]["rate"])
+
+    def sell(self, ts: int) -> float:
+        if self._feed_in is not None and (p := self._feed_in.at(ts)) is not None:
+            return p
+        return float(self.t["feed_in_rate"])
+
+    def band(self, ts: int) -> str | None:
+        """The time-of-use band in force (None on a single rate or Amber)."""
+        if self.t["type"] != "tou":
+            return None
+        lt = time.localtime(ts)
+        return str(self.tables.bands[self.tables.at(lt.tm_wday >= 5, lt.tm_hour * 60 + lt.tm_min)]["name"])

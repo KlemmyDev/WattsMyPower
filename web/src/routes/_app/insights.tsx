@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { InsightsPage } from "~/features/insights/components/InsightsPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** The Insights page became Health: keep old links and bookmarks working. */
 export const Route = createFileRoute("/_app/insights")({
-  head: () => ({ meta: [{ title: "Insights · WattsMyPower" }] }),
-  component: InsightsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/health", replace: true });
+  },
 });
