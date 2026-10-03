@@ -17,6 +17,7 @@ export function mergeDays(previews: ImportPreview[]): ImportDay[] {
               new: was.new + d.new,
               replaces: was.replaces + d.replaces,
               recorded: was.recorded + d.recorded,
+              locked: was.locked || d.locked,
               pv_kwh: add(was.pv_kwh, d.pv_kwh),
               load_kwh: add(was.load_kwh, d.load_kwh),
               import_kwh: add(was.import_kwh, d.import_kwh),
@@ -28,9 +29,17 @@ export function mergeDays(previews: ImportPreview[]): ImportDay[] {
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Whether importing replaces the day's recorded readings: when asked to, and before today. */
+export const replacing = (d: ImportDay, replace: boolean) => replace && d.recorded > 0 && !d.locked;
+
+/** 5-minute readings importing a day would write. */
+export const toWriteOn = (d: ImportDay, replace: boolean) =>
+  d.new + d.replaces + (replacing(d, replace) ? d.recorded : 0);
+
 /** How a day would be imported, for its status pill. */
-export function dayStatus(d: ImportDay): { label: string; tone: "ok" | "neutral" | "brand" } {
-  if (d.recorded >= d.buckets) return { label: "Already recorded", tone: "neutral" };
+export function dayStatus(d: ImportDay, replace = false): { label: string; tone: "ok" | "neutral" | "brand" } {
+  if (replacing(d, replace)) return { label: "Replaces recorded", tone: "brand" };
+  if (d.recorded >= d.buckets) return { label: d.locked ? "Recording today" : "Already recorded", tone: "neutral" };
   if (d.recorded > 0) return { label: "Fills gaps", tone: "brand" };
   if (d.replaces > 0) return { label: "Replaces earlier import", tone: "brand" };
   return { label: "New", tone: "ok" };

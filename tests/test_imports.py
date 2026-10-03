@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Config
 from app.core.database import Database
+from app.core.schema import ROLLUP_KEEPING_SQL
 from app.features.imports.files import UnreadableFile
 from app.features.imports.isolarcloud import NotACurve, describe, parse
 from app.features.imports.service import ImportService
@@ -67,6 +68,28 @@ def xlsx(rows: list[list[object]]) -> bytes:
     return buf.getvalue()
 
 
+def signed_chart(*, charge_positive: bool = True, load: bool = True, soc: bool = False) -> bytes:
+    """A day chart with one signed column each for the grid and the battery, as some exports give them."""
+    head = (
+        ["Time", "PV(W)", "Grid(W)", "Battery(W)"]
+        + (["Load(W)"] if load else [])
+        + (["Battery Level(%)"] if soc else [])
+    )
+    lines = [",".join(head)]
+    level = 30.0
+    for k in range(288):
+        h, m = divmod(k * 5, 60)
+        sunny = 8 <= h < 16
+        pv, grid, charging = (3000, -1500, 1000) if sunny else (0, 100, -400)  # grid: + bought, − fed in
+        home = pv + grid - charging
+        level += charging * 5 / 60 / 10_000 * 100  # a 10 kWh battery
+        row = [f"2025/04/21 {h:02d}:{m:02d}", str(pv), str(grid), str(charging if charge_positive else -charging)]
+        row += [str(home)] if load else []
+        row += [f"{level:.1f}"] if soc else []
+        lines.append(",".join(row))
+    return "\n".join(lines).encode()
+
+
 @pytest.fixture
 def imports(db: Database) -> ImportService:
     return ImportService(db)
@@ -88,6 +111,16 @@ def test_columns_are_matched_by_name() -> None:
     assert describe("Daily Yield(kWh)").field is None  # energy, not the power curve
 
 
+def test_signed_grid_and_battery_columns_are_recognised_but_not_their_other_readings() -> None:
+    assert describe("Grid(W)").field == "grid"
+    assert describe("Battery(W)").field == "battery"
+    assert describe("Battery Power(kW)").field == "battery"
+    assert describe("Feed-in to Grid(W)").field == "export"  # a direction still wins
+    assert describe("Battery Charge(W)").field == "charge"
+    for other in ("Grid Voltage(V)", "Grid Frequency(Hz)", "Battery Voltage(V)", "Battery Temperature(℃)"):
+        assert describe(other).field is None, other
+
+
 # ---------------------------------------------------------------------------------------- parsing
 
 
@@ -106,6 +139,34 @@ def test_a_day_chart_becomes_5_minute_buckets_with_daily_counters() -> None:
     assert last["daily_export"] == pytest.approx(12.0)
     assert last["daily_charge"] == pytest.approx(8.0)
     assert last["daily_import"] == pytest.approx(1.6)  # 100 W for 16 hours
+
+
+@pytest.mark.parametrize("charge_positive", [True, False])
+def test_signed_grid_and_battery_columns_import_either_way_round(charge_positive: bool) -> None:
+    curve = parse("plant.csv", signed_chart(charge_positive=charge_positive))
+    assert curve.mapping["grid"] == ["Grid(W)"] and curve.mapping["battery"] == ["Battery(W)"]
+    assert curve.warnings == []
+    noon = curve.buckets[local(2025, 4, 21, 12)]
+    assert noon["grid_power"] == -1500 and noon["battery_power"] == -1000  # feeding in, and charging
+    night = curve.buckets[local(2025, 4, 21, 2)]
+    assert night["grid_power"] == 100 and night["battery_power"] == 400  # buying, and discharging
+    last = curve.buckets[local(2025, 4, 21, 23, 55)]
+    assert last["daily_export"] == pytest.approx(12.0) and last["daily_import"] == pytest.approx(1.6)
+    assert last["daily_charge"] == pytest.approx(8.0) and last["daily_discharge"] == pytest.approx(6.4)
+
+
+@pytest.mark.parametrize("charge_positive", [True, False])
+def test_without_home_use_the_battery_level_says_which_way_it_runs(charge_positive: bool) -> None:
+    curve = parse("plant.csv", signed_chart(charge_positive=charge_positive, load=False, soc=True))
+    noon = curve.buckets[local(2025, 4, 21, 12)]
+    assert noon["battery_power"] == -1000 and noon["load_power"] == 500  # home use worked out from the rest
+    assert curve.warnings == []
+
+
+def test_when_nothing_says_which_way_the_battery_runs_positive_is_charging() -> None:
+    curve = parse("plant.csv", signed_chart(load=False))
+    assert curve.buckets[local(2025, 4, 21, 12)]["battery_power"] == -1000
+    assert any("positive was taken as charging" in w for w in curve.warnings)
 
 
 def test_semicolons_and_day_first_dates() -> None:
@@ -232,6 +293,64 @@ def test_a_live_rollup_replaces_an_imported_bucket(
     imports.remove(imports.list()[0]["id"])
     series = readings.history(local(2025, 4, 21), local(2025, 4, 22), 288, ["load_power"])["series"]
     assert [v for v in series["load_power"] if v is not None] == [777.0]
+
+
+def test_replacing_a_partly_recorded_day_uses_the_file_and_can_be_undone(
+    imports: ImportService, readings: ReadingsRepository, db: Database
+) -> None:
+    # The dashboard recorded a little of the day, some of it wrong, with readings the file doesn't have.
+    with db.writing() as conn:
+        for k in range(12):
+            readings.insert(conn, local(2025, 4, 21, 18) + k * 60, {"load_power": 999, "battery_temp": 30})
+    preview = imports.preview("plant.csv", day_chart())
+    assert preview["days"][0]["recorded"] == 3 and not preview["days"][0]["locked"]
+
+    result = imports.run("plant.csv", day_chart(), label="April", replace=True)
+    assert result["written"] == 288 and result["replaced"] == 3
+    series = readings.history(local(2025, 4, 21), local(2025, 4, 22), 288, ["load_power", "battery_temp"])["series"]
+    at = dict(zip(series["t"], series["load_power"], strict=True))
+    assert at[local(2025, 4, 21, 18)] == 500  # the file's reading, not the recorded 999
+    assert imports.list()[0]["replaced_days"] == 1
+
+    # Rollups rebuilt from the raw samples (a restart, a catch-up, a reprocess) leave the file's readings be.
+    with db.writing() as conn:
+        readings.insert(conn, local(2025, 4, 21, 18, 2), {"load_power": 999})
+        conn.execute(ROLLUP_KEEPING_SQL, (0, 2**62))
+    assert readings.history(local(2025, 4, 21, 18), local(2025, 4, 21, 18, 5), 10, ["load_power"])["series"][
+        "load_power"
+    ] == [500.0]
+
+    # Removing the import puts back exactly what was recorded, the readings the file lacked included.
+    imports.remove(result["import_id"])
+    series = readings.history(local(2025, 4, 21), local(2025, 4, 22), 288, ["load_power", "battery_temp"])["series"]
+    assert [v for v in series["load_power"] if v is not None] == [999.0] * 3
+    assert [v for v in series["battery_temp"] if v is not None] == [30.0] * 3
+    with db.reading() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM import_replaced").fetchone()[0] == 0
+
+
+def test_today_is_never_replaced_as_it_is_still_being_recorded(readings: ReadingsRepository, db: Database) -> None:
+    imports = ImportService(db, clock=lambda: local(2025, 4, 21, 20))
+    with db.writing() as conn:
+        readings.insert(conn, local(2025, 4, 21, 18), {"load_power": 999})
+    assert imports.preview("plant.csv", day_chart())["days"][0]["locked"]
+    result = imports.run("plant.csv", day_chart(), replace=True)
+    assert result["replaced"] == 0 and result["written"] == 287
+    load = readings.history(local(2025, 4, 21, 18), local(2025, 4, 21, 18, 5), 10, ["load_power"])["series"]
+    assert load["load_power"] == [999.0]
+
+
+def test_a_later_import_of_a_replaced_day_takes_over_putting_it_back(
+    imports: ImportService, readings: ReadingsRepository, db: Database
+) -> None:
+    with db.writing() as conn:
+        readings.insert(conn, local(2025, 4, 21, 18), {"load_power": 999})
+    first = imports.run("plant.csv", day_chart(), replace=True)
+    second = imports.run("plant.csv", day_chart(), replace=True)
+    assert [i["id"] for i in imports.list()] == [second["import_id"]]  # the first had nothing left of its own
+    imports.remove(second["import_id"])
+    load = readings.history(local(2025, 4, 21, 18), local(2025, 4, 21, 18, 5), 10, ["load_power"])["series"]
+    assert load["load_power"] == [999.0] and first["import_id"] != second["import_id"]
 
 
 # ---------------------------------------------------------------------------------------- api

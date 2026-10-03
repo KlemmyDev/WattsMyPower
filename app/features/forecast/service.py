@@ -214,6 +214,8 @@ class ForecastService:
             not saved
             or now - saved.get("trained_at", 0) >= RETRAIN_SECONDS
             or saved.get("signature") != self._signature()
+            # A week or more of history filled in since (say, after an import): learn from it now.
+            or self.weather.repo.coverage()["hours"] - saved.get("weather_hours", 0) >= RETRAIN_ON_NEW
         ):
             self.train(now)
         hours = self._hours(now)

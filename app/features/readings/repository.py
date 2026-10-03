@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from app.core.database import Database
-from app.core.schema import MAX_W, ROLLUP, ROLLUP_SQL, SAMPLE_COLUMNS
+from app.core.schema import MAX_W, ROLLUP, ROLLUP_KEEPING_SQL, SAMPLE_COLUMNS
 
 Snapshot = dict[str, Any]
 
@@ -42,20 +42,20 @@ class ReadingsRepository:
     def heal_rollups(self, conn: sqlite3.Connection) -> None:
         """After a crash or restart, rebuild rollups from the last recorded (not imported) bucket onward."""
         last = conn.execute("SELECT MAX(ts) FROM samples_5m WHERE import_id IS NULL").fetchone()[0] or 0
-        conn.execute(ROLLUP_SQL, (last, 2**62))
+        conn.execute(ROLLUP_KEEPING_SQL, (last, 2**62))
         conn.commit()
 
     def insert(self, conn: sqlite3.Connection, ts: int, snap: Snapshot) -> None:
         conn.execute(_INSERT, (ts, *(snap.get(c) for c in COLS)))
         bucket = ts // ROLLUP * ROLLUP
-        conn.execute(ROLLUP_SQL, (bucket, bucket + ROLLUP))
+        conn.execute(ROLLUP_KEEPING_SQL, (bucket, bucket + ROLLUP))
         conn.commit()
 
     def insert_many(self, conn: sqlite3.Connection, rows: list[tuple[int, Snapshot]]) -> None:
         if not rows:
             return
         conn.executemany(_INSERT, [(ts, *(s.get(c) for c in COLS)) for ts, s in rows])
-        conn.execute(ROLLUP_SQL, (rows[0][0] // ROLLUP * ROLLUP, 2**62))
+        conn.execute(ROLLUP_KEEPING_SQL, (rows[0][0] // ROLLUP * ROLLUP, 2**62))
         conn.commit()
 
     def raw_cutoff(self) -> int:

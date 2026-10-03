@@ -22,7 +22,8 @@ const POINTS: { name: string; tick: ReactNode; feeds: string }[] = [
     name: "Grid",
     tick: (
       <>
-        <b>Purchased power</b> and <b>Feed-in power</b>
+        <b>Purchased power</b> and <b>Feed-in power</b>, or one <b>Grid</b> column (positive when buying, negative when
+        feeding in)
       </>
     ),
     feeds: "Grid import and export, costs, bills, self-sufficiency",
@@ -31,7 +32,8 @@ const POINTS: { name: string; tick: ReactNode; feeds: string }[] = [
     name: "Battery",
     tick: (
       <>
-        <b>Battery charging power</b> and <b>Battery discharging power</b>
+        <b>Battery charging power</b> and <b>Battery discharging power</b>, or one <b>Battery</b> column with a sign
+        (which way it runs is worked out from the file)
       </>
     ),
     feeds: "Battery flows, cycles",
@@ -104,8 +106,9 @@ export function ExportGuide() {
         <Steps title="One day at a time: the plant's day chart">
           <li>In the iSolarCloud app or website, open your plant and that day's power chart.</li>
           <li>
-            Use <b className="text-ink">Export</b> (or download) on the chart. The file has Time, PV, Battery Charge,
-            Battery Discharge, Purchased Energy, Feed-in and Load at 5-minute steps, which is everything needed.
+            Use <b className="text-ink">Export</b> (or download) on the chart. The file has Time, PV, Load, and the grid
+            and battery at 5-minute steps, which is everything needed. Some have a column each way (Purchased Energy and
+            Feed-in, Battery Charge and Battery Discharge), others one signed Grid and Battery column: either works.
           </li>
           <li>Repeat for each day, then select all the files here at once.</li>
         </Steps>

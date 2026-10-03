@@ -7,6 +7,11 @@ differently: "PV(W)", "Purchased Energy(W)", "Feed-in(W)", "Battery Charge(W)", 
 device's points such as "SH5.0RS_001(123456)/Total DC Power(kW)". So columns are matched by
 what they're called rather than by position, and the match can be overridden by hand.
 
+Some exports give the grid and the battery one signed column each ("Grid(W)", "Battery(W)")
+rather than a column per direction. The grid's is positive when buying and negative when feeding
+in. The battery's direction is checked against the file itself (see _battery_sign), as exports
+differ; positive is taken as charging when the file can't tell.
+
 What comes out is one row per 5-minute bucket in the shape of samples_5m: the four powers in
 the usual signs (app.features.inverters.types), battery level, and daily counters integrated
 from the powers so daily totals, bills and insights count imported days too.
@@ -34,19 +39,24 @@ FIELDS: dict[str, str] = {
     "load": "Home use",
     "import": "Grid import",
     "export": "Grid export",
+    "grid": "Grid (+ import, − export)",
     "charge": "Battery charging",
     "discharge": "Battery discharging",
+    "battery": "Battery (+ charging, − discharging)",
     "soc": "Battery level",
 }
 
 # The first rule a column's name matches says what it is. Order matters: "discharge" before
-# "charge", and the battery level before anything that mentions the battery.
+# "charge", the battery level before anything that mentions the battery, and a direction ("feed-in
+# to grid", "battery charge") before the bare signed "grid" and "battery".
 _RULES: list[tuple[str, re.Pattern[str]]] = [
     ("soc", re.compile(r"\bsoc\b|state of charge|battery level|battery percent")),
     ("discharge", re.compile(r"discharg")),
     ("charge", re.compile(r"charg")),
     ("export", re.compile(r"feed[\s-]*in|export|to grid")),
     ("import", re.compile(r"purchas|import|from grid")),
+    ("grid", re.compile(r"\bgrid\b")),
+    ("battery", re.compile(r"\bbatter(y|ies)\b|\bbatt\b")),
     ("load", re.compile(r"\bload\b|consum|home use|household")),
     ("pv", re.compile(r"\bpv\b|solar|dc power|production|plant power")),
 ]
@@ -54,6 +64,7 @@ _TIME_HEADER = re.compile(r"^(time|date|date ?time|timestamp|时间|日期)$")
 _UNIT = re.compile(r"[(（\[]\s*([^)）\]]*?)\s*[)）\]]\s*$")
 _POWER_UNITS = {"w": 1.0, "kw": 1000.0, "mw": 1e6}
 _ENERGY_UNITS = {"wh", "kwh", "mwh"}
+SIGNED = {"grid", "battery"}  # only power in W or kW: not "Grid Voltage(V)" or "Battery Temperature(℃)"
 
 MAX_INTERVAL = 3600  # coarser than hourly is a daily or monthly report, not a curve
 
@@ -101,6 +112,8 @@ def describe(header: Cell) -> Column:
     if not (unit in _ENERGY_UNITS and not point.startswith("soc")):
         match = next((f for f, rule in _RULES if rule.search(point)), None)
     if match == "soc" and unit in _POWER_UNITS:
+        match = None
+    if match in SIGNED and unit is not None and unit not in _POWER_UNITS:
         match = None
     return Column(str(header or "").strip(), device.strip() or None, point, unit, match)
 
@@ -262,6 +275,41 @@ def _net(
     return [None] * n
 
 
+def _battery_sign(
+    signed: list[float | None],
+    pv: list[float | None] | None,
+    load: list[float | None] | None,
+    grid: list[float | None],
+    soc: list[float | None] | None,
+) -> int | None:
+    """
+    Which way a signed battery column runs: -1 if positive is charging (so it's negated into the
+    usual signs, where discharging is positive), 1 if positive is discharging, None if the file
+    can't tell. First by the energy balance (home use = solar + grid + battery) where the other
+    three are known; failing that, by whether the battery level rises while the column is positive.
+    """
+    off = {1: 0.0, -1: 0.0}
+    for j, b in enumerate(signed):
+        p, lo, g = (pv[j] if pv else None), (load[j] if load else None), grid[j]
+        if b is None or p is None or lo is None or g is None or abs(b) < 50:
+            continue
+        for sign in off:
+            off[sign] += abs(lo - p - g - sign * b)
+    if off[1] or off[-1]:
+        best, other = (1, -1) if off[1] < off[-1] else (-1, 1)
+        if off[best] < 0.7 * off[other]:
+            return best
+    if soc:
+        trend = 0.0
+        for j in range(len(signed) - 1):
+            b, a, z = signed[j], soc[j], soc[j + 1]
+            if b is not None and a is not None and z is not None and abs(b) >= 50:
+                trend += b * (z - a)
+        if abs(trend) > 0:
+            return -1 if trend > 0 else 1
+    return None
+
+
 # ---------------------------------------------------------------------------------------- parsing
 
 
@@ -355,8 +403,25 @@ def _curve(name: str, table: Table, at: int, overrides: Mapping[str, Sequence[st
         )
     n = len(kept)
     pv, load, soc = column("pv"), column("load"), column("soc")
-    grid = _net(column("import"), column("export"), n, ("grid import", "grid export"), warnings)
-    battery = _net(column("discharge"), column("charge"), n, ("battery discharging", "battery charging"), warnings)
+    imp, exp, signed_grid = column("import"), column("export"), column("grid")
+    # A column per direction wins over a signed one; a signed grid column is already in the usual signs.
+    if signed_grid is not None and (imp is None or exp is None):
+        grid = signed_grid
+    else:
+        grid = _net(imp, exp, n, ("grid import", "grid export"), warnings)
+    dis, cha, signed_battery = column("discharge"), column("charge"), column("battery")
+    if signed_battery is not None and (dis is None or cha is None):
+        sign = _battery_sign(signed_battery, pv, load, grid, soc)
+        if sign is None:
+            sign = -1
+            warnings.append(
+                "The file couldn't show which way the battery column runs, so positive was taken as charging. "
+                "If the battery's history looks backwards, remove this import and choose its charging and "
+                "discharging columns by hand."
+            )
+        battery = [None if v is None else sign * v for v in signed_battery]
+    else:
+        battery = _net(dis, cha, n, ("battery discharging", "battery charging"), warnings)
 
     readings: list[tuple[int, dict[str, float | None]]] = []
     for j, ts in enumerate(times):

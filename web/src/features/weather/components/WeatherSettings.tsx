@@ -15,8 +15,9 @@ import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { retrain, startBackfill, weatherStatusQuery } from "~/features/weather/api";
+import { retrain, weatherStatusQuery } from "~/features/weather/api";
 import type { WeatherStatus } from "~/features/weather/types";
+import { useFetchWeather, WeatherFetchProgress } from "~/features/weather/components/WeatherFetch";
 import { LocationForm } from "~/features/settings/components/LocationForm";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
@@ -221,29 +222,21 @@ function Panels() {
 
 /** What's stored, and filling in the weather for days with readings but none. */
 function History({ status }: { status: WeatherStatus | undefined }) {
-  const qc = useQueryClient();
-  const fill = useMutation({
-    mutationFn: startBackfill,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["weather"] }),
-  });
+  const fetchWeather = useFetchWeather();
+  // Report how a fill went only for one started here, not one from long ago.
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   if (!status) return null;
   const { stored, backfill } = status;
   const days = Math.round(stored.hours / 24);
   const remaining = backfill.remaining;
-  const filling = backfill.running && remaining > 0;
+  const start = (refetch: boolean) =>
+    fetchWeather.mutate(refetch, { onSuccess: (r) => setStartedAt(r.backfill.started_at ?? 0) });
   return (
     <SettingsCard padded aria-labelledby="h-history" className="gap-4">
       <CardTitle
         id="h-history"
         title="Weather history"
-        sub="Each hour's weather is kept, so History can show what it was like on any day and the forecast can learn from it."
-        aside={
-          filling ? (
-            <Pill tone="brand" size="sm">
-              Filling in
-            </Pill>
-          ) : undefined
-        }
+        sub={`Each hour's weather is kept, so History can show what it was like on any day and the forecast can learn from it. It's filled in for every day with readings, including imported ones, as far back as they go (Open-Meteo's archive starts in ${status.archive_from.slice(0, 4)}).`}
       />
       <div className="flex flex-col gap-1 text-sm">
         <span>
@@ -251,27 +244,39 @@ function History({ status }: { status: WeatherStatus | undefined }) {
             ? `${intAU(days)} ${plural(days, "day")} stored, from ${longDate.format(new Date(stored.first_ts * 1000))}.`
             : "Nothing stored yet."}
         </span>
-        <span className="text-ink-muted">
-          {remaining
-            ? filling
-              ? `Filling in ${remaining} ${plural(remaining, "day")} with readings but no weather, a few months at a time…`
-              : `${remaining} ${plural(remaining, "day")} with readings ${remaining === 1 ? "has" : "have"} no weather yet.`
-            : "Every day with readings has its weather."}
-        </span>
+        {!backfill.running && (
+          <span className="text-ink-muted">
+            {remaining
+              ? `${intAU(remaining)} ${plural(remaining, "day")} with readings ${remaining === 1 ? "has" : "have"} no weather yet. They're filled in a few months each half hour, or all at once now.`
+              : "Every day with readings has its weather."}
+          </span>
+        )}
       </div>
-      {remaining > 0 && !filling && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => fill.mutate()}
-          disabled={fill.isPending}
-        >
-          Fill in past weather
-        </Button>
+      {!status.location_set && (
+        <Notice tone="warn">Choose your location above first, so the weather is fetched for the right place.</Notice>
       )}
-      {backfill.error && <HelpText tone="bad">{backfill.error}</HelpText>}
-      {fill.isError && <HelpText tone="bad">{errorMessage(fill.error)}</HelpText>}
+      <WeatherFetchProgress since={startedAt ?? Infinity} />
+      {!backfill.running && status.location_set && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {remaining > 0 && (
+            <Button variant="outline" size="sm" onClick={() => start(false)} disabled={fetchWeather.isPending}>
+              Fetch the missing weather
+            </Button>
+          )}
+          {days > 0 && (
+            <Button variant="link" size="sm" onClick={() => start(true)} disabled={fetchWeather.isPending}>
+              Fetch it all again
+            </Button>
+          )}
+        </div>
+      )}
+      {!backfill.running && days > 0 && (
+        <HelpText>
+          Fetching it all again replaces the filled-in history, say after changing the weather model. Hours the forecast
+          recorded as they happened are kept.
+        </HelpText>
+      )}
+      {fetchWeather.isError && <HelpText tone="bad">{errorMessage(fetchWeather.error)}</HelpText>}
     </SettingsCard>
   );
 }

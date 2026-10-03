@@ -9,8 +9,10 @@ export type ImportDay = {
   new: number;
   /** Buckets an earlier import wrote, which this one replaces. */
   replaces: number;
-  /** Buckets WattsMyPower recorded itself: kept as they are. */
+  /** Buckets WattsMyPower recorded itself: kept as they are, unless the import replaces them. */
   recorded: number;
+  /** Today (or later): still being recorded, so never replaced. */
+  locked: boolean;
   pv_kwh: number | null;
   load_kwh: number | null;
   import_kwh: number | null;
@@ -36,7 +38,7 @@ export type ImportPreview = {
   warnings: string[];
 };
 
-export type ImportResult = ImportPreview & { import_id: number | null; written: number };
+export type ImportResult = ImportPreview & { import_id: number | null; written: number; replaced: number };
 
 /** An earlier import, as it stands now (buckets later recorded by the dashboard no longer count). */
 export type ImportRecord = {
@@ -48,6 +50,8 @@ export type ImportRecord = {
   first_ts: number | null;
   last_ts: number | null;
   days: number;
+  /** Days whose recorded readings it replaced, put back if it's removed. */
+  replaced_days: number;
 };
 
 /** Columns chosen by hand: field -> headers ([] = don't import). */

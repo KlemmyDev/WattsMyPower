@@ -24,12 +24,20 @@ class WeatherRepository:
 
     # ------------------------------------------------------------------ weather
     def write(
-        self, rows: Iterable[dict[str, Any]], latitude: float, longitude: float, now: int, *, history: bool = False
+        self,
+        rows: Iterable[dict[str, Any]],
+        latitude: float,
+        longitude: float,
+        now: int,
+        *,
+        history: bool = False,
+        replace: bool = False,
     ) -> int:
         """
         Store fetched hours. From the forecast (`history=False`) every hour is replaced, as "recent" once it
         has begun and "forecast" before. From a history service, only hours not already stored are added,
-        as "archive": what the forecast service last estimated for an hour is the closer match.
+        as "archive": what the forecast service last estimated for an hour is the closer match. With
+        `replace`, earlier "archive" hours in the same stretch go first, so it's fetched afresh.
         """
         values = []
         for r in rows:
@@ -38,6 +46,11 @@ class WeatherRepository:
             source = "archive" if history else ("recent" if r["ts"] < now else "forecast")
             values.append((r["ts"], latitude, longitude, *(r.get(c) for c in COLUMNS), source, now))
         with self.db.writing() as conn:
+            if history and replace and values:
+                conn.execute(
+                    "DELETE FROM weather_hours WHERE source = 'archive' AND ts >= ? AND ts <= ?",
+                    (min(v[0] for v in values), max(v[0] for v in values)),
+                )
             conn.executemany(_INSERT.format(verb="OR IGNORE" if history else "OR REPLACE"), values)
         return len(values)
 

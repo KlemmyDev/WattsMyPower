@@ -6,7 +6,10 @@ while it was off).
 A background loop runs every half hour:
   1. refreshes the forecast (also re-fetched on demand when the forecast is asked for and it's stale,
      or right away when the location, the weather model or the panels change);
-  2. backfills older days with readings, a few requests a run, each up to three months;
+  2. backfills older days with readings (any day back to 1940, once the location has been chosen), a few
+     requests a run, each up to three months; or, when
+     asked for (after an import, or from Settings), all of them at once, reporting its progress. It
+     can also fetch every day again ("refetch"), say after changing the weather model;
   3. runs whatever else wants the fresh weather (the forecast's learning, see ForecastService.tick).
 
 If a fetch fails, what's stored keeps serving, so the forecast survives an outage and a restart.
@@ -40,7 +43,8 @@ REFRESH = 1800  # seconds between forecast fetches
 RETRY = 300  # after a failed fetch, wait this long before trying again
 CHUNK_DAYS = 90  # days of history per request
 REQUESTS_PER_RUN = 4  # history requests per run of the loop
-MAX_DAYS = 5 * 365  # how far back to fill in
+REQUESTS_WHEN_ASKED = 30  # per run when a fill is asked for: about seven years, so it's done in one go
+ARCHIVE_FROM = dt.date(1940, 1, 1)  # the ERA5 archive's first day: as far back as weather can be filled in
 RECENT_DAYS = 7  # the forecast itself covers this many days back
 COMPLETE = 0.9  # share of hours a model must give sunlight and temperature for (and codes, for history)
 # Weather codes, worst first within a day: storms, snow, rain, drizzle, fog, cloud, clear.
@@ -85,7 +89,22 @@ class WeatherService:
         self._failed_at = 0.0
         self.error: str | None = None  # the last forecast fetch's failure, until one works
         self.model_unavailable: str | None = None  # a chosen weather model Open-Meteo couldn't serve
-        self.backfill_state: dict[str, Any] = {"running": False, "error": None, "last_run": None, "added_days": 0}
+        # Filling in past weather: whether it's going and was asked for, all days again or only missing ones
+        # (and, then, how far it has got), its progress through this fill, and how the last one went.
+        self.backfill_state: dict[str, Any] = {
+            "running": False,
+            "requested": False,
+            "refetch": False,
+            "cursor": None,
+            "total": 0,
+            "done": 0,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+            "last_run": None,
+            "added_days": 0,
+        }
+        self._fill_lock = threading.Lock()
         self.after_refresh: list[Callable[[], None]] = []
         self._task: asyncio.Task[None] | None = None
         self._wake: asyncio.Event | None = None
@@ -157,32 +176,76 @@ class WeatherService:
         return self.repo.hours(start, end)
 
     # ------------------------------------------------------------------ filling in history
-    def missing_days(self, today: dt.date) -> list[dt.date]:
-        """Days with readings but no weather, oldest first, from MAX_DAYS ago to before RECENT_DAYS ago."""
+    def missing_days(self, today: dt.date, *, every: bool = False, after: dt.date | None = None) -> list[dt.date]:
+        """Days with readings but no weather (or `every` day with readings), oldest first, back to the archive's
+        first day and to before RECENT_DAYS ago, and after `after`."""
         first = self.repo.first_reading()
         if first is None:
             return []
-        start = max(dt.date.fromisoformat(local_date(first)), today - dt.timedelta(days=MAX_DAYS))
+        start = max(dt.date.fromisoformat(local_date(first)), ARCHIVE_FROM)
         end = today - dt.timedelta(days=RECENT_DAYS - 1)
         if start >= end:
             return []
         lo, hi = _local_midnight(start), _local_midnight(end)
-        missing = self.repo.reading_days(lo, hi) - self.repo.days_covered(lo, hi)
-        return sorted(dt.date.fromisoformat(d) for d in missing)
+        days = self.repo.reading_days(lo, hi)
+        if not every:
+            days -= self.repo.days_covered(lo, hi)
+        return sorted(d for d in (dt.date.fromisoformat(x) for x in days) if after is None or d > after)
 
-    def backfill(self, requests: int = REQUESTS_PER_RUN) -> int:
+    def request_backfill(self, refetch: bool = False) -> None:
+        """Fill in past weather now, all of it, rather than a little each half hour; with `refetch`, every day with
+        readings again, not only those without weather. Call from the event loop."""
+        with self._fill_lock:
+            state = self.backfill_state
+            if not (state["requested"] and state["running"] and state["refetch"] == refetch):  # not already going
+                state.update(
+                    requested=True,
+                    running=True,
+                    refetch=refetch,
+                    cursor=None,
+                    total=None,
+                    done=0,
+                    error=None,
+                    started_at=int(self.clock()),
+                    finished_at=None,
+                )
+        self.wake()
+
+    def backfill(self, requests: int | None = None) -> int:
         """Fill in up to `requests` stretches of missing days. Returns how many days now have weather. Blocking."""
         if not self.config.forecast:
             return 0
         state = self.backfill_state
+        if not self.settings.location_set():
+            # Not the default location's weather, stored as if it were this home's: wait until it's chosen.
+            with self._fill_lock:
+                was_asked = state["requested"]
+                state.update(running=False, requested=False, refetch=False, cursor=None)
+                state["error"] = (
+                    "Choose your location first, so the weather is for the right place" if was_asked else None
+                )
+            return 0
         today = dt.date.fromtimestamp(self.clock())
-        missing = self.missing_days(today)
+        with self._fill_lock:
+            refetch, cursor = state["refetch"], state["cursor"]
+            requests = requests or (REQUESTS_WHEN_ASKED if state["requested"] else REQUESTS_PER_RUN)
+        after = dt.date.fromisoformat(cursor) if cursor else None
+        missing = self.missing_days(today, every=refetch, after=after)
         if not missing:
-            state.update(running=False, error=None, last_run=int(self.clock()), remaining=0)
+            with self._fill_lock:
+                if state["running"]:
+                    state.update(finished_at=int(self.clock()))
+                state.update(
+                    running=False, requested=False, refetch=False, cursor=None, error=None, last_run=int(self.clock())
+                )
             return 0
         lat, lon = self.where()
         model = self.model()
-        state.update(running=True, remaining=len(missing))
+        with self._fill_lock:
+            if not state["running"] or state["total"] is None:  # a fill starting: count what it has to do
+                state.update(total=len(missing), done=0, finished_at=None)
+                state["started_at"] = state["started_at"] if state["running"] else int(self.clock())
+            state.update(running=True)
         added = 0
         try:
             while missing and requests > 0:
@@ -195,21 +258,32 @@ class WeatherService:
                 end = max(d for d in missing if d <= limit)
                 chunk = functools.partial(openmeteo.history_url, lat, lon, start=start, end=end)
                 rows = self._fetch_model(chunk, model, ("ghi", "temp", "code"))
-                self.repo.write(rows, lat, lon, int(self.clock()), history=True)
+                # Only the days asked for: the day after (fetched for the last hour's sunshine) comes with its own.
+                until = _local_midnight(end + dt.timedelta(days=1))
+                rows = [r for r in rows if r["ts"] < until]
+                self.repo.write(rows, lat, lon, int(self.clock()), history=True, replace=refetch)
                 done = [d for d in missing if d <= end]
                 added += len(done)
                 missing = missing[len(done) :]
                 requests -= 1
-            state.update(error=None)
+                with self._fill_lock:
+                    state["done"] = (state["done"] or 0) + len(done)
+                    if refetch:
+                        state["cursor"] = end.isoformat()
+            error = None
         except Exception as e:
             log.warning("Filling in past weather failed: %s", e)
-            state.update(error=f"Open-Meteo's weather history couldn't be reached ({type(e).__name__})")
-        state.update(
-            running=bool(missing) and state["error"] is None,
-            last_run=int(self.clock()),
-            added_days=state.get("added_days", 0) + added,
-            remaining=len(missing),
-        )
+            error = f"Open-Meteo's weather history couldn't be reached ({type(e).__name__})"
+        with self._fill_lock:
+            finished = not missing or error is not None
+            state.update(
+                running=not finished,
+                error=error,
+                last_run=int(self.clock()),
+                added_days=state["added_days"] + added,
+            )
+            if finished:
+                state.update(requested=False, refetch=False, cursor=None, finished_at=int(self.clock()))
         return added
 
     # ------------------------------------------------------------------ views
@@ -255,6 +329,8 @@ class WeatherService:
             "stored": self.repo.coverage(),
             "missing_days": len(missing),
             "backfill": {**self.backfill_state, "remaining": len(missing)},
+            "archive_from": ARCHIVE_FROM.isoformat(),
+            "location_set": self.settings.location_set(),
         }
 
     # ------------------------------------------------------------------ the loop

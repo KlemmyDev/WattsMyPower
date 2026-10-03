@@ -14,7 +14,15 @@ export const previewImport = (file: File, choices: ColumnChoices) =>
   apiUpload<ImportPreview>("imports/preview", file, { name: file.name, columns: columnsParam(choices) });
 
 /** Import an export, as a new import or (`into`) as one more file of an earlier one. */
-export const runImport = (file: File, choices: ColumnChoices, into: number | null, label: string) =>
-  apiUpload<ImportResult>("imports", file, { name: file.name, columns: columnsParam(choices), into, label });
+/** Import an export, as a new import or (`into`) as one more file of an earlier one; `replace` uses its readings in
+ * place of what WattsMyPower recorded, too. */
+export const runImport = (file: File, choices: ColumnChoices, into: number | null, label: string, replace: boolean) =>
+  apiUpload<ImportResult>("imports", file, {
+    name: file.name,
+    columns: columnsParam(choices),
+    into,
+    label,
+    replace: replace || undefined,
+  });
 
 export const removeImport = (id: number) => apiSend<{ removed: number }>("DELETE", `imports/${id}`);
