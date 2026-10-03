@@ -71,10 +71,14 @@ def forecast_url(latitude: float, longitude: float, model: str) -> str:
 
 
 def history_url(latitude: float, longitude: float, model: str, start: dt.date, end: dt.date) -> str:
-    """Days `start` to `end` inclusive, from the historical forecast, or the archive before it begins."""
+    """
+    Days `start` to `end` inclusive, from the historical forecast, or the archive before it begins. A day more
+    is asked for: the last hour takes its sunshine from the next day's first stamp (see rows).
+    """
+    through = end + dt.timedelta(days=1)
     if start >= HISTORICAL_FROM:
-        return _url(HISTORICAL, latitude, longitude, model, HOURLY, start_date=start, end_date=end)
-    return _url(ARCHIVE, latitude, longitude, model, ARCHIVE_HOURLY, start_date=start, end_date=end)
+        return _url(HISTORICAL, latitude, longitude, model, HOURLY, start_date=start, end_date=through)
+    return _url(ARCHIVE, latitude, longitude, model, ARCHIVE_HOURLY, start_date=start, end_date=through)
 
 
 def rows(data: dict[str, Any]) -> list[Row]:

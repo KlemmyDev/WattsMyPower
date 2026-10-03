@@ -16,7 +16,10 @@ function covers(i: ImportRecord): string {
   if (!i.first_ts || !i.last_ts) return "Everything it held has since been recorded by WattsMyPower";
   const from = day(i.first_ts);
   const to = day(i.last_ts - 1);
-  return `${from === to ? from : `${from} to ${to}`} · ${i.days} ${plural(i.days, "day")}`;
+  const replaced = i.replaced_days
+    ? ` · replaced what was recorded on ${i.replaced_days} ${plural(i.replaced_days, "day")}`
+    : "";
+  return `${from === to ? from : `${from} to ${to}`} · ${i.days} ${plural(i.days, "day")}${replaced}`;
 }
 
 /** Settings → Integrations → Sungrow → Import: what's been imported, each removable without touching recorded history. */
@@ -56,7 +59,10 @@ export function PastImports() {
             </span>
           </div>
           {confirming === i.id ? (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {i.replaced_days > 0 && (
+                <HelpText className="basis-full">What WattsMyPower recorded on those days comes back.</HelpText>
+              )}
               <Button variant="outline" size="sm" onClick={() => remove.mutate(i.id)} disabled={remove.isPending}>
                 {remove.isPending ? "Removing…" : `Remove ${i.days} ${plural(i.days, "day")}`}
               </Button>

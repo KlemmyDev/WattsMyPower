@@ -66,9 +66,13 @@ async def run(
     columns: str | None = None,
     into: int | None = None,
     label: str | None = None,
+    replace: bool = False,
 ):
-    """Import an export's readings where the dashboard has none of its own. `into` adds the file to an earlier import."""
-    result = await _guarded(svc.imports.run, name, await _file(request), _overrides(columns), into, label)
+    """
+    Import an export's readings where the dashboard has none of its own, or with `replace`, in place of what it
+    recorded too (before today). `into` adds the file to an earlier import.
+    """
+    result = await _guarded(svc.imports.run, name, await _file(request), _overrides(columns), into, label, replace)
     _changed(svc)
     return result
 

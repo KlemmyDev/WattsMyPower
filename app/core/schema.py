@@ -6,7 +6,9 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                  long ranges so a year's chart never touches raw rows. Rows imported from
                  another source (iSolarCloud) carry their import's id in `import_id`; a rollup
                  rebuilt from real samples replaces them, clearing it
-    imports      each import of history from a file, so it can be listed and removed
+    imports      each import of history from a file, so it can be listed and removed, and whether it
+                 replaced readings the dashboard recorded (rather than only filling gaps)
+    import_replaced  the recorded rollups an import replaced, put back when it's removed
     settings     numeric settings saved from the dashboard (location, system cost)
     kv           text values: the tariff (JSON), the location's place name, the set-up guide's progress,
                  and the Amber connection
@@ -61,6 +63,16 @@ ROLLUP_SQL = (
     f"SELECT (ts / {ROLLUP}) * {ROLLUP} AS b, "
     + ", ".join(f"{agg}({c})" for c, agg in SAMPLE_COLUMNS.items())
     + " FROM samples WHERE ts >= ? AND ts < ? GROUP BY b"
+)
+# The same, leaving alone buckets an import replaced on purpose ("use the file's readings" for days the
+# dashboard had recorded): what everything after the migrations rebuilds rollups with.
+ROLLUP_KEEPING_SQL = (
+    f"INSERT OR REPLACE INTO samples_5m (ts, {', '.join(SAMPLE_COLUMNS)}) "
+    f"SELECT (ts / {ROLLUP}) * {ROLLUP} AS b, "
+    + ", ".join(f"{agg}({c})" for c, agg in SAMPLE_COLUMNS.items())
+    + " FROM samples WHERE ts >= ?1 AND ts < ?2 GROUP BY b HAVING b NOT IN ("
+    "SELECT s.ts FROM samples_5m s JOIN imports i ON i.id = s.import_id"
+    " WHERE i.replaces = 1 AND s.ts >= ?1 AND s.ts < ?2)"
 )
 
 # The range each sample column can physically hold for a home system. A value outside it isn't a
@@ -209,6 +221,18 @@ def _weather(conn: sqlite3.Connection) -> None:
     )
 
 
+def _import_replacing(conn: sqlite3.Connection) -> None:
+    """Imports that replace recorded readings: which do, and the recorded rollups each replaced (a row's columns
+    as JSON), so removing the import puts them back."""
+    if not any(r[1] == "replaces" for r in conn.execute("PRAGMA table_info(imports)")):
+        conn.execute("ALTER TABLE imports ADD COLUMN replaces INTEGER NOT NULL DEFAULT 0")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS import_replaced (ts INTEGER PRIMARY KEY, import_id INTEGER NOT NULL,"
+        " data TEXT NOT NULL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS import_replaced_by_import ON import_replaced (import_id)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -219,6 +243,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _prices,
     _imports,
     _weather,
+    _import_replacing,
 ]
 
 

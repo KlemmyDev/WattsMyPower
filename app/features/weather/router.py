@@ -38,11 +38,11 @@ async def status(svc: ServicesDep):
 
 
 @router.post("/backfill")
-async def backfill(svc: ServicesDep):
-    """Fill in past weather now, rather than at the next half-hourly run."""
-    svc.weather.backfill_state["running"] = True
-    svc.weather.wake()
-    return {"started": True}
+async def backfill(svc: ServicesDep, refetch: bool = False):
+    """Fill in past weather now, all of it, rather than a little each half hour. `refetch` fetches every day with
+    readings again (say after changing the weather model), not only those without weather."""
+    svc.weather.request_backfill(refetch)
+    return {"started": True, "backfill": svc.weather.backfill_state}
 
 
 @router.post("/retrain")

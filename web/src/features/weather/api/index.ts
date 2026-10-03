@@ -5,8 +5,8 @@ import type { WeatherDay, WeatherStatus } from "~/features/weather/types";
 export const weatherStatusQuery = queryOptions({
   queryKey: ["weather", "status"],
   queryFn: ({ signal }) => apiGet<WeatherStatus>("weather", undefined, { signal }),
-  // Faster while past weather is being filled in, so its progress shows.
-  refetchInterval: (q) => (q.state.data?.backfill.running ? 15_000 : 5 * 60_000),
+  // Every couple of seconds while past weather is being filled in, so its progress shows.
+  refetchInterval: (q) => (q.state.data?.backfill.running ? 2_000 : 5 * 60_000),
 });
 
 export const weatherDayQuery = (date: string) =>
@@ -16,8 +16,12 @@ export const weatherDayQuery = (date: string) =>
     staleTime: 10 * 60_000,
   });
 
-/** Fill in past weather now rather than at the next half-hourly run. */
-export const startBackfill = () => apiSend<{ started: boolean }>("POST", "weather/backfill");
+/** Fill in past weather now, all of it, rather than a little each half hour; `refetch` fetches every day again. */
+export const startBackfill = (refetch = false) =>
+  apiSend<{ started: boolean; backfill: WeatherStatus["backfill"] }>(
+    "POST",
+    refetch ? "weather/backfill?refetch=true" : "weather/backfill",
+  );
 
 /** Retrain the forecast's learned model now. */
 export const retrain = () => apiSend<unknown>("POST", "weather/retrain");

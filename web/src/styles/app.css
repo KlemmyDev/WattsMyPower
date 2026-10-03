@@ -507,3 +507,13 @@
     transition: none !important;
   }
 }
+
+/* An indeterminate progress bar's band (common/ui ProgressBar), across and off the track. */
+@keyframes progressSweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}

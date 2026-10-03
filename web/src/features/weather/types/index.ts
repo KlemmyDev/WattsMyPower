@@ -45,7 +45,24 @@ export type WeatherStatus = {
   error: string | null;
   stored: { first_ts: number | null; last_ts: number | null; hours: number };
   missing_days: number;
-  backfill: { running: boolean; error: string | null; last_run: number | null; added_days: number; remaining: number };
+  /** Filling in past weather: whether it's going, and its progress through this fill (`total` is null until counted). */
+  backfill: {
+    running: boolean;
+    requested: boolean;
+    refetch: boolean;
+    total: number | null;
+    done: number;
+    started_at: number | null;
+    finished_at: number | null;
+    error: string | null;
+    last_run: number | null;
+    added_days: number;
+    remaining: number;
+  };
+  /** The first day past weather can be filled in for (Open-Meteo's archive starts in 1940). */
+  archive_from: string;
+  /** Whether the location was chosen (past weather is only fetched once it is). */
+  location_set: boolean;
   learning: {
     on: boolean;
     in_use: boolean;

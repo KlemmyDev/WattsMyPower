@@ -34,6 +34,7 @@ async def get_settings(svc: ServicesDep):
 async def put_settings(svc: ServicesDep, changes: JsonBody):
     """Save the forecast location (and its place name), billing period or system details. Only known keys are accepted."""
     moved = ("latitude" in changes or "longitude" in changes) and "location_name" not in changes
+    before = (svc.settings.get("latitude"), svc.settings.get("longitude"))
     if moved:
         changes = {**changes, "location_name": None}  # the old name no longer applies
     try:
@@ -44,7 +45,11 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
         svc.live.publish()
     if WEATHER & changes.keys():  # fetch for the new place or model, and retrain for new panels
         svc.weather.invalidate()
-        svc.weather.wake()
+        after = (svc.settings.get("latitude"), svc.settings.get("longitude"))
+        if any(abs(a - b) > 0.01 for a, b in zip(before, after, strict=True)):
+            svc.weather.request_backfill(refetch=True)  # the weather stored for days past was another place's
+        else:
+            svc.weather.wake()
     if moved:  # coordinates typed in by hand: look up a place name for them
         named = await asyncio.to_thread(name_location, svc)
         return named or saved

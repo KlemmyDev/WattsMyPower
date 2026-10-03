@@ -110,6 +110,18 @@ class SettingsStore:
         with self._lock:
             return self._values.get(key, self.editable[key][2])
 
+    def location_set(self) -> bool:
+        """Whether someone chose the location (saved in Settings, or LATITUDE/LONGITUDE in the environment),
+        rather than it being the default. Past weather is only fetched for a chosen one."""
+        with self._lock:
+            if "latitude" in self._values or "longitude" in self._values:
+                return True
+        default = Config.__dataclass_fields__
+        return (self.editable["latitude"][2], self.editable["longitude"][2]) != (
+            default["latitude"].default,
+            default["longitude"].default,
+        )
+
     def get_text(self, key: str) -> str | None:
         with self._lock:
             return self._text.get(key)

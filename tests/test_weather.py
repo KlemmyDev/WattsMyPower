@@ -28,9 +28,10 @@ NOW -= NOW % 3600
 
 @pytest.fixture
 def settings(db: Database, config: Config) -> SettingsStore:
-    s = SettingsStore(db, replace(config, latitude=LAT, longitude=LON, pv_kw=6.6))
+    s = SettingsStore(db, replace(config, pv_kw=6.6))
     s.seed_system()
     s.load()
+    s.save({"latitude": LAT, "longitude": LON})  # chosen in Settings, as past weather needs
     return s
 
 
@@ -112,6 +113,10 @@ def test_a_day_ahead_forecast_is_kept_as_it_stood_the_day_before(db: Database) -
 # ---------------------------------------------------------------------------------------- filling in
 
 
+def local_ts(y: int, mo: int, d: int, h: int = 0) -> int:
+    return int(time.mktime((y, mo, d, h, 0, 0, 0, 0, -1)))
+
+
 def days_ago(n: int) -> int:
     lt = time.localtime(NOW)
     return int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday - n, 0, 0, 0, 0, 0, -1)))
@@ -123,7 +128,7 @@ def history_answer(url: str) -> dict[str, Any]:
     start = dt.date.fromisoformat(q["start_date"])
     end = dt.date.fromisoformat(q["end_date"])
     first = int(time.mktime((start.year, start.month, start.day, 0, 0, 0, 0, 0, -1)))
-    hours = ((end - start).days + 1) * 24 + 1
+    hours = ((end - start).days + 1) * 24  # 00:00 to 23:00 of each day, as Open-Meteo sends
     times = [first + i * 3600 for i in range(hours)]
     return open_meteo(times, shortwave_radiation=[400] * hours, temperature_2m=[20] * hours, weather_code=[1] * hours)
 
@@ -150,6 +155,42 @@ def test_past_weather_is_filled_in_for_days_with_readings(
     assert weather.backfill() == 0 and len(urls) == 1  # nothing left to ask for
 
 
+def test_no_past_weather_is_fetched_until_the_location_is_chosen(
+    db: Database, config: Config, settings: SettingsStore
+) -> None:
+    unset = SettingsStore(db, config)  # the default location, and nothing saved in Settings
+    with db.writing() as conn:
+        conn.execute("DELETE FROM settings WHERE key IN ('latitude', 'longitude')")
+        conn.execute("INSERT INTO samples_5m (ts, pv_power) VALUES (?, 1000)", (days_ago(30) + 43200,))
+    unset.load()
+    assert not unset.location_set()
+    asked: list[str] = []
+    weather = WeatherService(config, db, unset, get=lambda u: asked.append(u) or history_answer(u), clock=lambda: NOW)
+    weather.request_backfill()
+    assert weather.backfill() == 0 and asked == []
+    assert "Choose your location first" in weather.status()["backfill"]["error"]
+    assert not weather.status()["location_set"]
+    unset.save({"latitude": LAT, "longitude": LON})
+    weather.request_backfill()
+    assert weather.backfill() == 1 and len(asked) == 1
+
+
+@pytest.mark.parametrize(("year", "service"), [(2023, openmeteo.HISTORICAL), (1998, openmeteo.ARCHIVE)])
+def test_any_day_imported_gets_its_weather_however_long_ago(
+    db: Database, config: Config, settings: SettingsStore, year: int, service: str
+) -> None:
+    with db.writing() as conn:
+        conn.execute("INSERT INTO samples_5m (ts, pv_power) VALUES (?, 1000)", (local_ts(year, 10, 1, 12),))
+    asked: list[str] = []
+    weather = WeatherService(
+        config, db, settings, get=lambda u: asked.append(u) or history_answer(u), clock=lambda: NOW
+    )
+    weather.request_backfill()
+    assert weather.backfill() == 1
+    assert len(asked) == 1 and asked[0].startswith(service) and f"start_date={year}-10-01" in asked[0]
+    assert len(weather.day(dt.date(year, 10, 1))["hours"]) == 24  # its last hour too
+
+
 def test_a_failed_fill_is_reported_and_tried_again(db: Database, config: Config, settings: SettingsStore) -> None:
     with db.writing() as conn:
         conn.execute("INSERT INTO samples_5m (ts, pv_power) VALUES (?, 1000)", (days_ago(30) + 43200,))
@@ -162,6 +203,72 @@ def test_a_failed_fill_is_reported_and_tried_again(db: Database, config: Config,
     assert "couldn't be reached" in weather.status()["backfill"]["error"]
     weather._get = history_answer
     assert weather.backfill() == 1 and weather.status()["backfill"]["error"] is None
+
+
+def a_year_of_readings(db: Database) -> None:
+    """A reading at noon on each of the last 365 days, as a year imported from iSolarCloud would leave."""
+    with db.writing() as conn:
+        conn.executemany(
+            "INSERT INTO samples_5m (ts, pv_power) VALUES (?, 1000)", [(days_ago(n) + 43200,) for n in range(1, 366)]
+        )
+
+
+def test_a_fill_asked_for_does_a_year_at_once_and_reports_its_progress(
+    db: Database, config: Config, settings: SettingsStore
+) -> None:
+    a_year_of_readings(db)
+    urls: list[str] = []
+
+    def get(url: str) -> dict[str, Any]:
+        urls.append(url)
+        return history_answer(url)
+
+    weather = WeatherService(config, db, settings, get=get, clock=lambda: NOW)
+    weather.request_backfill()
+    state = weather.backfill_state
+    assert state["running"] and state["requested"] and state["total"] is None
+    added = weather.backfill()
+    # The last week comes with the forecast itself; the rest arrives in one run, three months a request.
+    assert added == 359 and len(urls) == 4
+    assert state["total"] == 359 and state["done"] == 359
+    assert not state["running"] and not state["requested"] and state["finished_at"] == NOW
+    assert weather.status()["backfill"]["remaining"] == 0
+
+
+def test_a_fill_the_loop_starts_on_its_own_goes_a_little_at_a_time(
+    db: Database, config: Config, settings: SettingsStore
+) -> None:
+    a_year_of_readings(db)
+    weather = WeatherService(config, db, settings, get=history_answer, clock=lambda: NOW)
+    weather.backfill(requests=2)
+    state = weather.backfill_state
+    assert state["running"] and state["total"] == 359 and state["done"] == 180
+    weather.backfill(requests=2)
+    assert not state["running"] and state["done"] == 359 and state["total"] == 359
+
+
+def test_fetching_every_day_again_replaces_filled_in_weather_but_not_the_forecasts(
+    db: Database, config: Config, settings: SettingsStore
+) -> None:
+    a_year_of_readings(db)
+    sunshine = {"ghi": 400}
+
+    def get(url: str) -> dict[str, Any]:
+        data = history_answer(url)
+        data["hourly"]["shortwave_radiation"] = [sunshine["ghi"]] * len(data["hourly"]["time"])
+        return data
+
+    weather = WeatherService(config, db, settings, get=get, clock=lambda: NOW)
+    weather.request_backfill()
+    weather.backfill()
+    recent = days_ago(200) + 12 * 3600
+    weather.repo.write([{"ts": recent, "ghi": 123, "temp": 20}], LAT, LON, NOW)  # what the forecast service said
+    sunshine["ghi"] = 600  # say, another weather model
+    weather.request_backfill(refetch=True)
+    assert weather.backfill() == 359
+    assert weather.repo.hours(days_ago(100) + 12 * 3600, days_ago(100) + 13 * 3600)[0]["ghi"] == 600
+    assert weather.repo.hours(recent, recent + 1)[0]["ghi"] == 123
+    assert not weather.backfill_state["refetch"] and weather.backfill() == 0  # done: not fetched again
 
 
 def test_a_model_open_meteo_cant_serve_falls_back_to_its_best_match(
@@ -269,6 +376,23 @@ def test_the_learned_model_finds_the_roofs_direction_and_shade_and_beats_the_pla
     assert forecast._active_model() is None  # the panels changed: not used until it's retrained
     with db.reading() as conn:
         assert conn.execute("SELECT 1 FROM kv WHERE key = ?", (MODEL_KEY,)).fetchone()
+
+
+def test_filling_in_a_week_or_more_of_history_retrains_straight_away(
+    db: Database, config: Config, readings: ReadingsRepository, settings: SettingsStore
+) -> None:
+    def offline(url: str) -> dict[str, Any]:
+        raise OSError("no network in tests")
+
+    weather = WeatherService(config, db, settings, get=offline, clock=lambda: NOW)
+    forecast = ForecastService(config, readings, settings, weather)
+    forecast.train(NOW)  # nothing to learn from yet
+    synthetic_history(db)  # then DAYS days of weather and readings arrive, as after an import
+    forecast.tick(NOW + 60)  # well within the usual retraining interval
+    saved = forecast.learned()
+    assert saved is not None and saved["trained_at"] == NOW + 60 and saved["model"] is not None
+    forecast.tick(NOW + 120)
+    assert forecast.learned()["trained_at"] == NOW + 60  # nothing new since: not trained again
 
 
 def test_with_too_little_history_nothing_is_learned(
