@@ -66,12 +66,12 @@ Run these from the `wattsmypower` folder:
 | Command | What it does |
 |---|---|
 | `bash install.sh` | update to the latest version (backs up both databases first) |
-| `bash install.sh --configure` | change your settings (array size, time zone, port) and restart. Inverters are changed in **Settings → Integrations**. |
+| `bash install.sh --configure` | change your settings (time zone, port) and restart. Inverters are changed in **Settings → Integrations**, and the array size and battery in **Settings → System**. |
 | `bash start.sh` | start it, and Docker if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
-| `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `PV_KW=10 bash install.sh --yes`, or `INVERTER_HOST=192.168.1.20` on a first install to connect the inverter without the dashboard |
+| `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `TZ=Australia/Perth bash install.sh --yes`. On a first install, `PV_KW=10` sets the array size and `INVERTER_HOST=192.168.1.20` connects the inverter, without the dashboard. |
 
 **Updating** pulls the latest version, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
@@ -98,7 +98,7 @@ The dashboard implements the "Energy Dashboard v5" design from Claude Design: a 
 - **Insights:** four headline figures (30-day self-sufficiency and share of solar used at home, battery cycles, lifetime CO₂ avoided), self-sufficiency by month for the last 12 months, battery health (state of health reported by the battery, depth of discharge, round-trip efficiency, time at full charge), a heatmap of grid import by hour and month, and solar performance: each of the last 30 days' output compared with what the weather allowed, flagging clear days more than 10% below expected. Sections fill in as history builds up; the lifetime figures come from the inverter's own counters, so they're right from the first reading.
 - **Savings:** this quarter's bill (so far, and estimated for the whole quarter from your average full day over the last 30 days, with what it would be without solar and the battery); system payback (enter what the system cost on the card; savings since install are estimated from the inverter's lifetime counters at today's rates, and the payoff date from your average monthly saving); a plan comparison that prices a year of your actual usage on every current plan from a retailer you choose; and the cost to drive 100 km from solar, the grid, or petrol.
 - **Tesla:** "not connected" state and the connection screen. Tesla sign-in needs a Tesla Fleet API app, which isn't set up yet.
-- **Settings:** system details read from the inverter (model, serial, battery, backup reserve, grid connection), electricity rates, and connected services, including the weather location. Change the weather location by searching for a suburb, town or address (OpenStreetMap's Nominatim service); only the suburb-level name and its coordinates are saved, never a street address. Coordinates can still be entered directly, and get a place name looked up automatically. The Forecast page shows which place the outlook is for.
+- **Settings:** system details read from the inverter (model, serial, battery, backup reserve, grid connection) and the ones it can't report (the solar array's size, and optionally the battery's capacity, a backup reserve to fall back on, and its maximum charge and discharge rate), electricity rates, and connected services, including the weather location. Change the weather location by searching for a suburb, town or address (OpenStreetMap's Nominatim service); only the suburb-level name and its coordinates are saved, never a street address. Coordinates can still be entered directly, and get a place name looked up automatically. The Forecast page shows which place the outlook is for.
 
 ### Tariffs
 
@@ -136,9 +136,8 @@ All settings are environment variables (see `.env.example`):
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
 | `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
-| `PV_KW` | `6.6` | Solar array size in kW (the inverter doesn't report it). Shown in the header, and the forecast's starting point before it calibrates. |
-| `BATTERY_KWH` | `0` | Battery capacity. `0` = read it from the inverter (register 5639). |
-| `BATTERY_RESERVE` | `10` | Only used if the inverter doesn't report its backup reserve |
+| `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Settings → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
+| `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Settings → Tariffs**. |
 | `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Settings → Integrations → Change location.** |
 | `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
