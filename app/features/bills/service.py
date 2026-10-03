@@ -7,6 +7,9 @@ in step with a month a bill starts in. Days are priced like /api/costs, at today
 at the prices of the time). Days
 still to come are estimated from the same week last year where there are complete days to go on,
 otherwise from the average complete day over the last 30 days.
+
+Days covered by imported smart-meter data use the meter's import and export (see
+app.features.tariffs.costs), and each day and bill says how many of its days did.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from typing import Any
 from app.core.database import Database
 from app.features.amber.repository import PriceRepository
 from app.features.bills.repository import BillsRepository
+from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.costs import daily_costs
@@ -78,12 +82,14 @@ class BillsService:
         readings: ReadingsRepository,
         settings: SettingsStore,
         tariffs: TariffStore,
+        meter: MeterService | None = None,
         prices: PriceRepository | None = None,
     ):
         self.repo = BillsRepository(db)
         self.readings = readings
         self.settings = settings
         self.tariffs = tariffs
+        self.meter = meter
         self.prices = prices
 
     def build(self, now: int) -> dict[str, Any]:
@@ -97,9 +103,11 @@ class BillsService:
         cur_e = add_months(cur_s, months)
 
         first = min(add_months(cur_s, -12), today - dt.timedelta(LAST_YEAR + NEAR))
-        priced = daily_costs(self.readings, t, tables, _ts(first), now + 1, self.prices)["days"]
+        priced = daily_costs(self.readings, t, tables, _ts(first), now + 1, self.meter, self.prices)["days"]
         days = {d["date"]: {**d, "without_solar": _without_solar(d)} for d in priced}
-        complete = self.repo.complete_days(_ts(first), _ts(today), COMPLETE) & set(days)
+        # Complete days: enough inverter readings, or covered by the meter's data.
+        from_meter = {k for k, d in days.items() if d["source"] == "meter" and k < today.isoformat()}
+        complete = (self.repo.complete_days(_ts(first), _ts(today), COMPLETE) | from_meter) & set(days)
         recent = [days[k] for k in complete if k >= (today - dt.timedelta(RECENT)).isoformat()]
         recent_avg = _average(recent) if recent else None
 
@@ -116,6 +124,9 @@ class BillsService:
             out["supply"] = round(supply * len(parts), 2)
             out["net_cost"] = round(out["import_cost"] + out["supply"] - out["feed_in_credit"], 2)
             return out
+
+        def meter_days(parts: list[Day]) -> int:
+            return sum(1 for p in parts if p.get("source") == "meter")
 
         def span(s: dt.date, e: dt.date) -> dict[str, Any]:
             return {"start": s.isoformat(), "end": (e - dt.timedelta(1)).isoformat(), "days": (e - s).days}
@@ -156,7 +167,7 @@ class BillsService:
             e = add_months(p, months)
             parts = recorded(p, e, cur_s)
             if parts:
-                past.append({**span(p, e), "recorded": len(parts), **totals(parts)})
+                past.append({**span(p, e), "recorded": len(parts), "meter_days": meter_days(parts), **totals(parts)})
             p = e
 
         upcoming = []
@@ -182,7 +193,7 @@ class BillsService:
             "months": months,
             "period": {**span(cur_s, cur_e), "day": (today - cur_s).days + 1},
             "current": {
-                "so_far": {**totals(so_far), "days": len(so_far)},
+                "so_far": {**totals(so_far), "days": len(so_far), "meter_days": meter_days(so_far)},
                 "expected": expected(cur_s, cur_e),
             },
             "days": [
@@ -192,6 +203,7 @@ class BillsService:
                     "import_kwh": round(d["import_kwh"], 2),
                     "export_kwh": round(d["export_kwh"], 2),
                     "pv_kwh": pv.get(d["date"]),
+                    "source": d["source"],
                     "partial": d["date"] == today.isoformat(),
                 }
                 for d in so_far

@@ -1,8 +1,10 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { createRootRouteWithContext, HeadContent, Outlet, ScriptOnce, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import appCss from "~/styles/app.css?url";
 import { ToastProvider } from "~/features/common/ui/components/Toast";
+import { useThemeSync } from "~/features/common/theme/hooks";
+import { THEME_SCRIPT } from "~/features/common/theme/utils";
 import type { RouterContext } from "~/router";
 
 const FAVICON =
@@ -13,7 +15,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "color-scheme", content: "dark" },
       { title: "WattsMyPower" },
     ],
     links: [
@@ -33,6 +34,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 function Root() {
   const { queryClient } = Route.useRouteContext();
+  useThemeSync();
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
@@ -44,9 +46,14 @@ function Root() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-AU">
+    // The theme script sets data-theme on <html> before React starts, so React mustn't mind it.
+    <html lang="en-AU" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Applies the saved theme (and its color-scheme and theme-color meta tags) before the
+            body renders, so a light page never flashes dark first. It's in the prerendered shell
+            only, and removes itself once it has run. */}
+        <ScriptOnce>{THEME_SCRIPT}</ScriptOnce>
       </head>
       <body>
         {children}

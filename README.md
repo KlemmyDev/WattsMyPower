@@ -66,12 +66,12 @@ Run these from the `wattsmypower` folder:
 | Command | What it does |
 |---|---|
 | `bash install.sh` | update to the latest version (backs up both databases first) |
-| `bash install.sh --configure` | change your settings (array size, time zone, port) and restart. Inverters are changed in **Settings → Integrations**. |
+| `bash install.sh --configure` | change your settings (time zone, port) and restart. Inverters are changed in **Settings → Integrations**, and the array size and battery in **Settings → System**. |
 | `bash start.sh` | start it, and Docker if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
-| `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `PV_KW=10 bash install.sh --yes`, or `INVERTER_HOST=192.168.1.20` on a first install to connect the inverter without the dashboard |
+| `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `TZ=Australia/Perth bash install.sh --yes`. On a first install, `PV_KW=10` sets the array size and `INVERTER_HOST=192.168.1.20` connects the inverter, without the dashboard. |
 
 **Updating** pulls the latest version, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
@@ -82,6 +82,8 @@ Run these from the `wattsmypower` folder:
 > **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Settings → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
+
+> **Frozen readings.** Now and then (often just after starting up) the WiNet-S2 keeps answering with exactly the same registers for a few minutes instead of fresh ones. Those repeats aren't recorded, so charts show a short gap rather than a flat line, and the dashboard says "Readings frozen since …" until fresh readings arrive. A live inverter always changes some of its registers between polls (reactive power and power factor move even when solar, the battery and home use hold steady), so only a poll identical to the last in every register counts as frozen. Readings recorded before this was caught are rebuilt without the frozen ones by `python -m app reprocess` (as far back as the collector holds).
 
 ## Pages in detail
 
@@ -98,7 +100,7 @@ The dashboard implements the "Energy Dashboard v5" design from Claude Design: a 
 - **Insights:** four headline figures (30-day self-sufficiency and share of solar used at home, battery cycles, lifetime CO₂ avoided), self-sufficiency by month for the last 12 months, battery health (state of health reported by the battery, depth of discharge, round-trip efficiency, time at full charge), a heatmap of grid import by hour and month, and solar performance: each of the last 30 days' output compared with what the weather allowed, flagging clear days more than 10% below expected. Sections fill in as history builds up; the lifetime figures come from the inverter's own counters, so they're right from the first reading.
 - **Savings:** this quarter's bill (so far, and estimated for the whole quarter from your average full day over the last 30 days, with what it would be without solar and the battery); system payback (enter what the system cost on the card; savings since install are estimated from the inverter's lifetime counters at today's rates, and the payoff date from your average monthly saving); a plan comparison that prices a year of your actual usage on every current plan from a retailer you choose; and the cost to drive 100 km from solar, the grid, or petrol.
 - **Tesla:** "not connected" state and the connection screen. Tesla sign-in needs a Tesla Fleet API app, which isn't set up yet.
-- **Settings:** system details read from the inverter (model, serial, battery, backup reserve, grid connection), electricity rates, and connected services, including the weather location. Change the weather location by searching for a suburb, town or address (OpenStreetMap's Nominatim service); only the suburb-level name and its coordinates are saved, never a street address. Coordinates can still be entered directly, and get a place name looked up automatically. The Forecast page shows which place the outlook is for.
+- **Settings:** system details read from the inverter (model, serial, battery, backup reserve, grid connection) and the ones it can't report (the solar array's size, and optionally the battery's capacity, a backup reserve to fall back on, and its maximum charge and discharge rate), electricity rates, and connected services, including the weather location. Change the weather location by searching for a suburb, town or address (OpenStreetMap's Nominatim service); only the suburb-level name and its coordinates are saved, never a street address. Coordinates can still be entered directly, and get a place name looked up automatically. The Forecast page shows which place the outlook is for.
 
 ### Tariffs
 
@@ -116,6 +118,14 @@ Settings → Tariffs takes either a **single rate** or **time of use**. Time of 
 Plan lists are cached for 6 hours and plan details for a day. The retailer list is `app/features/plans/retailers.json`, taken from the AER's "Energy Retailer Base URIs" PDF (January 2026) and limited to retailers that currently publish electricity plans. Refresh it when the AER updates that list.
 
 Costs are worked out on the server for every 5-minute reading, so each kWh is priced at the rate in force at that moment. Each day's totals are then scaled to match the inverter's own daily import and export counters. The whole history is priced with the current tariff, so saving new rates reprices past days too. "Today so far" shows the day's bill so far: grid usage (per rate on time of use), plus the daily supply charge, minus the feed-in credit, giving a cost (or credit) for today. History's "Saved" uses the same per-day figures.
+
+### Smart meter data (NEM12)
+
+Your electricity meter is what the retailer bills you on, so its readings are the most accurate figures for grid import and export. Most distributors and retailers let you download them as a **NEM12** file (a CSV of half-hourly or five-minute readings), often under "usage data" or "download my data". Upload it in **Settings → Billing → Smart meter data**: a preview shows the dates, the meter's channels (E1 and so on for import, B1 for export), the totals, and any estimated, substituted or missing readings before anything is saved. Only each meter's general channels count as grid import and export: the lowest-numbered E and B (usually E1 and B1). Other channels, most often E2 controlled load (off-peak hot water on its own circuit), are stored and listed, labelled "stored, not included in bills": retailers bill controlled load at its own rate, which the tariffs here don't have, and the inverter doesn't see that circuit. Importing a file that overlaps earlier ones replaces those days, so a newer download with fewer estimates wins. Each import can be removed again.
+
+Wherever the meter's data covers a whole day, bills and costs use its import and export instead of the inverter's, with each interval priced at the rate in force for it, and the Bills page says how many days came from the meter. Days without meter data (including today) keep using the inverter. NEM12 times are Australian Eastern Standard Time all year, with each value covering the interval ending at its slot; they're converted to the dashboard's time zone, so with daylight saving a NEM day spans two local days. Days with missing readings stay with the inverter's figures.
+
+Below the imports, **Meter and dashboard compared** sets each day's import and export from the meter against the dashboard's, and lists the days that differ by more than half a kWh and 10%. A dashboard that consistently counts less export than the meter usually means a second inverter is wired outside the main inverter's meter (see below).
 
 Register map and quirks come from [berndverhofstadt/sungrow-poc](https://github.com/berndverhofstadt/sungrow-poc) (MIT).
 
@@ -136,9 +146,8 @@ All settings are environment variables (see `.env.example`):
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
 | `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
-| `PV_KW` | `6.6` | Solar array size in kW (the inverter doesn't report it). Shown in the header, and the forecast's starting point before it calibrates. |
-| `BATTERY_KWH` | `0` | Battery capacity. `0` = read it from the inverter (register 5639). |
-| `BATTERY_RESERVE` | `10` | Only used if the inverter doesn't report its backup reserve |
+| `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Settings → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
+| `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Settings → Tariffs**. |
 | `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Settings → Integrations → Change location.** |
 | `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
@@ -234,6 +243,9 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/plans/compare?brand=&postcode=` | a year of your usage priced on each of a retailer's current plans, cheapest first |
 | `GET /api/tariff`, `PUT /api/tariff` | read or replace the tariff (JSON; validated, including overlapping windows) |
 | `GET /api/costs?start=&end=` | per-day import, export, cost, and savings, split by rate |
+| `POST /api/meter/preview?filename=` | what a NEM12 file (the raw request body) holds, without importing it |
+| `POST /api/meter/imports?filename=`, `GET /api/meter/imports`, `DELETE /api/meter/imports/{id}` | import a NEM12 file, list imports, remove one |
+| `GET /api/meter/reconcile?start=&end=` | each day's import and export from the meter against the dashboard's |
 | `GET /api/plans/brands` | retailers that publish plans |
 | `GET /api/plans/search?brand=&postcode=&q=` | a retailer's current residential electricity plans for a postcode, with prices incl. GST |
 | `GET /api/plans/tariff?brand=&plan=` | one plan converted to a tariff, plus notes (not saved) |
@@ -294,6 +306,7 @@ app/
                         (transform.py), reprocessing, mock mode, and the live event stream
     readings/           samples and 5-minute rollups: history, daily totals, CSV export
     tariffs/            tariff model and validation, the saved tariff, and time-of-use cost maths
+    meter/              smart-meter data: reading NEM12 files, storing imports, comparing with the dashboard
     settings/           forecast location (and place name) and system cost; OpenStreetMap place search
     forecast/           Open-Meteo forecast, self-calibration, battery projection
     insights/           Insights page figures, including solar performance against past weather

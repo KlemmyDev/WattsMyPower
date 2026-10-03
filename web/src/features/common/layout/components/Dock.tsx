@@ -4,6 +4,7 @@ import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
 import { kW } from "~/features/common/formatting/utils/number";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 /**
  * Mini power flow pinned to the bottom of every page except Overview, which it opens. It stays
@@ -33,33 +34,33 @@ export function Dock() {
         inert={!shown}
         aria-hidden={!shown}
         aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}. Open overview.`}
-        className="dock group flex max-w-full items-center gap-3 rounded-full border border-white/8 bg-[#141416]/75 py-2 pr-4 pl-2 whitespace-nowrap text-white no-underline shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_2px_8px_rgb(0_0_0/0.35),0_18px_40px_-18px_rgb(0_0_0/0.9)] backdrop-blur-xl backdrop-saturate-150 hover:border-white/15 hover:bg-[#18181b]/85 hover:text-white max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
+        className="dock group flex max-w-full items-center gap-3 rounded-full border border-fg/8 bg-dock/75 py-2 pr-4 pl-2 whitespace-nowrap text-fg no-underline shadow-dock backdrop-blur-xl backdrop-saturate-150 hover:border-fg/15 hover:bg-dock-hover/85 hover:text-fg max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
       >
-        <DockItem icon="sun" color="#ffb547" k="Solar" v={kW(pv)} />
-        <Conn on={(pv || 0) > ON} color="#ffb547" />
-        <DockItem icon="home" color="#f5f5f5" k="Home" v={`${l != null && l < 0 ? "−" : ""}${kW(l)}`} />
-        <Conn on={g != null && Math.abs(g) > ON} rev={(g ?? 0) > 0} color="#9a9aa3" />
-        <DockItem icon="grid" color="#b4b4bc" k={verb} v={kW(g)} />
-        <span aria-hidden className="h-5 w-px flex-none bg-white/10 max-sm:h-4" />
+        <DockItem icon="sun" color={COLOR.solar} k="Solar" v={kW(pv)} />
+        <Conn on={(pv || 0) > ON} color={COLOR.solar} />
+        <DockItem icon="home" color={COLOR.ink} k="Home" v={`${l != null && l < 0 ? "−" : ""}${kW(l)}`} />
+        <Conn on={g != null && Math.abs(g) > ON} rev={(g ?? 0) > 0} color={COLOR.gridLine} />
+        <DockItem icon="grid" color={COLOR.gridSoft} k={verb} v={kW(g)} />
+        <span aria-hidden className="h-5 w-px flex-none bg-fg/10 max-sm:h-4" />
         <span className="flex items-center gap-2 max-xs:gap-[5px]">
           <span
             className="soc-ring flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
             style={{ "--deg": `${(Math.max(0, Math.min(100, soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties}
           >
-            <span className="flex size-[27px] items-center justify-center rounded-full bg-[#17171a] text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
+            <span className="flex size-[27px] items-center justify-center rounded-full bg-dock-inset text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
               <Icon name="battery" size={14} className="max-sm:size-[13px] max-xs:size-3" />
             </span>
           </span>
           <DockText
             k={`Battery ${Math.round(soc)}%`}
             v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(b) : "Idle"}`}
-            color={st === "charge" ? "#8fa6ff" : st === "discharge" ? "#ffc777" : "rgba(255,255,255,0.75)"}
+            color={st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.75)}
           />
         </span>
         <Icon
           name="chevR"
           size={16}
-          className="ml-0.5 flex-none text-white/35 transition-[color,transform] duration-200 group-hover:translate-x-0.5 group-hover:text-white/70 max-sm:hidden"
+          className="ml-0.5 flex-none text-fg/35 transition-[color,transform] duration-200 group-hover:translate-x-0.5 group-hover:text-fg/70 max-sm:hidden"
         />
       </Link>
     </div>
@@ -84,7 +85,7 @@ function DockItem({ icon, color, k, v }: { icon: IconName; color: string; k: str
 function DockText({ k, v, color }: { k: string; v: string; color?: string }) {
   return (
     <span className="flex flex-col gap-[3px] leading-none">
-      <span className="text-[11px] font-medium text-white/45 max-sm:hidden">{k}</span>
+      <span className="text-[11px] font-medium text-fg/45 max-sm:hidden">{k}</span>
       <span
         className="text-[15px] font-semibold tracking-[-0.2px] tabular-nums max-sm:text-xs max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
         style={{ color }}

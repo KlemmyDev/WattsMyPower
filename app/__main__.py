@@ -41,7 +41,8 @@ def main(argv: list[str]) -> int:
             span = " to ".join(
                 dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M") for t in (done["from"], done["to"])
             )
-            print(f"Rebuilt {done['polls']} readings ({span}).")
+            frozen = f", leaving out {done['frozen']} frozen repeats" if done["frozen"] else ""
+            print(f"Rebuilt {done['polls']} readings ({span}){frozen}.")
         return 0
     print(__doc__.strip())
     return 2

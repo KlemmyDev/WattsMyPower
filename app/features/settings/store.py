@@ -1,14 +1,19 @@
 """
 Settings people can change from the dashboard: the forecast location (and its place
-name) and the billing period. Tariffs are structured, so they have their own store.
+name), the billing period, and the system details the inverter doesn't report (array
+size, battery overrides). Tariffs are structured, so they have their own store.
 
 Environment variables provide the defaults; anything saved from the Settings page is
-stored in the database and wins over the environment.
+stored in the database and wins over the environment. The system details were only
+set in the environment before they could be edited here: seed_system copies those
+values in once, and after that the database is the only source.
 """
 
 from __future__ import annotations
 
+import math
 import threading
+import time
 from typing import Any
 
 from app.core.config import Config
@@ -18,6 +23,16 @@ from app.core.database import Database
 TEXT: dict[str, int] = {"location_name": 120}
 # Settings that only take whole numbers.
 WHOLE = {"bill_months", "bill_day", "bill_anchor"}
+# The system details (Settings → System): key -> (name in messages, unit). Their range errors are
+# written as sentences, since the dashboard shows them as they are.
+SYSTEM: dict[str, tuple[str, str]] = {
+    "pv_kw": ("Solar array size", " kW"),
+    "battery_kwh_override": ("Battery capacity", " kWh"),
+    "battery_reserve_fallback": ("Backup reserve", "%"),
+    "battery_max_kw": ("Maximum charge and discharge rate", " kW"),
+}
+# kv marker: the system details have been copied from the environment (see seed_system).
+SYSTEM_SEEDED = "system_seeded"
 
 
 class SettingsStore:
@@ -32,6 +47,14 @@ class SettingsStore:
             "bill_months": (1, 3, 3),
             "bill_day": (1, 28, 1),
             "bill_anchor": (1, 12, 1),
+            # Solar array size in kW of panels: the forecast's starting point before it calibrates.
+            "pv_kw": (0.1, 100, config.pv_kw),
+            # Battery capacity in kWh. 0 = use what the inverter reports.
+            "battery_kwh_override": (0, 200, config.battery_kwh),
+            # Backup reserve (%) for when the inverter doesn't report one.
+            "battery_reserve_fallback": (0, 100, config.battery_reserve),
+            # The battery's max charge/discharge rate in kW, for the forecast.
+            "battery_max_kw": (0.1, 50, config.battery_max_kw),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}
@@ -45,6 +68,27 @@ class SettingsStore:
         with self._lock:
             self._values = {k: v for k, v in rows if k in self.editable}
             self._text = dict(text)
+
+    def seed_system(self) -> bool:
+        """Store the system details the environment sets (PV_KW, BATTERY_KWH, BATTERY_RESERVE,
+        BATTERY_MAX_KW), or the defaults an install without them runs on, once ever.
+
+        This moves an install from before these were edited in the dashboard into the database
+        with exactly the values it was using. After it has run the environment isn't read for
+        them again. Returns whether it ran. Call before load().
+        """
+        values = {k: self.editable[k][2] for k in SYSTEM}
+        with self.db.writing() as conn:
+            if conn.execute("SELECT 1 FROM kv WHERE key = ?", (SYSTEM_SEEDED,)).fetchone():
+                return False
+            # Taken as they are, even outside the ranges the dashboard allows: they're what the
+            # install has been running on. Only a value that isn't a number at all is left out.
+            conn.executemany(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                [(k, v) for k, v in values.items() if math.isfinite(v)],
+            )
+            conn.execute("INSERT INTO kv (key, value) VALUES (?, ?)", (SYSTEM_SEEDED, str(int(time.time()))))
+            return True
 
     def get(self, key: str) -> float:
         with self._lock:
@@ -69,13 +113,15 @@ class SettingsStore:
                 continue
             if key not in self.editable:
                 raise ValueError(f"Unknown setting: {key}")
+            name, unit = SYSTEM.get(key, (key, ""))
+            end = "." if key in SYSTEM else ""
             try:
                 value = float(raw)
             except (TypeError, ValueError):
-                raise ValueError(f"{key} must be a number") from None
+                raise ValueError(f"{name} must be a number{end}") from None
             lo, hi, _ = self.editable[key]
-            if not lo <= value <= hi:
-                raise ValueError(f"{key} must be between {lo:g} and {hi:g}")
+            if not lo <= value <= hi:  # also catches NaN
+                raise ValueError(f"{name} must be between {lo:g} and {hi:g}{unit}{end}")
             if key in WHOLE and not value.is_integer():
                 raise ValueError(f"{key} must be a whole number")
             clean[key] = round(value, 6)

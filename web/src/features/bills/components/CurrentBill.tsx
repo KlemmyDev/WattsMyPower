@@ -2,7 +2,7 @@ import type { Bills } from "~/features/bills/types";
 import { billAmount, billCents, spanLabel } from "~/features/bills/utils";
 import { Headline } from "~/features/bills/components/Headline";
 import { ButtonLink } from "~/features/common/ui/components/Button";
-import { Card } from "~/features/common/ui/components/Card";
+import { Card, Footnote } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { DASH, dollars, kWhInt, money, plural } from "~/features/common/formatting/utils/number";
 
@@ -59,6 +59,13 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
             {exp ? billAmount(use.net_cost) : billCents(use.net_cost)}
           </DataRow>
         </div>
+      )}
+      {soFar && soFar.meter_days > 0 && (
+        <Footnote>
+          {soFar.meter_days === soFar.days
+            ? "Grid usage and feed-in so far are from your smart meter's data."
+            : `Grid usage and feed-in for ${soFar.meter_days} of ${soFar.days} days so far are from your smart meter's data, the rest from the inverter.`}
+        </Footnote>
       )}
     </Card>
   );

@@ -1,11 +1,19 @@
 @import "tailwindcss";
 
+/* For the odd place the light theme needs more than a token swap, e.g. light:bg-canvas. */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
 /*
- * WattsMyPower design tokens ("Energy Dashboard v5"): a dark theme with Nunito headings,
- * Geist text and Geist Mono figures. Components use these through Tailwind utilities,
- * e.g. bg-surface, text-ink-muted, border-line-subtle, text-solar.
+ * WattsMyPower design tokens ("Energy Dashboard v5"): Nunito headings, Geist text and Geist Mono
+ * figures, in a dark theme (the default) and a light one. Components use these through Tailwind
+ * utilities, e.g. bg-surface, text-ink-muted, border-line-subtle, text-solar, and charts through
+ * the CSS variables (see features/common/theme/utils/colors.ts).
+ *
+ * The values here are the dark theme's. <html data-theme="light"> swaps in the light values
+ * further down, so every colour should come from a token: nothing hard-coded, or it won't change.
+ * `static` keeps every variable in the output, including ones only charts use.
  */
-@theme {
+@theme static {
   --font-sans: "Geist", system-ui, sans-serif;
   --font-display: "Nunito", "Geist", system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
@@ -29,16 +37,38 @@
   --color-popover: #1c1c1e;
   --color-chip: #141414;
 
-  /* text */
+  /* the brand tile behind the logo, top to bottom */
+  --color-mark-from: #242424;
+  --color-mark-to: #121212;
+  /* the History page's tab rows */
+  --color-tabs: #161616;
+  /* the floating power summary at the bottom of the page, and the circle behind its battery icon */
+  --color-dock: #141416;
+  --color-dock-hover: #18181b;
+  --color-dock-inset: #17171a;
+  /* value pills over the Power flow drawing */
+  --color-pill: #111111;
+  --color-pill-ink: #ffffff;
+
+  /* text, strongest to faintest */
   --color-ink: #f5f5f5;
+  --color-ink-hover: #d4d4d4;
   --color-ink-soft: #d0d0d0;
+  --color-ink-body: #c8c8c8;
+  --color-ink-quiet: #a0a0a0;
   --color-ink-muted: #9a9a9a;
+  --color-ink-sub: #8f8f94;
   --color-ink-dim: #8a8a8a;
+  --color-ink-label: #7a7a7a;
   --color-ink-faint: #6a6a6a;
   --color-ink-inverse: #0a0a0a;
   --color-brand: #8fa6ff;
   --color-link: #9fb2ff;
   --color-link-hover: #c4d0ff;
+  /* Full contrast with the canvas (white here, near-black in light), mostly at an opacity for
+     hairlines, washes and outlines: border-fg/25, bg-fg/8. */
+  --color-fg: #ffffff;
+  --color-selection: rgb(143 166 255 / 0.3);
 
   /* lines */
   --color-line-subtle: rgb(255 255 255 / 0.06);
@@ -48,17 +78,27 @@
 
   /* energy */
   --color-solar: #ffb547;
+  /* solar as a soft area under a chart line */
+  --color-solar-wash: #ffb547;
   --color-solar-deep: #ff7a1a;
   --color-battery: #6f8cff;
   --color-battery-soft: #8fa6ff;
+  --color-battery-ring: #2f5bff;
   --color-grid: #3a3d44;
   --color-grid-line: #9a9aa3;
+  --color-grid-soft: #b4b4bc;
+  --color-export: #f2a65a;
+  --color-import: #9aa4ff;
   --color-good: #3ee08f;
   --color-warn: #ffc777;
   --color-bad: #ff8a80;
   --color-danger: #ff6b5e;
+  --color-lilac: #c4a7ff;
   --color-track: #26262a;
+  --color-bar: #5a5a60;
+  --color-bar-faint: #3a3a3e;
   --color-bar-muted: #34343a;
+  --color-heat-base: #1b1b1d;
   --color-grey-500: #8a8a90;
   --color-grey-400: #4a4a50;
 
@@ -68,10 +108,18 @@
   --color-warn-subtle: rgb(255 181 71 / 0.12);
   --color-bad-subtle: rgb(255 90 80 / 0.12);
 
+  /* Tailwind writes shadow values into the utilities, so only their colours can change with the theme. */
+  --color-shadow-pop: rgb(0 0 0 / 0.8);
+  --color-shadow-pill: rgb(0 0 0 / 0.45);
+  --color-shadow-dock-edge: rgb(255 255 255 / 0.06);
+  --color-shadow-dock-near: rgb(0 0 0 / 0.35);
+  --color-shadow-dock-far: rgb(0 0 0 / 0.9);
   --shadow-focus: 0 0 0 3px rgb(143 166 255 / 0.3);
-  --shadow-pop: 0 20px 40px -12px rgb(0 0 0 / 0.8);
-  --shadow-pill: 0 10px 28px -10px rgb(0 0 0 / 0.45);
-  --shadow-dock: 0 16px 36px -12px rgb(0 0 0 / 0.8);
+  --shadow-pop: 0 20px 40px -12px var(--color-shadow-pop);
+  --shadow-pill: 0 10px 28px -10px var(--color-shadow-pill);
+  --shadow-dock:
+    inset 0 1px 0 var(--color-shadow-dock-edge), 0 2px 8px var(--color-shadow-dock-near),
+    0 18px 40px -18px var(--color-shadow-dock-far);
 
   /* Font sizes leave line height alone (inherited, `normal` by default), as the original design does; set leading-* where it matters. */
   --text-xs--line-height: initial;
@@ -88,7 +136,90 @@
   --animate-ring-drain: ringDrain 2.4s ease-in-out infinite;
 }
 
+/*
+ * The light theme: the same tokens with light values, picked in Settings → Account and applied
+ * before the page first paints (features/common/theme). Text keeps WCAG AA contrast on the canvas
+ * and on cards, down to ink-faint; energy and status colours are deeper so they read on white.
+ */
 @layer base {
+  :root[data-theme="light"] {
+    color-scheme: light;
+
+    --color-canvas: #f4f4f5;
+    --color-surface: #ffffff;
+    --color-surface-raised: #ececee;
+    --color-surface-inset: #f7f7f8;
+    --color-popover: #ffffff;
+    --color-chip: #ffffff;
+
+    --color-mark-from: #ffffff;
+    --color-mark-to: #ececef;
+    --color-tabs: #ffffff;
+    --color-dock: #ffffff;
+    --color-dock-hover: #ffffff;
+    --color-dock-inset: #eef1fd;
+    --color-pill: #ffffff;
+    --color-pill-ink: #111111;
+
+    --color-ink: #111111;
+    --color-ink-hover: #34343a;
+    --color-ink-soft: #2b2b2d;
+    --color-ink-body: #38383b;
+    --color-ink-quiet: #4f4f53;
+    --color-ink-muted: #545458;
+    --color-ink-sub: #5a5a5f;
+    --color-ink-dim: #5e5e62;
+    --color-ink-label: #636367;
+    --color-ink-faint: #69696e;
+    --color-ink-inverse: #ffffff;
+    --color-brand: #4157de;
+    --color-link: #3f57dc;
+    --color-link-hover: #2a3db5;
+    --color-fg: #111111;
+    --color-selection: rgb(65 87 222 / 0.2);
+
+    --color-line-subtle: rgb(17 17 17 / 0.08);
+    --color-line: rgb(17 17 17 / 0.12);
+    --color-line-strong: rgb(17 17 17 / 0.26);
+    --color-chip-line: rgb(17 17 17 / 0.08);
+
+    --color-solar: #d97706;
+    --color-solar-wash: #f7a823;
+    --color-solar-deep: #f26b12;
+    --color-battery: #5a74f2;
+    --color-battery-soft: #4157de;
+    --color-battery-ring: #3a5cf5;
+    --color-grid: #4a4e58;
+    --color-grid-line: #8b8b95;
+    --color-grid-soft: #74747e;
+    --color-export: #e8833a;
+    --color-import: #7b84ee;
+    --color-good: #0a7a42;
+    --color-warn: #a84d08;
+    --color-bad: #c22d29;
+    --color-danger: #dc3b2f;
+    --color-lilac: #9a6cf0;
+    --color-track: #e7e7ea;
+    --color-bar: #bcbcc3;
+    --color-bar-faint: #d6d6dc;
+    --color-bar-muted: #d4d4d9;
+    --color-heat-base: #ececef;
+    --color-grey-500: #9b9ba3;
+    --color-grey-400: #b4b4ba;
+
+    --color-brand-subtle: rgb(65 87 222 / 0.1);
+    --color-good-subtle: rgb(10 122 66 / 0.1);
+    --color-warn-subtle: rgb(217 119 6 / 0.12);
+    --color-bad-subtle: rgb(194 45 41 / 0.09);
+
+    --color-shadow-pop: rgb(17 17 17 / 0.2);
+    --color-shadow-pill: rgb(17 17 17 / 0.22);
+    --color-shadow-dock-edge: rgb(255 255 255 / 0.9);
+    --color-shadow-dock-near: rgb(17 17 17 / 0.08);
+    --color-shadow-dock-far: rgb(17 17 17 / 0.3);
+    --shadow-focus: 0 0 0 3px rgb(65 87 222 / 0.3);
+  }
+
   :root {
     color-scheme: dark;
     /* Sections scrolled into view (e.g. History's day panel) stop below the sticky header. */
@@ -113,7 +244,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
   ::selection {
-    background: rgb(143 166 255 / 0.3);
+    background: var(--color-selection);
   }
   button {
     cursor: pointer;
@@ -195,7 +326,10 @@
 
   /* Ring showing state of charge around an icon (set --deg and --ring-bg). */
   .soc-ring {
-    background: conic-gradient(var(--ring, var(--color-battery)) var(--deg, 0deg), rgb(255 255 255 / 0.14) 0);
+    background: conic-gradient(
+      var(--ring, var(--color-battery)) var(--deg, 0deg),
+      color-mix(in srgb, var(--color-fg) 14%, transparent) 0
+    );
   }
 
   /*
@@ -229,7 +363,8 @@
     height: 8px;
     flex: none;
     overflow: hidden;
-    background: linear-gradient(rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.12)) center / 100% 1px no-repeat;
+    --track: color-mix(in srgb, var(--color-fg) 12%, transparent);
+    background: linear-gradient(var(--track), var(--track)) center / 100% 1px no-repeat;
   }
   .dock-conn[data-on="true"] {
     background-image: linear-gradient(

@@ -11,6 +11,7 @@ import { minutesLabel } from "~/features/common/formatting/utils/date";
 import { priceLabel } from "~/features/amber/utils";
 import { bandColor, bandTable, tariffNumber, usedBands } from "~/features/common/tariffs/utils";
 import { dateKey, isWeekend, midnight } from "~/features/common/time/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** Today so far: cost and savings, split by rate. */
 export function TodayCard({ tariff, now }: { tariff: Tariff | undefined; now: number }) {
@@ -61,7 +62,7 @@ function Figures({ c }: { c?: CostDay }) {
           <div className="bg-ink transition-[width] duration-320 ease-out-soft" style={{ width: paid }} />
           <div className="flex-1 bg-good" />
         </div>
-        <div className="flex justify-between gap-3 text-xs text-[#7a7a7a] tabular-nums max-xs:flex-col max-xs:gap-1">
+        <div className="flex justify-between gap-3 text-xs text-ink-label tabular-nums max-xs:flex-col max-xs:gap-1">
           <span className="flex items-center gap-1.5">
             <i className="size-2 flex-none rounded-full bg-ink" />
             <span>{c && (credit ? `In credit ${money(-c.net_cost)}` : `You pay ${money(c.net_cost)}`)}</span>
@@ -88,7 +89,7 @@ function Figure({ k, v, sub, good }: { k: string; v: string; sub: string; good?:
       >
         {v}
       </span>
-      <span className="text-[13px] text-[#7a7a7a] tabular-nums">{sub}</span>
+      <span className="text-[13px] text-ink-label tabular-nums">{sub}</span>
     </div>
   );
 }
@@ -138,7 +139,7 @@ function RateTable({ c, t, now }: { c: CostDay; t: Tariff; now: number }) {
         ) : (
           <Row
             key={b.i}
-            dot={tou ? bandColor(b.i) : "#9a9aa3"}
+            dot={tou ? bandColor(b.i) : COLOR.gridLine}
             label={tou ? b.name : "Single rate"}
             sub={`${centsShort(b.rate)} per kWh`}
             kwh={kWh(b.import_kwh)}
@@ -149,7 +150,7 @@ function RateTable({ c, t, now }: { c: CostDay; t: Tariff; now: number }) {
         );
       })}
       <Row
-        dot="#3a3a40"
+        dot={COLOR.barFaint}
         label="Supply charge"
         sub="Fixed daily charge"
         cost={money(c.supply)}
@@ -157,14 +158,14 @@ function RateTable({ c, t, now }: { c: CostDay; t: Tariff; now: number }) {
         savedOn={false}
       />
       <Row
-        dot="#ffb547"
+        dot={COLOR.solar}
         label="Solar credit"
         sub={`Exported at ${centsShort(feedIn)} per kWh`}
         cost={`−${money(c.feed_in_credit)}`}
         saved={money(c.feed_in_credit)}
         savedKwh={kWh(c.export_kwh)}
       />
-      <div className={cn(COLS, "border-t border-white/14 pt-3")}>
+      <div className={cn(COLS, "border-t border-fg/14 pt-3")}>
         <span className="text-sm font-semibold">Today</span>
         <span />
         <span className="text-right text-[15px] font-semibold text-ink">{money(c.net_cost)}</span>

@@ -32,7 +32,8 @@ async def put_tariff(svc: ServicesDep, tariff: JsonBody):
 
 @router.get("/costs")
 async def get_costs(svc: ServicesDep, start: int | None = None, end: int | None = None):
-    """Per-day import/export, costs and savings, priced at the rate (or Amber price) in force for each 5 minutes."""
+    """Per-day import/export, costs and savings, priced at the rate (or Amber price) in force for each 5 minutes
+    (or meter interval)."""
     start, end = time_range(start, end, 86400)
     t, tables = svc.tariffs.current()
-    return await asyncio.to_thread(daily_costs, svc.readings, t, tables, start, end, svc.amber.repo)
+    return await asyncio.to_thread(daily_costs, svc.readings, t, tables, start, end, svc.meter, svc.amber.repo)

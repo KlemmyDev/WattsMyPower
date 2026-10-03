@@ -8,6 +8,7 @@ import { cn } from "~/features/common/ui/utils";
 import { batteryState, reserveOf } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 const B6W = 600;
 const B6H = 150;
@@ -17,7 +18,7 @@ const b6y = (soc: number) => B6H - 34 - (Math.max(0, Math.min(100, soc)) / 100) 
 type Point = { t: number; soc: number; w: number | null };
 
 // Blue while charging or idle, amber while discharging.
-const stateColor = (w: number | null) => (batteryState(w) === "discharge" ? "#ffb547" : "#6f8cff");
+const stateColor = (w: number | null) => (batteryState(w) === "discharge" ? COLOR.solar : COLOR.battery);
 
 /** Charted geometry for the last six hours (state of charge, split where readings are missing). */
 function chartOf(series: HistoryResponse["series"], start: number, end: number) {
@@ -81,9 +82,9 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
           <>
             <defs>
               <linearGradient id="b6fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#6f8cff" stopOpacity="0.32" />
-                <stop offset="0.7" stopColor="#6f8cff" stopOpacity="0.06" />
-                <stop offset="1" stopColor="#6f8cff" stopOpacity="0" />
+                <stop offset="0" stopOpacity="0.32" style={{ stopColor: COLOR.battery }} />
+                <stop offset="0.7" stopOpacity="0.06" style={{ stopColor: COLOR.battery }} />
+                <stop offset="1" stopOpacity="0" style={{ stopColor: COLOR.battery }} />
               </linearGradient>
               <linearGradient id="b6fadeX" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0" stopColor="#fff" stopOpacity="0" />
@@ -112,10 +113,10 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
                       y1={b6y(seg[i].soc).toFixed(1)}
                       x2={chart.X(p.t).toFixed(1)}
                       y2={b6y(p.soc).toFixed(1)}
-                      stroke={stateColor(p.w)}
                       strokeWidth="2"
                       strokeLinecap="round"
                       vectorEffect="non-scaling-stroke"
+                      style={{ stroke: stateColor(p.w) }}
                     />
                   )),
               )}
@@ -124,16 +125,16 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
                 x2={B6W}
                 y1={ry}
                 y2={ry}
-                stroke="rgba(255,255,255,0.1)"
                 strokeDasharray="3 5"
                 vectorEffect="non-scaling-stroke"
+                style={{ stroke: alpha(COLOR.fg, 0.1) }}
               />
             </g>
           </>
         )}
       </svg>
       <div className="pointer-events-none absolute inset-x-0 top-1.5 flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[10px] tracking-[1.2px] text-[#7a7a7a] uppercase">Last 6 hours</span>
+        <span className="font-mono text-[10px] tracking-[1.2px] text-ink-label uppercase">Last 6 hours</span>
         <span className="text-xs text-ink-muted tabular-nums">
           {chart &&
             (last
@@ -161,7 +162,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
       {chart && hover && <HoverReadout p={hover} left={(chart.X(hover.t) / B6W) * 100} />}
       {chart && last && (
         <span
-          className="pointer-events-none absolute -mt-1 -ml-1.5 size-2 rounded-full shadow-[0_0_0_2px_#141414]"
+          className="pointer-events-none absolute -mt-1 -ml-1.5 size-2 rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
           style={{
             left: `${(chart.X(last.t) / B6W) * 100}%`,
             top: `${(b6y(last.soc) / B6H) * 100}%`,

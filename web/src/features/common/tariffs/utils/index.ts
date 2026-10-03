@@ -1,8 +1,9 @@
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
 import { centsShort, money } from "~/features/common/formatting/utils/number";
 import { isWeekend } from "~/features/common/time/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
-export const BAND_COLORS = ["#ffb547", "#6f8cff", "#9a9aa3", "#3ee08f", "#c4a7ff", "#ff8a80"];
+export const BAND_COLORS = [COLOR.solar, COLOR.battery, COLOR.gridLine, COLOR.good, COLOR.lilac, COLOR.bad];
 export const bandColor = (i: number) => BAND_COLORS[i % BAND_COLORS.length];
 export const MAX_BANDS = 6;
 export const MAX_WINDOWS = 6;

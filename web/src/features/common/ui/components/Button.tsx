@@ -9,14 +9,14 @@ const base = "inline-flex items-center gap-2 font-semibold no-underline transiti
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "rounded-full border-0 bg-ink text-ink-inverse hover:bg-[#d4d4d4] hover:text-ink-inverse disabled:bg-surface-raised disabled:text-ink-faint",
+    "rounded-full border-0 bg-ink text-ink-inverse hover:bg-ink-hover hover:text-ink-inverse disabled:bg-surface-raised disabled:text-ink-faint",
   outline:
     "rounded-full border border-line bg-surface text-ink hover:bg-canvas hover:text-ink disabled:border-transparent disabled:bg-surface-raised disabled:text-ink-faint",
   link: "border-0 bg-transparent p-0 text-link hover:text-link-hover",
   "muted-link": "border-0 bg-transparent p-0 font-medium text-ink-muted hover:text-ink",
-  chip: "rounded-full border border-line px-3 py-[5px] text-xs whitespace-nowrap text-ink-muted hover:border-white/25 hover:text-ink",
+  chip: "rounded-full border border-line px-3 py-[5px] text-xs whitespace-nowrap text-ink-muted hover:border-fg/25 hover:text-ink",
   round:
-    "size-9 justify-center rounded-full border border-line bg-transparent p-0 text-ink hover:border-white/25 disabled:cursor-default disabled:border-white/5 disabled:text-grey-400",
+    "size-9 justify-center rounded-full border border-line bg-transparent p-0 text-ink hover:border-fg/25 disabled:cursor-default disabled:border-fg/5 disabled:text-grey-400",
   icon: "size-8 justify-center rounded-full border border-line bg-surface p-0 text-lg leading-none font-normal text-ink-muted hover:bg-canvas hover:text-ink",
 };
 

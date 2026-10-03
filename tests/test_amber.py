@@ -383,7 +383,7 @@ def _prices(db: Database, intervals: list[dict[str, Any]]) -> PriceRepository:
 
 def _day(readings: ReadingsRepository, t: dict[str, Any], prices: PriceRepository | None) -> dict[str, Any]:
     tariff = validate(t)
-    (day,) = daily_costs(readings, tariff, rate_tables(tariff), TEN - 10 * 3600, TEN + 14 * 3600, prices)["days"]
+    (day,) = daily_costs(readings, tariff, rate_tables(tariff), TEN - 10 * 3600, TEN + 14 * 3600, prices=prices)["days"]
     return day
 
 
@@ -456,7 +456,7 @@ def test_bills_on_amber_price_home_use_at_the_prices_of_the_time(
     tariffs.save(AMBER)
     settings = SettingsStore(db, config)
     settings.load()
-    out = BillsService(db, readings, settings, tariffs, prices).build(now)
+    out = BillsService(db, readings, settings, tariffs, prices=prices).build(now)
     so_far = out["current"]["so_far"]
     assert so_far["import_cost"] == pytest.approx(0.5)
     assert so_far["without_solar"] == pytest.approx(0.5 + 1.0)  # 1 kWh of home use at 50c, plus supply

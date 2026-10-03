@@ -39,6 +39,21 @@ export async function apiGet<T>(path: string, params?: Params, init?: RequestIni
   return parse<T>(await fetch(apiUrl(path, params), { credentials: "same-origin", ...init }));
 }
 
+/**
+ * POST a file as the raw request body, with its name as the `filename` query parameter (the server has no
+ * multipart form parser).
+ */
+export async function apiUpload<T>(path: string, file: File, params?: Params): Promise<T> {
+  return parse<T>(
+    await fetch(apiUrl(path, { ...params, filename: file.name }), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    }),
+  );
+}
+
 export async function apiSend<T>(
   method: "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,

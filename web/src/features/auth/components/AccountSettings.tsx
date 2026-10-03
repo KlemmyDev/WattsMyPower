@@ -5,12 +5,15 @@ import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { TitleBlock } from "~/features/common/ui/components/Card";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
+import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { sessionQuery } from "~/features/auth/api";
 import { useChangePassword } from "~/features/auth/hooks/useChangePassword";
 import { useLogout } from "~/features/auth/hooks/useLogout";
+import { useThemeChoice } from "~/features/common/theme/hooks";
+import { THEME_OPTIONS } from "~/features/common/theme/utils";
 
-/** Settings → Account: who's signed in, change password, sign out. */
+/** Settings → Account: who's signed in, how the dashboard looks, change password, sign out. */
 export function AccountSettings() {
   const { data: session } = useQuery(sessionQuery);
   const logout = useLogout();
@@ -18,12 +21,15 @@ export function AccountSettings() {
 
   if (session && !session.auth_enabled)
     return (
-      <section className="flex max-w-[880px] flex-col gap-2 rounded-3xl border border-line-subtle bg-surface p-7">
-        <TitleBlock title="Account" />
-        <p className="m-0 text-sm text-ink-muted">
-          This server doesn't ask anyone to sign in, so there's no account to manage here.
-        </p>
-      </section>
+      <>
+        <section className="flex max-w-[880px] flex-col gap-2 rounded-3xl border border-line-subtle bg-surface p-7">
+          <TitleBlock title="Account" />
+          <p className="m-0 text-sm text-ink-muted">
+            This server doesn't ask anyone to sign in, so there's no account to manage here.
+          </p>
+        </section>
+        <Appearance />
+      </>
     );
 
   return (
@@ -41,8 +47,27 @@ export function AccountSettings() {
           Sign out
         </Button>
       </section>
+      <Appearance />
       <ChangePassword />
     </>
+  );
+}
+
+/** Light, dark, or whatever the device uses. It's kept in this browser, so each device can differ. */
+function Appearance() {
+  const [theme, setTheme] = useThemeChoice();
+  return (
+    <section
+      aria-labelledby="h-theme"
+      className="flex max-w-[880px] flex-wrap items-center justify-between gap-4 rounded-3xl border border-line-subtle bg-surface p-7"
+    >
+      <TitleBlock
+        id="h-theme"
+        title="Appearance"
+        sub="Saved in this browser. System matches your device's light or dark setting."
+      />
+      <Segmented label="Theme" options={THEME_OPTIONS} value={theme} onChange={setTheme} />
+    </section>
   );
 }
 

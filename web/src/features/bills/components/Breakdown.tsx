@@ -5,6 +5,7 @@ import { ShareBar, ShareRow, StatGrid } from "~/features/bills/components/BillPa
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DASH, dollars, kWhInt, money, plural } from "~/features/common/formatting/utils/number";
 import { bandColor, bandHours, usedBands } from "~/features/common/tariffs/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 const pctOf = (v: number, total: number) => `${Math.round((v / (total || 1)) * 100)}%`;
 const PACE_DAYS = 3; // full days of this period before judging its pace
@@ -23,25 +24,25 @@ export function PaidFor({ bills }: { bills: Bills }) {
       />
       <ShareBar
         parts={[
-          { value: s.import_cost, color: "#f5f5f5" },
-          { value: s.supply, color: "#5a5a60" },
+          { value: s.import_cost, color: COLOR.ink },
+          { value: s.supply, color: COLOR.bar },
         ]}
       />
       <div>
         <ShareRow
-          color="#f5f5f5"
+          color={COLOR.ink}
           label="Home use from the grid"
           share={pctOf(s.import_cost, gross)}
           value={money(s.import_cost)}
         />
         <ShareRow
-          color="#5a5a60"
+          color={COLOR.bar}
           label={`Supply charge · ${s.days} ${plural(s.days, "day")}`}
           share={pctOf(s.supply, gross)}
           value={money(s.supply)}
         />
         <ShareRow
-          color="#ffb547"
+          color={COLOR.solar}
           label="Feed-in credit"
           value={money(s.feed_in_credit ? -s.feed_in_credit : 0)} // on Amber, a negative feed-in price costs money
         />
@@ -133,18 +134,18 @@ export function BillPace({ bills }: { bills: Bills }) {
   const tol = exp ? Math.max(5, Math.abs(exp.net_cost) * 0.05) : 0;
   const [status, color, note] =
     diff == null
-      ? [DASH, "#f5f5f5", `Shows up after the first ${PACE_DAYS} full days of this period.`]
+      ? [DASH, COLOR.ink, `Shows up after the first ${PACE_DAYS} full days of this period.`]
       : Math.abs(diff) <= tol
-        ? ["On track", "#f5f5f5", "Your spending so far is in line with the expected total."]
+        ? ["On track", COLOR.ink, "Your spending so far is in line with the expected total."]
         : diff > 0
           ? [
               "Above expected",
-              "#ffb547",
+              COLOR.solar,
               `At your current daily rate this bill would be ${dollars(diff)} more than expected.`,
             ]
           : [
               "Below expected",
-              "#3ee08f",
+              COLOR.good,
               `At your current daily rate this bill would be ${dollars(-diff)} less than expected.`,
             ];
   return (
@@ -174,8 +175,8 @@ export function CostPerKwh({ bills }: { bills: Bills }) {
   const yours = s.home_kwh > 0 ? s.net_cost / s.home_kwh : null;
   const grid = s.home_kwh > 0 ? s.without_solar / s.home_kwh : null;
   const rows: [string, number | null, string][] = [
-    ["Your cost", yours, "#f5f5f5"],
-    ["Grid only, no solar", grid, "#5a5a60"],
+    ["Your cost", yours, COLOR.ink],
+    ["Grid only, no solar", grid, COLOR.bar],
   ];
   return (
     <Card aria-labelledby="h-per-kwh">
@@ -196,7 +197,7 @@ export function CostPerKwh({ bills }: { bills: Bills }) {
         {rows.map(([label, v, color]) => (
           <div key={label} className="grid grid-cols-[minmax(120px,160px)_1fr_52px] items-center gap-3.5">
             <span className="text-[13px] text-ink-muted">{label}</span>
-            <div className="h-3 rounded-full bg-popover">
+            <div className="h-3 rounded-full bg-popover light:bg-track">
               <div
                 className="h-full min-w-3 rounded-full"
                 style={{
