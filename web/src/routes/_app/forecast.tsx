@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ForecastPage } from "~/features/forecast/components/ForecastPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** The Forecast page grew into the Plan page: old links and bookmarks go there. */
 export const Route = createFileRoute("/_app/forecast")({
-  head: () => ({ meta: [{ title: "Forecast · WattsMyPower" }] }),
-  component: ForecastPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/plan", replace: true });
+  },
 });

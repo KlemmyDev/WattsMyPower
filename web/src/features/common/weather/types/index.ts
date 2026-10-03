@@ -13,6 +13,35 @@ export type ForecastHour = {
   precip: number;
 };
 
+/** One day of the outlook: today from now on, then the next two days whole. */
+export type ForecastDay = {
+  date: string; // YYYY-MM-DD, local
+  start: number; // local midnight
+  from: number; // when its forecast starts: now for today, midnight otherwise
+  pv_kwh: number;
+  load_kwh: number;
+  import_kwh: number;
+  export_kwh: number;
+  full_at: number | null; // when the battery is forecast to reach full that day
+  full_now: boolean; // today only: it's full already
+  max_soc: number;
+  min_soc: number;
+  code: number | null; // WMO code summing up its daylight hours
+  temp_min: number | null;
+  temp_max: number | null;
+  precip: number; // highest chance of rain in daylight, %
+};
+
+/** How close the day-ahead solar forecast has come (GET /api/forecast/accuracy). */
+export type ForecastAccuracy = {
+  days: { date: string; forecast_kwh: number; actual_kwh: number }[];
+  mae_kwh: number | null;
+  bias_kwh: number | null;
+  actual_mean: number | null;
+  /** Actual solar over forecast on 8 in 10 days: forecast × low to forecast × high. Null until a week of days. */
+  range: { low: number; high: number; days: number } | null;
+};
+
 export type Forecast = {
   generated_at: number;
   calibration: { kwh_per_kwh_m2: number; fitted_hours: number };
@@ -23,6 +52,8 @@ export type Forecast = {
     backtest: { days: number; learned_mae: number | null; simple_mae: number | null };
   };
   hours: ForecastHour[];
+  /** Today and the next two days, summed up. */
+  days: ForecastDay[];
   summary: {
     pv_kwh_24h: number;
     full_at: number | null;

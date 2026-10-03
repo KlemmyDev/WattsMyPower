@@ -1,34 +1,38 @@
 import type { Forecast, ForecastHour } from "~/features/common/weather/types";
 import { Icon } from "~/features/common/ui/components/Icon";
-import { cn } from "~/features/common/ui/utils";
 import { hourLabel } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import { degrees, hourIcon } from "~/features/common/weather/utils";
 
-/** The next 24 hours as columns: weather, temperature, a solar bar, its kWh, and battery level at the end of the hour. */
-export function HourStrip({ forecast }: { forecast: Forecast }) {
-  const hours = forecast.hours.slice(0, 24);
+/**
+ * A day's forecast hours as columns: weather, temperature, a solar bar, its kWh, and battery level at
+ * the end of the hour. `now` labels the first column when the day's forecast starts part way through it.
+ */
+export function HourStrip({ forecast, hours, now }: { forecast: Forecast; hours: ForecastHour[]; now: boolean }) {
   // Bars are scaled to a full hour of sun for this system, or the sunniest hour if that's higher.
   const full = Math.max(forecast.calibration.kwh_per_kwh_m2, ...hours.map((h) => h.pv_kwh), 0.1);
   return (
     <div className="overflow-x-auto">
-      <div className="grid min-w-[1056px] grid-cols-[repeat(24,minmax(44px,1fr))]">
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${hours.length}, minmax(44px, 1fr))`, minWidth: hours.length * 44 }}
+      >
         {hours.map((h, i) => (
-          <HourColumn key={h.ts} hour={h} first={i === 0} full={full} />
+          <HourColumn key={h.ts} hour={h} label={i === 0 && now ? "Now" : null} full={full} />
         ))}
       </div>
     </div>
   );
 }
 
-function HourColumn({ hour, first, full }: { hour: ForecastHour; first: boolean; full: number }) {
+function HourColumn({ hour, label, full }: { hour: ForecastHour; label: string | null; full: number }) {
   const hr = new Date(hour.ts * 1000).getHours();
   const icon = hourIcon(hour);
   const fahrenheit = useFahrenheit();
   return (
-    <div className={cn("flex flex-col items-center gap-2 rounded-xl py-3", hr === 0 && !first && "bg-canvas")}>
-      <div className="text-[11px] font-semibold text-ink-muted tabular-nums">{first ? "Now" : hourLabel(hr)}</div>
+    <div className="flex flex-col items-center gap-2 rounded-xl py-3">
+      <div className="text-[11px] font-semibold text-ink-muted tabular-nums">{label ?? hourLabel(hr)}</div>
       <div className={icon === "sun" ? "text-solar" : "text-ink-muted"}>
         <Icon name={icon} size={20} />
       </div>

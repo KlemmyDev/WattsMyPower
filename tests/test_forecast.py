@@ -10,7 +10,7 @@ import pytest
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.forecast.service import ForecastService, trimmed_mean
+from app.features.forecast.service import ForecastService, day_start, solar_range, trimmed_mean
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
 from app.features.weather.service import WeatherService
@@ -72,3 +72,85 @@ def test_solar_fit_ignores_a_day_of_garbled_readings(db: Database, service: Fore
     hours = [{"ts": ts, "rad": sun(ts + 1800)} for ts in range(NOW - 7 * 86400, NOW, 3600)]
     k, fitted = service._calibrate(hours, NOW)
     assert k == pytest.approx(9.0, rel=0.05) and fitted > 24
+
+
+# ------------------------------------------------------------------ the days ahead
+def outlook_weather(now: int) -> dict[str, object]:
+    """Open-Meteo's hourly weather from a little before now to past the day after tomorrow: sun by day."""
+    t = [now - now % 3600 + h * 3600 for h in range(-2, 80)]
+    lit = [6 <= time.localtime(ts).tm_hour < 18 for ts in t]
+    return {
+        "hourly": {
+            "time": t,
+            "shortwave_radiation": [round(sun(ts) * 1000) for ts in t],
+            "temperature_2m": [15 + time.localtime(ts).tm_hour / 2 for ts in t],
+            # Two hours of rain the day after tomorrow, one stray shower tomorrow.
+            "weather_code": [
+                61
+                if (d := ts - day_start(now)) // 86400 == 2 and 12 <= time.localtime(ts).tm_hour < 14
+                else 80
+                if d // 86400 == 1 and time.localtime(ts).tm_hour == 9
+                else 1
+                for ts in t
+            ],
+            "is_day": [int(x) for x in lit],
+            "precipitation_probability": [0] * len(t),
+        }
+    }
+
+
+def test_the_outlook_sums_up_today_and_the_next_two_days(
+    db: Database, config: Config, readings: ReadingsRepository
+) -> None:
+    now = int(time.time())
+    settings = SettingsStore(db, replace(config, pv_kw=6.6))
+    settings.load()
+    data = outlook_weather(now)
+    forecast = ForecastService(config, readings, settings, WeatherService(config, db, settings, get=lambda _: data))
+    out = forecast.build({"battery_soc": 30.0}, 10.0, 10.0)
+    assert out is not None
+    days = out["days"]
+    assert [d["start"] for d in days] == [day_start(now, n) for n in range(3)]
+    # The steps run to the end of the day after tomorrow, and no further.
+    assert out["hours"][-1]["ts"] + 3600 == day_start(now, 3)
+    # Today starts now; the other days at midnight. Each day's totals are its hours'.
+    assert days[0]["from"] == now and days[1]["from"] == days[1]["start"]
+    for d in days:
+        hrs = [h for h in out["hours"] if d["start"] <= h["start"] < d["start"] + 86400]
+        assert d["pv_kwh"] == pytest.approx(sum(h["pv_kwh"] for h in hrs), abs=0.05)
+        assert d["import_kwh"] - d["export_kwh"] == pytest.approx(sum(h["grid_kwh"] for h in hrs), abs=0.05)
+    # A sunny day fills a 10 kWh battery from the night's low, in daylight.
+    tomorrow = days[1]
+    assert tomorrow["full_at"] is not None and 6 <= time.localtime(tomorrow["full_at"]).tm_hour < 18
+    assert tomorrow["max_soc"] == 100 and tomorrow["min_soc"] < 100
+    # One shower doesn't make a day wet; two hours of rain do.
+    assert tomorrow["code"] == 1 and days[2]["code"] == 61
+
+
+def test_a_full_battery_is_full_now_rather_than_filling(
+    db: Database, config: Config, readings: ReadingsRepository
+) -> None:
+    now = int(time.time())
+    settings = SettingsStore(db, config)
+    settings.load()
+    data = outlook_weather(now)
+    forecast = ForecastService(config, readings, settings, WeatherService(config, db, settings, get=lambda _: data))
+    out = forecast.build({"battery_soc": 100.0}, 10.0, 10.0)
+    assert out is not None
+    assert out["days"][0]["full_now"] and out["days"][0]["full_at"] is None
+
+
+def test_the_likely_range_needs_a_week_of_days() -> None:
+    def days(ratios: list[float]) -> list[dict[str, float]]:
+        return [{"forecast_kwh": 20.0, "actual_kwh": 20.0 * r} for r in ratios]
+
+    assert solar_range(days([1.0] * 6)) is None
+    # Ten days: the second-lowest and second-highest ratios bound 8 in 10 of them.
+    out = solar_range(days([0.4, 0.7, 0.8, 0.9, 0.95, 1.0, 1.0, 1.05, 1.1, 1.3]))
+    assert out == {"low": 0.7, "high": 1.1, "days": 10}
+    # Days too dull to compare don't count, and the range always includes the forecast itself.
+    assert solar_range([*days([1.1] * 8), {"forecast_kwh": 0.2, "actual_kwh": 2.0}]) == {
+        "low": 1.0,
+        "high": 1.1,
+        "days": 8,
+    }

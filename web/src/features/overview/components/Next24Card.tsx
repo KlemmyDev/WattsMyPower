@@ -81,8 +81,8 @@ export function Next24Card({
         title="Next 24 hours"
         id="h-next"
         action={
-          <ButtonLink to="/forecast" variant="link">
-            View forecast
+          <ButtonLink to="/plan" variant="link">
+            View plan
           </ButtonLink>
         }
       />

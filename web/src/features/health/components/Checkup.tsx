@@ -33,8 +33,8 @@ function Detail({ id, anchor }: { id: string; anchor: string }) {
     );
   if (id === "forecast")
     return (
-      <Link to="/forecast" className={cls}>
-        Forecast
+      <Link to="/plan" className={cls}>
+        Plan
       </Link>
     );
   return (
