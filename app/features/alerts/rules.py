@@ -39,6 +39,8 @@ class Facts:
     reserve: float  # the battery's backup reserve, %
     sun: float  # the sun's height now, degrees
     daylight_since: float | None  # since when the sun has been up (sun.DAYLIGHT); None after dark
+    # While the inverter keeps answering with the same readings: when the repeated one was taken.
+    frozen_since: float | None = None
     # Looked up only when a rule asks: the Insights solar performance, and yesterday's totals.
     performance: Callable[[], dict[str, Any] | None] = lambda: None
     yesterday: Callable[[], dict[str, Any] | None] = lambda: None
@@ -171,6 +173,25 @@ def inverter_offline(f: Facts, v: Values, s: RuleState) -> Check:
     else:
         why = "Check the inverter and its Wi-Fi dongle have power and are on your home network."
     return Check("bad", "Your inverter isn't answering", f"There have been no readings {when}. {why}", since=since)
+
+
+def readings_frozen(f: Facts, v: Values, s: RuleState) -> Check:
+    if not f.fresh(f.last_success):
+        return UNKNOWN  # not answering at all: the inverter alert covers that
+    if f.frozen_since is None:
+        return Check(
+            "ok",
+            "Readings are moving again",
+            f"Your inverter's readings are updating again{_after(s, f.now)}, and are being recorded.",
+        )
+    return Check(
+        "bad",
+        "Your inverter's readings are stuck",
+        f"Your inverter has been answering with the same readings since {clock(f.frozen_since, f.now)}, so "
+        "nothing new is being recorded. Its Wi-Fi dongle usually sorts this out itself within minutes; if it "
+        "hasn't, turning the dongle (or the inverter) off and on again does.",
+        since=f.frozen_since,
+    )
 
 
 def pv2_offline(f: Facts, v: Values, s: RuleState) -> Check:
@@ -313,6 +334,16 @@ RULES: tuple[Rule, ...] = (
         (Setting("minutes", "After", "minutes", 5, 240, 15),),
         debounce=lambda v: v["minutes"] * 60,
         urgent=True,
+    ),
+    Rule(
+        "readings_frozen",
+        "Readings stuck",
+        "The inverter answers, but with the same readings over and over, so nothing new is recorded. Its Wi-Fi "
+        "dongle does this now and then for a few minutes; this tells you when it lasts.",
+        readings_frozen,
+        (Setting("minutes", "After", "minutes", 10, 240, 30),),
+        debounce=lambda v: v["minutes"] * 60,
+        cooldown=3 * HOUR,
     ),
     Rule(
         "pv2_offline",

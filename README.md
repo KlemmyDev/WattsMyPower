@@ -203,6 +203,7 @@ Each alert can be switched off, and its thresholds changed:
 | Alert | When | Default |
 |---|---|---|
 | Inverter not answering | no reading from the main inverter (the collector's last successful read, so a dongle serving stale values doesn't trip it) | after 15 minutes |
+| Readings stuck | the inverter answers, but with the same readings over and over (the WiNet-S2 does this for a few minutes now and then), so nothing new is recorded | after 30 minutes |
 | Second inverter not answering | the second inverter has stopped answering while the sun is up. The sun's height is worked out from the forecast location, so it never fires at night, when it sleeps | after 30 minutes in daylight |
 | Battery low | battery charge at or below a level | 10% |
 | Battery not charging in the sun | exporting at least 500 W while the battery isn't full and isn't charging | for 30 minutes |

@@ -207,6 +207,24 @@ def test_a_debounce_in_progress_survives_a_restart(db: Database, config: Config,
     assert send.titles() == ["Battery isn't charging"]
 
 
+def test_readings_stuck_for_half_an_hour(on: AlertsService, send: FakeSend) -> None:
+    stuck = T0 - 5 * MIN  # the inverter keeps answering, with the reading from then
+    for k in range(0, 25):
+        on.evaluate(facts(T0 + k * MIN, frozen_since=stuck, snapshot={"ts": stuck, "battery_soc": 60.0}))
+    assert send.sent == []
+    on.evaluate(facts(T0 + 25 * MIN, frozen_since=stuck, snapshot={"ts": stuck, "battery_soc": 60.0}))
+    assert send.titles() == ["Your inverter's readings are stuck"]
+    assert f"same readings since {time.strftime('%H:%M', time.localtime(stuck))}" in send.sent[0]["body"]["message"]
+    on.evaluate(facts(T0 + 40 * MIN))
+    assert send.titles()[-1] == "Readings are moving again"
+
+
+def test_stuck_readings_say_nothing_while_the_inverter_isnt_answering(on: AlertsService, send: FakeSend) -> None:
+    for k in range(0, 60):
+        on.evaluate(facts(T0 + k * MIN, last_success=T0 - 5 * MIN, frozen_since=T0 - 10 * MIN))
+    assert send.titles() == ["Your inverter isn't answering"]
+
+
 def test_second_inverter_is_left_alone_after_dark(on: AlertsService, send: FakeSend) -> None:
     pv2 = {"host": "192.168.0.10", "brand": "Sungrow", "model": "SG5K-D", "last_success": None}
     dusk = T0 + 7 * HOUR

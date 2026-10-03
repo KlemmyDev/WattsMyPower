@@ -116,6 +116,7 @@ class AlertsService:
             reserve=live.reserve(),
             sun=elevation(lat, lon, now),
             daylight_since=daylight_since(lat, lon, now),
+            frozen_since=live.frozen_since,
             performance=self._performance,
             yesterday=lambda: self._yesterday(now),
         )
