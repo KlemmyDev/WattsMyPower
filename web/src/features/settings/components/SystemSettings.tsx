@@ -11,6 +11,7 @@ import { saveSettingsError } from "~/features/common/settings/utils";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { useToast } from "~/features/common/ui/components/Toast";
+import { HouseSettings } from "~/features/settings/components/HouseSettings";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
@@ -35,7 +36,7 @@ function systemRows(s: SystemInfo | undefined): [string, string][] {
   ];
 }
 
-/** Settings → System: what the inverters report about the installation, and the details they can't. */
+/** Settings → System: what the inverters report about the installation, the details they can't, and the house. */
 export function SystemSettings() {
   const live = useLive();
   const last = live?.last_success;
@@ -71,6 +72,7 @@ export function SystemSettings() {
       </SettingsCard>
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
       {live && <SystemForm system={live.system} />}
+      {live && <HouseSettings system={live.system} />}
     </>
   );
 }

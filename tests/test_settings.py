@@ -24,9 +24,26 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "panel_tilt": 0,
         "panel_bearing": 0,
         "forecast_learning": 1,
+        "house_storeys": 1,
+        "garage_spaces": 0,
         "location_name": None,
         "weather_model": "best_match",
+        "house_style": "estate",
+        "inverter_places": [],
+        "battery_places": [],
     }
+
+
+def test_where_each_inverter_and_battery_is_is_a_list_of_places(db: Database, config: Config) -> None:
+    store = SettingsStore(db, config)
+    store.load()
+    store.save({"inverter_places": ["garage", "wall"], "battery_places": ["garage"]})
+    fresh = SettingsStore(db, config)
+    fresh.load()
+    assert fresh.get_list("inverter_places") == ["garage", "wall"] and fresh.get_list("battery_places") == ["garage"]
+    for bad in (["roof"], ["wall"] * 4, "wall"):
+        with pytest.raises(ValueError, match="inverter_places must be a list"):
+            store.save({"inverter_places": bad})
 
 
 def test_a_choice_takes_only_its_values_and_its_default_isnt_stored(db: Database, config: Config) -> None:
