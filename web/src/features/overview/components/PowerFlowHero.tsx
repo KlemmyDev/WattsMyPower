@@ -5,6 +5,7 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { batteryState, gridVerb } from "~/features/common/energy/utils";
 import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number";
+import { useTween } from "~/features/common/ui/hooks/useTween";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { HouseScene, houseAnchors, type Anchor } from "~/features/overview/components/HouseScene";
@@ -61,10 +62,12 @@ function Scene({
   const { labels } = houseAnchors();
   const dark = wx.mode === "night" || wx.mode === "storm";
   const { grid_power: g, battery_power: b, load_power: l } = p;
+  // The figures glide to each minute's reading; the scene's flows and states follow the reading itself.
+  const tween = { pv: useTween(p.pv_power), g: useTween(g), l: useTween(l), b: useTween(b) };
   const parts = (w: number | null | undefined) => (w == null ? [DASH, "kW"] : powerParts(w));
-  const [pv, grid, home] = [parts(p.pv_power), parts(g), parts(l)];
+  const [pv, grid, home] = [parts(tween.pv), parts(tween.g), parts(tween.l)];
   const st = batteryState(b);
-  const batRate = st === "charge" ? `↑ ${kW(b)}` : st === "discharge" ? `↓ ${kW(b)}` : "0 W";
+  const batRate = st === "charge" ? `↑ ${kW(tween.b)}` : st === "discharge" ? `↓ ${kW(tween.b)}` : "0 W";
   const batColor = st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.6);
 
   return (

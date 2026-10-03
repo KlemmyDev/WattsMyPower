@@ -140,7 +140,7 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 size-full overflow-visible"
+          className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
         >
           {chart.zeroY != null && (
             <line

@@ -5,6 +5,7 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
 import { kW } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { useTween } from "~/features/common/ui/hooks/useTween";
 
 /**
  * Mini power flow pinned to the bottom of every page except Overview, which it opens. It stays
@@ -19,6 +20,14 @@ export function Dock() {
     const id = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
+  // The figures glide to each minute's reading (hooks before the early return).
+  const t = {
+    pv: useTween(p?.pv_power),
+    l: useTween(p?.load_power),
+    g: useTween(p?.grid_power),
+    b: useTween(p?.battery_power),
+    soc: useTween(p?.battery_soc),
+  };
   if (!p) return null;
   const shown = ready && !onOverview;
   const { pv_power: pv, grid_power: g, battery_power: b, load_power: l } = p;
@@ -36,16 +45,18 @@ export function Dock() {
         aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}. Open overview.`}
         className="dock group flex max-w-full items-center gap-3 rounded-full border border-fg/8 bg-dock/75 py-2 pr-4 pl-2 whitespace-nowrap text-fg no-underline shadow-dock backdrop-blur-xl backdrop-saturate-150 hover:border-fg/15 hover:bg-dock-hover/85 hover:text-fg max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
       >
-        <DockItem icon="sun" color={COLOR.solar} k="Solar" v={kW(pv)} />
+        <DockItem icon="sun" color={COLOR.solar} k="Solar" v={kW(t.pv)} />
         <Conn on={(pv || 0) > ON} color={COLOR.solar} />
-        <DockItem icon="home" color={COLOR.ink} k="Home" v={`${l != null && l < 0 ? "−" : ""}${kW(l)}`} />
+        <DockItem icon="home" color={COLOR.ink} k="Home" v={`${l != null && l < 0 ? "−" : ""}${kW(t.l)}`} />
         <Conn on={g != null && Math.abs(g) > ON} rev={(g ?? 0) > 0} color={COLOR.gridLine} />
-        <DockItem icon="grid" color={COLOR.gridSoft} k={verb} v={kW(g)} />
+        <DockItem icon="grid" color={COLOR.gridSoft} k={verb} v={kW(t.g)} />
         <span aria-hidden className="h-5 w-px flex-none bg-fg/10 max-sm:h-4" />
         <span className="flex items-center gap-2 max-xs:gap-[5px]">
           <span
             className="soc-ring flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
-            style={{ "--deg": `${(Math.max(0, Math.min(100, soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties}
+            style={
+              { "--deg": `${(Math.max(0, Math.min(100, t.soc ?? soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties
+            }
           >
             <span className="flex size-[27px] items-center justify-center rounded-full bg-dock-inset text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
               <Icon name="battery" size={14} className="max-sm:size-[13px] max-xs:size-3" />
@@ -53,7 +64,7 @@ export function Dock() {
           </span>
           <DockText
             k={`Battery ${Math.round(soc)}%`}
-            v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(b) : "Idle"}`}
+            v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(t.b) : "Idle"}`}
             color={st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.75)}
           />
         </span>

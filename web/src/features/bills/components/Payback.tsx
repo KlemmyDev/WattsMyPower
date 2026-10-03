@@ -38,7 +38,10 @@ export function Payback() {
           {p.cost && p.paid_pct != null && (
             <div className="flex flex-col gap-1.5">
               <div className="h-2.5 overflow-hidden rounded-full bg-track">
-                <div className="h-full rounded-full bg-good" style={{ width: `${p.paid_pct}%` }} />
+                <div
+                  className="h-full origin-left animate-fill-x rounded-full bg-good"
+                  style={{ width: `${p.paid_pct}%` }}
+                />
               </div>
               <div className="flex justify-between gap-3 text-xs text-ink-faint tabular-nums">
                 <span>{Math.round(p.paid_pct)}% paid back</span>

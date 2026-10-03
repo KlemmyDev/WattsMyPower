@@ -17,7 +17,7 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 type N24 = NonNullable<ReturnType<typeof next24>>;
 type Point = N24["points"][number];
 
-const plot = "absolute inset-0 size-full overflow-visible";
+const plot = "absolute inset-0 size-full animate-reveal-x overflow-visible";
 const line = { vectorEffect: "non-scaling-stroke", strokeLinejoin: "round" } as const;
 
 /** A dot on a chart line at the hovered point. `top` is a percentage of the plot's height. */
@@ -120,7 +120,7 @@ function Coverage({ n }: { n: N24 }) {
       <div className="text-lg leading-[26px] font-medium text-pretty text-ink">{n.headline}</div>
       <div className="flex flex-col gap-1.5">
         <div className="flex h-2 overflow-hidden rounded-full bg-bar-faint">
-          <div className="bg-battery" style={{ width: `${n.cover.toFixed(1)}%` }} />
+          <div className="origin-left animate-fill-x bg-battery" style={{ width: `${n.cover.toFixed(1)}%` }} />
         </div>
         <div className="flex justify-between gap-3 text-xs text-ink-dim tabular-nums">
           <span className="whitespace-nowrap">Solar and battery · {Math.round(n.cover)}%</span>

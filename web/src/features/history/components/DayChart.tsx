@@ -184,11 +184,13 @@ export function DayChart({
             <div key={top} className="absolute right-0 left-0 border-t border-fg/5" style={{ top }} />
           ))}
           {chart && (
+            // Keyed by day, so picking another day draws it in afresh.
             <svg
+              key={chart.start}
               viewBox={`0 0 ${W} ${H}`}
               preserveAspectRatio="none"
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 size-full overflow-visible"
+              className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
             >
               <defs>
                 <linearGradient id="hyPv" x1="0" y1="0" x2="0" y2="1">

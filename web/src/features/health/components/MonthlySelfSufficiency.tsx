@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Insights } from "~/features/health/types";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
@@ -39,8 +40,8 @@ export function MonthlySelfSufficiency({ months }: { months: Insights["months"] 
               </span>
               {/* 86% leaves room for the label above a full bar. */}
               <i
-                className={cn("block w-full max-w-9 rounded-md", cur ? "bg-ink" : "bg-bar-muted")}
-                style={{ height: `${v == null ? 0 : (v * 0.86).toFixed(1)}%` }}
+                className={cn("bar-grow block w-full max-w-9 rounded-md", cur ? "bg-ink" : "bg-bar-muted")}
+                style={{ height: `${v == null ? 0 : (v * 0.86).toFixed(1)}%`, "--i": k } as CSSProperties}
               />
             </div>
           );

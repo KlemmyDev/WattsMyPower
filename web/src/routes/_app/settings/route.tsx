@@ -21,6 +21,7 @@ export const Route = createFileRoute("/_app/settings")({
 
 function SettingsLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const shown = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
   const current: string | undefined = TABS.find((t) => path === t.to || path.startsWith(`${t.to}/`))?.to;
   const row = useRef<HTMLElement>(null);
   // The highlight slides under the current tab, as in the main navigation.
@@ -58,7 +59,10 @@ function SettingsLayout() {
           );
         })}
       </nav>
-      <Outlet />
+      {/* Each tab's sections rise into place as it opens, as a page's do (keyed by the tab shown). */}
+      <div key={shown} className="page-rise flex min-w-0 flex-col gap-5">
+        <Outlet />
+      </div>
     </>
   );
 }
