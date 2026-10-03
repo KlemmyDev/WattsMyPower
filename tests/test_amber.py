@@ -6,6 +6,8 @@ from __future__ import annotations
 import datetime as dt
 import http.client
 import json
+import os
+import time
 import urllib.error
 from collections.abc import Iterator
 from typing import Any
@@ -20,12 +22,14 @@ from app.features.amber.prices import PriceLookup, convert
 from app.features.amber.repository import PriceRepository
 from app.features.amber.service import NEM, AmberService, AmberSetupError, mask
 from app.features.bills.service import BillsService
+from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.costs import daily_costs
 from app.features.tariffs.model import rate_tables, validate
 from app.features.tariffs.store import TariffStore
 from app.main import create_app
+from tests.test_meter import channel, nem12
 
 KEY = "psk_0123456789abcdef0123456789abcdef"
 NOW = int(dt.datetime(2026, 10, 3, 12, tzinfo=NEM).timestamp())
@@ -360,6 +364,14 @@ def test_disconnecting_forgets_the_key_and_prices(db: Database, tariffs: TariffS
 
 # -- costs on Amber prices -------------------------------------------------------------------------
 AMBER = {"type": "amber", "flat_rate": 0.3, "feed_in_rate": 0.05, "supply_charge": 1.0, "bands": []}
+TOU_TARIFF = {
+    **AMBER,
+    "type": "tou",
+    "bands": [
+        {"name": "Peak", "rate": 0.45, "windows": [{"days": "all", "start": "16:00", "end": "21:00"}]},
+        {"name": "Other", "rate": 0.25, "other": True, "windows": []},
+    ],
+}
 TEN = int(dt.datetime(2026, 3, 3, 10).timestamp())  # 10:00 local on a Tuesday
 
 
@@ -488,3 +500,73 @@ def test_amber_through_the_api(client: TestClient) -> None:
 
     assert client.delete("/api/amber").json()["connected"] is False
     assert client.get("/api/tariff").json()["type"] == "flat"
+
+
+# -- Amber prices on days the smart meter covers -----------------------------------------------------
+def test_price_lookup_averages_over_a_span() -> None:
+    look = PriceLookup([(0, 300, 0.1), (300, 300, 0.3), (1800, 1800, 0.2)])
+    assert look.over(0, 600) == (600, pytest.approx(0.1 * 300 + 0.3 * 300))
+    assert look.over(0, 1800) == (600, pytest.approx(120.0))  # 600-1800 has no price
+    assert look.over(2100, 2400) == (300, pytest.approx(0.2 * 300))  # 5 minutes inside a 30-minute price
+
+
+@pytest.fixture
+def brisbane() -> Iterator[None]:
+    """The meter's days follow the dashboard's time zone: Brisbane here, as in test_meter. Restored afterwards."""
+    before = os.environ.get("TZ")
+    os.environ["TZ"] = "Australia/Brisbane"
+    time.tzset()
+    yield
+    if before is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = before
+    time.tzset()
+
+
+def _at(d: dt.date, h: int, m: int = 0) -> int:
+    return int(dt.datetime(d.year, d.month, d.day, h, m).timestamp())
+
+
+def test_amber_prices_meter_days_by_interval_and_inverter_days_by_reading(
+    brisbane: None, db: Database, readings: ReadingsRepository
+) -> None:
+    d1, d2 = dt.date(2026, 7, 1), dt.date(2026, 7, 2)
+    # The meter covers the 1st: 0.5 kWh in and 0.1 kWh out every half hour. The 2nd has only the inverter.
+    meter = MeterService(db, readings)
+    meter.import_file(nem12(channel("E1", {d1: 0.5}), channel("B1", {d1: 0.1})), "m.csv", NOW)
+    _grid(readings, _at(d2, 0), 24 * 60, 500)  # 12 kWh from the grid on the 2nd
+
+    # Amber: 20c every half hour on both days, except on the 1st: 10:00-10:30 as six 5-minute prices
+    # (10c to 60c, averaging 35c), no price at all for 12:00-12:30, and 13:00-13:30 only priced to 13:15.
+    special = {_at(d1, 10), _at(d1, 12), _at(d1, 13)}
+    halves = [_at(d, 0) + k * 1800 for d in (d1, d2) for k in range(48)]
+    intervals = [interval("general", ts, 30, 20.0) for ts in halves if ts not in special]
+    intervals += [interval("general", _at(d1, 10, 5 * k), 5, 10.0 * (k + 1)) for k in range(6)]
+    intervals += [interval("general", _at(d1, 13, 5 * k), 5, 40.0) for k in range(3)]
+    intervals += [interval("feedIn", _at(d1, 0) + k * 1800, 30, -5.0) for k in range(48)]  # paid 5c all day
+    prices = _prices(db, intervals)
+
+    tariff = validate(AMBER)
+    days = daily_costs(readings, tariff, rate_tables(tariff), _at(d1, 0), _at(d2, 0) + 86400, meter, prices)
+    one, two = days["days"]
+    assert (one["source"], two["source"]) == ("meter", "inverter")
+
+    priced, fallback = one["bands"]
+    # 45 half hours at 20c, 10:00 at the 35c average, and the priced half of 13:00 at 40c.
+    assert priced["import_kwh"] == pytest.approx(24 - 0.75)
+    assert priced["cost"] == pytest.approx(45 * 0.5 * 0.2 + 0.5 * 0.35 + 0.25 * 0.4)
+    assert fallback["import_kwh"] == pytest.approx(0.75) and fallback["cost"] == pytest.approx(0.75 * 0.3)
+    assert one["export_kwh"] == pytest.approx(4.8) and one["feed_in_credit"] == pytest.approx(4.8 * 0.05)
+    assert one["unpriced_kwh"] == pytest.approx(0.75)
+    assert one["net_cost"] == pytest.approx(4.775 + 0.225 + 1.0 - 0.24)
+
+    # The inverter's day: each 5-minute reading at its 20c half hour.
+    assert two["import_kwh"] == pytest.approx(12.0, abs=0.05)
+    assert two["import_cost"] == pytest.approx(2.4, abs=0.01) and two["unpriced_kwh"] == 0
+
+    # Single rate and time of use are untouched by Amber's prices on meter days too.
+    for t in ({**AMBER, "type": "flat"}, TOU_TARIFF):
+        v = validate(t)
+        args = (readings, v, rate_tables(v), _at(d1, 0), _at(d2, 0) + 86400, meter)
+        assert daily_costs(*args, prices) == daily_costs(*args)

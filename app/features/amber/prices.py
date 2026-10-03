@@ -99,5 +99,19 @@ class PriceLookup:
         start, duration, rate = self._rows[i]
         return rate if ts < start + duration else None
 
+    def over(self, start: int, end: int) -> tuple[int, float]:
+        """How many seconds of [start, end) have a price, and the sum of rate × seconds over them
+        (so their time-weighted average is the second over the first)."""
+        i = max(0, bisect.bisect_right(self._starts, start) - 1)
+        covered, total = 0, 0.0
+        while i < len(self._rows) and self._rows[i][0] < end:
+            s, duration, rate = self._rows[i]
+            overlap = min(end, s + duration) - max(start, s)
+            if overlap > 0:
+                covered += overlap
+                total += rate * overlap
+            i += 1
+        return covered, total
+
     def __len__(self) -> int:
         return len(self._rows)
