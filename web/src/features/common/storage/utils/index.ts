@@ -18,3 +18,4 @@ export const store = {
 
 export const STORE_POSTCODE = "wmp-postcode";
 export const STORE_BRAND = "wmp-brand";
+export const STORE_THEME = "wmp-theme";
