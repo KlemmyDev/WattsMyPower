@@ -5,9 +5,10 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     samples_5m   5-minute rollups of samples, kept up to date on every insert; used for
                  long ranges so a year's chart never touches raw rows
     settings     numeric settings saved from the dashboard (location, system cost)
-    kv           text values: the tariff (JSON) and the location's place name
+    kv           text values: the tariff (JSON), the location's place name, and the Amber connection
     users        the household account
     sessions     signed-in browsers (only a hash of each token is stored)
+    prices       dynamic electricity prices (from Amber), one row per channel and interval
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -105,11 +106,26 @@ def _drop_impossible_values(conn: sqlite3.Connection) -> None:
         conn.execute(ROLLUP_SQL, (b, b + ROLLUP))
 
 
+def _prices(conn: sqlite3.Connection) -> None:
+    """Dynamic prices, for a tariff that follows Amber's wholesale prices (app.features.amber).
+
+    `ts` is the interval's start (unix seconds) and `duration` its length in seconds (300 or 1800).
+    `rate` is $/kWh including GST, as it lands on the bill: for `general` and `controlledLoad` what a
+    kWh imported costs, for `feedIn` what a kWh exported earns (negative when exporting costs money).
+    `actual` is 1 for a final price, 0 for a forecast (replaced by the final price once it's known)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS prices (channel TEXT NOT NULL, ts INTEGER NOT NULL, duration INTEGER NOT NULL,"
+        " rate REAL NOT NULL, actual INTEGER NOT NULL, fetched INTEGER NOT NULL, PRIMARY KEY (channel, ts))"
+        " WITHOUT ROWID"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
     _drop_impossible_values,
+    _prices,
 ]
 
 

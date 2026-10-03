@@ -36,7 +36,7 @@ def test_windows_can_wrap_past_midnight() -> None:
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        ({"type": "monthly"}, "Rate type must be single rate or time of use."),
+        ({"type": "monthly"}, "Rate type must be single rate, time of use, or Amber."),
         ({"flat_rate": "lots"}, "Grid import rate must be a number."),
         ({"supply_charge": 50}, "Daily supply charge must be between 0 and 20."),
         ({"bands": TOU["bands"][:1]}, "Time of use needs between 2 and 6 rates."),

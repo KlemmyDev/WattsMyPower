@@ -34,7 +34,7 @@ def test_status_before_the_first_reading(client: TestClient) -> None:
 def test_tariff_errors_are_readable(client: TestClient) -> None:
     r = client.put("/api/tariff", json={"type": "monthly"})
     assert r.status_code == 422
-    assert r.json() == {"detail": "Rate type must be single rate or time of use."}
+    assert r.json() == {"detail": "Rate type must be single rate, time of use, or Amber."}
 
 
 def test_saved_tariff_is_used_everywhere(client: TestClient) -> None:

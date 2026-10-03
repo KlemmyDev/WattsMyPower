@@ -1,19 +1,21 @@
 """
 The tariff model: validation, and which rate applies at each minute of the week.
 
-A tariff is either a single import rate, or time of use: a list of named rates,
-each active in one or more time windows, plus one "all other times" rate.
-Feed-in and the daily supply charge are flat either way.
+A tariff is either a single import rate; time of use: a list of named rates,
+each active in one or more time windows, plus one "all other times" rate; or Amber:
+the import and feed-in prices Amber Electric sets for every 5 or 30 minutes
+(app.features.amber), with the single and feed-in rates standing in for any time
+Amber has no price for. Otherwise feed-in and the daily supply charge are flat.
 
     {
-      "type": "flat" | "tou",
-      "flat_rate": 0.32,                     # $/kWh, used when type is flat
+      "type": "flat" | "tou" | "amber",
+      "flat_rate": 0.32,                     # $/kWh, used when type is flat (and where Amber has no price)
       "bands": [                             # used when type is tou; first match wins, but overlaps are rejected
         {"name": "Peak", "rate": 0.45, "windows": [{"days": "all", "start": "16:00", "end": "21:00"}]},   # "00:00" to "00:00" = all day
         {"name": "Off-peak", "rate": 0.22, "windows": [{"days": "all", "start": "21:00", "end": "07:00"}]},
         {"name": "Shoulder", "rate": 0.30, "other": true, "windows": []}
       ],
-      "feed_in_rate": 0.05,                  # $/kWh
+      "feed_in_rate": 0.05,                  # $/kWh (for type amber: where Amber has no price)
       "supply_charge": 1.05,                 # $/day
       "source": {...}                        # optional: the published plan it was imported from
     }
@@ -28,6 +30,9 @@ from typing import Any
 Tariff = dict[str, Any]
 
 DAYS = {"all": "Every day", "weekdays": "Weekdays", "weekends": "Weekends"}
+TYPES = ("flat", "tou", "amber")
+# An Amber tariff's two "bands": energy at Amber's prices, and energy at times Amber had no price for.
+AMBER_PRICED, AMBER_FALLBACK = 0, 1
 MAX_BANDS = 6
 MAX_WINDOWS = 6
 _TIME = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$|^24:00$")
@@ -69,7 +74,16 @@ def _minutes(t: str) -> int:
 
 
 def rate_tables(t: Tariff) -> RateTables:
-    """Which band applies at each minute. Raises ValueError (naming the clash) if windows overlap."""
+    """Which band applies at each minute. Raises ValueError (naming the clash) if windows overlap.
+
+    An Amber tariff has no time windows: its costs are priced interval by interval (costs.py), and its
+    bands only name the two ways energy gets priced, with every minute pointing at the fallback."""
+    if t["type"] == "amber":
+        bands = [
+            {"name": "Amber prices", "rate": t["flat_rate"], "windows": []},
+            {"name": "No Amber price", "rate": t["flat_rate"], "other": True, "windows": []},
+        ]
+        return RateTables(bands=bands, weekday=[AMBER_FALLBACK] * 1440, weekend=[AMBER_FALLBACK] * 1440)
     bands = (
         t["bands"]
         if t["type"] == "tou"
@@ -117,8 +131,8 @@ def validate(raw: Any) -> Tariff:
         return round(x, 4)
 
     typ = raw.get("type")
-    if typ not in ("flat", "tou"):
-        raise ValueError("Rate type must be single rate or time of use.")
+    if typ not in TYPES:
+        raise ValueError("Rate type must be single rate, time of use, or Amber.")
     t: Tariff = {
         "type": typ,
         "flat_rate": rate(raw.get("flat_rate"), "Grid import rate"),
