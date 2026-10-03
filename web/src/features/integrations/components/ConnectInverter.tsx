@@ -5,6 +5,7 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { useToast } from "~/features/common/ui/components/Toast";
+import { cn } from "~/features/common/ui/utils";
 import { connectInverter, scanQuery, startScan } from "~/features/integrations/api";
 import type {
   ConnectedInverter,
@@ -296,16 +297,18 @@ function Manual({
 export function ConnectInverter({
   overview,
   onConnected,
+  className,
 }: {
   overview: IntegrationsOverview;
   onConnected: () => void;
+  className?: string;
 }) {
   const connect = useConnect(onConnected);
   const [source, setSource] = useState<"scan" | "manual">();
   const busy = connect.isPending;
 
   return (
-    <div className="flex flex-col gap-7 p-6">
+    <div className={cn("flex flex-col gap-7 p-6", className)}>
       <Scan
         overview={overview}
         busy={busy}

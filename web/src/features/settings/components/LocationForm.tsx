@@ -7,11 +7,27 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { failure, saveSettingsError } from "~/features/common/settings/utils";
+import { cn } from "~/features/common/ui/utils";
 
 type LocationChanges = Pick<Partial<Settings>, "latitude" | "longitude" | "location_name">;
 
-/** Pick the forecast location by place search, or by typing coordinates. Mounted while open. */
-export function LocationForm({ system, onClose }: { system: SystemInfo | undefined; onClose: () => void }) {
+/**
+ * Pick the forecast location by place search, or by typing coordinates. In Settings it's mounted while
+ * open, with a Cancel button (`onClose`); the set-up guide shows it as a step and moves on when it's saved.
+ */
+export function LocationForm({
+  system,
+  onClose,
+  onSaved = onClose,
+  autoFocus = true,
+  className,
+}: {
+  system: SystemInfo | undefined;
+  onClose?: () => void;
+  onSaved?: () => void;
+  autoFocus?: boolean;
+  className?: string;
+}) {
   const toast = useToast();
   const geocode = useGeocode();
   const saveSettings = useSaveSettings();
@@ -42,7 +58,7 @@ export function LocationForm({ system, onClose }: { system: SystemInfo | undefin
       onSuccess: () => {
         setError("");
         toast("Location saved. Updating the forecast.");
-        onClose();
+        onSaved?.();
       },
       onError: (err) => setError(saveSettingsError(err)),
     });
@@ -50,11 +66,11 @@ export function LocationForm({ system, onClose }: { system: SystemInfo | undefin
 
   const places = geocode.data;
   return (
-    <div className="flex basis-full flex-col gap-2.5 pl-[60px] max-sm:pl-0">
+    <div className={cn("flex basis-full flex-col gap-2.5 pl-[60px] max-sm:pl-0", className)}>
       <form className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 max-[520px]:grid-cols-1" onSubmit={search}>
         <Field label="Suburb, town or address">
           <Input
-            autoFocus
+            autoFocus={autoFocus}
             placeholder="For example, Paddington QLD"
             autoComplete="off"
             value={place}
@@ -62,9 +78,11 @@ export function LocationForm({ system, onClose }: { system: SystemInfo | undefin
           />
         </Field>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
+          {onClose && (
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+          )}
           <Button type="submit" size="sm" disabled={geocode.isPending}>
             Search
           </Button>
