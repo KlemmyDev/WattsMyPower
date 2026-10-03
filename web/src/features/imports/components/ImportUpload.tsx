@@ -15,7 +15,32 @@ import { dayStatus, fileKey, intervalLabel, mergeDays } from "~/features/imports
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 const ACCEPT = ".csv,.xlsx,.xls,.txt";
-const SOURCES = ["pv", "load", "import", "export"] as const;
+/** The four flows, and the columns that can give each: one alone, or all of a group. Any one missing is worked out from the rest. */
+const FLOWS: { name: string; from: string[][] }[] = [
+  { name: "solar", from: [["pv"]] },
+  { name: "home use", from: [["load"]] },
+  { name: "the grid", from: [["grid"], ["import", "export"]] },
+  { name: "the battery", from: [["battery"], ["charge", "discharge"]] },
+];
+
+/** Fields one column can stand in for, both ways: a signed column, or its pair of one-way columns. */
+const COVERED_BY: Record<string, string[]> = {
+  import: ["grid"],
+  export: ["grid"],
+  grid: ["import", "export"],
+  charge: ["battery"],
+  discharge: ["battery"],
+  battery: ["charge", "discharge"],
+};
+
+/** What an unchosen field's empty option says: covered by another column, or worked out from the rest. */
+function emptyLabel(field: string, preview: ImportPreview): string {
+  const by = COVERED_BY[field];
+  if (by?.every((f) => preview.mapping[f]?.length))
+    return `Not needed: ${by.map((f) => preview.mapping[f].join(" + ")).join(" and ")} cover${by.length === 1 ? "s" : ""} it`;
+  // The battery's level can't be worked out from the flows; the rest can, if only one is missing.
+  return field === "soc" ? "Not in this file" : "Not in this file (worked out if it can be)";
+}
 
 /** Picking each field's column(s): what was matched, any other column, or none. */
 function ColumnPicker({
@@ -50,7 +75,7 @@ function ColumnPicker({
                 className="h-10 min-w-0 text-sm"
               >
                 <option value="[]">
-                  {current.length || field in choices ? "Don't import" : "Not in this file (worked out if it can be)"}
+                  {current.length || field in choices ? "Don't import" : emptyLabel(field, preview)}
                 </option>
                 {current.length > 1 && <option value={value}>{current.join(" + ")}</option>}
                 {headers.map((h) => (
@@ -98,7 +123,11 @@ export function ImportUpload() {
   const daysToWrite = days.filter((d) => d.new + d.replaces > 0).length;
   const first = ready[0]?.preview;
   const warnings = [...new Set(ready.flatMap((r) => r.preview.warnings))];
-  const missing = first ? SOURCES.filter((f) => !first.mapping[f]?.length) : [];
+  const missing = first
+    ? FLOWS.filter(({ from }) => !from.some((group) => group.every((f) => first.mapping[f]?.length))).map(
+        (flow) => flow.name,
+      )
+    : [];
 
   const pick = (list: FileList | null) => {
     if (!list?.length) return;
@@ -222,7 +251,7 @@ export function ImportUpload() {
         <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[13px] leading-5 text-ink-muted">
           {missing.length > 0 && (
             <li>
-              No column for {missing.map((f) => first?.fields[f].toLowerCase()).join(", ")}.{" "}
+              No column for {missing.join(", ")}.{" "}
               {missing.length === 1
                 ? "It's worked out from the others."
                 : "With more than one missing, those figures stay blank for these days."}

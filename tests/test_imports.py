@@ -67,6 +67,28 @@ def xlsx(rows: list[list[object]]) -> bytes:
     return buf.getvalue()
 
 
+def signed_chart(*, charge_positive: bool = True, load: bool = True, soc: bool = False) -> bytes:
+    """A day chart with one signed column each for the grid and the battery, as some exports give them."""
+    head = (
+        ["Time", "PV(W)", "Grid(W)", "Battery(W)"]
+        + (["Load(W)"] if load else [])
+        + (["Battery Level(%)"] if soc else [])
+    )
+    lines = [",".join(head)]
+    level = 30.0
+    for k in range(288):
+        h, m = divmod(k * 5, 60)
+        sunny = 8 <= h < 16
+        pv, grid, charging = (3000, -1500, 1000) if sunny else (0, 100, -400)  # grid: + bought, − fed in
+        home = pv + grid - charging
+        level += charging * 5 / 60 / 10_000 * 100  # a 10 kWh battery
+        row = [f"2025/04/21 {h:02d}:{m:02d}", str(pv), str(grid), str(charging if charge_positive else -charging)]
+        row += [str(home)] if load else []
+        row += [f"{level:.1f}"] if soc else []
+        lines.append(",".join(row))
+    return "\n".join(lines).encode()
+
+
 @pytest.fixture
 def imports(db: Database) -> ImportService:
     return ImportService(db)
@@ -88,6 +110,16 @@ def test_columns_are_matched_by_name() -> None:
     assert describe("Daily Yield(kWh)").field is None  # energy, not the power curve
 
 
+def test_signed_grid_and_battery_columns_are_recognised_but_not_their_other_readings() -> None:
+    assert describe("Grid(W)").field == "grid"
+    assert describe("Battery(W)").field == "battery"
+    assert describe("Battery Power(kW)").field == "battery"
+    assert describe("Feed-in to Grid(W)").field == "export"  # a direction still wins
+    assert describe("Battery Charge(W)").field == "charge"
+    for other in ("Grid Voltage(V)", "Grid Frequency(Hz)", "Battery Voltage(V)", "Battery Temperature(℃)"):
+        assert describe(other).field is None, other
+
+
 # ---------------------------------------------------------------------------------------- parsing
 
 
@@ -106,6 +138,34 @@ def test_a_day_chart_becomes_5_minute_buckets_with_daily_counters() -> None:
     assert last["daily_export"] == pytest.approx(12.0)
     assert last["daily_charge"] == pytest.approx(8.0)
     assert last["daily_import"] == pytest.approx(1.6)  # 100 W for 16 hours
+
+
+@pytest.mark.parametrize("charge_positive", [True, False])
+def test_signed_grid_and_battery_columns_import_either_way_round(charge_positive: bool) -> None:
+    curve = parse("plant.csv", signed_chart(charge_positive=charge_positive))
+    assert curve.mapping["grid"] == ["Grid(W)"] and curve.mapping["battery"] == ["Battery(W)"]
+    assert curve.warnings == []
+    noon = curve.buckets[local(2025, 4, 21, 12)]
+    assert noon["grid_power"] == -1500 and noon["battery_power"] == -1000  # feeding in, and charging
+    night = curve.buckets[local(2025, 4, 21, 2)]
+    assert night["grid_power"] == 100 and night["battery_power"] == 400  # buying, and discharging
+    last = curve.buckets[local(2025, 4, 21, 23, 55)]
+    assert last["daily_export"] == pytest.approx(12.0) and last["daily_import"] == pytest.approx(1.6)
+    assert last["daily_charge"] == pytest.approx(8.0) and last["daily_discharge"] == pytest.approx(6.4)
+
+
+@pytest.mark.parametrize("charge_positive", [True, False])
+def test_without_home_use_the_battery_level_says_which_way_it_runs(charge_positive: bool) -> None:
+    curve = parse("plant.csv", signed_chart(charge_positive=charge_positive, load=False, soc=True))
+    noon = curve.buckets[local(2025, 4, 21, 12)]
+    assert noon["battery_power"] == -1000 and noon["load_power"] == 500  # home use worked out from the rest
+    assert curve.warnings == []
+
+
+def test_when_nothing_says_which_way_the_battery_runs_positive_is_charging() -> None:
+    curve = parse("plant.csv", signed_chart(load=False))
+    assert curve.buckets[local(2025, 4, 21, 12)]["battery_power"] == -1000
+    assert any("positive was taken as charging" in w for w in curve.warnings)
 
 
 def test_semicolons_and_day_first_dates() -> None:
