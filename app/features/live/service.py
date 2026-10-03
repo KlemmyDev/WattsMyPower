@@ -52,24 +52,29 @@ class LiveService:
         return model
 
     def battery_kwh(self) -> float:
-        return self.config.battery_kwh or self.info.get("battery_kwh") or 0.0
+        """The capacity set in Settings → System, or else what the inverter reports."""
+        return self.settings.get("battery_kwh_override") or self.info.get("battery_kwh") or 0.0
 
     def reserve(self) -> float:
+        """The backup reserve (%) the inverter reports, or else the one set in Settings → System."""
         r: float | None = self.info.get("reserve")
-        return r if r is not None else self.config.battery_reserve
+        return r if r is not None else self.settings.get("battery_reserve_fallback")
 
     def system(self) -> dict[str, Any]:
-        cfg, info = self.config, self.info
+        cfg, info, settings = self.config, self.info, self.settings
         return {
             "brand": info.get("brand"),
             "model": info.get("model"),
             "serial": info.get("serial"),
             "nominal_kw": info.get("nominal_kw"),
             "phases": info.get("phases"),
-            "pv_kw": cfg.pv_kw,
+            "pv_kw": settings.get("pv_kw"),
             "battery_kwh": self.battery_kwh(),
             "battery_reserve": self.reserve(),
-            "battery_max_kw": cfg.battery_max_kw,
+            "battery_max_kw": settings.get("battery_max_kw"),
+            # What the inverter itself reports, so Settings → System can say whether its settings apply.
+            "inverter_battery_kwh": info.get("battery_kwh"),
+            "inverter_reserve": info.get("reserve"),
             "forecast": cfg.forecast,
             "tariff": self.tariffs.get(),
             "pv2": None if self.pv2 is None else {"behind_meter": cfg.pv2_behind_meter, **self.pv2},

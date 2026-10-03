@@ -1,9 +1,16 @@
+import { useState, type FormEvent, type ReactNode } from "react";
 import type { SystemInfo } from "~/features/common/live/types";
 import { SettingRow } from "~/features/common/ui/components/DataRow";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { inverterName } from "~/features/common/live/utils";
+import { useSaveSettings } from "~/features/common/settings/hooks";
+import { SYSTEM_SETTINGS, type Settings, type SystemSettingKey } from "~/features/common/settings/types";
+import { saveSettingsError } from "~/features/common/settings/utils";
+import { Button } from "~/features/common/ui/components/Button";
+import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
+import { useToast } from "~/features/common/ui/components/Toast";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
@@ -21,39 +28,151 @@ function systemRows(s: SystemInfo | undefined): [string, string][] {
     ["Site name", "Home"],
     ["Inverter", s?.model ? `${inverterName(s)} hybrid${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"],
     ["Serial number", s?.serial || "—"],
-    ["Solar array", s?.pv_kw ? `${s.pv_kw} kW` : "—"],
-    ["Battery", s?.battery_kwh ? `${s.battery_kwh} kWh` : "—"],
-    ["Maximum charge and discharge rate", s?.battery_max_kw ? `${s.battery_max_kw} kW` : "—"],
-    ["Backup reserve", s?.battery_reserve != null ? pct(s.battery_reserve) : "—"],
+    ["Battery", s?.inverter_battery_kwh ? `${s.inverter_battery_kwh} kWh` : "—"],
+    ["Backup reserve", s?.inverter_reserve != null ? pct(s.inverter_reserve) : "—"],
     ["Grid connection", s?.phases || "—"],
     ...(s?.pv2 ? [["Second inverter", secondInverter(s.pv2)] satisfies [string, string]] : []),
   ];
 }
 
-/** Settings → System: what the inverters report about the installation. */
+/** Settings → System: what the inverters report about the installation, and the details they can't. */
 export function SystemSettings() {
   const live = useLive();
   const last = live?.last_success;
   return (
-    <SettingsCard aria-labelledby="h-sys">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle p-6">
-        <SettingsTitle
-          id="h-sys"
-          title="Solar and battery system"
-          sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
-        />
-      </div>
-      <div>
-        {systemRows(live?.system).map(([label, value]) => (
-          <SettingRow key={label} label={label}>
-            {value}
-          </SettingRow>
-        ))}
-      </div>
-      <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-        These details come from your inverters over the local network. Inverters are connected in Settings →
-        Integrations; the solar array size (PV_KW) is set in the server configuration.
-      </div>
+    <>
+      <SettingsCard aria-labelledby="h-sys">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle p-6">
+          <SettingsTitle
+            id="h-sys"
+            title="Solar and battery system"
+            sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
+          />
+        </div>
+        <div>
+          {systemRows(live?.system).map(([label, value]) => (
+            <SettingRow key={label} label={label}>
+              {value}
+            </SettingRow>
+          ))}
+        </div>
+        <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
+          These details come from your inverters over the local network. Inverters are connected in Settings →
+          Integrations.
+        </div>
+      </SettingsCard>
+      {/* Mounted once the status has loaded, so the fields start from the saved values. */}
+      {live && <SystemForm system={live.system} />}
+    </>
+  );
+}
+
+type Values = Record<SystemSettingKey, string>;
+
+const valuesOf = (s: SystemInfo): Values => ({
+  pv_kw: String(s.pv_kw),
+  battery_kwh_override: String(s.battery_kwh_override),
+  battery_reserve_fallback: String(s.battery_reserve_fallback),
+  battery_max_kw: String(s.battery_max_kw),
+});
+
+const NAMES: Record<SystemSettingKey, string> = {
+  pv_kw: "the solar array size",
+  battery_kwh_override: "the battery capacity",
+  battery_reserve_fallback: "the backup reserve",
+  battery_max_kw: "the maximum charge and discharge rate",
+};
+
+/** The details the inverter can't report, or that override what it does. */
+function SystemForm({ system: s }: { system: SystemInfo }) {
+  const save = useSaveSettings();
+  const toast = useToast();
+  const [values, setValues] = useState(() => valuesOf(s));
+  const [error, setError] = useState("");
+  // Blank counts as changed, so saving says what's missing.
+  const changed = SYSTEM_SETTINGS.filter((k) => values[k].trim() === "" || Number(values[k]) !== s[k]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const empty = changed.find((k) => values[k].trim() === "" || Number.isNaN(Number(values[k])));
+    if (empty) return setError(`Enter a number for ${NAMES[empty]}.`);
+    const changes: Partial<Settings> = Object.fromEntries(changed.map((k) => [k, Number(values[k])]));
+    save.mutate(changes, {
+      onSuccess: (next) => {
+        setValues(valuesOf({ ...s, ...next }));
+        toast("System details saved. Updating the forecast.");
+      },
+      onError: (err) => setError(saveSettingsError(err)),
+    });
+  };
+
+  const field = (key: SystemSettingKey, label: string, unit: string, step: string, help: ReactNode) => (
+    <Field label={label} help={help}>
+      <Input
+        type="number"
+        inputMode="decimal"
+        step={step}
+        unit={unit}
+        value={values[key]}
+        onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+      />
+    </Field>
+  );
+
+  const reportedKwh = s.inverter_battery_kwh;
+  const reportedReserve = s.inverter_reserve;
+  return (
+    <SettingsCard padded aria-labelledby="h-sys-details">
+      <SettingsTitle
+        id="h-sys-details"
+        title="Your system's details"
+        sub="What your inverter can't tell us. Changes apply straight away across the app."
+      />
+      <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-5">
+          {field(
+            "pv_kw",
+            "Solar array size",
+            "kW",
+            "0.01",
+            "The total of all your panels, on every inverter. The forecast starts from this, then learns from what your panels actually make.",
+          )}
+          {field(
+            "battery_kwh_override",
+            "Battery capacity",
+            "kWh",
+            "0.1",
+            reportedKwh
+              ? `Leave at 0 to use what your inverter reports (${reportedKwh} kWh). Set it only if that's wrong.`
+              : "Leave at 0 to use what your inverter reports. Set it if your inverter doesn't report one.",
+          )}
+          {field(
+            "battery_reserve_fallback",
+            "Backup reserve",
+            "%",
+            "1",
+            reportedReserve != null
+              ? `The charge kept for blackouts. Your inverter reports ${pct(reportedReserve)}, so that's used instead of this.`
+              : "The charge kept for blackouts. Used because your inverter doesn't report its own.",
+          )}
+          {field(
+            "battery_max_kw",
+            "Maximum charge and discharge rate",
+            "kW",
+            "0.1",
+            "How fast the battery can charge or discharge. The forecast uses it to work out when the battery fills and empties.",
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" size="sm" disabled={!changed.length || save.isPending}>
+            {save.isPending ? "Saving…" : "Save details"}
+          </Button>
+          <HelpText tone="bad" role="alert">
+            {error}
+          </HelpText>
+        </div>
+      </form>
     </SettingsCard>
   );
 }

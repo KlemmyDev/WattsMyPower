@@ -12,14 +12,14 @@
 # the database is backed up to data/backups/ (the newest 5 are kept), without
 # stopping the app.
 #
-# Options:  --configure  change your settings (array size, time zone, port), then restart.
-#                        Your current values are the defaults. Inverters are connected in the
-#                        dashboard: Settings → Integrations.
+# Options:  --configure  change your settings (time zone, port), then restart. Your current
+#                        values are the defaults. Inverters are connected, and the array size
+#                        set, in the dashboard: Settings → Integrations and Settings → System.
 #           --start      just start it (and Docker if needed): no update, rebuild or
 #                        questions. start.sh does the same.
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
-#                        passed in, e.g. PV_KW=10 bash install.sh --yes (INVERTER_HOST too, on a
-#                        first install, to connect the inverter without the dashboard)
+#                        passed in, e.g. TZ=Australia/Perth bash install.sh --yes, and on a first
+#                        install PV_KW=10 or INVERTER_HOST=... to set up without the dashboard
 #           -h, --help   show this help
 #
 # First install only:  WMP_DIR=/path  folder to install into (default: ./wattsmypower)
@@ -214,18 +214,18 @@ fi
 current() { local passed="${!1-}"; printf '%s' "${passed:-$(get_env "$1")}"; }
 
 configure() {
-  # Inverters are connected in the dashboard (Settings → Integrations). Ones passed in on a first
-  # install (INVERTER_HOST=... bash install.sh --yes) are still taken, and moved into its database.
+  # Inverters are connected in the dashboard (Settings → Integrations), and the array size and battery
+  # are set there too (Settings → System). Ones passed in on a first install (INVERTER_HOST=... or
+  # PV_KW=... bash install.sh --yes) are still taken, and moved into the databases when it starts.
   local v
-  for v in INVERTER_HOST PV2_HOST PV2_BEHIND_METER; do
+  for v in INVERTER_HOST PV2_HOST PV2_BEHIND_METER PV_KW BATTERY_KWH; do
     [ -n "${!v-}" ] && set_env "$v" "${!v}"
   done
-  set_env PV_KW "$(ask "Total size of your solar panels in kW" "$(current PV_KW)")"
   local tz; tz="$(current TZ)"
   [ -n "$tz" ] && [ "$tz" != "$(get_env TZ .env.example)" ] || tz="$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || printf '%s' "$tz")"
   set_env TZ "$(ask "Time zone" "$tz")"
   set_env PORT "$(ask "Port to serve the dashboard on" "$(current PORT)")"
-  info "Saved to .env. Inverters, rates, location and system cost are set in the dashboard."
+  info "Saved to .env. Inverters, array size, rates, location and system cost are set in the dashboard."
 }
 
 if [ ! -f .env ]; then
