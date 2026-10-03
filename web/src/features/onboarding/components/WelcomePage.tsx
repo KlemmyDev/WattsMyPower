@@ -74,7 +74,7 @@ export function WelcomePage({ step }: { step: StepId | undefined }) {
     <div className="min-h-screen bg-canvas">
       <header className="mx-auto flex max-w-[800px] items-center justify-between gap-4 px-8 pt-6 max-sm:px-4 max-sm:pt-4">
         <span className="flex items-center gap-3">
-          <span className="flex size-10 flex-none items-center justify-center rounded-[13px] border border-white/8 bg-linear-160 from-[#242424] to-[#121212]">
+          <span className="flex size-10 flex-none items-center justify-center rounded-[13px] border border-fg/8 bg-linear-160 from-mark-from to-mark-to">
             <BrandMark />
           </span>
           <span className="font-display text-lg font-semibold tracking-[-0.4px] whitespace-nowrap max-2xs:hidden">
