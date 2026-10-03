@@ -40,7 +40,7 @@ LISTS: dict[str, tuple[tuple[str, ...], int]] = {
 # Settings that only take whole numbers.
 WHOLE = {
     "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
-    "house_storeys", "garage_spaces", "system_installed", "battery_installed",
+    "house_storeys", "garage_spaces", "system_installed", "battery_installed", "car_phases",
 }  # fmt: skip
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
@@ -59,7 +59,15 @@ OWNERSHIP: dict[str, tuple[str, str]] = {
     "battery_warranty_years": ("Battery warranty", " years"),
     "battery_warranty_mwh": ("Battery warranty energy", " MWh"),
 }
-NAMED = SYSTEM | OWNERSHIP
+# The car's details (the Plan page's car charging card).
+CAR: dict[str, tuple[str, str]] = {
+    "car_battery_kwh": ("The car's battery", " kWh"),
+    "car_efficiency": ("Charging efficiency", "%"),
+    "car_amps": ("Charging current", " A"),
+    "car_phases": ("Phases", ""),
+    "car_voltage": ("Voltage", " V"),
+}
+NAMED = SYSTEM | OWNERSHIP | CAR
 # kv marker: the system details have been copied from the environment (see seed_system).
 SYSTEM_SEEDED = "system_seeded"
 
@@ -103,6 +111,13 @@ class SettingsStore:
             "battery_installed": (0, 4_102_444_800, 0),
             "battery_warranty_years": (0, 30, 0),
             "battery_warranty_mwh": (0, 1000, 0),
+            # The car, for planning its charges (the Plan page): its battery's usable size, how much of what
+            # comes from the wall reaches it (%), and how it's usually charged (amps, 1 or 3 phases, volts).
+            "car_battery_kwh": (10, 200, 75),
+            "car_efficiency": (50, 100, 90),
+            "car_amps": (1, 48, 16),
+            "car_phases": (1, 3, 1),
+            "car_voltage": (200, 260, 230),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}

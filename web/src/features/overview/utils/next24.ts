@@ -39,10 +39,12 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
     ...hrs.map((h) => ({ t: mid(h), v: h.pv_kw })),
     { t: end, v: last.pv_kw },
   ];
+  // Home use with any planned car charging on top: it's all drawn from the same place.
+  const drawn = (h: ForecastHour) => h.load_kw + (h.car_kw ?? 0);
   const load: V[] = [
-    { t: now, v: hrs[0].load_kw },
-    ...hrs.map((h) => ({ t: mid(h), v: h.load_kw })),
-    { t: end, v: last.load_kw },
+    { t: now, v: drawn(hrs[0]) },
+    ...hrs.map((h) => ({ t: mid(h), v: drawn(h) })),
+    { t: end, v: drawn(last) },
   ];
   const socPts: V[] = [
     { t: now, v: p && p.battery_soc != null ? p.battery_soc : hrs[0].soc },
@@ -150,14 +152,14 @@ export function next24(f: Forecast, p: Snapshot | null, s: SystemInfo | undefine
 
   // Totals for the next 24 hours
   const kwhOf = (h: ForecastHour, v: number) => (v * (h.ts + 3600 - h.start)) / 3600;
-  const use = hrs.reduce((a, h) => a + kwhOf(h, h.load_kw), 0);
+  const used = hrs.reduce((a, h) => a + kwhOf(h, drawn(h)), 0);
   const imp = hrs.reduce((a, h) => a + Math.max(0, h.grid_kwh), 0);
-  const cover = use > 0 ? Math.max(0, Math.min(1, 1 - imp / use)) : 1;
+  const cover = used > 0 ? Math.max(0, Math.min(1, 1 - imp / used)) : 1;
   // On Amber, each hour at its forecast prices (the fallback rates where there's no forecast yet).
   const cost = t ? hoursCost(hrs, ratesFor(t, prices)) + tariffNumber(t.supply_charge) : null;
   const stats: [label: string, value: string, color: string][] = [
     ["Solar forecast", kWhInt(f.summary.pv_kwh_24h), COLOR.solar],
-    ["Expected use", kWhInt(use), COLOR.ink],
+    ["Expected use", kWhInt(used), COLOR.ink],
     ["From the grid", kWh(imp), COLOR.ink],
     ["Expected cost", money(cost), cost != null && cost < 0 ? COLOR.good : COLOR.ink],
   ];

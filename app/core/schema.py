@@ -233,6 +233,19 @@ def _import_replacing(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS import_replaced_by_import ON import_replaced (import_id)")
 
 
+def _car_charges(conn: sqlite3.Connection) -> None:
+    """Car charges planned ahead (app.features.car), which the forecast counts as home use. `start` and
+    `end` are unix seconds; `power_w` is what it draws from the wall, `kwh` the energy from the wall in
+    all; the charge levels are the car's battery, % (null when not given)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS car_charges (id INTEGER PRIMARY KEY, start INTEGER NOT NULL,"
+        " end INTEGER NOT NULL, power_w REAL NOT NULL, kwh REAL NOT NULL, amps REAL NOT NULL,"
+        " phases INTEGER NOT NULL, soc_from REAL, soc_to REAL, battery_helps INTEGER NOT NULL,"
+        " created_at INTEGER NOT NULL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS car_charges_end ON car_charges (end)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -244,6 +257,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _imports,
     _weather,
     _import_replacing,
+    _car_charges,
 ]
 
 

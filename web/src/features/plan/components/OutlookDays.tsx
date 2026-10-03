@@ -87,6 +87,12 @@ export function OutlookDays({
               <dd className="text-right font-medium" style={{ color: filled ? COLOR.battery : COLOR.ink }}>
                 {batteryLine(d, now)}
               </dd>
+              {d.car >= 0.05 && (
+                <>
+                  <dt className="text-ink-dim">Car charging</dt>
+                  <dd className="text-right font-medium text-ink">{kWh(d.car)}</dd>
+                </>
+              )}
               <dt className="text-ink-dim">From the grid</dt>
               <dd className="text-right font-medium text-ink">{d.imp < 0.05 ? "None" : kWh(d.imp)}</dd>
               {d.cost != null && (

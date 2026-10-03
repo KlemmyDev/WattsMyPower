@@ -5,6 +5,8 @@ export type ForecastHour = {
   pv_kwh: number;
   pv_kw: number;
   load_kw: number;
+  /** Planned car charging (kW on average over the hour), on top of home use; 0 with none. */
+  car_kw: number;
   soc: number; // % at the end of the hour
   grid_kwh: number; // + import, − export
   temp: number | null;
@@ -20,6 +22,8 @@ export type ForecastDay = {
   from: number; // when its forecast starts: now for today, midnight otherwise
   pv_kwh: number;
   load_kwh: number;
+  /** Planned car charging that day (kWh from the wall). */
+  car_kwh: number;
   import_kwh: number;
   export_kwh: number;
   full_at: number | null; // when the battery is forecast to reach full that day

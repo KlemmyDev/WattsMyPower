@@ -16,6 +16,7 @@ import { useNow } from "~/features/common/time/hooks";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { shortDay } from "~/features/common/formatting/utils/date";
 import { locationLabel, reserveOf } from "~/features/common/energy/utils";
+import { CarCharging } from "~/features/car/components/CarCharging";
 import { AccuracyCard } from "~/features/plan/components/AccuracyCard";
 import { BestTimes } from "~/features/plan/components/BestTimes";
 import { HourStrip } from "~/features/plan/components/HourStrip";
@@ -137,6 +138,7 @@ export function PlanPage() {
               </div>
             </div>
           </Card>
+          <CarCharging />
           <Card key={`hours-${day.key}`} aria-labelledby="h-hbh">
             <TitleBlock
               id="h-hbh"

@@ -27,6 +27,8 @@ type Row = {
   load: number | null;
   grid: number | null; // kWh, + from the grid
   soc: number | null;
+  /** Planned car charging (kWh), forecast hours only; the inverter's readings count it in home use. */
+  car: number | null;
   h: ForecastHour | null;
 };
 type P = { t: number; v: number };
@@ -65,11 +67,21 @@ function plot(
         load: r?.load ?? null,
         grid: r?.grid ?? null,
         soc: r?.soc ?? null,
+        car: null,
         h: null,
       });
     } else if (h) {
-      rows.push({ t0: h.start, t1, pv: h.pv_kwh, load: hourKwh(h, h.load_kw), grid: h.grid_kwh, soc: h.soc, h });
-    } else rows.push({ t0, t1, pv: null, load: null, grid: null, soc: null, h: null });
+      rows.push({
+        t0: h.start,
+        t1,
+        pv: h.pv_kwh,
+        load: hourKwh(h, h.load_kw),
+        grid: h.grid_kwh,
+        soc: h.soc,
+        car: hourKwh(h, h.car_kw ?? 0),
+        h,
+      });
+    } else rows.push({ t0, t1, pv: null, load: null, grid: null, soc: null, car: null, h: null });
   }
 
   // Recorded lines from the 5-minute readings before now.
@@ -87,7 +99,7 @@ function plot(
   // Forecast lines: hourly averages drawn through the middle of each hour, from `from` to midnight.
   const hrs = day.hours;
   const mid = (h: ForecastHour) => h.start + (hourEnd(h) - h.start) / 2;
-  const ahead = (k: "pv_kw" | "load_kw"): P[] =>
+  const ahead = (k: "pv_kw" | "load_kw" | "car_kw"): P[] =>
     hrs.length
       ? [
           { t: from, v: hrs[0][k] },
@@ -97,13 +109,15 @@ function plot(
       : [];
   const pvAhead = ahead("pv_kw");
   const loadAhead = ahead("load_kw");
+  // Planned car charging, drawn only on a day with some.
+  const carAhead = hrs.some((h) => (h.car_kw ?? 0) > 0) ? ahead("car_kw") : [];
   const socAhead: P[] = hrs.length
     ? [{ t: from, v: soc0 ?? hrs[0].soc }, ...hrs.map((h) => ({ t: Math.min(start + span, hourEnd(h)), v: h.soc }))]
     : [];
 
   const top = Math.max(
     1,
-    ...[...pvPast, ...loadPast, ...loadAhead].map((p) => p.v),
+    ...[...pvPast, ...loadPast, ...loadAhead, ...carAhead].map((p) => p.v),
     ...pvAhead.map((p) => p.v * (range ? range[1] : 1)),
   );
   const mx = top * 1.1;
@@ -139,6 +153,7 @@ function plot(
     pvAhead: path(pvAhead, py),
     pvAheadArea: area(pvAhead),
     loadAhead: path(loadAhead, py),
+    carAhead: path(carAhead, py),
     socAhead: path(socAhead, by),
     band,
     by,
@@ -175,6 +190,9 @@ function RowTooltip({ row, left, width, rates }: { row: Row; left: number; width
       </div>
       <TooltipRow label="Solar" value={kWh(row.pv)} color={COLOR.solar} />
       <TooltipRow label="Home use" value={kWh(row.load)} color={COLOR.ink} />
+      {row.car != null && row.car >= 0.05 && (
+        <TooltipRow label="Car charging" value={kWh(row.car)} color={COLOR.lilac} />
+      )}
       <TooltipRow label="Battery" value={row.soc == null ? DASH : pct(row.soc)} color={COLOR.battery} />
       <TooltipRow
         label={g >= 0.05 ? "From the grid" : g <= -0.05 ? "To the grid" : "Grid"}
@@ -227,6 +245,7 @@ export function PlanChart({
     ["Battery level", COLOR.battery, "line"],
     ["From grid", COLOR.fromGrid, "box"],
     ["Sent to grid", COLOR.export, "box"],
+    ...(c.carAhead ? [["Car charging", COLOR.lilac, "line"] as [string, string, "line"]] : []),
   ];
 
   return (
@@ -309,6 +328,9 @@ export function PlanChart({
             <path d={c.pvAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
             <path d={c.loadPast} {...STROKE} strokeWidth="1.5" style={{ stroke: COLOR.ink }} />
             <path d={c.loadAhead} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
+            {c.carAhead && (
+              <path d={c.carAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.lilac }} />
+            )}
             <line
               x1="0"
               x2={W}
