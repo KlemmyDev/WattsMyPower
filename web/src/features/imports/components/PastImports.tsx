@@ -19,7 +19,7 @@ function covers(i: ImportRecord): string {
   return `${from === to ? from : `${from} to ${to}`} · ${i.days} ${plural(i.days, "day")}`;
 }
 
-/** Settings → Import: what's been imported, each removable without touching recorded history. */
+/** Settings → Integrations → Sungrow → Import: what's been imported, each removable without touching recorded history. */
 export function PastImports() {
   const qc = useQueryClient();
   const toast = useToast();
