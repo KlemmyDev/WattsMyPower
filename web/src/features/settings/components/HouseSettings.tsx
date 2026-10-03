@@ -23,6 +23,8 @@ const STYLES: { value: HouseStyle; name: string; blurb: string }[] = [
   { value: "estate", name: "Estate", blurb: "Brick veneer under a tiled gable roof" },
   { value: "modern", name: "Modern", blurb: "White boxes, glass and a flat roof" },
   { value: "queenslander", name: "Queenslander", blurb: "Weatherboards on stumps, a verandah and an iron roof" },
+  { value: "federation", name: "Federation", blurb: "Red brick, terracotta tiles and a bay window" },
+  { value: "farmhouse", name: "Farmhouse", blurb: "Dark cladding, a steep metal roof and a deck" },
 ];
 
 const PLACES: { value: Place; label: string }[] = [
@@ -127,7 +129,7 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold">Style</span>
-        <div role="group" aria-label="Style" className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+        <div role="group" aria-label="Style" className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
           {STYLES.map((st) => {
             const on = house.style === st.value;
             return (

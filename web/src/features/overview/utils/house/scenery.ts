@@ -3,6 +3,8 @@ import { box, group, h, I, ln, type Attrs, type Kid } from "~/features/overview/
 import { houseKey, type HouseStyle, type Layout } from "~/features/overview/utils/house/layout";
 import { defs, flat, front, side, tree, type StyleParts } from "~/features/overview/utils/house/parts";
 import { estate } from "~/features/overview/utils/house/styles/estate";
+import { farmhouse } from "~/features/overview/utils/house/styles/farmhouse";
+import { federation } from "~/features/overview/utils/house/styles/federation";
 import { modern } from "~/features/overview/utils/house/styles/modern";
 import { queenslander } from "~/features/overview/utils/house/styles/queenslander";
 
@@ -13,7 +15,7 @@ import { queenslander } from "~/features/overview/utils/house/styles/queenslande
  * and gauges follow the readings.
  */
 
-const STYLES: Record<HouseStyle, (l: Layout) => StyleParts> = { estate, modern, queenslander };
+const STYLES: Record<HouseStyle, (l: Layout) => StyleParts> = { estate, modern, queenslander, federation, farmhouse };
 
 function build(l: Layout) {
   const { garage: g, ground: gr } = l;

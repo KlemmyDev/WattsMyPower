@@ -7,7 +7,7 @@ import {
   type Place,
 } from "~/features/overview/utils/house/layout";
 
-const STYLES: HouseStyle[] = ["estate", "modern", "queenslander"];
+const STYLES: HouseStyle[] = ["estate", "modern", "queenslander", "federation", "farmhouse"];
 
 /** Inverters connected: the hybrid, and a second one if there is. */
 export const connectedInverters = (s: SystemInfo | undefined) => Math.min(1 + (s?.pv2 ? 1 : 0), MAX_INVERTERS);

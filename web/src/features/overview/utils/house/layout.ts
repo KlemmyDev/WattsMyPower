@@ -15,7 +15,7 @@ import { I, type P3 } from "~/features/overview/utils/house/iso";
  */
 
 export type Place = "wall" | "garage";
-export type HouseStyle = "estate" | "modern" | "queenslander";
+export type HouseStyle = "estate" | "modern" | "queenslander" | "federation" | "farmhouse";
 
 export type HouseOptions = {
   style: HouseStyle;
@@ -175,7 +175,74 @@ function queenslander(storeys: 1 | 2): Shape {
   };
 }
 
-const SHAPES: Record<HouseStyle, (storeys: 1 | 2) => Shape> = { estate, modern, queenslander };
+/** The Federation home's levels: red brick under a terracotta hip roof, a bay under a front gable, a chimney. */
+export function federationLevels(storeys: 1 | 2) {
+  const wallTop = storeys === 2 ? 7.6 : 4.0;
+  return {
+    wallTop,
+    ridge: wallTop + 3.0,
+    // the hip roof: eaves all round, a short ridge along the middle
+    eaves: { x0: -0.4, x1: 10.4, y0: -0.4, y1: 8.5 },
+    ridgeLine: { x0: 3.5, x1: 6.5, y: 4.05 },
+    // the bay: brick walls out from the front, under a gable facing the street
+    bay: { x0: 6, x1: 9.6, y1: 9.4, gable: wallTop + 2.0, peak: 7.8 },
+    chimney: { x0: 1.6, x1: 2.4, y0: 2.2, y1: 3.0, top: wallTop + 4.0 },
+  };
+}
+
+function federation(storeys: 1 | 2): Shape {
+  const f = federationLevels(storeys);
+  return {
+    side: { y0: 0.4, y1: 7.6, zMin: 0, zMax: f.wallTop },
+    sideWindows: [
+      { y0: 1.3, y1: 3.5, z0: 1.4, z1: 3.2 },
+      ...(storeys === 2 ? [{ y0: 1.3, y1: 3.5, z0: 5.0, z1: 6.8 }] : []),
+    ],
+    top: f.chimney.top + 0.3,
+    roofOut: [
+      [10.3, 8.4, f.wallTop + 0.1],
+      [10.03, 7.7, f.wallTop - 0.15],
+    ],
+    gridAt: [0.7, 8.03, 3.0],
+    solarAt: [3.2, 6.6, f.wallTop + 0.9],
+    homeAt: [1.4, 8, 2.0],
+    groundY1: 11.0,
+  };
+}
+
+/** The farmhouse's levels: dark cladding under a steep standing-seam gable roof. */
+export function farmhouseLevels(storeys: 1 | 2) {
+  const wallTop = storeys === 2 ? 7.0 : 3.6;
+  return { wallTop, eave: wallTop - 0.3, ridge: wallTop + 4.0, floor: storeys === 2 ? 3.5 : null };
+}
+
+function farmhouse(storeys: 1 | 2): Shape {
+  const f = farmhouseLevels(storeys);
+  return {
+    side: { y0: 0.4, y1: 7.6, zMin: 0, zMax: f.wallTop },
+    sideWindows: [
+      { y0: 1.2, y1: 3.2, z0: 1.0, z1: 2.6 },
+      ...(f.floor ? [{ y0: 1.2, y1: 3.2, z0: f.floor + 0.9, z1: f.floor + 2.5 }] : []),
+    ],
+    top: f.ridge,
+    roofOut: [
+      [9.2, 8.2, f.eave + 0.4],
+      [10.03, 7.7, f.eave + 0.15],
+    ],
+    gridAt: [0.4, 8.03, 2.6],
+    solarAt: [5, 6.0, f.ridge - 2.0],
+    homeAt: [2.0, 8, 1.8],
+    groundY1: 10.4,
+  };
+}
+
+const SHAPES: Record<HouseStyle, (storeys: 1 | 2) => Shape> = {
+  estate,
+  modern,
+  queenslander,
+  federation,
+  farmhouse,
+};
 
 // ------------------------------------------------------------------------------------------ hanging equipment
 
