@@ -13,6 +13,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.container import build_services
 from app.core.config import Config
 from app.core.spa import mount_spa
+from app.features.alerts.router import router as alerts_router
 from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
 from app.features.bills.router import router as bills_router
@@ -36,6 +37,7 @@ ROUTERS = [
     forecast_router,
     insights_router,
     integrations_router,
+    alerts_router,
     bills_router,
     plans_router,
     health_router,
@@ -54,11 +56,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
         await asyncio.to_thread(services.tariffs.load)
         if poll:
             await services.source.start()
+            await services.alerts.start()  # follows the live status the source publishes
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
+            await services.alerts.stop()
             await services.source.stop()
 
     app = FastAPI(title="WattsMyPower", lifespan=lifespan)
