@@ -1,4 +1,5 @@
 import type { SystemInfo } from "~/features/common/live/types";
+import { ButtonLink } from "~/features/common/ui/components/Button";
 import { SettingRow } from "~/features/common/ui/components/DataRow";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
@@ -53,6 +54,14 @@ export function SystemSettings() {
       <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
         These details come from your inverters over the local network. Inverters are connected in Settings →
         Integrations; the solar array size (PV_KW) is set in the server configuration.
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-6 py-4">
+        <span className="min-w-[200px] flex-1 text-[13px] leading-5 text-ink-muted">
+          The set-up guide walks through connecting your inverter, your electricity plan, location and billing.
+        </span>
+        <ButtonLink to="/welcome" variant="outline" size="sm">
+          Open the set-up guide
+        </ButtonLink>
       </div>
     </SettingsCard>
   );

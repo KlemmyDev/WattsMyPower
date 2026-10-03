@@ -18,6 +18,20 @@ const dm = (d: Date) => dayMonth(d.getTime() / 1000);
 
 /** Settings → Billing: how often bills come and when a period starts, so estimates line up with the retailer's. */
 export function BillingSettings() {
+  return (
+    <SettingsCard padded aria-labelledby="h-billing">
+      <SettingsTitle
+        id="h-billing"
+        title="Billing period"
+        sub="Match these to your electricity bill so estimates line up with what your retailer charges."
+      />
+      <BillingFields />
+    </SettingsCard>
+  );
+}
+
+/** The billing period's fields, saved as they change, without a card (the set-up guide shows them too). */
+export function BillingFields() {
   const s = useSystem();
   const save = useSaveSettings();
   const pending = save.isPending ? save.variables : undefined;
@@ -35,12 +49,7 @@ export function BillingSettings() {
   const starts = Array.from({ length: months }, (_, k) => new Date(today.getFullYear(), base - k, day)).reverse();
 
   return (
-    <SettingsCard padded aria-labelledby="h-billing">
-      <SettingsTitle
-        id="h-billing"
-        title="Billing period"
-        sub="Match these to your electricity bill so estimates line up with what your retailer charges."
-      />
+    <>
       <div className="flex flex-col gap-2">
         <span className="text-[13px] font-semibold">How often you are billed</span>
         <Segmented
@@ -99,6 +108,6 @@ export function BillingSettings() {
         Bill estimates across the app use these dates.
       </div>
       {save.isError && <HelpText tone="bad">{saveSettingsError(save.error)}</HelpText>}
-    </SettingsCard>
+    </>
   );
 }
