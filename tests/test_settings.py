@@ -28,6 +28,7 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "garage_spaces": 0,
         "location_name": None,
         "weather_model": "best_match",
+        "house_style": "estate",
         "inverter_places": [],
         "battery_places": [],
     }

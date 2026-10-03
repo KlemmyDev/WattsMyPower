@@ -9,11 +9,21 @@ import { HelpText } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { HouseScene, type HouseFlows } from "~/features/overview/components/HouseScene";
-import type { Place } from "~/features/overview/utils/house/layout";
+import type { HouseStyle, Place } from "~/features/overview/utils/house/layout";
+import { cn } from "~/features/common/ui/utils";
 import { houseOptions } from "~/features/overview/utils/house/options";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
-type HouseValues = Pick<Settings, "house_storeys" | "garage_spaces" | "inverter_places" | "battery_places">;
+type HouseValues = Pick<
+  Settings,
+  "house_style" | "house_storeys" | "garage_spaces" | "inverter_places" | "battery_places"
+>;
+
+const STYLES: { value: HouseStyle; name: string; blurb: string }[] = [
+  { value: "estate", name: "Estate", blurb: "Brick veneer under a tiled gable roof" },
+  { value: "modern", name: "Modern", blurb: "White boxes, glass and a flat roof" },
+  { value: "queenslander", name: "Queenslander", blurb: "Weatherboards on stumps, a verandah and an iron roof" },
+];
 
 const PLACES: { value: Place; label: string }[] = [
   { value: "wall", label: "Outside wall" },
@@ -47,6 +57,9 @@ function Choice<T extends string>({
   );
 }
 
+/** The style tiles show the house still: no power moving, so a page of them stays quiet. */
+const THUMB_FLOWS: HouseFlows = { pv: 0, grid: 0, bat: 0, soc: 0.6, tesla: 0, conn: false };
+
 /** What the preview shows: the live readings if there are some, else a sunny afternoon charging the battery. */
 function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFlows {
   if (!p) return { pv: 4.2, grid: -1.1, bat: 1.6, soc: 0.62, tesla: 0, conn: false };
@@ -71,6 +84,7 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
   const snapshot = useSnapshot();
   // Changes show straight away and save in the background.
   const [values, setValues] = useState<HouseValues>(() => ({
+    house_style: system.house_style,
     house_storeys: system.house_storeys,
     garage_spaces: system.garage_spaces,
     inverter_places: system.inverter_places,
@@ -110,6 +124,34 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
       />
       <div className="relative aspect-[2/1] w-full overflow-hidden rounded-2xl bg-[#dcebff] max-sm:aspect-[4/3]">
         <HouseScene flows={previewFlows(snapshot, system)} sky="sunny" house={house} leaders={false} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[13px] font-semibold">Style</span>
+        <div role="group" aria-label="Style" className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+          {STYLES.map((st) => {
+            const on = house.style === st.value;
+            return (
+              <button
+                key={st.value}
+                type="button"
+                aria-pressed={on}
+                onClick={() => set({ house_style: st.value })}
+                className={cn(
+                  "flex flex-col overflow-hidden rounded-2xl border bg-canvas text-left transition-colors",
+                  on ? "border-ink" : "border-line hover:border-line-strong",
+                )}
+              >
+                <span className="relative aspect-[2/1] w-full overflow-hidden bg-[#dcebff] max-sm:aspect-[5/2]">
+                  <HouseScene flows={THUMB_FLOWS} sky="sunny" house={{ ...house, style: st.value }} leaders={false} />
+                </span>
+                <span className="flex flex-col gap-0.5 px-3.5 py-2.5">
+                  <span className="text-sm font-semibold text-ink">{st.name}</span>
+                  <span className="text-xs text-ink-muted">{st.blurb}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-5 max-md:grid-cols-1">
         <Choice

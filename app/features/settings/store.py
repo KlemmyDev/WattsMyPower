@@ -28,6 +28,8 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
         ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
         "best_match",
     ),
+    # How the Overview draws the house (Settings → System → Your house).
+    "house_style": (("estate", "modern", "queenslander"), "estate"),
 }
 # Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
 # battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.

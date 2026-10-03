@@ -26,9 +26,10 @@ export type Settings = {
   panel_bearing: number;
   forecast_learning: number;
   /**
-   * The house as the Overview draws it (Settings → System → Your house): 1 or 2 storeys; car spaces in the garage
+   * The house as the Overview draws it (Settings → System → Your house): its style; 1 or 2 storeys; car spaces in the garage
    * (0 = no garage); and where each inverter and battery is, in the order they're connected (missing = outside).
    */
+  house_style: "estate" | "modern" | "queenslander";
   house_storeys: number;
   garage_spaces: number;
   inverter_places: ("wall" | "garage")[];

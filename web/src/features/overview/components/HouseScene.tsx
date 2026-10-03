@@ -244,7 +244,7 @@ export function HouseScene({
         {night && S.night}
         {night && equipment(() => true, true)}
         {/* pole to house */}
-        {flow(sag([-1.5, 8.9, 7.6], [0.9, 8.03, 3.4], 34), flows.grid, flows.grid > 0, FLOW.grid, night)}
+        {flow(sag([-1.5, 8.9, 7.6], l.shape.gridAt, 34), flows.grid, flows.grid > 0, FLOW.grid, night)}
         {/* roof to each inverter */}
         {l.pvPaths.map((path, i) => (
           <Fragment key={i}>{flow(dPath(path), solar[i], true, FLOW.pv, night)}</Fragment>

@@ -1,5 +1,13 @@
 import type { SystemInfo } from "~/features/common/live/types";
-import { DEFAULT_HOUSE, MAX_INVERTERS, type HouseOptions, type Place } from "~/features/overview/utils/house/layout";
+import {
+  DEFAULT_HOUSE,
+  MAX_INVERTERS,
+  type HouseOptions,
+  type HouseStyle,
+  type Place,
+} from "~/features/overview/utils/house/layout";
+
+const STYLES: HouseStyle[] = ["estate", "modern", "queenslander"];
 
 /** Inverters connected: the hybrid, and a second one if there is. */
 export const connectedInverters = (s: SystemInfo | undefined) => Math.min(1 + (s?.pv2 ? 1 : 0), MAX_INVERTERS);
@@ -15,6 +23,7 @@ const places = (chosen: string[] | undefined, n: number): Place[] =>
 export function houseOptions(s: SystemInfo | undefined): HouseOptions {
   if (!s) return DEFAULT_HOUSE;
   return {
+    style: STYLES.includes(s.house_style) ? s.house_style : "estate",
     storeys: s.house_storeys === 2 ? 2 : 1,
     garage: Math.min(Math.max(Math.round(s.garage_spaces ?? 0), 0), 2) as 0 | 1 | 2,
     inverters: places(s.inverter_places, connectedInverters(s)),
