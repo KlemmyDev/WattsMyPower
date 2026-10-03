@@ -30,6 +30,7 @@ from app.features.readings.repository import ReadingsRepository
 from app.features.settings.geocode import Geocoder
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
+from app.features.weather.service import WeatherService
 
 
 @dataclass
@@ -42,6 +43,7 @@ class Services:
     amber: AmberService
     geocoder: Geocoder
     plans: PlansService
+    weather: WeatherService
     forecast: ForecastService
     insights: InsightsService
     meter: MeterService
@@ -70,6 +72,9 @@ def build_services(config: Config) -> Services:
         CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
     insights = InsightsService(db, readings, settings)
+    weather = WeatherService(config, db, settings)
+    forecast = ForecastService(config, readings, settings, weather)
+    weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
     return Services(
         config=config,
@@ -80,7 +85,8 @@ def build_services(config: Config) -> Services:
         amber=amber,
         geocoder=Geocoder(),
         plans=plans,
-        forecast=ForecastService(config, readings, settings),
+        weather=weather,
+        forecast=forecast,
         insights=insights,
         meter=meter,
         bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),

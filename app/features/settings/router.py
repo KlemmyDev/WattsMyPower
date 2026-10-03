@@ -11,6 +11,9 @@ from app.container import Services
 from app.dependencies import JsonBody, ServicesDep
 from app.features.settings.store import SYSTEM
 
+# Settings the weather is fetched for or the forecast's sunlight depends on: changing one refetches.
+WEATHER = {"latitude", "longitude", "weather_model", "panel_tilt", "panel_bearing", "pv_kw", "forecast_learning"}
+
 router = APIRouter(prefix="/api")
 
 
@@ -39,6 +42,9 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
         raise HTTPException(status_code=422, detail=str(e)) from e
     if SYSTEM.keys() & changes.keys():  # the battery's capacity or reserve may have changed: tell every open dashboard
         svc.live.publish()
+    if WEATHER & changes.keys():  # fetch for the new place or model, and retrain for new panels
+        svc.weather.invalidate()
+        svc.weather.wake()
     if moved:  # coordinates typed in by hand: look up a place name for them
         named = await asyncio.to_thread(name_location, svc)
         return named or saved

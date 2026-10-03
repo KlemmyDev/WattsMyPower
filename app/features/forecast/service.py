@@ -1,13 +1,17 @@
 """
 Solar and battery forecast for the next ~24 hours.
 
-Weather comes from Open-Meteo (free, no API key). Solar per hour is modelled as
-    pv_kwh = k * radiation_kwh_per_m2
-where k starts at the array size (Settings → System) * 0.8 and is then calibrated against what the inverter
-actually produced over the last week (so orientation, shading and clipping are
-absorbed without needing to be configured). Home use per hour comes from what
-the house used in that hour of day over the last two weeks. The battery is then
-stepped forward hour by hour from its current charge.
+Weather comes from Open-Meteo (free, no API key), through the stored weather (app.features.weather).
+Solar per hour is modelled one of two ways:
+
+  - plainly, as pv_kwh = k * radiation_kwh_per_m2, where k starts at the array size (Settings →
+    System) * 0.8 and is then calibrated against what the inverter actually produced over the
+    last week (so orientation, shading and clipping are roughly absorbed without being configured);
+  - or by the model learned from weather history (app.features.forecast.learning), once it has
+    shown in a back-test that it's the more accurate, and while Settings leaves learning on.
+
+Home use per hour comes from what the house used in that hour of day over the last two weeks. The
+battery is then stepped forward hour by hour from its current charge.
 
 Both are fitted per day and then combined robustly (a median for solar, a trimmed
 mean for home use), so one odd day, or a garbled reading that slipped through,
@@ -16,29 +20,30 @@ can't drag the forecast far from what the system really does.
 
 from __future__ import annotations
 
+import json
 import logging
 import statistics
+import threading
 import time
 from collections import defaultdict
 from itertools import pairwise
 from typing import Any
 
-from app.core.cache import TTLCache
 from app.core.config import Config
-from app.core.http import get_json
+from app.features.forecast import learning
+from app.features.forecast.learning import Backtest, Sample, SolarModel
 from app.features.forecast.repository import ForecastRepository
 from app.features.readings.repository import ReadingsRepository, Snapshot
 from app.features.settings.store import SettingsStore
+from app.features.weather.repository import local_date
+from app.features.weather.service import WeatherService
 
 log = logging.getLogger(__name__)
 
-CACHE_SECONDS = 1800
-RETRY_SECONDS = 300  # after a failed fetch, keep serving the last forecast this long before trying again
-URL = (
-    "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
-    "&hourly=shortwave_radiation,temperature_2m,weather_code,is_day,precipitation_probability"
-    "&past_days=7&forecast_days=3&timezone=auto&timeformat=unixtime"
-)
+MODEL_KEY = "forecast_model"  # kv: the learned model, its back-test and what it was trained on
+RETRAIN_SECONDS = 20 * 3600
+TRAIN_DAYS = 730  # weather history the model learns from, at most
+RETRAIN_ON_NEW = 7 * 24  # hours of weather history added since training (filled in) that retrain it early
 
 # Rough typical home use (kW) by hour, used until we have our own history for that hour.
 DEFAULT_LOAD = [0.4, 0.35, 0.35, 0.35, 0.35, 0.4, 0.8, 1.5, 1.2, 0.7, 0.6, 0.6,
@@ -47,33 +52,19 @@ DEFAULT_LOAD = [0.4, 0.35, 0.35, 0.35, 0.35, 0.4, 0.8, 1.5, 1.2, 0.7, 0.6, 0.6,
 RAIN_CODES = set(range(51, 68)) | set(range(80, 83)) | set(range(95, 100))
 
 Hour = dict[str, Any]
-Where = tuple[float, float]
-
-# Cache keys. The weather is one slot holding (where, data) for the last good fetch,
-# so a change of location refetches, and a failed fetch can fall back to it.
-_WEATHER = "weather"
 
 
-def hours_from(weather: dict[str, Any]) -> list[Hour]:
-    """
-    One entry per hour, keyed by the hour's *start*. Open-Meteo radiation is the
-    mean over the preceding hour, so the value stamped 07:00 belongs to 06:00-07:00.
-    """
-    h = weather["hourly"]
-    t = h["time"]
-    out = []
-    for i in range(1, len(t)):
-        out.append(
-            {
-                "ts": t[i - 1],
-                "rad": (h["shortwave_radiation"][i] or 0) / 1000,  # kWh/m² over the hour
-                "temp": h["temperature_2m"][i - 1],
-                "code": h["weather_code"][i - 1],
-                "is_day": h["is_day"][i - 1],
-                "precip": h["precipitation_probability"][i - 1],
-            }
-        )
-    return out
+def hour_of(row: dict[str, Any]) -> Hour:
+    """A stored weather hour (keyed by its start) in the forecast's terms."""
+    return {
+        "ts": row["ts"],
+        "rad": (row.get("ghi") or 0) / 1000,  # kWh/m² over the hour
+        "temp": row.get("temp"),
+        "code": row.get("code"),
+        "is_day": row.get("is_day"),
+        "precip": row.get("precip_prob"),
+        "weather": row,
+    }
 
 
 def trimmed_mean(values: list[float], cut: float = 0.2) -> float:
@@ -117,38 +108,169 @@ def describe_morning(hours: list[Hour], lt: time.struct_time) -> str:
             return time.strftime("%H:%M", time.localtime(ts))
 
         return f"Showers {fmt(wet[0]['ts'])} to {fmt(wet[-1]['ts'] + 3600)}"
-    codes = [h["code"] for h in morning]
+    codes = [h["code"] for h in morning if h["code"] is not None]
+    if not codes:
+        return "No forecast"
     avg = sum(codes) / len(codes)
     return "Sunny" if avg < 1.5 else "Partly cloudy" if avg < 2.5 else "Cloudy"
 
 
 class ForecastService:
-    def __init__(self, config: Config, readings: ReadingsRepository, settings: SettingsStore):
+    def __init__(self, config: Config, readings: ReadingsRepository, settings: SettingsStore, weather: WeatherService):
         self.config = config
         self.readings = readings
         self.settings = settings
+        self.weather = weather
         self.repo = ForecastRepository(readings.db)
-        self._cache = TTLCache()
+        self._model_lock = threading.Lock()
+        self._learned: dict[str, Any] | None = None  # MODEL_KEY's value, once read
 
     # ------------------------------------------------------------------ weather
-    def _fetch_weather(self) -> dict[str, Any] | None:
-        where: Where = (self.settings.get("latitude"), self.settings.get("longitude"))
-        _, hit = self._cache.get(_WEATHER, CACHE_SECONDS)
-        if hit and hit[0] == where:
-            return hit[1]
-        try:
-            data = get_json(URL.format(lat=where[0], lon=where[1]), timeout=10)
-        except Exception as e:  # keep serving the last good forecast
-            log.warning("Open-Meteo fetch failed: %s", e)
-            _, last = self._cache.get(_WEATHER, float("inf"))
-            if last is None:
-                return None
-            self._cache.set(_WEATHER, last, age=CACHE_SECONDS - RETRY_SECONDS)  # retry in 5 min
-            return last[1]
-        self._cache.set(_WEATHER, (where, data))
-        return data
+    def _hours(self, now: int) -> list[Hour]:
+        """The last week and the next few days of hourly weather, refreshing the forecast if it's stale."""
+        self.weather.ensure_fresh()
+        rows = self.weather.hours(now - 7 * 86400 - 3600, now + 3 * 86400)
+        return [hour_of(r) for r in rows]
+
+    # ------------------------------------------------------------------ the learned model
+    def _signature(self) -> list[Any]:
+        """What the model's sunlight figures depend on: retrain when any of it changes."""
+        p = self.weather.panels()
+        return [round(p.latitude, 2), round(p.longitude, 2), p.tilt, p.bearing, self.settings.get("pv_kw")]
+
+    def learned(self) -> dict[str, Any] | None:
+        """The stored model and its back-test, as saved by train()."""
+        with self._model_lock:
+            if self._learned is None:
+                with self.readings.db.reading() as conn:
+                    row = conn.execute("SELECT value FROM kv WHERE key = ?", (MODEL_KEY,)).fetchone()
+                self._learned = json.loads(row[0]) if row else {}
+            return self._learned or None
+
+    def _samples(self, start: int, end: int) -> list[Sample]:
+        """Stored weather hours in [start, end) as the model sees them, with what the panels made in each."""
+        panels = self.weather.panels()
+        rows = self.weather.hours(start, end)
+        if not rows:
+            return []
+        made: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # hour -> [W sum, rollups, full]
+        align = rows[0]["ts"] % 3600  # weather hours sit on the half hour in some time zones
+        for ts, pv, soc in self.weather.repo.solar_rollups(start, end):
+            h = ts - (ts - align) % 3600
+            m = made[h]
+            m[0] += pv
+            m[1] += 1
+            m[2] = max(m[2], 1.0 if soc is not None and soc >= 98 else 0.0)
+        out = []
+        for row in rows:
+            s = learning.sample(row, panels, local_date(row["ts"]))
+            hour = made.get(row["ts"])
+            if hour and hour[1] >= 10:  # at least 50 minutes of readings in the hour
+                s.actual = hour[0] / hour[1] / 1000  # mean kW over the hour = kWh
+                s.full = bool(hour[2])
+            out.append(s)
+        return out
+
+    def train(self, now: int | None = None) -> dict[str, Any]:
+        """Fit the model on stored weather and readings, back-test it, and save both. Blocking."""
+        now = int(now or time.time())
+        pv_kw = self.settings.get("pv_kw")
+        samples = [s for s in self._samples(now - TRAIN_DAYS * 86400, now) if s.ts + 3600 <= now]
+        model = learning.fit(samples, pv_kw)
+        test = learning.backtest(samples, pv_kw) if model else Backtest()
+        days = {s.day for s in samples if s.actual is not None}
+        saved = {
+            "trained_at": now,
+            "weather_hours": self.weather.repo.coverage()["hours"],
+            "signature": self._signature(),
+            "days": len(days),
+            "first_day": min(days) if days else None,
+            "model": model.to_json() if model else None,
+            "backtest": test.to_json(),
+            "better": test.better,
+        }
+        with self.readings.db.writing() as conn:
+            conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (MODEL_KEY, json.dumps(saved)))
+        with self._model_lock:
+            self._learned = saved
+        return saved
+
+    def _active_model(self) -> SolarModel | None:
+        """The learned model, if learning is on and it beat the plain forecast."""
+        if not self.settings.get("forecast_learning"):
+            return None
+        saved = self.learned()
+        if not saved or not saved.get("better") or not saved.get("model"):
+            return None
+        if saved.get("signature") != self._signature():
+            return None  # the panels or location changed: wait for it to be retrained
+        return SolarModel.from_json(saved["model"])
+
+    def tick(self, now: int | None = None) -> None:
+        """After each weather refresh: retrain if due, and keep the day-ahead forecast. Blocking."""
+        now = int(now or time.time())
+        saved = self.learned()
+        if (
+            not saved
+            or now - saved.get("trained_at", 0) >= RETRAIN_SECONDS
+            or saved.get("signature") != self._signature()
+        ):
+            self.train(now)
+        hours = self._hours(now)
+        ahead = [h for h in hours if h["ts"] > now]
+        if ahead:
+            k, _ = self._calibrate(hours, now)
+            model = self._active_model()
+            self.weather.repo.log_forecast(
+                [(h["ts"], self._pv_kw(h, k, model)) for h in ahead], now, "learned" if model else "simple"
+            )
+
+    def _pv_kw(self, hour: Hour, k: float, model: SolarModel | None) -> float:
+        """Forecast solar (mean kW, so kWh) for an hour."""
+        if model is None:
+            return k * hour["rad"]
+        panels = self.weather.panels()
+        return model.predict(learning.sample(hour["weather"], panels, local_date(hour["ts"])))
+
+    def accuracy(self, now: int | None = None, days: int = 30) -> dict[str, Any]:
+        """How close the day-ahead forecast came, day by day, over the last `days` full days."""
+        now = int(now or time.time())
+        lt = time.localtime(now)
+        end = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
+        start = end - days * 86400 - 3600
+        forecasts = self.weather.repo.forecasts(start, end)
+        samples = {s.ts: s for s in self._samples(start, end)}
+        by_day: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # forecast, actual, hours
+        for ts, kwh in forecasts.items():
+            s = samples.get(ts)
+            if s is None or s.actual is None:
+                continue
+            d = by_day[s.day]
+            d[0] += kwh
+            d[1] += s.actual
+            d[2] += 1
+        out: list[dict[str, Any]] = [
+            {"date": day, "forecast_kwh": round(f, 2), "actual_kwh": round(a, 2)}
+            for day, (f, a, n) in sorted(by_day.items())
+            if n >= 8 and a >= 0.5
+        ]
+        n = len(out)
+        return {
+            "days": out,
+            "mae_kwh": round(sum(abs(d["forecast_kwh"] - d["actual_kwh"]) for d in out) / n, 2) if n else None,
+            "bias_kwh": round(sum(d["forecast_kwh"] - d["actual_kwh"] for d in out) / n, 2) if n else None,
+            "actual_mean": round(sum(d["actual_kwh"] for d in out) / n, 2) if n else None,
+        }
 
     # ------------------------------------------------------------------ model
+    def _model_view(self, model: SolarModel | None) -> dict[str, Any]:
+        saved = self.learned() or {}
+        return {
+            "kind": "learned" if model else "simple",
+            "days": saved.get("days", 0),
+            "backtest": {k: v for k, v in (saved.get("backtest") or {}).items() if k != "per_day"},
+        }
+
     def _calibrate(self, hours: list[Hour], now: int) -> tuple[float, float]:
         """
         kWh of PV per kWh/m² of radiation, fitted on the past week's actual output.
@@ -211,12 +333,12 @@ class ForecastService:
     def build(self, latest: Snapshot | None, battery_kwh: float, reserve_pct: float) -> dict[str, Any] | None:
         if not self.config.forecast:
             return None
-        weather = self._fetch_weather()
-        if weather is None:
-            return None
         now = int(time.time())
-        hours = hours_from(weather)
+        hours = self._hours(now)
+        if not any(h["ts"] + 3600 > now for h in hours):
+            return None  # no forecast stored for the hours to come
         k, fitted = self._calibrate(hours, now)
+        model = self._active_model()
         prof = self._load_profile(now)
 
         # Steps: the rest of the current hour, then whole hours for ~36 h.
@@ -227,7 +349,9 @@ class ForecastService:
                 continue
             start = max(h["ts"], now)
             hr = time.localtime(h["ts"]).tm_hour
-            steps.append({**h, "start": start, "dur": end - start, "pv_kw": k * h["rad"], "load_kw": prof[hr]})
+            steps.append(
+                {**h, "start": start, "dur": end - start, "pv_kw": self._pv_kw(h, k, model), "load_kw": prof[hr]}
+            )
 
         cap = battery_kwh or 10.0
         soc_pct = (latest or {}).get("battery_soc")
@@ -253,6 +377,7 @@ class ForecastService:
         return {
             "generated_at": now,
             "calibration": {"kwh_per_kwh_m2": round(k, 2), "fitted_hours": fitted},
+            "model": self._model_view(model),
             "hours": [
                 {
                     "ts": s["ts"],

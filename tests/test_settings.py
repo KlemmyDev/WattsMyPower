@@ -20,8 +20,27 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "battery_kwh_override": config.battery_kwh,
         "battery_reserve_fallback": config.battery_reserve,
         "battery_max_kw": config.battery_max_kw,
+        "temp_unit_f": 0,
+        "panel_tilt": 0,
+        "panel_bearing": 0,
+        "forecast_learning": 1,
         "location_name": None,
+        "weather_model": "best_match",
     }
+
+
+def test_a_choice_takes_only_its_values_and_its_default_isnt_stored(db: Database, config: Config) -> None:
+    store = SettingsStore(db, config)
+    store.load()
+    store.save({"weather_model": "bom_access_global"})
+    fresh = SettingsStore(db, config)
+    fresh.load()
+    assert fresh.get_choice("weather_model") == "bom_access_global"
+    with pytest.raises(ValueError, match="weather_model must be one of"):
+        store.save({"weather_model": "made_up"})
+    store.save({"weather_model": "best_match"})
+    with db.reading() as conn:
+        assert conn.execute("SELECT 1 FROM kv WHERE key = 'weather_model'").fetchone() is None
 
 
 def test_saved_values_win_and_persist(db: Database, config: Config) -> None:

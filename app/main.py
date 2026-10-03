@@ -31,6 +31,7 @@ from app.features.readings.router import router as readings_router
 from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
 from app.features.tariffs.router import router as tariffs_router
+from app.features.weather.router import router as weather_router
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ ROUTERS = [
     amber_router,
     settings_router,
     forecast_router,
+    weather_router,
     insights_router,
     integrations_router,
     alerts_router,
@@ -80,11 +82,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.source.start()
             await services.alerts.start()  # follows the live status the source publishes
             await services.amber.start()  # does nothing until an Amber account is connected
+            await services.weather.start()  # the forecast, filling in past weather, and the forecast's learning
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
+            await services.weather.stop()
             await services.amber.stop()
             await services.alerts.stop()
             await services.source.stop()

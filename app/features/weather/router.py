@@ -1,0 +1,60 @@
+"""The weather: its settings' status, filling in past weather, a day's weather, and how the forecast is doing."""
+
+from __future__ import annotations
+
+import asyncio
+import datetime as dt
+
+from fastapi import APIRouter, HTTPException
+
+from app.dependencies import ServicesDep
+
+router = APIRouter(prefix="/api/weather")
+
+
+@router.get("")
+async def status(svc: ServicesDep):
+    """What's stored, filling in past weather, the learned model and its back-test, and day-ahead accuracy."""
+
+    def gather():
+        learned = svc.forecast.learned() or {}
+        return {
+            **svc.weather.status(),
+            "learning": {
+                "on": bool(svc.settings.get("forecast_learning")),
+                "in_use": svc.forecast._active_model() is not None,
+                "trained_at": learned.get("trained_at"),
+                "days": learned.get("days", 0),
+                "first_day": learned.get("first_day"),
+                "better": bool(learned.get("better")),
+                "backtest": learned.get("backtest"),
+            },
+            "accuracy": svc.forecast.accuracy(),
+        }
+
+    return await asyncio.to_thread(gather)
+
+
+@router.post("/backfill")
+async def backfill(svc: ServicesDep):
+    """Fill in past weather now, rather than at the next half-hourly run."""
+    svc.weather.backfill_state["running"] = True
+    svc.weather.wake()
+    return {"started": True}
+
+
+@router.post("/retrain")
+async def retrain(svc: ServicesDep):
+    """Retrain the learned model now (after filling in history), and say how it did."""
+    saved = await asyncio.to_thread(svc.forecast.train)
+    return {k: v for k, v in saved.items() if k != "model"}
+
+
+@router.get("/day")
+async def day(svc: ServicesDep, date: str):
+    """A day's weather hour by hour, summed up, with its day-ahead solar forecast."""
+    try:
+        when = dt.date.fromisoformat(date)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD") from e
+    return await asyncio.to_thread(svc.weather.day, when)

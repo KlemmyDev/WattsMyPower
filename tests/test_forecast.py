@@ -13,6 +13,7 @@ from app.core.database import Database
 from app.features.forecast.service import ForecastService, trimmed_mean
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
+from app.features.weather.service import WeatherService
 
 DAYS = 14
 NOW = int(time.mktime(time.strptime("2026-10-02 20:00", "%Y-%m-%d %H:%M")))
@@ -23,7 +24,7 @@ def service(db: Database, config: Config, readings: ReadingsRepository) -> Forec
     config = replace(config, pv_kw=13.2)
     settings = SettingsStore(db, config)
     settings.load()
-    return ForecastService(config, readings, settings)
+    return ForecastService(config, readings, settings, WeatherService(config, db, settings))
 
 
 def sun(ts: int) -> float:

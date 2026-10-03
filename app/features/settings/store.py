@@ -21,8 +21,16 @@ from app.core.database import Database
 
 # Text settings: key -> max length. Stored in the kv table (the settings table holds REALs).
 TEXT: dict[str, int] = {"location_name": 120}
+# Text settings with a fixed set of values: key -> (allowed values, default).
+CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
+    # Open-Meteo's weather model for the forecast: its own pick for the location, or one model.
+    "weather_model": (
+        ("best_match", "bom_access_global", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
+        "best_match",
+    ),
+}
 # Settings that only take whole numbers.
-WHOLE = {"bill_months", "bill_day", "bill_anchor"}
+WHOLE = {"bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing"}
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
 SYSTEM: dict[str, tuple[str, str]] = {
@@ -55,6 +63,13 @@ class SettingsStore:
             "battery_reserve_fallback": (0, 100, config.battery_reserve),
             # The battery's max charge/discharge rate in kW, for the forecast.
             "battery_max_kw": (0.1, 50, config.battery_max_kw),
+            # Weather (Settings → Integrations → Weather). Temperatures in °F (1) rather than °C (0).
+            "temp_unit_f": (0, 1, 0),
+            # How the panels sit: tilt from flat (0 = flat, or not known), and the compass bearing they face.
+            "panel_tilt": (0, 90, 0),
+            "panel_bearing": (0, 359, 0),
+            # Let the forecast use what it has learned from weather history when that's more accurate (1).
+            "forecast_learning": (0, 1, 1),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}
@@ -63,8 +78,9 @@ class SettingsStore:
     def load(self) -> None:
         with self.db.reading() as conn:
             rows = conn.execute("SELECT key, value FROM settings").fetchall()
-            marks = ",".join("?" * len(TEXT))
-            text = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({marks})", list(TEXT)).fetchall()
+            keys = [*TEXT, *CHOICES]
+            marks = ",".join("?" * len(keys))
+            text = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({marks})", keys).fetchall()
         with self._lock:
             self._values = {k: v for k, v in rows if k in self.editable}
             self._text = dict(text)
@@ -98,10 +114,16 @@ class SettingsStore:
         with self._lock:
             return self._text.get(key)
 
+    def get_choice(self, key: str) -> str:
+        allowed, default = CHOICES[key]
+        value = self.get_text(key)
+        return value if value in allowed else default
+
     def all_values(self) -> dict[str, Any]:
         values = {k: self.get(k) for k in self.editable}
         whole = {k: int(v) for k, v in values.items() if k in WHOLE}
-        return {**values, **whole, **{k: self.get_text(k) for k in TEXT}}
+        choices = {k: self.get_choice(k) for k in CHOICES}
+        return {**values, **whole, **{k: self.get_text(k) for k in TEXT}, **choices}
 
     def save(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Validate and store. Raises ValueError naming the first bad field."""
@@ -110,6 +132,12 @@ class SettingsStore:
         for key, raw in changes.items():
             if key in TEXT:
                 text[key] = str(raw or "").strip()[: TEXT[key]] or None
+                continue
+            if key in CHOICES:
+                allowed, default = CHOICES[key]
+                if raw not in allowed:
+                    raise ValueError(f"{key} must be one of {', '.join(allowed)}")
+                text[key] = None if raw == default else raw
                 continue
             if key not in self.editable:
                 raise ValueError(f"Unknown setting: {key}")

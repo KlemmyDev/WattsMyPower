@@ -3,7 +3,8 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { hourLabel } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
-import { hourIcon } from "~/features/common/weather/utils";
+import { useFahrenheit } from "~/features/common/weather/hooks";
+import { degrees, hourIcon } from "~/features/common/weather/utils";
 
 /** The next 24 hours as columns: weather, temperature, a solar bar, its kWh, and battery level at the end of the hour. */
 export function HourStrip({ forecast }: { forecast: Forecast }) {
@@ -24,13 +25,14 @@ export function HourStrip({ forecast }: { forecast: Forecast }) {
 function HourColumn({ hour, first, full }: { hour: ForecastHour; first: boolean; full: number }) {
   const hr = new Date(hour.ts * 1000).getHours();
   const icon = hourIcon(hour);
+  const fahrenheit = useFahrenheit();
   return (
     <div className={cn("flex flex-col items-center gap-2 rounded-xl py-3", hr === 0 && !first && "bg-canvas")}>
       <div className="text-[11px] font-semibold text-ink-muted tabular-nums">{first ? "Now" : hourLabel(hr)}</div>
       <div className={icon === "sun" ? "text-solar" : "text-ink-muted"}>
         <Icon name={icon} size={20} />
       </div>
-      <div className="text-xs tabular-nums">{hour.temp != null ? `${Math.round(hour.temp)}°` : "–"}</div>
+      <div className="text-xs tabular-nums">{hour.temp != null ? degrees(hour.temp, fahrenheit) : "–"}</div>
       <div className="flex h-[120px] w-3.5 items-end rounded bg-canvas">
         <div className="w-full rounded bg-solar" style={{ height: `${Math.min(100, (hour.pv_kwh / full) * 100)}%` }} />
       </div>
