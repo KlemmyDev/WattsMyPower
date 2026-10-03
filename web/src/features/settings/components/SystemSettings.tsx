@@ -8,7 +8,7 @@ import { inverterName } from "~/features/common/live/utils";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { SYSTEM_SETTINGS, type Settings, type SystemSettingKey } from "~/features/common/settings/types";
 import { saveSettingsError } from "~/features/common/settings/utils";
-import { Button } from "~/features/common/ui/components/Button";
+import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
@@ -59,6 +59,14 @@ export function SystemSettings() {
         <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
           These details come from your inverters over the local network. Inverters are connected in Settings →
           Integrations.
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-6 py-4">
+          <span className="min-w-[200px] flex-1 text-[13px] leading-5 text-ink-muted">
+            The set-up guide walks through connecting your inverter, your electricity plan, location and billing.
+          </span>
+          <ButtonLink to="/welcome" variant="outline" size="sm">
+            Open the set-up guide
+          </ButtonLink>
         </div>
       </SettingsCard>
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}

@@ -21,6 +21,7 @@ from app.features.live.ingest import CollectorIngest
 from app.features.live.service import LiveService
 from app.features.live.simulator import Simulator
 from app.features.meter.service import MeterService
+from app.features.onboarding.service import OnboardingService
 from app.features.plans.service import PlansService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.geocode import Geocoder
@@ -43,6 +44,7 @@ class Services:
     bills: BillsService
     auth: AuthService
     integrations: IntegrationsService
+    onboarding: OnboardingService
     live: LiveService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
@@ -60,6 +62,7 @@ def build_services(config: Config) -> Services:
     source: CollectorIngest | Simulator = (
         CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
+    integrations = IntegrationsService(config, collector, live)
     return Services(
         config=config,
         db=db,
@@ -73,7 +76,8 @@ def build_services(config: Config) -> Services:
         meter=meter,
         bills=BillsService(db, readings, settings, tariffs, meter),
         auth=AuthService(db, enabled=config.auth),
-        integrations=IntegrationsService(config, collector, live),
+        integrations=integrations,
+        onboarding=OnboardingService(config, db, integrations),
         live=live,
         source=source,
     )

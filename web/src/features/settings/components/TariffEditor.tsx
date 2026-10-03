@@ -53,13 +53,13 @@ function MoneyField({
   );
 }
 
-function ImportNote({ plan }: { plan: PlanTariff }) {
+function ImportNote({ plan, saveLabel }: { plan: PlanTariff; saveLabel: string }) {
   return (
     <div role="status" className="rounded-xl bg-brand-subtle px-4 py-3.5 text-[13px] leading-5 text-ink-muted">
       <b className="font-semibold text-ink">
         Loaded {plan.plan.brand} · {plan.plan.name}.
       </b>{" "}
-      Check the rates below, then select Save rates.
+      Check the rates below, then select {saveLabel}.
       {plan.notes.length > 0 && (
         <ul className="mt-2 mb-0 list-disc pl-[18px]">
           {plan.notes.map((n, i) => (
@@ -114,9 +114,115 @@ function ImportRates({ draft, edit }: { draft: Tariff; edit: (e: TariffEdit) => 
 }
 
 /**
- * The "Electricity rates" card. Edits a draft of the server's tariff (from tariffQuery, refetched on
- * mount, rather than the live stream's copy) and saves it with Save rates.
+ * The tariff being edited: the draft if there is one, else the server's (from tariffQuery, refetched
+ * on mount, rather than the live stream's copy).
  */
+export function useRatesDraft(state: EditorState) {
+  const query = useQuery(tariffQuery);
+  // Always edit what the server has, not whatever the page last heard over the live stream.
+  const server = query.isFetchedAfterMount && !query.isError ? query.data : undefined;
+  return { query, draft: state.draft ?? server, dirty: state.draft !== null };
+}
+
+/** Save the draft, saying how it went in the editor's status line. */
+export function useSaveRates(dispatch: Dispatch<EditorAction>) {
+  const save = useSaveTariff();
+  return {
+    isPending: save.isPending,
+    save: (draft: Tariff, onSaved?: () => void) => {
+      dispatch({ type: "saving" });
+      save.mutate(draft, {
+        onSuccess: () => {
+          dispatch({ type: "saved", message: `Saved at ${hhmm(nowS())}. Savings on every page now use these rates.` });
+          onSaved?.();
+        },
+        onError: (err) => dispatch({ type: "failed", message: failure(err, "Check the rates and try again.") }),
+      });
+    },
+  };
+}
+
+/**
+ * The rates themselves: where they came from, the rate type, import rates, feed-in and supply.
+ * Edits go to the draft; `saveLabel` is the button that saves them, for the note after loading a plan.
+ */
+export function RatesFields({
+  draft,
+  state,
+  dispatch,
+  saveLabel = "Save rates",
+}: {
+  draft: Tariff;
+  state: EditorState;
+  dispatch: Dispatch<EditorAction>;
+  saveLabel?: string;
+}) {
+  const tou = draft.type === "tou";
+  const edit = (e: TariffEdit) => dispatch({ type: "edit", base: draft, edit: e });
+  return (
+    <>
+      {state.imported ? (
+        <ImportNote plan={state.imported} saveLabel={saveLabel} />
+      ) : (
+        draft.source && <SourceLine source={draft.source} />
+      )}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[13px] font-semibold">Rate type</span>
+        <Segmented
+          label="Rate type"
+          className="self-start"
+          options={RATE_TYPES}
+          value={draft.type}
+          onChange={(v) => v !== draft.type && edit({ type: "set-rate-type", value: v })}
+        />
+        <HelpText>
+          {tou
+            ? "Different rates at different times of day, for example peak, shoulder, and off-peak."
+            : "One price for grid electricity at any time of day."}
+        </HelpText>
+      </div>
+      {tou ? (
+        <ImportRates draft={draft} edit={edit} />
+      ) : (
+        <div className={fieldGrid}>
+          <MoneyField
+            label="Grid import rate"
+            unit="per kWh"
+            help="What you pay for electricity from the grid"
+            value={draft.flat_rate}
+            onChange={(value) => edit({ type: "set-field", field: "flat_rate", value })}
+          />
+        </div>
+      )}
+      <div className={fieldGrid}>
+        <MoneyField
+          label="Feed-in tariff"
+          unit="per kWh"
+          help="What you earn for solar sent to the grid"
+          value={draft.feed_in_rate}
+          onChange={(value) => edit({ type: "set-field", field: "feed_in_rate", value })}
+        />
+        <MoneyField
+          label="Daily supply charge"
+          unit="per day"
+          help="Fixed daily charge from your retailer"
+          value={draft.supply_charge}
+          onChange={(value) => edit({ type: "set-field", field: "supply_charge", value })}
+        />
+      </div>
+    </>
+  );
+}
+
+export function RatesLoading({ failed }: { failed: boolean }) {
+  return (
+    <div className="text-sm text-ink-muted">
+      {failed ? "The rates could not be loaded. Reload the page to try again." : "Loading rates…"}
+    </div>
+  );
+}
+
+/** The "Electricity rates" card: edits a draft of the server's tariff and saves it with Save rates. */
 export function TariffEditor({
   ref,
   state,
@@ -126,31 +232,13 @@ export function TariffEditor({
   state: EditorState;
   dispatch: Dispatch<EditorAction>;
 }) {
-  const query = useQuery(tariffQuery);
-  const save = useSaveTariff();
-  // Always edit what the server has, not whatever the page last heard over the live stream.
-  const server = query.isFetchedAfterMount && !query.isError ? query.data : undefined;
-  const draft = state.draft ?? server;
-  const dirty = state.draft !== null;
+  const { query, draft, dirty } = useRatesDraft(state);
+  const save = useSaveRates(dispatch);
 
   let body: ReactNode;
   if (!draft) {
-    body = (
-      <div className="text-sm text-ink-muted">
-        {query.isError ? "The rates could not be loaded. Reload the page to try again." : "Loading rates…"}
-      </div>
-    );
+    body = <RatesLoading failed={query.isError} />;
   } else {
-    const tou = draft.type === "tou";
-    const edit = (e: TariffEdit) => dispatch({ type: "edit", base: draft, edit: e });
-    const saveRates = () => {
-      dispatch({ type: "saving" });
-      save.mutate(draft, {
-        onSuccess: () =>
-          dispatch({ type: "saved", message: `Saved at ${hhmm(nowS())}. Savings on every page now use these rates.` }),
-        onError: (err) => dispatch({ type: "failed", message: failure(err, "Check the rates and try again.") }),
-      });
-    };
     const discard = () => {
       dispatch({ type: "discard" });
       void query.refetch();
@@ -163,51 +251,7 @@ export function TariffEditor({
           title="Electricity rates"
           sub="Used to calculate savings, grid cost, and feed-in credit. Find these on your electricity bill."
         />
-        {state.imported ? <ImportNote plan={state.imported} /> : draft.source && <SourceLine source={draft.source} />}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-semibold">Rate type</span>
-          <Segmented
-            label="Rate type"
-            className="self-start"
-            options={RATE_TYPES}
-            value={draft.type}
-            onChange={(v) => v !== draft.type && edit({ type: "set-rate-type", value: v })}
-          />
-          <HelpText>
-            {tou
-              ? "Different rates at different times of day, for example peak, shoulder, and off-peak."
-              : "One price for grid electricity at any time of day."}
-          </HelpText>
-        </div>
-        {tou ? (
-          <ImportRates draft={draft} edit={edit} />
-        ) : (
-          <div className={fieldGrid}>
-            <MoneyField
-              label="Grid import rate"
-              unit="per kWh"
-              help="What you pay for electricity from the grid"
-              value={draft.flat_rate}
-              onChange={(value) => edit({ type: "set-field", field: "flat_rate", value })}
-            />
-          </div>
-        )}
-        <div className={fieldGrid}>
-          <MoneyField
-            label="Feed-in tariff"
-            unit="per kWh"
-            help="What you earn for solar sent to the grid"
-            value={draft.feed_in_rate}
-            onChange={(value) => edit({ type: "set-field", field: "feed_in_rate", value })}
-          />
-          <MoneyField
-            label="Daily supply charge"
-            unit="per day"
-            help="Fixed daily charge from your retailer"
-            value={draft.supply_charge}
-            onChange={(value) => edit({ type: "set-field", field: "supply_charge", value })}
-          />
-        </div>
+        <RatesFields draft={draft} state={state} dispatch={dispatch} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4">
           <span className={cn("min-h-5 text-[13px]", state.status?.bad ? "text-bad" : "text-ink-faint")}>
             {state.status?.text}
@@ -216,7 +260,7 @@ export function TariffEditor({
             <Button variant="outline" disabled={!dirty} onClick={discard}>
               Discard changes
             </Button>
-            <Button size="sm" disabled={!dirty} onClick={saveRates}>
+            <Button size="sm" disabled={!dirty} onClick={() => save.save(draft)}>
               Save rates
             </Button>
           </div>

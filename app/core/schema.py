@@ -5,7 +5,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     samples_5m   5-minute rollups of samples, kept up to date on every insert; used for
                  long ranges so a year's chart never touches raw rows
     settings     numeric settings saved from the dashboard (location, system cost)
-    kv           text values: the tariff (JSON) and the location's place name
+    kv           text values: the tariff (JSON), the location's place name, and the set-up guide's progress
     users        the household account
     sessions     signed-in browsers (only a hash of each token is stored)
     meter_imports    smart-meter (NEM12) files imported from Settings → Billing

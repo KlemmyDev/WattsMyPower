@@ -101,6 +101,20 @@ function PlanResults({
 
 /** "Find your plan": search Energy Made Easy for a retailer's plans and load one into the rates editor. */
 export function PlanFinder({ onImport }: { onImport: (plan: PlanTariff) => void }) {
+  return (
+    <SettingsCard padded aria-labelledby="h-find">
+      <SettingsTitle
+        id="h-find"
+        title="Find your plan"
+        sub="Search the current plans retailers publish to Energy Made Easy, then load one into the rates below. Prices include GST."
+      />
+      <PlanSearch onImport={onImport} />
+    </SettingsCard>
+  );
+}
+
+/** The plan search form and its results, without a card (the set-up guide shows it too). */
+export function PlanSearch({ onImport }: { onImport: (plan: PlanTariff) => void }) {
   const system = useSystem();
   const toast = useToast();
   const brands = useQuery(brandsQuery);
@@ -165,12 +179,7 @@ export function PlanFinder({ onImport }: { onImport: (plan: PlanTariff) => void 
     );
 
   return (
-    <SettingsCard padded aria-labelledby="h-find">
-      <SettingsTitle
-        id="h-find"
-        title="Find your plan"
-        sub="Search the current plans retailers publish to Energy Made Easy, then load one into the rates below. Prices include GST."
-      />
+    <>
       <form
         className="grid grid-cols-[120px_minmax(180px,1.2fr)_minmax(160px,1fr)_auto] items-end gap-3 max-md:grid-cols-2"
         onSubmit={submit}
@@ -212,6 +221,6 @@ export function PlanFinder({ onImport }: { onImport: (plan: PlanTariff) => void 
         </Button>
       </form>
       <div>{results}</div>
-    </SettingsCard>
+    </>
   );
 }

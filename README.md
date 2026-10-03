@@ -51,11 +51,13 @@ Two services, run together by Docker Compose:
 
    It saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
 
-3. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. Then finish setting up:
-   - **Settings → Integrations → Connect an inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
-   - **Settings → Tariffs:** your electricity rates. Use **Find your plan** to load them from Energy Made Easy, or enter them by hand.
-   - **Settings → Integrations → Change location:** your suburb, for the weather forecast.
-   - **Savings:** what your system cost, for the payback estimate.
+3. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
+   - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
+   - **Your electricity plan:** load your rates from Energy Made Easy with **Find your plan**, or enter them by hand.
+   - **Where you live:** your suburb, for the weather forecast.
+   - **Your billing period:** how often you're billed and when a period starts.
+
+   Everything in it is also in Settings (Integrations, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
 
 If you're running Docker inside an unprivileged Proxmox LXC container, first turn on `nesting=1` in the container's **Options → Features**.
 
@@ -232,6 +234,7 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/auth/session` | whether this browser is signed in, and whether an account still needs creating |
 | `POST /api/auth/setup`, `POST /api/auth/login`, `POST /api/auth/logout` | create the account (first run only), sign in, sign out |
 | `PUT /api/auth/password` | change the password (signs out other browsers) |
+| `GET /api/onboarding`, `PATCH /api/onboarding` | the set-up guide's progress: steps done or skipped, finished, or put off |
 | `GET /api/live` | latest snapshot, system details, and whether readings are arriving |
 | `GET /api/stream` | server-sent events, one message per poll |
 | `GET /api/history?start=&end=&points=&fields=` | time-bucketed columnar series (unix seconds) |
@@ -313,6 +316,7 @@ app/
     savings/            quarterly bill, payback, plan comparison
     plans/              Energy Made Easy / CDR plan search and plan-to-tariff conversion (retailers.json)
     auth/               sign-in: the household account, sessions, and the /api guard
+    onboarding/         the first-run set-up guide's progress, and spotting installs already set up
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
