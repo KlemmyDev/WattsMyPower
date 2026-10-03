@@ -86,6 +86,6 @@ def build_services(config: Config) -> Services:
         integrations=integrations,
         onboarding=OnboardingService(config, db, integrations),
         live=live,
-        alerts=AlertsService(db, live, settings, readings, tariffs, insights),
+        alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo),
         source=source,
     )
