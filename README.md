@@ -10,6 +10,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 - **Forecast:** the next 24 hours of solar and battery level, from the local weather (Open-Meteo), calibrated to your own system.
 - **Insights:** self-sufficiency, battery health and cycles, when you use grid power, and whether your panels are performing as they should.
 - **Savings:** this quarter's bill, system payback, and a comparison of every current plan from a retailer against your real usage.
+- **Imported history:** bring in the days before it was set up (or fill gaps) from iSolarCloud's 5-minute power-curve exports, under **Settings → Import**, which also explains what to export.
 - **A second, older Sungrow inverter** (for example an SG5K-D on an AC-coupled system) can be added, so both systems count.
 - **Alerts** to your phone (ntfy or Pushover) or any webhook: the inverter not answering, the battery low or not charging in the sun, solar underperforming, and an optional daily summary.
 - Works on desktop and phones.

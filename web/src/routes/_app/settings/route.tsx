@@ -8,10 +8,11 @@ const TABS = [
   { to: "/settings/billing", label: "Billing" },
   { to: "/settings/integrations", label: "Integrations" },
   { to: "/settings/alerts", label: "Alerts" },
+  { to: "/settings/import", label: "Import" },
   { to: "/settings/account", label: "Account" },
 ] as const;
 
-/** Settings: a tab row over the System, Tariffs, Billing, Integrations, Alerts and Account pages. */
+/** Settings: a tab row over the System, Tariffs, Billing, Integrations, Alerts, Import and Account pages. */
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsLayout,
 });

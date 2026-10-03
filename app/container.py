@@ -16,6 +16,7 @@ from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.bills.service import BillsService
 from app.features.forecast.service import ForecastService
+from app.features.imports.service import ImportService
 from app.features.insights.service import InsightsService
 from app.features.integrations.service import IntegrationsService
 from app.features.live.client import CollectorClient
@@ -45,6 +46,7 @@ class Services:
     insights: InsightsService
     meter: MeterService
     bills: BillsService
+    imports: ImportService
     auth: AuthService
     integrations: IntegrationsService
     onboarding: OnboardingService
@@ -82,6 +84,7 @@ def build_services(config: Config) -> Services:
         insights=insights,
         meter=meter,
         bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),
+        imports=ImportService(db),
         auth=AuthService(db, enabled=config.auth),
         integrations=integrations,
         onboarding=OnboardingService(config, db, integrations),

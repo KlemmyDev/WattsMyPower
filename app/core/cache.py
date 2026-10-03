@@ -27,6 +27,11 @@ class TTLCache:
         with self._lock:
             self._entries[key] = (time.time() - age, value)
 
+    def forget(self, key: Any) -> None:
+        """Drop `key`, so the next lookup loads it afresh."""
+        with self._lock:
+            self._entries.pop(key, None)
+
     def get_or_load(self, key: Any, ttl: float, load: Callable[[], Any]) -> Any:
         """The cached value, or `load()`'s result (cached). Errors from load aren't cached."""
         found, value = self.get(key, ttl)

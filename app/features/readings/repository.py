@@ -40,8 +40,8 @@ class ReadingsRepository:
 
     # ------------------------------------------------------------------ writing (the ingest loop's connection)
     def heal_rollups(self, conn: sqlite3.Connection) -> None:
-        """After a crash or restart, rebuild rollups from the last rollup bucket onward."""
-        last = conn.execute("SELECT MAX(ts) FROM samples_5m").fetchone()[0] or 0
+        """After a crash or restart, rebuild rollups from the last recorded (not imported) bucket onward."""
+        last = conn.execute("SELECT MAX(ts) FROM samples_5m WHERE import_id IS NULL").fetchone()[0] or 0
         conn.execute(ROLLUP_SQL, (last, 2**62))
         conn.commit()
 

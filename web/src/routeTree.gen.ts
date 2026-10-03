@@ -23,6 +23,7 @@ import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/ind
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsAlertsRouteImport } from './routes/_app/settings/alerts'
 import { Route as AppSettingsBillingRouteImport } from './routes/_app/settings/billing'
+import { Route as AppSettingsImportRouteImport } from './routes/_app/settings/import'
 import { Route as AppSettingsIntegrationsRouteImport } from './routes/_app/settings/integrations'
 import { Route as AppSettingsSystemRouteImport } from './routes/_app/settings/system'
 import { Route as AppSettingsTariffsRouteImport } from './routes/_app/settings/tariffs'
@@ -98,6 +99,11 @@ const AppSettingsBillingRoute = AppSettingsBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
+const AppSettingsImportRoute = AppSettingsImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
 const AppSettingsIntegrationsRoute = AppSettingsIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
+  '/settings/import': typeof AppSettingsImportRoute
   '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
   '/settings/tariffs': typeof AppSettingsTariffsRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
+  '/settings/import': typeof AppSettingsImportRoute
   '/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/settings/system': typeof AppSettingsSystemRoute
   '/settings/tariffs': typeof AppSettingsTariffsRoute
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/alerts': typeof AppSettingsAlertsRoute
   '/_app/settings/billing': typeof AppSettingsBillingRoute
+  '/_app/settings/import': typeof AppSettingsImportRoute
   '/_app/settings/integrations': typeof AppSettingsIntegrationsRoute
   '/_app/settings/system': typeof AppSettingsSystemRoute
   '/_app/settings/tariffs': typeof AppSettingsTariffsRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/alerts'
     | '/settings/billing'
+    | '/settings/import'
     | '/settings/integrations'
     | '/settings/system'
     | '/settings/tariffs'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/alerts'
     | '/settings/billing'
+    | '/settings/import'
     | '/settings/integrations'
     | '/settings/system'
     | '/settings/tariffs'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/_app/settings/account'
     | '/_app/settings/alerts'
     | '/_app/settings/billing'
+    | '/_app/settings/import'
     | '/_app/settings/integrations'
     | '/_app/settings/system'
     | '/_app/settings/tariffs'
@@ -354,6 +366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsBillingRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/import': {
+      id: '/_app/settings/import'
+      path: '/import'
+      fullPath: '/settings/import'
+      preLoaderRoute: typeof AppSettingsImportRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/integrations': {
       id: '/_app/settings/integrations'
       path: '/integrations'
@@ -396,6 +415,7 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
   AppSettingsAlertsRoute: typeof AppSettingsAlertsRoute
   AppSettingsBillingRoute: typeof AppSettingsBillingRoute
+  AppSettingsImportRoute: typeof AppSettingsImportRoute
   AppSettingsIntegrationsRoute: typeof AppSettingsIntegrationsRoute
   AppSettingsSystemRoute: typeof AppSettingsSystemRoute
   AppSettingsTariffsRoute: typeof AppSettingsTariffsRoute
@@ -406,6 +426,7 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
   AppSettingsAlertsRoute: AppSettingsAlertsRoute,
   AppSettingsBillingRoute: AppSettingsBillingRoute,
+  AppSettingsImportRoute: AppSettingsImportRoute,
   AppSettingsIntegrationsRoute: AppSettingsIntegrationsRoute,
   AppSettingsSystemRoute: AppSettingsSystemRoute,
   AppSettingsTariffsRoute: AppSettingsTariffsRoute,
