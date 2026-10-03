@@ -65,4 +65,6 @@ export type LiveStatus = {
   poll_interval: number;
   last_success: number | null;
   error: string | null;
+  /** While the inverter's dongle keeps serving the same registers: when the reading it repeats was taken. The repeats aren't recorded, so `snapshot` stays at that reading. */
+  frozen_since?: number | null;
 };
