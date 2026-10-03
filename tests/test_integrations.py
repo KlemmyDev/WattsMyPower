@@ -141,6 +141,18 @@ def test_the_network_to_scan(service: IntegrationsService) -> None:
     assert service.suggest_network([{"host": "192.168.0.244"}], "10.0.5.23") == "192.168.0.0/24"
 
 
+def test_the_network_to_scan_behind_docker_desktop(
+    service: IntegrationsService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Docker Desktop hands every connection on from the container's own network, so the browser looks like
+    # Docker's gateway: the address the dashboard was opened at is used instead, else the default.
+    monkeypatch.setattr("app.features.integrations.service._container_networks", lambda: frozenset({"172.18.0.0/24"}))
+    assert service.suggest_network([], "172.18.0.1", "192.168.0.50") == "192.168.0.0/24"
+    assert service.suggest_network([], "172.18.0.1", "localhost") == "192.168.1.0/24"
+    assert service.suggest_network([], "10.0.5.23", "wattsmypower.local") == "10.0.5.0/24"
+    assert service.suggest_network([{"host": "192.168.0.244"}], None, "10.0.5.9") == "192.168.0.0/24"
+
+
 def test_no_collector_to_reach(service: IntegrationsService, collector: FakeCollector) -> None:
     def down() -> dict[str, Any]:
         raise CollectorError(502, "The collector couldn't be reached (URLError).")

@@ -18,7 +18,10 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 ## What you need
 
 - A Sungrow SH-RS or SH-RT hybrid inverter with a **WiNet-S or WiNet-S2** dongle on your home network. The dashboard finds it by scanning your network; if it can't, you'll need its **IP address** (from your router's list of connected devices, or the iSolarCloud app).
-- A **Linux machine on the same network that stays on**: a Proxmox LXC container or VM, a Raspberry Pi, or any Debian or Ubuntu box. The install script sets up Docker on it if needed.
+- A **computer on the same network that stays on**, to run it in Docker:
+  - **Linux** (the best fit): a Proxmox LXC container or VM, a Raspberry Pi, or any Debian or Ubuntu box. The install script sets up Docker on it if needed.
+  - **A Mac**, with Docker Desktop.
+  - **Windows 10 or 11**, with Docker Desktop and WSL (Windows' built-in Linux).
 - Optional: a second, older Sungrow inverter with a Wi-Fi dongle (found by the same scan).
 
 ## How it fits together
@@ -30,7 +33,11 @@ Two services, run together by Docker Compose:
 
 ## Install
 
-1. **Log in to the Linux machine** (for example `ssh root@<machine IP>`, or the Proxmox console).
+The same install script runs everywhere; only getting ready for it differs. Follow the steps for your computer, then [open the dashboard](#open-the-dashboard).
+
+### Linux
+
+1. **Log in to the Linux machine** (for example `ssh root@<machine IP>`, or the Proxmox console). If it's an unprivileged Proxmox LXC container, first turn on `nesting=1` in the container's **Options → Features**, so Docker can run in it.
 
 2. **Run the installer:**
 
@@ -40,38 +47,91 @@ Two services, run together by Docker Compose:
 
    (On a minimal system without curl, run `apt install -y curl` first. Prefix commands with `sudo` if you're not logged in as root.)
 
-   It downloads WattsMyPower into a `wattsmypower` folder where you run it (installing git first if it's missing, asking first). To use another folder, put `WMP_DIR=/opt/wattsmypower` before `bash`. If you'd rather read the script before running it, download it, look it over, then run it:
+   It installs Docker if it's missing (asking first), and sets Docker to start at boot so the dashboard comes back by itself after a restart. Then see [what the installer does](#what-the-installer-does).
+
+### Mac
+
+1. **Install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)** and open it once. In its **Settings → General**, keep **Start Docker Desktop when you sign in to your computer** turned on: WattsMyPower only records while Docker Desktop is running.
+
+2. **Open Terminal** and run the installer from your home folder:
 
    ```bash
-   curl -fsSLO https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh
-   bash install.sh
+   cd ~
    ```
 
-   It installs Docker if it's missing (asking first), and sets Docker to start at boot so the dashboard comes back by itself after a restart. Then it asks:
-   - the total size of your solar panels in kW
-   - your time zone, and the port for the dashboard (8080 unless you change it)
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
+   ```
 
-   It saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
+   If git isn't installed yet, macOS offers to install its command line tools: accept, then run the installer again. Docker Desktop is started if it isn't running. Keep the folder inside your home folder: Docker Desktop only shares that with Docker unless you add others in **Settings → Resources → File sharing**. Then see [what the installer does](#what-the-installer-does).
 
-3. **Open that address** in a browser on any device on your network. The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
-   - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
-   - **Your electricity plan:** load your rates from Energy Made Easy with **Find your plan**, or enter them by hand.
-   - **Where you live:** your suburb, for the weather forecast.
-   - **Your billing period:** how often you're billed and when a period starts.
+3. **Keep the Mac awake.** In **System Settings → Energy** (on a laptop, **Battery → Options**), turn on preventing automatic sleeping when the display is off. After a restart, Docker Desktop starts once you sign in, and WattsMyPower with it.
 
-   Everything in it is also in Settings (Integrations, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
+### Windows
 
-If you're running Docker inside an unprivileged Proxmox LXC container, first turn on `nesting=1` in the container's **Options → Features**.
+WattsMyPower runs on Windows inside WSL (Windows Subsystem for Linux), with Docker Desktop. Its files live on WSL's Linux disk rather than on `C:`, because its databases aren't reliable on a Windows drive shared into Docker.
+
+1. **Install WSL and Ubuntu.** Open **PowerShell as administrator** (right-click the Start button → **Terminal (Admin)**, or **Windows PowerShell (Admin)** on Windows 10) and run:
+
+   ```powershell
+   wsl --install
+   ```
+
+   Restart when it asks, then open **Ubuntu** from the Start menu and choose a Linux username and password when it asks.
+
+2. **Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)** and open it. In its **Settings**:
+   - **General:** keep **Use the WSL 2 based engine** and **Start Docker Desktop when you sign in to your computer** turned on. WattsMyPower only records while Docker Desktop is running.
+   - **Resources → WSL integration:** turn it on for **Ubuntu**, then **Apply & restart**.
+
+3. **Run the installer in the Ubuntu window,** from your Linux home folder (it refuses a Windows drive such as `/mnt/c`):
+
+   ```bash
+   cd ~
+   ```
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
+   ```
+
+   Docker Desktop is started if it isn't running. Then see [what the installer does](#what-the-installer-does). The address it prints is this PC's address on your network.
+
+4. **Let other devices reach it.** If Windows Firewall asks whether Docker Desktop may accept connections, allow it on **private networks**. Your home network has to be set as private for that: **Settings → Network & internet →** your connection **→ Private network**.
+
+5. **Keep the PC on.** In **Settings → System → Power & battery** (**Power & sleep** on Windows 10), set sleep to **Never** when plugged in. After a restart, Docker Desktop starts once you sign in to Windows, and WattsMyPower with it.
+
+To reach the files from Windows (for example to copy a backup), open `\\wsl$\Ubuntu\home\<your Linux username>\wattsmypower` in File Explorer.
+
+### What the installer does
+
+It downloads WattsMyPower into a `wattsmypower` folder where you run it (installing git first if it's missing, asking first). To use another folder, put `WMP_DIR=/opt/wattsmypower` before `bash`. If you'd rather read the script before running it, download it, look it over, then run it:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh
+bash install.sh
+```
+
+It asks for your time zone and the port for the dashboard (8080 unless you change it), saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
+
+### Open the dashboard
+
+**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
+
+- **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
+- **Your electricity plan:** load your rates from Energy Made Easy with **Find your plan**, or enter them by hand.
+- **Where you live:** your suburb, for the weather forecast.
+- **Your billing period:** how often you're billed and when a period starts.
+
+Everything in it is also in Settings (Integrations, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
 
 ## Everyday use
 
-Run these from the `wattsmypower` folder:
+Run these from the `wattsmypower` folder (in Terminal on a Mac, and in Ubuntu on Windows):
 
 | Command | What it does |
 |---|---|
 | `bash install.sh` | update to the latest version (backs up both databases first) |
 | `bash install.sh --configure` | change your settings (time zone, port) and restart. Inverters are changed in **Settings → Integrations**, and the array size and battery in **Settings → System**. |
-| `bash start.sh` | start it, and Docker if needed, without updating or rebuilding |
+| `bash start.sh` | start it, and Docker (or Docker Desktop) if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |

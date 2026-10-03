@@ -4,6 +4,9 @@
 #   Install:  curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
 #   Update:   cd wattsmypower && bash install.sh
 #
+# Runs on Linux (Docker is installed if it's missing), on a Mac with Docker Desktop, and on
+# Windows in WSL (Ubuntu) with Docker Desktop. Docker Desktop is started if it isn't running.
+#
 # Run from anywhere other than a WattsMyPower folder, it downloads WattsMyPower into
 # ./wattsmypower (installing git first if needed) and carries on from there. Run inside
 # that folder, it updates it.
@@ -76,8 +79,25 @@ set_env() {
   cat "$tmp" >.env; rm -f "$tmp"
 }
 
-SUDO=""
-if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then SUDO="sudo"; fi
+# Where it's running: linux, mac, wsl (Windows, inside WSL) or windows (Git Bash and the like).
+case "$(uname -s)" in
+  Darwin) OS=mac ;;
+  MINGW* | MSYS* | CYGWIN*) OS=windows ;;
+  *) if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then OS=wsl; else OS=linux; fi ;;
+esac
+# Docker Desktop for Windows, which WSL uses when its WSL integration is on.
+DESKTOP_EXE="/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe"
+
+SUDO=""  # Docker Desktop (Mac) runs as you: nothing here needs root there
+if [ "$OS" != mac ] && [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then SUDO="sudo"; fi
+
+# In WSL the databases have to be on Linux's own disk: SQLite isn't reliable on a Windows drive
+# (/mnt/c) shared into Docker.
+check_folder() {
+  if [ "$OS" = wsl ]; then
+    case "$1" in /mnt/[a-z]/*) die "$1 is on a Windows drive, where the databases wouldn't be reliable. Run this from your Linux home folder instead (cd ~), or choose a folder there with WMP_DIR=~/wattsmypower." ;; esac
+  fi
+}
 
 # ---------------------------------------------------------------- find (or download) the app
 # This script's own folder, when it's being run from a file rather than piped in from curl.
@@ -86,19 +106,25 @@ if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then SELF_DIR="$(
 is_app() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/app" ] && [ -f "$1/install.sh" ]; }
 
 if [ "$HELP" = 1 ]; then
-  if [ -n "$SELF_DIR" ]; then sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  if [ -n "$SELF_DIR" ]; then sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash [-s -- --yes]"; fi
   exit 0
 fi
 
+if [ "$OS" = windows ]; then
+  die "On Windows, WattsMyPower runs in WSL (Ubuntu) with Docker Desktop: open Ubuntu and run the install command there. The README's Windows steps cover setting them up."
+fi
+
 if [ -z "$SELF_DIR" ] || ! is_app "$SELF_DIR"; then
   DIR="${WMP_DIR:-$(pwd)/wattsmypower}"
+  check_folder "$DIR"
   if is_app "$DIR"; then
     say "WattsMyPower is already in $DIR: updating it"
   else
     [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ] && die "$DIR already exists and isn't a WattsMyPower folder. Move it, or choose another folder with WMP_DIR=/path."
-    if ! command -v git >/dev/null 2>&1; then
+    if ! git --version >/dev/null 2>&1; then  # (on a Mac, this offers to install the command line tools)
       warn "git is needed to download WattsMyPower and to update it later."
+      [ "$OS" = mac ] && die "Install git (xcode-select --install, or brew install git) and run this again."
       command -v apt-get >/dev/null 2>&1 || die "Install git (https://git-scm.com/downloads) and run this again."
       confirm "Install git now (apt-get install git)?" || die "Install git (apt install git) and run this again."
       $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git
@@ -110,6 +136,7 @@ if [ -z "$SELF_DIR" ] || ! is_app "$SELF_DIR"; then
 fi
 cd "$SELF_DIR"
 HERE="$SELF_DIR"
+check_folder "$HERE"
 
 # ---------------------------------------------------------------- update the code
 if [ "$PULL" = 1 ] && [ -d .git ]; then
@@ -131,7 +158,21 @@ fi
 
 # ---------------------------------------------------------------- Docker
 say "Checking Docker"
+# Docker Desktop (on a Mac, and on Windows for WSL) is an app: start it if it isn't running.
+start_docker_desktop() {
+  case "$OS" in
+    mac) open -ga Docker 2>/dev/null ;;  # -g: in the background
+    wsl) [ -f "$DESKTOP_EXE" ] && powershell.exe -NoProfile -Command "Start-Process '$(wslpath -w "$DESKTOP_EXE")'" >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+if [ "$OS" != linux ] && ! docker info >/dev/null 2>&1 && start_docker_desktop; then
+  info "Starting Docker Desktop (this can take a minute)"
+  for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
+fi
 if ! command -v docker >/dev/null 2>&1; then
+  [ "$OS" = mac ] && die "Docker isn't installed. Install Docker Desktop (https://docs.docker.com/desktop/setup/install/mac-install/), open it once, and run this again."
+  [ "$OS" = wsl ] && die "Docker isn't available in WSL. Install Docker Desktop for Windows (https://docs.docker.com/desktop/setup/install/windows-install/), then turn on its WSL integration for ${WSL_DISTRO_NAME:-this distro} (Settings → Resources → WSL integration), and run this again."
   warn "Docker isn't installed."
   if confirm "Install it now with Docker's official install script (get.docker.com)?"; then
     command -v curl >/dev/null 2>&1 || die "curl is needed to download it: run 'apt install curl' and try again."
@@ -142,19 +183,34 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 DOCKER="docker"
 docker_ok() { docker info >/dev/null 2>&1 || { [ -n "$SUDO" ] && $SUDO docker info >/dev/null 2>&1; }; }
-if command -v systemctl >/dev/null 2>&1; then
-  # Start Docker if it isn't running, and have it start at boot so the app comes back after a restart.
+if command -v systemctl >/dev/null 2>&1 && systemctl cat docker.service >/dev/null 2>&1; then
+  # Docker as a service (not Docker Desktop): start it if it isn't running, and have it start at
+  # boot so the app comes back after a restart.
   if ! docker_ok; then info "Starting Docker"; $SUDO systemctl start docker || true; fi
   if [ "$(systemctl is-enabled docker 2>/dev/null)" != enabled ]; then $SUDO systemctl enable docker >/dev/null 2>&1 && info "Docker will now start at boot." || true; fi
 fi
 if ! docker info >/dev/null 2>&1; then
   if [ -n "$SUDO" ] && $SUDO docker info >/dev/null 2>&1; then DOCKER="$SUDO docker"
-  else die "Docker is installed but isn't running, or this user can't use it. Start it (systemctl start docker) or run this as root."; fi
+  elif [ "$OS" = linux ]; then die "Docker is installed but isn't running, or this user can't use it. Start it (systemctl start docker) or run this as root."
+  else die "Docker Desktop isn't running yet. Start it, wait until it says it's running, and run this again."; fi
 fi
 if $DOCKER compose version >/dev/null 2>&1; then DC="$DOCKER compose"
 elif command -v docker-compose >/dev/null 2>&1; then DC="${SUDO:+$SUDO }docker-compose"
 else die "Docker Compose isn't available. Install the compose plugin (apt install docker-compose-plugin) and run this again."; fi
 info "$($DOCKER --version)"
+# This machine's address on the home network (blank if it can't tell).
+lan_ip() {
+  local ip="" iface
+  case "$OS" in
+    mac)
+      iface="$(route -n get default 2>/dev/null | awk '/interface:/ { print $2 }' || true)"
+      ip="$(ipconfig getifaddr "${iface:-en0}" 2>/dev/null || true)" ;;
+    wsl)  # WSL's own address is private to this PC: ask Windows for its address instead
+      ip="$(powershell.exe -NoProfile -Command "(Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway -and \$_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1).IPv4Address.IPAddress" 2>/dev/null | tr -d '\r' || true)" ;;
+  esac
+  [ -n "$ip" ] || ip="$( (hostname -I 2>/dev/null || true) | awk '{ print $1 }')"
+  printf '%s' "$ip"
+}
 # Wait until the app answers, then show where it is.
 wait_and_report() {
   local ok=0 ip
@@ -163,11 +219,15 @@ wait_and_report() {
     if $DOCKER exec "$APP" python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)" >/dev/null 2>&1; then ok=1; break; fi
     sleep 2
   done
-  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  ip="$(lan_ip)"
   if [ "$ok" = 1 ]; then
     local port; port="$(get_env PORT)"
     say "WattsMyPower is running: http://${ip:-localhost}:${port:-8080}"
     info "New install? Connect your inverter there: Settings → Integrations finds it on your network."
+    if [ "$OS" != linux ]; then
+      info "It only records while Docker Desktop is running: keep 'Start Docker Desktop when you sign in to your computer'"
+      info "on (Docker Desktop → Settings → General), and stop this computer sleeping."
+    fi
     info "Logs: $DC logs -f --tail=50"
   else
     warn "It started but isn't responding yet. Recent logs:"
@@ -213,6 +273,15 @@ fi
 # The default for a question: a value passed in the environment, then what .env already has.
 current() { local passed="${!1-}"; printf '%s' "${passed:-$(get_env "$1")}"; }
 
+# This machine's time zone, e.g. Australia/Brisbane (Linux, WSL and Mac).
+system_tz() {
+  local tz=""
+  tz="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+  [ -n "$tz" ] || tz="$(readlink /etc/localtime 2>/dev/null | sed -n 's|.*zoneinfo/||p' || true)"
+  [ -n "$tz" ] || tz="$(cat /etc/timezone 2>/dev/null || true)"
+  [ -n "$tz" ] && printf '%s' "$tz"
+}
+
 configure() {
   # Inverters are connected in the dashboard (Settings → Integrations), and the array size and battery
   # are set there too (Settings → System). Ones passed in on a first install (INVERTER_HOST=... or
@@ -222,7 +291,7 @@ configure() {
     [ -n "${!v-}" ] && set_env "$v" "${!v}"
   done
   local tz; tz="$(current TZ)"
-  [ -n "$tz" ] && [ "$tz" != "$(get_env TZ .env.example)" ] || tz="$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || printf '%s' "$tz")"
+  [ -n "$tz" ] && [ "$tz" != "$(get_env TZ .env.example)" ] || tz="$(system_tz || printf '%s' "$tz")"
   set_env TZ "$(ask "Time zone" "$tz")"
   set_env PORT "$(ask "Port to serve the dashboard on" "$(current PORT)")"
   info "Saved to .env. Inverters, array size, rates, location and system cost are set in the dashboard."
@@ -262,7 +331,7 @@ PORT="$(get_env PORT)"; PORT="${PORT:-8080}"
 if $DOCKER ps --format '{{.Names}}' | grep -qx "$APP"; then
   say "Backing up the databases"
   # SQLite's online backup, run inside the container: safe while the app keeps recording.
-  $DOCKER exec "$APP" python - <<'PY'
+  $DOCKER exec -i "$APP" python - <<'PY'
 import glob, os, sqlite3, time
 os.makedirs("/data/backups", exist_ok=True)
 stamp = time.strftime("%Y%m%d-%H%M%S")
