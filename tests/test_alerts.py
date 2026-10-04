@@ -501,3 +501,135 @@ def test_yesterdays_figures_for_the_summary(alerts: AlertsService, db: Database)
     assert y is not None and y["date"] == "2026-10-02"
     assert y["pv"] == pytest.approx(24, abs=0.1) and y["supply"] == 1.05
     assert alerts._yesterday(start + 3 * 86400) is None  # nothing recorded that day
+
+
+# -- good to know: solar, battery, grid and prices ----------------------------------------
+def sunny(now: float, **values: float) -> Facts:
+    return facts(now, snapshot={"ts": now, "battery_soc": 80.0, "grid_power": 0.0, "pv_power": 0.0, **values})
+
+
+def test_the_new_rules_are_off_until_turned_on(on: AlertsService, send: FakeSend) -> None:
+    for m in (0, 30, 60):
+        on.evaluate(sunny(T0 + m * MIN, pv_power=6000.0, grid_power=-4000.0, battery_soc=100.0, daily_pv=40.0))
+    assert send.sent == []
+    rules = {r["id"]: r for r in on.overview()["rules"]}
+    assert rules["solar_output"]["category"] == "solar" and rules["solar_output"]["resolves"] is False
+    assert rules["price_high"]["needs"] == "amber"  # not on an Amber tariff
+    assert [c["id"] for c in on.overview()["categories"]] == ["system", "solar", "grid", "prices", "summary"]
+
+
+def test_spare_solar_after_its_minutes_once_per_cooldown(on: AlertsService, send: FakeSend) -> None:
+    on.save_rule("exporting", {"enabled": True, "settings": {"watts": 2000, "minutes": 10}})
+    for m in (0, 5, 10, 11):
+        on.evaluate(sunny(T0 + m * MIN, grid_power=-2500.0, battery_soc=100.0))
+    assert send.titles() == ["Sending 2.5 kW to the grid"]
+    assert "with the battery at 100%" in send.sent[0]["body"]["message"]
+    assert send.sent[0]["body"]["tags"] == ["bulb"]
+    on.evaluate(sunny(T0 + 20 * MIN, grid_power=-500.0))  # clears, quietly
+    for m in (30, 45):  # back again inside the 3-hour cooldown: nothing
+        on.evaluate(sunny(T0 + m * MIN, grid_power=-2500.0))
+    assert len(send.sent) == 1
+
+
+def test_battery_full_waits_for_a_real_run_down(on: AlertsService, send: FakeSend) -> None:
+    on.save_rule("battery_full", {"enabled": True})
+    on.evaluate(sunny(T0, battery_soc=100.0, grid_power=-1500.0))
+    assert send.titles() == ["Battery charged to 100%"]
+    assert "(sending 1.5 kW now)" in send.sent[0]["body"]["message"]
+    on.evaluate(sunny(T0 + 7 * HOUR, battery_soc=95.0))  # still nearly full: the same charge
+    on.evaluate(sunny(T0 + 8 * HOUR, battery_soc=100.0))
+    assert len(send.sent) == 1
+    on.evaluate(sunny(T0 + 9 * HOUR, battery_soc=88.0))  # run down 10% or more: a new fill counts
+    on.evaluate(sunny(T0 + 10 * HOUR, battery_soc=100.0))
+    assert len(send.sent) == 2
+
+
+def test_high_grid_use_and_its_follow_up(on: AlertsService, send: FakeSend) -> None:
+    on.save_rule("grid_import", {"enabled": True, "settings": {"watts": 5000, "minutes": 5}})
+    for m in (0, 3, 5):
+        on.evaluate(sunny(T0 + m * MIN, grid_power=6200.0, battery_soc=30.0))
+    on.evaluate(sunny(T0 + 10 * MIN, grid_power=4500.0))  # under the line, not yet 80% of it: still on
+    on.evaluate(sunny(T0 + 15 * MIN, grid_power=900.0))
+    assert send.titles() == ["Drawing 6.2 kW from the grid", "Grid use back down"]
+    assert "for 5 minutes. Your battery is at 30%." in send.sent[0]["body"]["message"]
+
+
+def test_daily_milestones_once_a_day(on: AlertsService, send: FakeSend) -> None:
+    on.save_rule("solar_today", {"enabled": True, "settings": {"kwh": 20}})
+    on.save_rule("grid_today", {"enabled": True, "settings": {"kwh": 10}})
+    on.evaluate(sunny(T0, daily_pv=19.0, daily_import=4.0))
+    on.evaluate(sunny(T0 + HOUR, daily_pv=21.4, daily_import=4.0))
+    on.evaluate(sunny(T0 + 2 * HOUR, daily_pv=25.0, daily_import=12.0))
+    on.evaluate(sunny(T0 + 3 * HOUR, daily_pv=30.0, daily_import=14.0))
+    assert send.titles() == ["21 kWh of solar today", "12 kWh from the grid today"]
+    tomorrow = T0 + 24 * HOUR
+    on.evaluate(sunny(tomorrow, daily_pv=22.0, daily_import=1.0))
+    assert send.titles()[-1] == "22 kWh of solar today"
+
+
+def test_a_milestone_ignores_yesterdays_totals_just_after_midnight(on: AlertsService, send: FakeSend) -> None:
+    on.save_rule("grid_today", {"enabled": True, "settings": {"kwh": 10}})
+    midnight = time.mktime((2026, 10, 3, 0, 4, 0, 0, 0, -1))
+    on.evaluate(sunny(midnight, daily_import=18.0))  # the inverter hasn't reset its counter yet
+    # A reading from just before midnight, still current: yesterday's total, not today's.
+    on.evaluate(facts(midnight - 2 * MIN, snapshot={"ts": midnight - 5 * MIN, "daily_import": 18.0}))
+    assert send.sent == []
+
+
+@pytest.fixture
+def amber(db: Database, config: Config, send: FakeSend) -> AlertsService:
+    """Alerts on an Amber tariff, with an ntfy channel, and prices from T0."""
+    from app.features.amber.repository import PriceRepository
+
+    service = make_service(db, config, send)
+    service.prices = PriceRepository(db)
+    service.tariffs.save({"type": "amber", "flat_rate": 0.3, "feed_in_rate": 0.05, "supply_charge": 1.0, "bands": []})
+    service.save_channel("ntfy", dict(NTFY))
+    return service
+
+
+def priced(service: AlertsService, now: float) -> Facts:
+    """A sunny moment, with the price the service looks up for it."""
+    f = sunny(now)
+    f.price = service.facts(now).price
+    return f
+
+
+def price(db: Database, start: float, rate: float, feed_in: float | None = None) -> None:
+    with db.writing() as conn:
+        conn.execute("INSERT OR REPLACE INTO prices VALUES ('general', ?, 1800, ?, 0, 0)", (int(start), rate))
+        if feed_in is not None:
+            conn.execute("INSERT OR REPLACE INTO prices VALUES ('feedIn', ?, 1800, ?, 0, 0)", (int(start), feed_in))
+
+
+def test_the_price_now_on_amber(amber: AlertsService, db: Database) -> None:
+    assert amber.facts(T0).price() is None  # no price for now
+    price(db, T0, 0.62, feed_in=0.08)
+    assert amber.facts(T0 + 600).price() == {"import": 0.62, "feed_in": 0.08, "until": int(T0) + 1800}
+    assert {r["id"]: r for r in amber.overview()["rules"]}["price_high"]["needs"] is None
+
+
+def test_price_spike_and_back_down(amber: AlertsService, db: Database, send: FakeSend) -> None:
+    amber.save_rule("price_high", {"enabled": True, "settings": {"cents": 50}})
+    price(db, T0, 0.62)
+    price(db, T0 + 1800, 0.30)
+    amber.evaluate(priced(amber, T0 + 60))
+    amber.evaluate(priced(amber, T0 + 1860))
+    assert send.titles() == ["Grid power at 62.0c/kWh", "Grid price back down"]
+    assert "until 11:30" in send.sent[0]["body"]["message"]
+
+
+def test_negative_prices_mention_what_exporting_costs(amber: AlertsService, db: Database, send: FakeSend) -> None:
+    amber.save_rule("price_negative", {"enabled": True})
+    price(db, T0, -0.04, feed_in=-0.06)
+    amber.evaluate(priced(amber, T0 + 60))
+    [sent] = send.sent
+    assert sent["body"]["title"] == "Grid power at -4.0c/kWh"
+    assert "you're paid to use grid power" in sent["body"]["message"]
+    assert "Sending power to the grid costs 6.0c/kWh right now." in sent["body"]["message"]
+
+
+def test_price_alerts_stay_quiet_off_amber(on: AlertsService, send: FakeSend) -> None:
+    on.save_rule("price_negative", {"enabled": True, "settings": {"cents": 20}})
+    on.evaluate(sunny(T0))
+    assert send.sent == []

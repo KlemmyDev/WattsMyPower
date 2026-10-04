@@ -18,9 +18,14 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "WattsMyPower" },
+      // Added to a phone's home screen, it opens like an app: on an iPhone, that's what lets it get notifications.
+      { name: "apple-mobile-web-app-title", content: "WattsMyPower" },
+      { name: "mobile-web-app-capable", content: "yes" },
     ],
     links: [
       { rel: "icon", href: FAVICON },
+      { rel: "manifest", href: "/manifest.json" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

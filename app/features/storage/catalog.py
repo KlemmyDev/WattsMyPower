@@ -177,6 +177,13 @@ DASHBOARD: dict[str, Table] = {
         grows=True,
         cap=500,
     ),
+    "push_subscriptions": Table(
+        "alerts",
+        "Browsers notified",
+        "Browsers that turned on notifications: the address their push service gave, and the keys to encrypt for them.",
+        "Kept until turned off",
+        Spec("created_at"),
+    ),
     "alert_channels": Table(
         "alerts", "Alert channels", "Where alerts are sent: ntfy, a webhook or Pushover.", "Kept until removed"
     ),

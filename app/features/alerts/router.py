@@ -1,4 +1,4 @@
-"""Settings → Alerts: where alerts go (with a test send), which rules are on, and what was sent."""
+"""Settings → Alerts: where alerts go (with a test send), browsers notified, which rules are on, and what was sent."""
 
 from __future__ import annotations
 
@@ -51,6 +51,29 @@ async def remove_channel(svc: ServicesDep, kind: str):
 async def test_channel(svc: ServicesDep, kind: str, body: JsonBody):
     """Send a test notification with the settings given (or the saved ones, for an empty body)."""
     return await _run(svc.alerts.test_channel, kind, body)
+
+
+@router.get("/push")
+async def push(svc: ServicesDep):
+    """The server's public key for subscribing, and the browsers subscribed to notifications."""
+    return await _run(svc.alerts.push_overview)
+
+
+@router.post("/push/devices")
+async def subscribe(svc: ServicesDep, body: JsonBody):
+    """Turn on notifications for a browser: {"subscription": PushSubscription.toJSON(), "name": "Chrome on Mac"}."""
+    return await _run(svc.alerts.subscribe, body)
+
+
+@router.delete("/push/devices/{device}")
+async def unsubscribe(svc: ServicesDep, device: str):
+    return {"removed": await _run(svc.alerts.remove_device, device)}
+
+
+@router.post("/push/test")
+async def test_push(svc: ServicesDep, body: JsonBody):
+    """Send a test notification to one browser ({"device": id}) or all of them ({})."""
+    return await _run(svc.alerts.test_push, body)
 
 
 @router.put("/rules/{rule}")

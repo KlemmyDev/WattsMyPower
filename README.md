@@ -12,7 +12,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 - **Bills:** the current billing period first (set in **Settings → Billing**). The bill so far and its expected total, and whether spending is on pace. Every day of the period as a calendar, coloured by its cost (credits in green), grid use, peak-rate use on time of use, solar sent to the grid, or solar; select a day to see its grid use by rate, supply charge and feed-in against the period's average day, with the costliest, cheapest and biggest feed-in days a click away, and the days still to come outlined with what they're expected to cost. **Ways to lower this bill** ranks changes worked out from the last 30 days at your rates, each with roughly what it's worth over a bill: moving some peak-rate use into the middle of the day or a cheaper rate, using more of the solar you export, trimming what's always on overnight (priced at the night rate for what came from the grid and the feed-in rate for what the battery covered), and, when the supply charge is most of the bill, comparing plans. **When grid power costs you** shows what grid power cost by hour of an average day, month by month, with the dearest rate's hours outlined. Then where the money went (usage, supply and feed-in; by rate; cost per kWh used), the next few bills and the year ahead, past bills, and the **return on your system**: what solar and the battery have saved, a year and in all, and when the system pays for itself (with its cost and install date in **Settings → System**).
 - **Imported history:** bring in the days before it was set up (or fill gaps) from iSolarCloud's 5-minute power-curve exports, under **Settings → Integrations → Sungrow → Import history from iSolarCloud**, which also explains what to export.
 - **A second, older Sungrow inverter** (for example an SG5K-D on an AC-coupled system) can be added, so both systems count.
-- **Alerts** to your phone (ntfy or Pushover) or any webhook: the inverter not answering, the battery low or not charging in the sun, solar underperforming, and an optional daily summary.
+- **Alerts** as your browser's or phone's own notifications (no app needed, once the dashboard is on HTTPS), through ntfy or Pushover, or to any webhook: the inverter not answering, the battery low or not charging in the sun, solar underperforming, and an optional daily summary. Optional good-to-know alerts too: strong solar, spare solar going to the grid, the battery full, solar and grid milestones for the day, high grid use, and Amber price spikes or negative prices.
 - **Your data, in the open:** **Settings → Database** shows everything stored, in both databases (the dashboard's and the collector's): each table's size on disk and its indexes, rows, the dates it covers, how long it's kept, how fast it's growing and where it levels off, what's in it (inverter by inverter, recorded or imported, forecast or past weather), and its columns. Saved settings show their names only, never what's in them.
 - Works on desktop and phones.
 
@@ -254,9 +254,12 @@ Grid import for every 5-minute slot of a weekday and a weekend day is averaged o
 
 **Settings → Alerts** tells you when something needs attention, so you don't have to keep checking. Alerts are off until you set up somewhere to send them:
 
+- **Browser notifications:** **Turn on notifications** in the browser you use the dashboard in, on each phone or computer you want them on. They arrive as that device's own notifications, even with the dashboard closed, and a tap opens the page they're about. Every browser that has them is listed, with a test send and a way to remove it. They go out through the browser's push service (Google's for Chrome and Edge, Mozilla's for Firefox, Apple's for Safari), encrypted so only that browser can read them, and only outgoing: nothing has to reach your server from outside. Two catches:
+  - **They need HTTPS.** Browsers only allow notifications on a secure page (`https://`, or `localhost` on the server itself), and the dashboard is served over plain HTTP. The easiest fix is [Tailscale](https://tailscale.com): install it on the server and your phone, turn on HTTPS certificates for your tailnet (in its admin console, under DNS), run `tailscale serve --bg 8080` on the server, and open the `https://<machine>.<tailnet>.ts.net` address it prints. It stays private to your devices. A reverse proxy with a real certificate (such as Caddy with your own domain) works too.
+  - **On an iPhone or iPad,** add the dashboard to your home screen first (Share → Add to Home Screen, iOS 16.4 or later), open it from there, and turn notifications on in Settings → Alerts.
 - **ntfy:** free push notifications through the [ntfy](https://ntfy.sh) app. Enter a topic address such as `https://ntfy.sh/a-hard-to-guess-name` (on ntfy.sh anyone who knows the topic can read it) and subscribe to the same topic in the app. A self-hosted ntfy server works too, with an access token or `username:password` if it needs signing in.
 - **Pushover:** your user key, and the API token of an application you create in Pushover.
-- **Webhook:** any address, sent each alert as JSON (`event` is `alert`, `resolved`, `summary` or `test`, plus `rule`, `title`, `message`, `ts` and `urgent`), with an optional bearer token. Handy for Home Assistant.
+- **Webhook:** any address, sent each alert as JSON (`event` is `alert`, `resolved`, `notice` (good news), `summary` or `test`, plus `rule`, `title`, `message`, `ts` and `urgent`), with an optional bearer token. Handy for Home Assistant.
 
 **Send a test** tries what's in the form before you save it, and says what went wrong if it doesn't arrive. Tokens, keys and webhook addresses are stored in the dashboard's database and only ever shown masked.
 
@@ -271,6 +274,19 @@ Each alert can be switched off, and its thresholds changed:
 | Battery not charging in the sun | exporting at least 500 W while the battery isn't full and isn't charging | for 30 minutes |
 | Solar underperforming | clear days well below what the system usually makes in that weather, judged the same way as Health's solar performance | below 75% on 2 clear days in a row |
 | Daily summary | yesterday's solar, home use, grid bought and sold, and cost | off; 7 am when on |
+
+And alerts that are good to know, all off until you turn them on. They're sent as notices, with no follow-up when they're over:
+
+| Alert | When | Default |
+|---|---|---|
+| Strong solar | solar output at or above a level: a good time to run appliances | 4,000 W for 10 minutes; at most every 12 hours |
+| Solar milestone | today's solar passes an amount | 20 kWh; once a day |
+| Spare solar | sending at least this much to the grid | 2,000 W for 10 minutes; at most every 3 hours |
+| Battery full | battery charged to a level (again only after it has run down 10%) | 100% |
+| High grid use | drawing at least this much from the grid, with a follow-up when it's back down | 5,000 W for 5 minutes |
+| Grid use today | today's grid import passes an amount | 15 kWh; once a day |
+| High price | on an Amber tariff, the grid price at or above a level, with a follow-up when it drops | 50c/kWh |
+| Negative price | on an Amber tariff, the grid price at or below a level (and what exporting costs, if it does) | 0c/kWh |
 
 A problem has to last before it's reported, so a passing blip stays quiet. Each alert is sent once, then not repeated for a while (an hour for the inverter, up to three days for solar performance) even if the problem comes and goes, and a follow-up says when it's fixed. If an alert can't be delivered (often the same outage that took the internet down), it's tried again every 5 minutes while the problem lasts. Where each alert is up to is kept in the database, so restarting or updating the dashboard doesn't send them again. Recent alerts, and whether they arrived, are listed on the same page.
 

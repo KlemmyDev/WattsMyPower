@@ -44,6 +44,9 @@ class Facts:
     # Looked up only when a rule asks: the Health page's solar performance, and yesterday's totals.
     performance: Callable[[], dict[str, Any] | None] = lambda: None
     yesterday: Callable[[], dict[str, Any] | None] = lambda: None
+    # On an Amber tariff, the price now: {"import": $/kWh, "feed_in": $/kWh (what exporting earns), "until": the
+    # interval's end}. None on another tariff, or with no price for now.
+    price: Callable[[], dict[str, Any] | None] = lambda: None
 
     def fresh(self, ts: float | None) -> bool:
         """Whether something read at `ts` is current: within the last three polls."""
@@ -106,6 +109,14 @@ class Rule:
     # After an alert, the least time before the same rule sends another. None for a scheduled message.
     cooldown: float | None = HOUR
     urgent: bool = False
+    # Which group it's listed under in Settings → Alerts (CATEGORIES).
+    category: str = "system"
+    # Where a tap on its notification goes.
+    page: str = "/health"
+    # When it clears, a follow-up says so. Off for good news, which needs no "it's over".
+    resolves: bool = True
+    # What it works only with: "amber" for an Amber tariff (it watches Amber's prices).
+    needs: str | None = None
 
     def values(self, saved: dict[str, Any] | None = None) -> Values:
         """The rule's settings: saved values, else the defaults."""
@@ -331,6 +342,166 @@ def daily_summary(f: Facts, v: Values, s: RuleState) -> Check:
     return Check("report", title, f"{day_name(yday)}\n" + "\n".join(lines), data={"date": yday})
 
 
+# -- good to know: solar, battery, grid and prices ---------------------------------------
+def today(f: Facts, snap: Snapshot) -> str | None:
+    """Today's date, if the reading is from today and its daily counters have had time to start afresh (an
+    inverter can carry yesterday's totals for a few minutes past midnight)."""
+    lt, read = time.localtime(f.now), time.localtime(snap.get("ts") or 0)
+    if read[:3] != lt[:3] or lt.tm_hour * 60 + lt.tm_min < 10:
+        return None
+    return time.strftime("%Y-%m-%d", lt)
+
+
+def solar_output(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    pv = snap.get("pv_power") if snap else None
+    if pv is None:
+        return UNKNOWN
+    if pv >= v["watts"]:
+        return Check(
+            "bad",
+            f"Solar at {_kw(pv)}",
+            f"Your panels are making {_kw(pv)}. A good time to run the dishwasher, washing machine or dryer, "
+            "or to charge the car, on your own solar.",
+        )
+    return Check("ok") if pv < 0.8 * v["watts"] else UNKNOWN
+
+
+def solar_today(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    kwh = snap.get("daily_pv") if snap else None
+    date = today(f, snap) if snap else None
+    if kwh is None or date is None or s.data.get("date") == date or kwh < v["kwh"]:
+        return UNKNOWN
+    return Check(
+        "report",
+        f"{kwh:.0f} kWh of solar today",
+        f"Your panels have made {_kwh(kwh)} so far today, past the {v['kwh']:.0f} kWh you set.",
+        data={"date": date},
+    )
+
+
+def exporting(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    grid = snap.get("grid_power") if snap else None
+    if grid is None:
+        return UNKNOWN
+    if -grid >= v["watts"]:
+        soc = snap.get("battery_soc") if snap else None
+        battery = f" with the battery at {soc:.0f}%" if soc is not None else ""
+        return Check(
+            "bad",
+            f"Sending {_kw(grid)} to the grid",
+            f"You're sending {_kw(grid)} of spare solar to the grid{battery}. Running the dishwasher, washing "
+            "machine or charging the car now uses it at home instead.",
+        )
+    return Check("ok") if -grid < 0.5 * v["watts"] else UNKNOWN
+
+
+def battery_full(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    soc = snap.get("battery_soc") if snap else None
+    if soc is None:
+        return UNKNOWN
+    if soc >= v["percent"]:
+        grid = snap.get("grid_power") if snap else None
+        spare = f" (sending {_kw(grid)} now)" if grid is not None and grid <= -100 else ""
+        return Check(
+            "bad",
+            f"Battery charged to {soc:.0f}%",
+            f"Your battery is charged to {soc:.0f}%. Spare solar goes to the grid from here{spare}.",
+        )
+    return Check("ok") if soc <= v["percent"] - 10 else UNKNOWN
+
+
+def grid_import(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    grid = snap.get("grid_power") if snap else None
+    if grid is None:
+        return UNKNOWN
+    if grid >= v["watts"]:
+        soc = snap.get("battery_soc") if snap else None
+        battery = f" Your battery is at {soc:.0f}%." if soc is not None else ""
+        return Check(
+            "bad",
+            f"Drawing {_kw(grid)} from the grid",
+            f"The house has been drawing {_kw(grid)} from the grid for {span(v['minutes'] * 60)}.{battery} "
+            "Something big may be running: an oven, heater, air conditioner or the car.",
+        )
+    if grid < 0.8 * v["watts"]:
+        return Check("ok", "Grid use back down", f"The house is drawing {_kw(max(grid, 0))} from the grid now.")
+    return UNKNOWN
+
+
+def grid_today(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    kwh = snap.get("daily_import") if snap else None
+    date = today(f, snap) if snap else None
+    if kwh is None or date is None or s.data.get("date") == date or kwh < v["kwh"]:
+        return UNKNOWN
+    return Check(
+        "report",
+        f"{kwh:.0f} kWh from the grid today",
+        f"You've bought {_kwh(kwh)} from the grid so far today, past the {v['kwh']:.0f} kWh you set.",
+        data={"date": date},
+    )
+
+
+def _cents(rate: float) -> str:
+    """$/kWh as "34.5c/kWh"."""
+    return f"{rate * 100:.1f}c/kWh"
+
+
+def price_high(f: Facts, v: Values, s: RuleState) -> Check:
+    p = f.price()
+    if not p or p.get("import") is None:
+        return UNKNOWN
+    rate, limit = p["import"], v["cents"] / 100
+    if rate >= limit:
+        until = f" until {clock(p['until'], f.now)}" if p.get("until") else ""
+        return Check(
+            "bad",
+            f"Grid power at {_cents(rate)}",
+            f"Amber's price is {_cents(rate)}{until}. Use what you can from the battery and solar, and hold off on "
+            "big appliances until it drops.",
+        )
+    if rate < 0.9 * limit:
+        return Check("ok", "Grid price back down", f"Amber's price is back down to {_cents(rate)}.")
+    return UNKNOWN
+
+
+def price_negative(f: Facts, v: Values, s: RuleState) -> Check:
+    p = f.price()
+    if not p or p.get("import") is None:
+        return UNKNOWN
+    rate = p["import"]
+    if rate * 100 <= v["cents"]:
+        until = f" until {clock(p['until'], f.now)}" if p.get("until") else ""
+        paid = "you're paid to use grid power" if rate < 0 else "grid power is almost free"
+        feed_in = p.get("feed_in")
+        export = (
+            f" Sending power to the grid costs {_cents(-feed_in)} right now."
+            if feed_in is not None and feed_in < 0
+            else ""
+        )
+        return Check(
+            "bad",
+            f"Grid power at {_cents(rate)}",
+            f"Amber's price is {_cents(rate)}{until}: {paid}. A good time to charge the car or run big "
+            f"appliances.{export}",
+        )
+    return Check("ok") if rate * 100 > v["cents"] + 2 else UNKNOWN
+
+
+# The groups the rules are listed in, in order: id -> (name, what they're about).
+CATEGORIES: dict[str, tuple[str, str]] = {
+    "system": ("Problems", "Something needs looking at. Each is sent once, with a follow-up when it's fixed."),
+    "solar": ("Solar and battery", "Good times to use power, and milestones. Off until you turn them on."),
+    "grid": ("Grid", "When the house leans on the grid."),
+    "prices": ("Prices", "When Amber's price spikes or goes negative."),
+    "summary": ("Summaries", "A look back at the day."),
+}
+
 RULES: tuple[Rule, ...] = (
     Rule(
         "inverter_offline",
@@ -404,6 +575,107 @@ RULES: tuple[Rule, ...] = (
         (Setting("hour", "Sent at", "am", 5, 11, 7),),
         enabled=False,
         cooldown=None,
+        category="summary",
+        page="/history",
+    ),
+    Rule(
+        "solar_output",
+        "Strong solar",
+        "Your panels are making more than this: a good time to run appliances on your own solar.",
+        solar_output,
+        (Setting("watts", "At least", "W", 500, 30000, 4000), Setting("minutes", "For", "minutes", 1, 60, 10)),
+        enabled=False,
+        debounce=lambda v: v["minutes"] * 60,
+        cooldown=12 * HOUR,
+        category="solar",
+        page="/",
+        resolves=False,
+    ),
+    Rule(
+        "solar_today",
+        "Solar milestone",
+        "Today's solar passes this. Once a day at most.",
+        solar_today,
+        (Setting("kwh", "When today reaches", "kWh", 1, 300, 20),),
+        enabled=False,
+        cooldown=None,
+        category="solar",
+        page="/",
+        resolves=False,
+    ),
+    Rule(
+        "exporting",
+        "Spare solar",
+        "You're sending more than this to the grid: power you could use at home instead.",
+        exporting,
+        (Setting("watts", "At least", "W", 200, 30000, 2000), Setting("minutes", "For", "minutes", 1, 120, 10)),
+        enabled=False,
+        debounce=lambda v: v["minutes"] * 60,
+        cooldown=3 * HOUR,
+        category="solar",
+        page="/",
+        resolves=False,
+    ),
+    Rule(
+        "battery_full",
+        "Battery full",
+        "The battery has charged to this level. Told again after it has run down 10% and filled up again.",
+        battery_full,
+        (Setting("percent", "At or above", "%", 50, 100, 100),),
+        enabled=False,
+        cooldown=6 * HOUR,
+        category="solar",
+        page="/",
+        resolves=False,
+    ),
+    Rule(
+        "grid_import",
+        "High grid use",
+        "The house is drawing more than this from the grid. You'll hear when it's back down.",
+        grid_import,
+        (Setting("watts", "At least", "W", 500, 30000, 5000), Setting("minutes", "For", "minutes", 1, 120, 5)),
+        enabled=False,
+        debounce=lambda v: v["minutes"] * 60,
+        cooldown=HOUR,
+        category="grid",
+        page="/",
+    ),
+    Rule(
+        "grid_today",
+        "Grid use today",
+        "What you've bought from the grid today passes this. Once a day at most.",
+        grid_today,
+        (Setting("kwh", "When today reaches", "kWh", 1, 300, 15),),
+        enabled=False,
+        cooldown=None,
+        category="grid",
+        page="/bills",
+        resolves=False,
+    ),
+    Rule(
+        "price_high",
+        "High price",
+        "Amber's price for grid power reaches this. You'll hear when it's back down.",
+        price_high,
+        (Setting("cents", "At or above", "c/kWh", 10, 2000, 50),),
+        enabled=False,
+        cooldown=HOUR,
+        category="prices",
+        page="/plan",
+        needs="amber",
+    ),
+    Rule(
+        "price_negative",
+        "Negative price",
+        "Amber's price falls to this or below: grid power is nearly free, or you're paid to use it.",
+        price_negative,
+        (Setting("cents", "At or below", "c/kWh", -100, 20, 0),),
+        enabled=False,
+        cooldown=3 * HOUR,
+        category="prices",
+        page="/plan",
+        resolves=False,
+        needs="amber",
     ),
 )
 BY_ID = {r.id: r for r in RULES}

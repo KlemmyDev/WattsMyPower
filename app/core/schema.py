@@ -29,6 +29,8 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     car_charges  car charges planned ahead, which the forecast counts as home use
     car_levels   each car's battery level (%) as it was given, to estimate it between times
     cars         the electric cars connected: name, the model chosen, and their details (JSON)
+    push_subscriptions  browsers that turned on notifications: where their push service takes them, and
+                 the keys to encrypt for them (app.features.alerts.webpush)
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -300,6 +302,17 @@ def _cars(conn: sqlite3.Connection) -> None:
     conn.execute("DELETE FROM kv WHERE key LIKE 'car\\_%' ESCAPE '\\'")
 
 
+def _push_subscriptions(conn: sqlite3.Connection) -> None:
+    """Browser notifications (app.features.alerts.webpush): one row per browser subscribed. `endpoint` is the
+    address at its push service, `p256dh` and `auth` its keys (base64url); `id` a short hash of the endpoint, for
+    the page. `last_sent` / `last_error`: how the last notification to it went."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS push_subscriptions (id TEXT PRIMARY KEY, endpoint TEXT NOT NULL UNIQUE,"
+        " p256dh TEXT NOT NULL, auth TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL,"
+        " last_sent INTEGER, last_error TEXT)"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -315,6 +328,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _car_levels,
     _car_charge_plans,
     _cars,
+    _push_subscriptions,
 ]
 
 
