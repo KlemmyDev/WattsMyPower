@@ -6,7 +6,7 @@ import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartH
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
-import { DASH, kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
 import { addDays } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useFahrenheit } from "~/features/common/weather/hooks";
@@ -24,21 +24,26 @@ const W = 1000;
 const PH = 200; // solar and home use
 const BH = 64; // battery level
 
-/** Half an hour of the day as the chart reads it (energy in kWh): recorded (today, before now) or forecast. */
-type Row = {
-  t0: number;
-  t1: number;
+type P = { t: number; v: number };
+/** Five minutes under the pointer, as History reads one out: power in W (+ from the grid, + battery discharging), the
+ * battery level, and where each sits on its plot (percentages of its height) for the dots. */
+type Point = {
+  t: number;
+  recorded: boolean;
   pv: number | null;
   load: number | null;
-  grid: number | null; // kWh, + from the grid
-  bat: number | null; // kWh, + discharging
+  grid: number | null;
+  bat: number | null;
   soc: number | null;
-  /** Planned car charging (kWh), forecast half hours only; the inverter's readings count it in home use. */
   car: number | null;
-  /** The forecast hour it's part of; null for one recorded. */
+  /** The forecast hour it falls in; null for a recorded one. */
   h: ForecastHour | null;
+  pvTop: number | null;
+  loadTop: number | null;
+  socTop: number | null;
 };
-type P = { t: number; v: number };
+/** The hover's step: one reading. */
+const STEP = 300;
 /**
  * What today's hours were forecast to bring, hour by hour from midnight (kW, or kWh in the hour): solar, from the
  * day-ahead forecast kept with each hour's weather, and home use, the typical day's. Drawn over the hours already
@@ -67,46 +72,20 @@ function plot(
   const from = day.today ? now : start;
   const X = (t: number) => ((Math.min(start + span, Math.max(start, t)) - start) / span) * W;
 
-  // Half hour by half hour: those gone (today) from the readings, the rest from the forecast. The forecast is hourly,
-  // so each hour is shared over its halves (the part of one it covers, for the half hour under way), and its battery
-  // level is drawn straight from the hour before's to its own.
+  // The grid and battery bars, a half hour each: those gone (today) from the readings, the rest from the forecast.
+  // The forecast is hourly, so each hour is shared over its halves (the part of one it covers, for the half hour under
+  // way). The battery's share is what the house and car used, less solar and the grid (+ discharging).
   const recorded = day.today ? slotsOf(series, start, HALF_HOUR) : [];
-  const rows: Row[] = [];
+  const flows: Flow[] = [];
   for (let t0 = start, i = 0; t0 < start + span; t0 += HALF_HOUR, i++) {
     const t1 = t0 + HALF_HOUR;
-    const k = day.hours.findIndex((x) => x.ts <= t0 && t0 < x.ts + 3600);
-    const h = k >= 0 ? day.hours[k] : null;
-    if (day.today && t1 <= now) {
-      const r = recorded[i];
-      rows.push({
-        t0,
-        t1,
-        pv: r?.pv ?? null,
-        load: r?.load ?? null,
-        grid: r?.grid ?? null,
-        bat: r?.bat ?? null,
-        soc: r?.soc ?? null,
-        car: null,
-        h: null,
-      });
-    } else if (h) {
-      const len = Math.max(1, hourEnd(h) - h.start);
-      const share = Math.max(0, Math.min(t1, hourEnd(h)) - Math.max(t0, h.start)) / len;
-      const before = k > 0 ? day.hours[k - 1].soc : (soc0 ?? h.soc);
-      const done = Math.min(1, Math.max(0, (Math.min(t1, hourEnd(h)) - h.start) / len));
-      rows.push({
-        t0,
-        t1,
-        pv: h.pv_kwh * share,
-        load: hourKwh(h, h.load_kw) * share,
-        grid: h.grid_kwh * share,
-        // What the battery gave (+) or took: what the house and car used, less solar and the grid.
-        bat: (hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh) * share,
-        soc: before + (h.soc - before) * done,
-        car: hourKwh(h, h.car_kw ?? 0) * share,
-        h,
-      });
-    } else rows.push({ t0, t1, pv: null, load: null, grid: null, bat: null, soc: null, car: null, h: null });
+    const h = day.hours.find((x) => x.ts <= t0 && t0 < x.ts + 3600);
+    if (day.today && t1 <= now) flows.push({ grid: recorded[i]?.grid ?? null, bat: recorded[i]?.bat ?? null });
+    else if (h) {
+      const share = Math.max(0, Math.min(t1, hourEnd(h)) - Math.max(t0, h.start)) / Math.max(1, hourEnd(h) - h.start);
+      const bat = hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh;
+      flows.push({ grid: h.grid_kwh * share, bat: bat * share, forecast: true });
+    } else flows.push({ grid: null, bat: null });
   }
 
   // Recorded lines from the 5-minute readings before now.
@@ -175,8 +154,57 @@ function plot(
           .join(" ")} Z`
       : "";
 
-  // The grid and battery bars, a half hour each.
-  const flows: Flow[] = rows.map((r) => ({ grid: r.grid, bat: r.bat, forecast: !!r.h }));
+  // The five minutes from `t`: the reading itself for those gone today, else read off the forecast lines (solar, home
+  // use, battery level) with the grid and battery at their hour's average, the forecast being hourly.
+  const lerp = (pts: P[], t: number): number | null => {
+    if (!pts.length) return null;
+    const k = pts.findIndex((p) => p.t >= t);
+    if (k <= 0) return k === 0 ? pts[0].v : pts[pts.length - 1].v;
+    const a = pts[k - 1];
+    const b = pts[k];
+    return a.v + ((b.v - a.v) * (t - a.t)) / (b.t - a.t || 1);
+  };
+  const at = new Map((day.today ? series?.t : undefined)?.map((t, i) => [t, i]) ?? []);
+  const pct = (v: number | null, f: (v: number) => number, h: number) => (v == null ? null : (f(v) / h) * 100);
+  const point = (t: number): Point => {
+    let p: Omit<Point, "pvTop" | "loadTop" | "socTop">;
+    if (day.today && t < now) {
+      const i = at.get(t);
+      const v = (f: string) => (i == null ? null : (series?.[f]?.[i] ?? null));
+      p = {
+        t,
+        recorded: true,
+        pv: v("pv_power"),
+        load: v("load_power"),
+        grid: v("grid_power"),
+        bat: v("battery_power"),
+        soc: v("battery_soc"),
+        car: null,
+        h: null,
+      };
+    } else {
+      const h = hrs.find((x) => x.ts <= t && t < x.ts + 3600) ?? null;
+      const hours = h ? Math.max(1, hourEnd(h) - h.start) / 3600 : 1;
+      const kw = (v: number | null) => (v == null ? null : v * 1000);
+      p = {
+        t,
+        recorded: false,
+        pv: kw(lerp(pvAhead, t)),
+        load: kw(lerp(loadAhead, t)),
+        grid: h ? (h.grid_kwh / hours) * 1000 : null,
+        bat: h ? ((hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh) / hours) * 1000 : null,
+        soc: lerp(socAhead, t),
+        car: h && h.car_kw ? h.car_kw * 1000 : null,
+        h,
+      };
+    }
+    return {
+      ...p,
+      pvTop: pct(p.pv == null ? null : Math.max(0, p.pv) / 1000, py, PH),
+      loadTop: pct(p.load == null ? null : Math.max(0, p.load) / 1000, py, PH),
+      socTop: pct(p.soc, by, BH),
+    };
+  };
 
   // The weather every three hours: the forecast's, or (earlier today) what was recorded.
   const sky = skyEvery3h(start, day.hours, recordedSky);
@@ -184,7 +212,7 @@ function plot(
   return {
     start,
     span,
-    rows,
+    point,
     flows,
     sky,
     X,
@@ -205,71 +233,88 @@ function plot(
   };
 }
 
-/** The earlier forecast for half of hour `k` (kWh): half the hour's solar, and half an hour of its typical use. */
-function halfOf(o: Overlay, k: number) {
+/** The earlier forecast's average power (W) in hour `k`: its solar (kWh in the hour, so kW on average) and its
+ * typical use (kW). */
+function hourOf(o: Overlay, k: number) {
   const pv = o.pv[k];
   const load = o.load[k];
-  return { pv: pv == null ? null : pv / 2, load: load == null ? null : load / 2 };
+  return { pv: pv == null ? null : pv * 1000, load: load == null ? null : load * 1000 };
 }
 
 const WINDOW_COLOR: Record<Window["kind"], string> = { spare: COLOR.export, avoid: COLOR.bad, paid: COLOR.good };
 
-function RowTooltip({
-  row,
+/** A dot on a line at the hovered five minutes. `top` is a percentage of its plot's height. */
+const Dot = ({ left, top, color }: { left: number; top: number | null; color: string }) =>
+  top == null ? null : (
+    <span
+      className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+      style={{ left: `${left}%`, top: `${top}%`, background: color }}
+    />
+  );
+
+/** The five minutes under the pointer: recorded (today, before now) or as forecast, in W as the lines are drawn. */
+function PointTooltip({
+  p,
   left,
   width,
   rates,
   marked,
   was,
+  sky,
 }: {
-  row: Row;
+  p: Point;
   left: number;
   width: number;
   rates: Rates | null;
-  /** A recorded hour's earlier forecast (kWh), with the overlay on. */
-  was: { pv: number | null; load: number | null } | null;
   /** Below the moments' row of numbers (MARKER_ROW). */
   marked: boolean;
+  /** A recorded reading's earlier forecast for its hour (average W), with the overlay on. */
+  was: { pv: number | null; load: number | null } | null;
+  /** The hour's weather: the forecast's, or as recorded. */
+  sky: { temp: number | null; code: number | null; is_day: number | null } | null;
 }) {
   const fahrenheit = useFahrenheit();
-  const h = row.h;
-  const icon = h ? hourIcon(h) : null;
-  const g = row.grid ?? 0;
-  // What the hour's grid power is priced at: feed-in while it exports, the buy price otherwise.
-  const selling = g <= -0.05;
-  const from = h ? Math.max(row.t0, h.start) : row.t0;
-  const price = h && rates ? (selling ? rates.sell : rates.buy)(from, row.t1) : null;
-  const name = selling ? "Feed-in" : h && rates ? (rates.name(from, row.t1) ?? "Grid price") : null;
+  const icon = sky?.code != null ? hourIcon({ code: sky.code, is_day: sky.is_day ?? 1 }) : null;
+  const power = (v: number | null) => (v == null ? DASH : kW(v));
+  const g = p.grid ?? 0;
+  const b = p.bat ?? 0;
+  // What the grid power is priced at: feed-in while it exports, the buy price otherwise (the forecast's minutes only).
+  const selling = g <= -50;
+  const price = p.h && rates ? (selling ? rates.sell : rates.buy)(p.t, p.t + STEP) : null;
+  const name = selling ? "Feed-in" : p.h && rates ? (rates.name(p.t, p.t + STEP) ?? "Grid price") : null;
   return (
     <ChartTooltip left={left} flip={left > 60} width={width} className={marked ? "top-[48px]" : "top-[22px]"}>
       <div className="flex items-end justify-between gap-2 font-medium text-ink">
         <span className="flex flex-col">
-          <span className="text-[11px] font-normal text-ink-faint">{h ? "Forecast" : "Recorded"}</span>
-          {hhmm(row.t0)} to {hhmm(row.t1)}
+          <span className="text-[11px] font-normal text-ink-faint">{p.recorded ? "Recorded" : "Forecast"}</span>
+          {hhmm(p.t)} to {hhmm(p.t + STEP)}
         </span>
-        {icon && h && (
+        {icon && (
           <span className="flex items-center gap-1 text-ink-soft">
             <span style={{ color: hourIconColor(icon) }}>
               <Icon name={icon} size={14} />
             </span>
-            {h.temp != null ? degrees(h.temp, fahrenheit) : ""}
+            {sky?.temp != null ? degrees(sky.temp, fahrenheit) : ""}
           </span>
         )}
       </div>
-      <TooltipRow label="Solar" value={kWh(row.pv)} color={COLOR.solar} />
-      {was?.pv != null && <TooltipRow label="Forecast solar" value={kWh(was.pv)} />}
-      <TooltipRow label="Home use" value={kWh(row.load)} color={COLOR.ink} />
-      {was?.load != null && <TooltipRow label="Typical home use" value={kWh(was.load)} />}
-      {row.car != null && row.car >= 0.05 && (
-        <TooltipRow label="Car charging" value={kWh(row.car)} color={COLOR.lilac} />
-      )}
-      <TooltipRow label="Battery" value={row.soc == null ? DASH : pct(row.soc)} color={COLOR.battery} />
-      {row.bat != null && Math.abs(row.bat) >= 0.05 && (
-        <TooltipRow label={row.bat > 0 ? "Discharged" : "Charged"} value={kWh(Math.abs(row.bat))} />
+      <TooltipRow label="Solar" value={power(p.pv)} color={COLOR.solar} />
+      {was?.pv != null && <TooltipRow label="Forecast solar" value={kW(was.pv)} />}
+      <TooltipRow label="Home use" value={power(p.load)} color={COLOR.ink} />
+      {was?.load != null && <TooltipRow label="Typical home use" value={kW(was.load)} />}
+      {p.car != null && p.car >= 50 && <TooltipRow label="Car charging" value={kW(p.car)} color={COLOR.lilac} />}
+      <TooltipRow label="Battery" value={p.soc == null ? DASH : pct(p.soc)} color={COLOR.battery} />
+      {Math.abs(b) >= 50 && (
+        <TooltipRow
+          label={b > 0 ? "Discharging" : "Charging"}
+          value={kW(Math.abs(b))}
+          color={b > 0 ? FLOW_COLOR.discharge : FLOW_COLOR.charge}
+        />
       )}
       <TooltipRow
-        label={g >= 0.05 ? "From the grid" : g <= -0.05 ? "To the grid" : "Grid"}
-        value={row.grid == null ? DASH : Math.abs(g) >= 0.05 ? kWh(Math.abs(g)) : "Idle"}
+        label={g >= 50 ? "From the grid" : g <= -50 ? "To the grid" : "Grid"}
+        value={p.grid == null ? DASH : Math.abs(g) >= 50 ? kW(Math.abs(g)) : "Idle"}
+        color={g >= 50 ? FLOW_COLOR.fromGrid : g <= -50 ? FLOW_COLOR.toGrid : undefined}
       />
       {price != null && <TooltipRow label={name} value={`${priceLabel(price)}/kWh`} />}
     </ChartTooltip>
@@ -277,10 +322,10 @@ function RowTooltip({
 }
 
 /**
- * A day of the plan, midnight to midnight: solar and home use, the battery level, and grid power
- * hour by hour. Today shows what's been recorded up to now and the forecast after it; solar's
- * likely range is shaded around its forecast, and the day's best times are marked across the top, with its key
- * moments numbered above them.
+ * A day of the plan, midnight to midnight: solar and home use, the battery level, and the grid and battery as bars
+ * every half hour. Today shows what's been recorded up to now and the forecast after it; solar's likely range is
+ * shaded around its forecast, and the day's best times are marked across the top, with its key moments numbered above
+ * them. The pointer reads out five minutes at a time, as History does, with a dot on each line.
  */
 export function PlanChart({
   day,
@@ -320,7 +365,7 @@ export function PlanChart({
     () => plot(day, series, now, soc0, range, recordedSky, overlay),
     [day, series, now, soc0, range, recordedSky, overlay],
   );
-  const [hover, setHover] = useState<Row | null>(null);
+  const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(0);
   const left = (t: number) => (c.X(t) / W) * 100;
   // The moments' numbers sit in a row of their own above the best-times strips.
@@ -330,7 +375,8 @@ export function PlanChart({
     const r = e.currentTarget.getBoundingClientRect();
     setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
     const t = c.start + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * c.span;
-    setHover(c.rows.find((row) => row.t0 <= t && t < row.t1) ?? null);
+    // The five minutes it's in, as History reads them out (the bars stay half-hourly).
+    setHover(c.point(c.start + Math.floor((t - c.start) / STEP) * STEP));
   };
 
   const legend: [string, string, "line" | "dash" | "box"][] = [
@@ -408,7 +454,11 @@ export function PlanChart({
           <div
             aria-hidden
             className="pointer-events-none absolute bottom-0 rounded-[3px] bg-fg/8"
-            style={{ top: top + 22, left: `${left(hover.t0)}%`, width: `${left(hover.t1) - left(hover.t0)}%` }}
+            style={{
+              top: top + 22,
+              left: `${left(hover.t)}%`,
+              width: `max(3px, ${(left(hover.t + STEP) - left(hover.t)).toFixed(3)}%)`,
+            }}
           />
         )}
         <div className="relative h-[200px] max-sm:h-[160px] compact:h-[140px]">
@@ -447,6 +497,12 @@ export function PlanChart({
               style={{ stroke: alpha(COLOR.fg, 0.12) }}
             />
           </svg>
+          {hover && (
+            <>
+              <Dot left={left(hover.t + STEP / 2)} top={hover.pvTop} color={COLOR.solar} />
+              <Dot left={left(hover.t + STEP / 2)} top={hover.loadTop} color={COLOR.ink} />
+            </>
+          )}
         </div>
         <div className="mt-1 flex items-center justify-end text-[11px] text-ink-dim tabular-nums">
           Reserve {reserve}%
@@ -492,16 +548,22 @@ export function PlanChart({
               style={{ stroke: alpha(COLOR.fg, 0.12) }}
             />
           </svg>
+          {hover && <Dot left={left(hover.t + STEP / 2)} top={hover.socTop} color={COLOR.battery} />}
         </div>
         <FlowBars slots={c.flows} className="relative mt-1 h-[64px] compact:h-12" />
         {hover && (
-          <RowTooltip
-            row={hover}
-            left={left(hover.t0 + (hover.t1 - hover.t0) / 2)}
+          <PointTooltip
+            p={hover}
+            left={left(hover.t + STEP / 2)}
             width={width}
             rates={rates}
             marked={top > 0}
-            was={overlay && !hover.h && day.today ? halfOf(overlay, Math.floor((hover.t0 - c.start) / 3600)) : null}
+            was={overlay && hover.recorded ? hourOf(overlay, Math.floor((hover.t - c.start) / 3600)) : null}
+            sky={
+              hover.h ??
+              recordedSky?.find((x) => x.ts === c.start + Math.floor((hover.t - c.start) / 3600) * 3600) ??
+              null
+            }
           />
         )}
       </div>
