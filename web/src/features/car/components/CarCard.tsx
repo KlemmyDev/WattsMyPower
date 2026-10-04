@@ -1,9 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { carQuery, suggestQuery } from "~/features/car/api";
+import { carsQuery, suggestQuery } from "~/features/car/api";
 import { LevelBar, LevelForm, levelSource, rangeWords } from "~/features/car/components/CarLevel";
 import type { CarView } from "~/features/car/types";
-import { carName, chargeLine, costWords, MODE, phaseWord, solarWords, stepsLine, when } from "~/features/car/utils";
+import {
+  carName,
+  chargeLine,
+  costWords,
+  MODE,
+  paintOf,
+  phaseWord,
+  solarWords,
+  stepsLine,
+  when,
+} from "~/features/car/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
@@ -13,26 +23,41 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { sameDay } from "~/features/common/time/utils";
 
 /**
- * The car on the Overview, once one is connected: its level and range, and its next charge (planned, or the best
- * time to charge it), with the way to Plan for more.
+ * The cars on the Overview, once any are connected: each one's level and range, and its next charge (planned, or
+ * the best time to charge it), with the way to Plan for more. Two side by side; one, or more than two, a row each.
  */
-export function CarCard({ now }: { now: number }) {
-  const { data } = useQuery(carQuery);
-  if (!data?.connected) return null;
+export function CarCards({ now }: { now: number }) {
+  const { data: cars } = useQuery(carsQuery);
+  if (!cars?.length) return null;
+  const pair = cars.length === 2;
+  return cars.map((v) => <CarCard key={v.id} view={v} now={now} half={pair} />);
+}
+
+function CarCard({ view, now, half }: { view: CarView; now: number; half: boolean }) {
+  const id = `h-car-card-${view.id}`;
   return (
-    <Card aria-labelledby="h-car-card" className="col-span-12">
+    <Card aria-labelledby={id} className={half ? "col-span-6 max-lg:col-span-12" : "col-span-12"}>
       <CardHeader
-        title={carName(data)}
-        id="h-car-card"
+        title={
+          <span className="flex items-center gap-2.5">
+            <i
+              aria-hidden
+              className="size-3 rounded-full border border-fg/20"
+              style={{ background: paintOf(view.car.car_colour).hex }}
+            />
+            {carName(view)}
+          </span>
+        }
+        id={id}
         action={
           <ButtonLink to="/plan" hash="car" variant="link" size="sm">
             Plan charging
           </ButtonLink>
         }
       />
-      <div className="grid grid-cols-2 gap-8 max-md:grid-cols-1 max-md:gap-6">
-        <Level view={data} now={now} />
-        <NextCharge view={data} now={now} />
+      <div className={half ? "flex flex-col gap-6" : "grid grid-cols-2 gap-8 max-md:grid-cols-1 max-md:gap-6"}>
+        <Level view={view} now={now} />
+        <NextCharge view={view} now={now} />
       </div>
     </Card>
   );
@@ -51,7 +76,7 @@ function Level({ view, now }: { view: CarView; now: number }) {
       </div>
       <LevelBar soc={l?.soc ?? null} target={target} />
       {editing || !l ? (
-        <LevelForm initial={l?.soc ?? null} onDone={l ? () => setEditing(false) : undefined} />
+        <LevelForm car={view.id} initial={l?.soc ?? null} onDone={l ? () => setEditing(false) : undefined} />
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Muted>{levelSource(l, now)}.</Muted>
@@ -73,7 +98,7 @@ function NextCharge({ view, now }: { view: CarView; now: number }) {
   const level = view.level?.soc;
   const target = view.car.car_target_soc;
   const wanted = !planned && level != null && level < target - 0.5;
-  const { data: s, isPending, isError } = useQuery({ ...suggestQuery({}), enabled: wanted });
+  const { data: s, isPending, isError } = useQuery({ ...suggestQuery(view.id, {}), enabled: wanted });
 
   if (planned) {
     const on = planned.start <= now;

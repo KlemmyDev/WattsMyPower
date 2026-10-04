@@ -1,4 +1,13 @@
-import type { CarView, ChargeMode, ChargeStep, SuggestedCharge, Weekday } from "~/features/car/types";
+import type {
+  CarBody,
+  CarColour,
+  NamedPaint,
+  CarView,
+  ChargeMode,
+  ChargeStep,
+  SuggestedCharge,
+  Weekday,
+} from "~/features/car/types";
 import { hhmm, weekdayLong } from "~/features/common/formatting/utils/date";
 import { kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
@@ -79,7 +88,7 @@ export function solarWords(c: Pick<SuggestedCharge, "solar_share">): string {
   return "no spare solar";
 }
 
-/** The car's name: what it's called, or its model, or just "Your car". */
+/** A car's name: what it's called, or its model, or just "Your car". */
 export const carName = (v: CarView | undefined) => v?.name || v?.model?.model || "Your car";
 
 /** Each aim's name, and what it does, in words. */
@@ -115,3 +124,35 @@ export function stepsLine(steps: ChargeStep[], now?: number): string {
     )
     .join(", then ");
 }
+
+/** Each paint's name, and its colour in the drawing. */
+export const PAINT: Record<NamedPaint, { label: string; hex: string }> = {
+  white: { label: "White", hex: "#f3f3f0" },
+  black: { label: "Black", hex: "#202226" },
+  grey: { label: "Grey", hex: "#5f646b" },
+  silver: { label: "Silver", hex: "#b8bcc2" },
+  blue: { label: "Blue", hex: "#2a4f8f" },
+  red: { label: "Red", hex: "#a5161f" },
+  green: { label: "Green", hex: "#3f5c4a" },
+  sand: { label: "Sand", hex: "#cbbd9f" },
+};
+export const PAINTS = Object.keys(PAINT) as NamedPaint[];
+
+/** A paint's name and colour: a named one's, or "Custom" and the colour itself. */
+export const paintOf = (c: CarColour): { label: string; hex: string } =>
+  c.startsWith("#") ? { label: "Custom", hex: c } : (PAINT[c as NamedPaint] ?? PAINT.white);
+
+/** What each shape is called. */
+export const BODY: Record<CarBody, string> = {
+  model3: "Tesla Model 3",
+  modelY: "Tesla Model Y",
+  atto3: "BYD Atto 3",
+  dolphin: "BYD Dolphin",
+  seal: "BYD Seal",
+  sealion7: "BYD Sealion 7",
+  ioniq5: "Hyundai Ioniq 5",
+  sedan: "Sedan",
+  suv: "SUV",
+  hatch: "Hatchback",
+};
+export const BODIES = Object.keys(BODY) as CarBody[];

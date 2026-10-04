@@ -4,6 +4,7 @@ import {
   MAX_INVERTERS,
   type HouseOptions,
   type HouseStyle,
+  type Park,
   type Place,
 } from "~/features/overview/utils/house/layout";
 
@@ -19,14 +20,18 @@ export const connectedBatteries = (_s: SystemInfo | undefined) => 1;
 const places = (chosen: string[] | undefined, n: number): Place[] =>
   Array.from({ length: n }, (_, i) => (chosen?.[i] === "garage" ? "garage" : "wall"));
 
-/** The house to draw, from Settings → System → Your house, with as many inverters and batteries as are connected. */
-export function houseOptions(s: SystemInfo | undefined): HouseOptions {
-  if (!s) return DEFAULT_HOUSE;
+/**
+ * The house to draw, from Settings → System → Your house, with as many inverters and batteries as are connected,
+ * and where each connected car would rather park.
+ */
+export function houseOptions(s: SystemInfo | undefined, cars: Park[] = []): HouseOptions {
+  if (!s) return { ...DEFAULT_HOUSE, cars };
   return {
     style: STYLES.includes(s.house_style) ? s.house_style : "estate",
     storeys: s.house_storeys === 2 ? 2 : 1,
     garage: Math.min(Math.max(Math.round(s.garage_spaces ?? 0), 0), 2) as 0 | 1 | 2,
     inverters: places(s.inverter_places, connectedInverters(s)),
     batteries: places(s.battery_places, connectedBatteries(s)),
+    cars,
   };
 }

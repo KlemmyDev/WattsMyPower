@@ -31,6 +31,12 @@ function build(l: Layout) {
   if (!g)
     for (const yy of [1.0, 7.0])
       ground.push(ln([11.3, yy, 0.02], [gr.x1 - 0.3, yy, 0.02], { stroke: "rgba(0,0,0,0.06)", strokeWidth: 1.5 }));
+  // Paving under the spots outside, beside a garage (without one, the driveway above is under them).
+  if (g)
+    for (const sp of l.spots.filter((p) => !p.garage)) {
+      ground.push(flat(sp.x0 - 0.25, sp.x1 + 0.25, sp.y0 - 0.3, sp.y1 + 0.3, 0.012, "#ebeae5"));
+      if (sp.x1 + 0.25 >= gr.x1) ground.push(side(gr.x1, sp.y0 - 0.3, sp.y1 + 0.3, -0.5, 0, "#cfcdc6"));
+    }
   ground.push(...style.paths);
 
   // The back tree and the power pole, then the house.
@@ -100,9 +106,6 @@ function build(l: Layout) {
     wet.push(h("ellipse", { cx: c[0], cy: c[1], rx, ry: rx * 0.36, fill: "rgba(140,160,190,0.45)" }));
   }
 
-  // Where a car would park: beside the house, or on the driveway in front of the garage.
-  const bay = g ? [g.x0 + 0.7, Math.min(g.x0 + 3.1, g.x1 - 0.7), g.y1 + 0.5, gr.y1 - 0.3] : [11.75, 13.95, 1.35, 6.6];
-
   return {
     ground: group(ground),
     house: group(house),
@@ -112,11 +115,6 @@ function build(l: Layout) {
     yard: group(style.yard),
     wet: group(wet),
     night: group(style.night),
-    parking: flat(bay[0], bay[1], bay[2], bay[3], 0.02, "none", {
-      stroke: "rgba(0,0,0,0.28)",
-      strokeWidth: 1.5,
-      strokeDasharray: "6 6",
-    }),
   } satisfies Record<string, ReactElement>;
 }
 

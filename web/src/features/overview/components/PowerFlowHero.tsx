@@ -1,4 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
+import { carsQuery } from "~/features/car/api";
+import { carName, paintOf } from "~/features/car/utils";
 import type { Forecast } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -49,6 +52,7 @@ function Scene({
   now: number;
 }) {
   const wx = liveWeather(p, f, now, !!s?.temp_unit_f);
+  const { data: cars } = useQuery(carsQuery);
   const flows = {
     pv: (p.pv_power || 0) / 1000,
     grid: (p.grid_power || 0) / 1000,
@@ -75,7 +79,22 @@ function Scene({
       {/* No background under the scene: it covers the box, and a light one would show as a fringe
           around the rounded corners against a dark sky. */}
       <div className="relative aspect-[1200/600] w-full whitespace-nowrap max-md:aspect-[4/3]">
-        <HouseScene flows={flows} sky={wx.mode} cover={wx.cover} house={houseOptions(s)} />
+        <HouseScene
+          flows={flows}
+          sky={wx.mode}
+          cover={wx.cover}
+          house={houseOptions(
+            s,
+            (cars ?? []).map((c) => c.car.car_park),
+          )}
+          cars={(cars ?? []).map((c) => ({
+            body: c.car.car_body,
+            paint: paintOf(c.car.car_colour).hex,
+            label: [carName(c), c.level && `${Math.round(c.level.soc)}%`].filter(Boolean).join(" · "),
+            href: `/settings/integrations/car/${c.id}`,
+          }))}
+          links
+        />
         {/* The heading and weather chip follow the sky (dark at night and in storms), not the theme. */}
         <div className="absolute top-7 left-8 z-1 flex max-w-[300px] flex-col items-start gap-3.5 whitespace-normal max-md:top-3 max-md:left-3.5">
           <div className="flex flex-col gap-1 max-md:hidden">

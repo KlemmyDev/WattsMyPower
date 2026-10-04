@@ -20,8 +20,7 @@ from app.core.config import Config
 from app.core.database import Database
 
 # Text settings: key -> max length. Stored in the kv table (the settings table holds REALs).
-# The car's name and the model it was chosen from (app.features.car.catalog), for the EV integration.
-TEXT: dict[str, int] = {"location_name": 120, "car_name": 60, "car_model": 60}
+TEXT: dict[str, int] = {"location_name": 120}
 # Text settings with a fixed set of values: key -> (allowed values, default).
 CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # Open-Meteo's weather model for the forecast: its own pick for the location, or one model.
@@ -31,23 +30,17 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     ),
     # How the Overview draws the house (Settings → System → Your house).
     "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
-    # What suggested car charges aim for (app.features.car.planner): the least on the bill, the most solar,
-    # sparing the home battery, or the soonest done.
-    "car_charge_mode": (("cheapest", "solar", "battery", "fastest"), "cheapest"),
 }
 # Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
 # battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.
 LISTS: dict[str, tuple[tuple[str, ...], int]] = {
     "inverter_places": (("wall", "garage"), 3),
     "battery_places": (("wall", "garage"), 3),
-    # The days the car is needed, by car_ready_by; none means every day.
-    "car_days": (("mon", "tue", "wed", "thu", "fri", "sat", "sun"), 7),
 }
 # Settings that only take whole numbers.
 WHOLE = {
     "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
-    "house_storeys", "garage_spaces", "system_installed", "battery_installed", "car_phases",
-    "car_connected", "car_target_soc", "car_ready_by", "car_battery_helps",
+    "house_storeys", "garage_spaces", "system_installed", "battery_installed",
 }  # fmt: skip
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
@@ -66,19 +59,7 @@ OWNERSHIP: dict[str, tuple[str, str]] = {
     "battery_warranty_years": ("Battery warranty", " years"),
     "battery_warranty_mwh": ("Battery warranty energy", " MWh"),
 }
-# The car's details (Settings → Integrations → Electric vehicle, and the Plan page's car charging card).
-CAR: dict[str, tuple[str, str]] = {
-    "car_battery_kwh": ("The car's battery", " kWh"),
-    "car_efficiency": ("Charging efficiency", "%"),
-    "car_amps": ("Charging current", " A"),
-    "car_min_amps": ("The lowest charging current", " A"),
-    "car_phases": ("Phases", ""),
-    "car_voltage": ("Voltage", " V"),
-    "car_wh_per_km": ("Energy use", " Wh/km"),
-    "car_target_soc": ("The charge limit", "%"),
-    "car_ready_by": ("Ready by", " minutes after midnight"),
-}
-NAMED = SYSTEM | OWNERSHIP | CAR
+NAMED = SYSTEM | OWNERSHIP
 # kv marker: the system details have been copied from the environment (see seed_system).
 SYSTEM_SEEDED = "system_seeded"
 
@@ -122,23 +103,6 @@ class SettingsStore:
             "battery_installed": (0, 4_102_444_800, 0),
             "battery_warranty_years": (0, 30, 0),
             "battery_warranty_mwh": (0, 1000, 0),
-            # The car, for planning its charges (the Plan page): its battery's usable size, how much of what
-            # comes from the wall reaches it (%), and how it's charged (the most amps the charger gives and
-            # the fewest the car accepts, 1 or 3 phases, volts).
-            "car_battery_kwh": (10, 200, 75),
-            "car_efficiency": (50, 100, 90),
-            "car_amps": (1, 48, 16),
-            "car_min_amps": (1, 32, 6),
-            "car_phases": (1, 3, 1),
-            "car_voltage": (200, 260, 230),
-            # The EV integration: whether a car is connected (1), what it uses on the road (Wh/km), the level it's
-            # usually charged to (%), when it's usually needed (minutes after local midnight), and whether the
-            # home battery may help charge it when charges are suggested (1).
-            "car_connected": (0, 1, 0),
-            "car_wh_per_km": (50, 500, 170),
-            "car_target_soc": (50, 100, 80),
-            "car_ready_by": (0, 1439, 450),
-            "car_battery_helps": (0, 1, 1),
         }
         self._lock = threading.Lock()
         self._values: dict[str, float] = {}

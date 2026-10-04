@@ -44,25 +44,6 @@ export type Settings = {
   battery_installed: number;
   battery_warranty_years: number;
   battery_warranty_mwh: number;
-  /**
-   * The car (Settings → Integrations → Electric vehicle; the Plan page): whether one's connected (1), its name and the
-   * model it was chosen from, and its details (see CarDetails in the car feature).
-   */
-  car_connected: number;
-  car_name: string | null;
-  car_model: string | null;
-  car_battery_kwh: number;
-  car_efficiency: number;
-  car_amps: number;
-  car_min_amps: number;
-  car_phases: number;
-  car_voltage: number;
-  car_wh_per_km: number;
-  car_target_soc: number;
-  car_ready_by: number;
-  car_days: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
-  car_battery_helps: number;
-  car_charge_mode: "cheapest" | "solar" | "battery" | "fastest";
 };
 
 export type OwnershipKey =

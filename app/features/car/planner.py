@@ -464,7 +464,7 @@ def next_ready_by(now: int, minutes: int, days: list[str] | None = None, at_leas
 
 
 class ChargePlanner:
-    """Suggested charges for the car, from the forecast, the planned charges, the tariff and the car's details."""
+    """Suggested charges for a car, from the forecast, the planned charges, the tariff and the car's details."""
 
     def __init__(
         self,
@@ -482,6 +482,7 @@ class ChargePlanner:
 
     def suggest(
         self,
+        car_id: int,
         body: dict[str, Any],
         *,
         home_soc: float | None,
@@ -492,11 +493,12 @@ class ChargePlanner:
         """Suggestions for a charge from the car's level now (given, or as last known) to a level (given, or the
         car's usual one) by a time (given, or its usual time next). Raises ValueError, in words."""
         now = int(now or time.time())
+        d = self.car.details(car_id)
         given = body.get("ready_by")
         ready_by = (
             int(_number(body, "ready_by", 0, 4_102_444_800))
             if given not in (None, "")
-            else next_ready_by(now, int(self.settings.get("car_ready_by")), self.settings.get_list("car_days"))
+            else next_ready_by(now, int(d["car_ready_by"]), d["car_days"])
         )
         if ready_by <= now + QUARTER:
             raise ValueError("Give a time at least 15 minutes from now.")
@@ -509,20 +511,20 @@ class ChargePlanner:
         horizon = steps[-1]["start"] + steps[-1]["dur"]
         ready_by = min(ready_by, horizon)
 
-        level = self.car.level(now)
+        level = self.car.level(car_id, now)
         soc_now = _number(body, "soc_now", 0, 100) if body.get("soc_now") not in (None, "") else None
         if soc_now is None:
             if level is None:
                 raise ValueError("Say what the car's charge is now.")
             soc_now = level["soc"]
         soc_to = _number(body, "soc_to", 1, 100) if body.get("soc_to") not in (None, "") else None
-        soc_to = soc_to if soc_to is not None else self.settings.get("car_target_soc")
+        soc_to = soc_to if soc_to is not None else d["car_target_soc"]
 
-        mode = body.get("mode") or self.settings.get_choice("car_charge_mode")
+        mode = body.get("mode") or d["car_charge_mode"]
         if mode not in MODES:
             raise ValueError(f"Aim for one of: {', '.join(MODES)}.")
 
-        spec = self.car.spec()
+        spec = self.car.spec(car_id)
         t, tables = self.tariffs.current()
         buy, sell = step_prices(Pricer(t, tables, self.prices, now, horizon), steps)
         others = self.car.charges(now, horizon)
@@ -533,7 +535,7 @@ class ChargePlanner:
             max_kw=self.settings.get("battery_max_kw"),
         )
         # Charges already planned before it's needed raise the car's level by then: plan for what's left.
-        planned = self.car.planned_soc(soc_now, now, ready_by)
+        planned = self.car.planned_soc(car_id, soc_now, now, ready_by)
         result: dict[str, Any] = {"planned_soc": planned if planned > soc_now else None}
         if planned >= soc_to - 0.5:
             return result | {

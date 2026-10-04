@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { amberQuery } from "~/features/amber/api";
-import { carQuery } from "~/features/car/api";
+import { carsQuery } from "~/features/car/api";
 import { carName } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
@@ -112,27 +112,33 @@ function AmberLink() {
 }
 
 function CarLink() {
-  const { data: view, isPending, error } = useQuery(carQuery);
+  const { data: cars, isPending, error } = useQuery(carsQuery);
   const [label, detail] = isPending
-    ? ["Checking", "Checking for a car…"]
-    : error || !view
+    ? ["Checking", "Checking for cars…"]
+    : error || !cars
       ? ["Unavailable", errorMessage(error)]
-      : !view.connected
+      : !cars.length
         ? ["Not connected", "Tell it about your EV, and Plan suggests when to charge it from spare solar"]
         : [
             "Connected",
-            [carName(view), view.level ? `${Math.round(view.level.soc)}%` : null, "charge times suggested on Plan"]
-              .filter(Boolean)
-              .join(" · "),
+            cars.length === 1
+              ? [
+                  carName(cars[0]),
+                  cars[0].level ? `${Math.round(cars[0].level.soc)}%` : null,
+                  "charge times suggested on Plan",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : `${cars.map(carName).join(" and ")} · charge times suggested on Plan`,
           ];
   return (
     <IntegrationLink
       card
       to="/settings/integrations/car"
       icon="car"
-      name="Electric vehicle"
+      name={cars && cars.length > 1 ? "Electric vehicles" : "Electric vehicle"}
       status={label}
-      on={!!view?.connected}
+      on={!!cars?.length}
       detail={detail}
     />
   );

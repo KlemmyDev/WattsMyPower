@@ -15,6 +15,8 @@ import { I, type P3 } from "~/features/overview/utils/house/iso";
  */
 
 export type Place = "wall" | "garage";
+/** Where a car would rather park. */
+export type Park = "garage" | "outside";
 export type HouseStyle = "estate" | "modern" | "queenslander" | "federation" | "farmhouse";
 
 export type HouseOptions = {
@@ -25,6 +27,8 @@ export type HouseOptions = {
   /** Where each inverter is, the main (hybrid) one first; and each battery. */
   inverters: Place[];
   batteries: Place[];
+  /** Where each connected car would rather park, in the order they were connected. */
+  cars: Park[];
 };
 
 export const DEFAULT_HOUSE: HouseOptions = {
@@ -33,10 +37,15 @@ export const DEFAULT_HOUSE: HouseOptions = {
   garage: 0,
   inverters: ["wall"],
   batteries: ["wall"],
+  cars: [],
 };
 
 export const MAX_BATTERIES = 3;
 export const MAX_INVERTERS = 3;
+export const MAX_OUTSIDE = 2; // car spots outside, beside the outermost wall
+
+/** Where a car parks: a rectangle on the ground (the car's length along y), in the garage or outside. */
+export type Spot = { x0: number; x1: number; y0: number; y1: number; garage: boolean };
 
 /** A box on a wall that faces +x: the wall's x, along y from y0 to y1, and z0 to z1 up it. */
 export type Unit = { x: number; y0: number; y1: number; z0: number; z1: number };
@@ -80,6 +89,11 @@ export type Layout = {
   /** Energy lines: roof to each inverter, and the main inverter to each battery. */
   pvPaths: P3[][];
   batteryPaths: P3[][];
+  /** Where cars park: each garage space, then the spots outside (as many as the cars that park there need, and
+   * one to show where a car would go when there's no garage). */
+  spots: Spot[];
+  /** The spot each car parks in (its index in `spots`), in the order of `options.cars`; -1 where there's no room. */
+  parked: number[];
   /** Points the label pills' leader lines end at, on the drawing. */
   anchors: { solar: P3; grid: P3; home: P3; battery: P3; tesla: P3 };
   /** Scale and shift that fit the drawing in the frame a single-storey house without a garage fills. */
@@ -288,12 +302,47 @@ function hang(wall: Wall, inverters: number, batteries: number): { inverters: Un
 }
 
 const mid = (u: Unit): number => (u.y0 + u.y1) / 2;
+
+/**
+ * The parking: a spot for each garage space (its own lane, the car's length along y), and outside, beside the
+ * outermost wall where the charger hangs, as many spots as the cars that won't be in the garage need (at most
+ * MAX_OUTSIDE), or one to show where a car would park when there's no garage. Cars that would rather park in the
+ * garage fill its spaces in order; the rest, and any it has no room for, park outside while there's room.
+ */
+function parking(o: HouseOptions, garage: { x0: number; x1: number; y0: number; spaces: 1 | 2 } | null) {
+  const lanes = garage ? garage.spaces : 0;
+  const inside: number[] = [];
+  const outside: number[] = [];
+  o.cars.forEach((p, i) => (p === "garage" && inside.length < lanes ? inside : outside).push(i));
+  const out = Math.min(MAX_OUTSIDE, Math.max(garage ? 0 : 1, outside.length));
+  const spots: Spot[] = [];
+  if (garage) {
+    const lane = (garage.x1 - garage.x0) / lanes;
+    for (let k = 0; k < lanes; k++) {
+      const cx = garage.x0 + lane * (k + 0.5);
+      spots.push({ x0: cx - 1.15, x1: cx + 1.15, y0: garage.y0 + 0.35, y1: garage.y0 + 6.05, garage: true });
+    }
+  }
+  // Beside a garage, towards the street, by the charger at the front of its wall, clear of what hangs behind it;
+  // without one, beside the house on the driveway.
+  const wall = garage?.x1 ?? 10;
+  const [y0, y1] = garage ? [5.0, 10.7] : [1.35, 7.05];
+  for (let k = 0; k < out; k++) {
+    const x0 = wall + 1.4 + k * 2.75;
+    spots.push({ x0, x1: x0 + 2.3, y0, y1, garage: false });
+  }
+  const parked = o.cars.map(() => -1);
+  inside.forEach((i, k) => (parked[i] = k));
+  outside.slice(0, out).forEach((i, k) => (parked[i] = lanes + k));
+  return { spots, parked };
+}
 const covers = (u: Unit, w: SideWindow) => u.y0 < w.y1 && u.y1 > w.y0 && u.z0 < w.z1 && u.z1 > w.z0;
 
 export function layout(o: HouseOptions): Layout {
   const shape = SHAPES[o.style](o.storeys);
   const gw = o.garage === 2 ? 6.6 : 3.8;
   const garage = o.garage ? { x0: 10, x1: 10 + gw, y0: 1.5, y1: 8, top: 3.3, spaces: o.garage } : null;
+  const { spots, parked } = parking(o, garage);
 
   // The charger hangs at the front of the outermost outside wall; equipment outside goes behind it.
   const s = shape.side;
@@ -368,23 +417,28 @@ export function layout(o: HouseOptions): Layout {
 
   const ground = {
     x0: -2,
-    x1: Math.max(15, (garage?.x1 ?? 10) + 2),
+    x1: Math.max(15, (garage?.x1 ?? 10) + 2, ...spots.map((sp) => sp.x1 + 0.6)),
     y0: -1,
-    y1: Math.max(shape.groundY1, garage ? 11.4 : 10.4),
+    y1: Math.max(shape.groundY1, garage ? 11.4 : 10.4, ...spots.map((sp) => sp.y1 + 0.6)),
   };
   const anchors = {
     solar: shape.solarAt,
     grid: POLE,
     home: shape.homeAt,
     battery: batteries[0] ? ([batteries[0].x, mid(batteries[0]), (batteries[0].z0 + batteries[0].z1) / 2] as P3) : POLE,
-    tesla: garage ? ([(garage.x0 + garage.x1) / 2, 9.6, 0.4] as P3) : ([13.95, 4.3, 1.0] as P3),
+    tesla: spots[0]
+      ? ([(spots[0].x0 + spots[0].x1) / 2, (spots[0].y0 + spots[0].y1) / 2, 1.0] as P3)
+      : ([13.95, 4.3, 1.0] as P3),
   };
 
   return {
     options: o,
     shape,
     garage,
-    ghostGarage: !!garage && [...o.inverters, ...o.batteries].includes("garage"),
+    // See-through when something's inside: equipment, or a car.
+    ghostGarage:
+      !!garage &&
+      ([...o.inverters, ...o.batteries].includes("garage") || parked.some((k) => k >= 0 && spots[k].garage)),
     ground,
     inverters,
     batteries,
@@ -392,6 +446,8 @@ export function layout(o: HouseOptions): Layout {
     sideWindows,
     pvPaths,
     batteryPaths,
+    spots,
+    parked,
     anchors,
     fit: fit(ground, shape.top),
   };
@@ -431,7 +487,7 @@ export const fitted = (l: Layout, p: P3): [number, number] => {
 
 /** A stable key for caching what's drawn for a layout. */
 export const houseKey = (o: HouseOptions) =>
-  `${o.style}-${o.storeys}-${o.garage}-${o.inverters.join(".")}-${o.batteries.join(".")}`;
+  `${o.style}-${o.storeys}-${o.garage}-${o.inverters.join(".")}-${o.batteries.join(".")}-${o.cars.join(".")}`;
 
 const layouts = new Map<string, Layout>();
 /** The layout for a house, worked out once per set of choices. */

@@ -50,10 +50,12 @@ export const rangeWords = (l: CarLevel) => `about ${intAU(l.km)} km of range`;
 
 /** Give the car's charge now: one number and Save. */
 export function LevelForm({
+  car,
   initial,
   onDone,
   className,
 }: {
+  car: number;
   initial: number | null;
   onDone?: () => void;
   className?: string;
@@ -66,12 +68,15 @@ export function LevelForm({
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (ok)
-      set.mutate(n, {
-        onSuccess: () => {
-          toast("The car's charge is updated.");
-          onDone?.();
+      set.mutate(
+        { car, soc: n },
+        {
+          onSuccess: () => {
+            toast("The car's charge is updated.");
+            onDone?.();
+          },
         },
-      });
+      );
   };
   return (
     <form onSubmit={submit} noValidate className={cn("flex flex-wrap items-center gap-2", className)}>
@@ -83,7 +88,7 @@ export function LevelForm({
           min="0"
           max="100"
           unit="%"
-          autoFocus
+          autoFocus={!!onDone}
           boxClassName="h-9 w-[104px]"
           value={v}
           onChange={(e) => setV(e.target.value)}

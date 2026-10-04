@@ -32,12 +32,13 @@ import { cn } from "~/features/common/ui/utils";
 type Plannable = Omit<SuggestedCharge, "kind">;
 
 /** Plan a suggested charge, steps and all, then say so. */
-function usePlanSuggestion(s: Suggestions | undefined) {
+function usePlanSuggestion(car: number, s: Suggestions | undefined) {
   const { addPlan } = useChargeChange();
   const toast = useToast();
   const plan = (c: Plannable, now: number) =>
     addPlan.mutate(
       {
+        car,
         steps: c.steps.map(({ start, end, amps }) => ({ start, end, amps })),
         phases: c.phases,
         soc_now: c.soc_from,
@@ -84,9 +85,9 @@ export function SuggestedCharges({ view, now }: { view: CarView; now: number }) 
     return () => clearTimeout(t);
   }, [key]);
   const can = asked.soc_now != null && asked.soc_to != null && asked.ready_by != null;
-  const q = useQuery({ ...suggestQuery(asked), enabled: can, placeholderData: keepPreviousData });
+  const q = useQuery({ ...suggestQuery(view.id, asked), enabled: can, placeholderData: keepPreviousData });
   const s = q.data;
-  const { plan, pending, error } = usePlanSuggestion(s);
+  const { plan, pending, error } = usePlanSuggestion(view.id, s);
   const chosen = s?.options.find((o) => o.kind === mode) ?? s?.options[0];
 
   return (
