@@ -76,7 +76,7 @@ def build_services(config: Config) -> Services:
         CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
     )
     weather = WeatherService(config, db, settings)
-    car = CarService(db, settings)
+    car = CarService(db)
     forecast = ForecastService(config, readings, settings, weather, car)
     insights = InsightsService(db, readings, settings, weather, forecast, tariffs, amber.repo)
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates

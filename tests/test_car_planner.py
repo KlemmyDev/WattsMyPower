@@ -16,6 +16,7 @@ from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
 
 HOUR = 3600
+ONE = 1  # the first car connected
 T0 = 1_790_002_800 - 1_790_002_800 % HOUR  # a whole hour; step k starts k hours after it
 
 # A Model Y on a three-phase charger: 5 to 16 A, so 3.45 to 11 kW.
@@ -149,35 +150,34 @@ def test_the_ready_by_time_is_the_next_one_at_least_an_hour_away() -> None:
 
 
 @pytest.fixture
-def car(db: Database, config: Config) -> CarService:
-    settings = SettingsStore(db, config)
-    settings.load()
-    settings.save({"car_phases": 3})
-    return CarService(db, settings)
+def car(db: Database) -> CarService:
+    svc = CarService(db)
+    assert svc.create({"car_phases": 3})["id"] == ONE
+    return svc
 
 
 def soc(car: CarService, at: int) -> float:
-    level = car.level(at)
+    level = car.level(ONE, at)
     assert level is not None
     return float(level["soc"])
 
 
 def test_the_cars_level_counts_planned_charges_since_it_was_given(car: CarService) -> None:
-    assert car.level(T0) is None
-    car.set_level({"soc": 40}, now=T0)
+    assert car.level(ONE, T0) is None
+    car.set_level(ONE, {"soc": 40}, now=T0)
     # 16 A three-phase (11.04 kW) from an hour on, to stop at 70%.
-    car.add({"start": T0 + HOUR, "soc_to": 70, "soc_now": None, "hours": None, "amps": 16} | {"hours": 5}, now=T0)
+    car.add(ONE, {"start": T0 + HOUR, "soc_to": 70, "soc_now": None, "hours": None, "amps": 16} | {"hours": 5}, now=T0)
     assert soc(car, T0 + HOUR) == 40  # not started
-    two = car.level(T0 + 2 * HOUR)
+    two = car.level(ONE, T0 + 2 * HOUR)
     assert two is not None
     assert two["soc"] == pytest.approx(40 + 11.04 * 0.9 / 75 * 100, abs=0.1) and two["charged"] and two["given"] == 40
     assert two["km"] == round(two["soc"] / 100 * 75 * 1000 / 170)
     # A charge for a set time with no level to stop at runs to full; a level given later starts afresh.
     assert soc(car, T0 + 7 * HOUR) == 100
-    car.set_level({"soc": 55}, now=T0 + 8 * HOUR)
+    car.set_level(ONE, {"soc": 55}, now=T0 + 8 * HOUR)
     assert soc(car, T0 + 9 * HOUR) == 55
     with pytest.raises(ValueError, match="between 0 and 100"):
-        car.set_level({"soc": 120})
+        car.set_level(ONE, {"soc": 120})
 
 
 def test_a_plan_in_steps_is_kept_and_removed_as_one(car: CarService) -> None:
@@ -185,25 +185,25 @@ def test_a_plan_in_steps_is_kept_and_removed_as_one(car: CarService) -> None:
         {"start": T0 + HOUR, "end": T0 + 2 * HOUR, "amps": 10},
         {"start": T0 + 2 * HOUR, "end": T0 + 4 * HOUR, "amps": 16},
     ]
-    kept = car.add_plan({"steps": steps_, "phases": 1, "soc_now": 40, "battery_helps": False}, now=T0)
+    kept = car.add_plan(ONE, {"steps": steps_, "phases": 1, "soc_now": 40, "battery_helps": False}, now=T0)
     assert [(c["amps"], c["battery_helps"]) for c in kept] == [(10, False), (16, False)]
     assert kept[0]["plan"] == kept[1]["plan"] == kept[0]["id"]
     # Each step's level follows on from the last: 2.3 kWh, then 7.36 kWh, 90% of it into 75 kWh.
     assert kept[0]["soc_to"] == pytest.approx(40 + 2.3 * 0.9 / 75 * 100, abs=0.1)
     assert kept[1]["soc_from"] == kept[0]["soc_to"] and soc(car, T0 + 5 * HOUR) == kept[1]["soc_to"]
     with pytest.raises(ValueError, match="in order"):
-        car.add_plan({"steps": [steps_[1], steps_[0]], "phases": 1}, now=T0)
-    assert car.remove(kept[1]["id"]) and car.listed(T0) == []
+        car.add_plan(ONE, {"steps": [steps_[1], steps_[0]], "phases": 1}, now=T0)
+    assert car.remove(kept[1]["id"]) and car.listed(T0, ONE) == []
 
 
 def test_a_charge_planned_with_the_cars_level_records_it(car: CarService) -> None:
-    car.add({"start": T0 + HOUR, "soc_now": 35, "soc_to": 80}, now=T0)
-    level = car.level(T0)
+    car.add(ONE, {"start": T0 + HOUR, "soc_now": 35, "soc_to": 80}, now=T0)
+    level = car.level(ONE, T0)
     assert level is not None and level["given"] == 35 and level["given_at"] == T0
     # The level it's planned to reach caps what it adds.
-    assert car.planned_soc(35, T0, T0 + 10 * HOUR) == 80
+    assert car.planned_soc(ONE, 35, T0, T0 + 10 * HOUR) == 80
     # A charge after that one starts where it leaves the car, which isn't the car's level now.
-    car.add({"start": T0 + 6 * HOUR, "soc_now": 80, "soc_to": 90, "level_now": False}, now=T0 + 60)
+    car.add(ONE, {"start": T0 + 6 * HOUR, "soc_now": 80, "soc_to": 90, "level_now": False}, now=T0 + 60)
     assert soc(car, T0 + 60) == 35
 
 
@@ -221,16 +221,18 @@ def test_suggestions_start_from_the_cars_last_level_and_usual_limit(
     tariffs = TariffStore(db, config)
     tariffs.load()
     ss = steps(30, pv={h: 8.0 for h in range(9, 15)})
-    plan = ChargePlanner(car, FakeForecast(ss), car.settings, tariffs, None)  # type: ignore[arg-type]
+    settings = SettingsStore(db, config)
+    settings.load()
+    plan = ChargePlanner(car, FakeForecast(ss), settings, tariffs, None)  # type: ignore[arg-type]
     ask: dict[str, Any] = {"home_soc": 100.0, "battery_kwh": 10.0, "reserve_pct": 10.0, "now": T0}
     with pytest.raises(ValueError, match="charge is now"):
-        plan.suggest({"ready_by": T0 + 20 * HOUR}, **ask)
-    car.set_level({"soc": 50}, now=T0)
-    out = plan.suggest({"ready_by": T0 + 20 * HOUR}, **ask)
+        plan.suggest(ONE, {"ready_by": T0 + 20 * HOUR}, **ask)
+    car.set_level(ONE, {"soc": 50}, now=T0)
+    out = plan.suggest(ONE, {"ready_by": T0 + 20 * HOUR}, **ask)
     assert out["soc_now"] == 50 and out["soc_to"] == 80 and not out["covered"] and out["options"]
     # A charge already planned to 80% before then covers it.
-    car.add({"start": T0 + 2 * HOUR, "soc_now": 50, "soc_to": 80}, now=T0)
-    covered = plan.suggest({"ready_by": T0 + 20 * HOUR}, **ask)
+    car.add(ONE, {"start": T0 + 2 * HOUR, "soc_now": 50, "soc_to": 80}, now=T0)
+    covered = plan.suggest(ONE, {"ready_by": T0 + 20 * HOUR}, **ask)
     assert covered["covered"] and covered["planned_soc"] == 80 and covered["options"] == []
     with pytest.raises(ValueError, match="15 minutes"):
-        plan.suggest({"ready_by": T0 + 60}, **ask)
+        plan.suggest(ONE, {"ready_by": T0 + 60}, **ask)

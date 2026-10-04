@@ -10,6 +10,7 @@ not exact for every build year.
     min_amps     the lowest current it charges at: 5 A for a Tesla, 6 A (the charging standard's floor) otherwise
     lfp          a lithium iron phosphate battery, which its maker says to charge to 100% regularly, rather than
                  the 80 or 90% day to day other lithium batteries are kept at
+    body         how the Overview draws it: its own shape for some popular models, else a sedan, SUV or hatch
 """
 
 from __future__ import annotations
@@ -17,6 +18,20 @@ from __future__ import annotations
 from typing import Any
 
 VOLTS = 230.0
+
+# The shapes the Overview can draw a car as: some popular models of their own, and three of every other.
+BODIES = ("model3", "modelY", "atto3", "dolphin", "seal", "sealion7", "ioniq5", "sedan", "suv", "hatch")
+# Each model's shape, by the start of its id; any other is an SUV.
+_BODY_BY_ID = {
+    "tesla-model-3": "model3", "tesla-model-y": "modelY", "byd-atto-3": "atto3", "byd-dolphin": "dolphin",
+    "byd-seal-": "seal", "byd-sealion-7": "sealion7", "hyundai-ioniq-5": "ioniq5", "hyundai-ioniq-6": "sedan",
+    "polestar-2": "sedan", "mg-4": "hatch", "nissan-leaf": "hatch", "cupra-born": "hatch", "gwm-ora": "hatch",
+}  # fmt: skip
+
+
+def body_of(model_id: str | None) -> str:
+    """How a catalog model is drawn."""
+    return next((b for prefix, b in _BODY_BY_ID.items() if (model_id or "").startswith(prefix)), "suv")
 
 
 def _car(
@@ -42,6 +57,7 @@ def _car(
         "min_amps": 5 if make == "Tesla" else 6,
         "lfp": lfp,
         "target_soc": 100 if lfp else 80,
+        "body": body_of(id),
     }
 
 

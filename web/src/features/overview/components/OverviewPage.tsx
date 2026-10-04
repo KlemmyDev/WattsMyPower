@@ -1,5 +1,5 @@
 import { AmberPricesCard } from "~/features/amber/components/AmberPricesCard";
-import { CarCard } from "~/features/car/components/CarCard";
+import { CarCards } from "~/features/car/components/CarCard";
 import { useAmberPrices } from "~/features/amber/hooks";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useForecast } from "~/features/common/weather/hooks";
@@ -27,7 +27,7 @@ export function OverviewPage() {
         <BatteryCard p={p} s={s} f={f} now={now} />
         <TodayCard tariff={s?.tariff} now={now} />
         <TodayEnergyCard p={p} now={now} />
-        <CarCard now={now} />
+        <CarCards now={now} />
         {prices && <AmberPricesCard prices={prices} now={now} />}
       </div>
       <Next24Card p={p} s={s} f={f} now={now} prices={prices} />

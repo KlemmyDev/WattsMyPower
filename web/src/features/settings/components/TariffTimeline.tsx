@@ -2,7 +2,7 @@ import type { Tariff } from "~/features/common/tariffs/types";
 import { Swatch } from "~/features/common/ui/components/Swatch";
 import { bandColor, bandTable, tariffNumber, type DayKind } from "~/features/common/tariffs/utils";
 import { cn } from "~/features/common/ui/utils";
-import { minutesLabel } from "~/features/common/formatting/utils/date";
+import { hourLabel, minutesLabel } from "~/features/common/formatting/utils/date";
 import { money } from "~/features/common/formatting/utils/number";
 
 const DAY = 1440;
@@ -57,7 +57,7 @@ export function TariffTimeline({ tariff }: { tariff: Tariff }) {
               )}
               style={{ left: `${(hr / 24) * 100}%` }}
             >
-              {String(hr).padStart(2, "0")}:00
+              {hourLabel(hr)}
             </span>
           ))}
         </div>

@@ -56,9 +56,9 @@ def test_charges_that_cant_be_worked_out_say_why(kw: dict, message: str) -> None
 def test_charges_are_kept_listed_and_removed(db: Database, config: Config) -> None:
     settings = SettingsStore(db, config)
     settings.load()
-    settings.save({"car_phases": 3})
-    car = CarService(db, settings)
-    added = car.add({"start": NOW + HOUR, "soc_now": 40, "soc_to": 90, "battery_helps": False}, now=NOW)
+    car = CarService(db)
+    one = car.create({"car_phases": 3})["id"]
+    added = car.add(one, {"start": NOW + HOUR, "soc_now": 40, "soc_to": 90, "battery_helps": False}, now=NOW)
     assert added["phases"] == 3 and added["amps"] == 16  # the car's usual way of charging
     (listed,) = car.listed(now=NOW)
     assert listed["id"] == added["id"] and listed["battery_helps"] is False and listed["wall_kwh"] == added["wall_kwh"]
@@ -67,7 +67,7 @@ def test_charges_are_kept_listed_and_removed(db: Database, config: Config) -> No
     # Long over: no longer listed. Already over: not planned at all.
     assert car.listed(now=added["end"] + 13 * HOUR) == []
     with pytest.raises(ValueError, match="already be over"):
-        car.add({"start": NOW - 5 * HOUR, "hours": 1}, now=NOW)
+        car.add(one, {"start": NOW - 5 * HOUR, "hours": 1}, now=NOW)
     assert car.remove(added["id"]) and car.listed(now=NOW) == []
 
 
@@ -118,16 +118,42 @@ def client(config: Config) -> Iterator[TestClient]:
 def test_the_api_estimates_plans_and_removes(client: TestClient) -> None:
     import time
 
+    assert client.get("/api/cars").json() == []
+    car = client.post("/api/cars", json={"name": "The Model Y", "model": "tesla-model-y-lr", "car_phases": 3}).json()
+    assert car["name"] == "The Model Y" and car["model"]["make"] == "Tesla" and car["car"]["car_body"] == "modelY"
     start = int(time.time()) + HOUR
     body = {"start": start, "amps": 16, "phases": 3, "soc_now": 40, "soc_to": 90}
-    preview = client.post("/api/car/estimate", json=body).json()
+    preview = client.post(f"/api/cars/{car['id']}/estimate", json=body).json()
     assert preview["power_kw"] == 11.04
-    assert client.get("/api/car").json()["charges"] == []  # an estimate isn't saved
-    bad = client.post("/api/car/estimate", json={**body, "soc_to": 20})
+    assert client.get("/api/cars").json()[0]["charges"] == []  # an estimate isn't saved
+    bad = client.post(f"/api/cars/{car['id']}/estimate", json={**body, "soc_to": 20})
     assert bad.status_code == 422 and "above" in bad.json()["detail"]
+    assert client.post("/api/cars/99/estimate", json=body).status_code == 404
 
-    added = client.post("/api/car/charges", json=body).json()
-    view = client.get("/api/car").json()
+    added = client.post(f"/api/cars/{car['id']}/charges", json=body).json()
+    (view,) = client.get("/api/cars").json()
     assert view["car"]["car_battery_kwh"] == 75 and [c["id"] for c in view["charges"]] == [added["id"]]
-    assert client.delete(f"/api/car/charges/{added['id']}").json() == {"ok": True}
-    assert client.delete(f"/api/car/charges/{added['id']}").status_code == 404
+    assert view["level"]["soc"] == 40  # given with the charge
+    assert client.delete(f"/api/cars/charges/{added['id']}").json() == {"ok": True}
+    assert client.delete(f"/api/cars/charges/{added['id']}").status_code == 404
+
+
+def test_cars_are_connected_changed_and_disconnected(client: TestClient) -> None:
+    y = client.post("/api/cars", json={"model": "tesla-model-y-rwd", "car_colour": "red"}).json()
+    atto = client.post("/api/cars", json={"model": "byd-atto-3-extended", "car_park": "outside"}).json()
+    assert [c["id"] for c in client.get("/api/cars").json()] == [y["id"], atto["id"]]
+    assert atto["car"]["car_body"] == "atto3" and atto["car"]["car_park"] == "outside"
+    # A model's figures fill in what isn't given.
+    assert (atto["car"]["car_battery_kwh"], atto["car"]["car_amps"], atto["car"]["car_target_soc"]) == (60.5, 32, 100)
+    changed = client.put(f"/api/cars/{y['id']}", json={"name": "Daily", "car_days": ["fri", "wed"]}).json()
+    assert changed["name"] == "Daily" and changed["car"]["car_days"] == ["wed", "fri"]
+    assert changed["car"]["car_colour"] == "red"  # what wasn't given stays
+    bad = client.put(f"/api/cars/{y['id']}", json={"car_target_soc": 20})
+    assert bad.status_code == 422 and bad.json()["detail"] == "The charge limit must be between 50 and 100%."
+    assert client.put(f"/api/cars/{y['id']}", json={"car_colour": "pink"}).status_code == 422
+    custom = client.put(f"/api/cars/{y['id']}", json={"car_colour": "#3A7BD5"}).json()
+    assert custom["car"]["car_colour"] == "#3a7bd5"
+    assert client.post(f"/api/cars/{y['id']}/level", json={"soc": 55}).json()["soc"] == 55
+    assert client.delete(f"/api/cars/{y['id']}").json() == {"ok": True}
+    assert [c["id"] for c in client.get("/api/cars").json()] == [atto["id"]]
+    assert client.delete(f"/api/cars/{y['id']}").status_code == 404

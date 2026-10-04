@@ -22,10 +22,6 @@ export function useSaveSettings() {
         qc.invalidateQueries({ queryKey: ["forecast"] });
         qc.invalidateQueries({ queryKey: ["insights"] });
       }
-      if (Object.keys(changes).some((k) => k.startsWith("car_"))) {
-        qc.invalidateQueries({ queryKey: ["car"] });
-        qc.invalidateQueries({ queryKey: ["forecast"] });
-      }
       if (OWNERSHIP_SETTINGS.some((k) => k in changes)) {
         qc.invalidateQueries({ queryKey: ["insights"] });
         qc.invalidateQueries({ queryKey: ["bills"] });

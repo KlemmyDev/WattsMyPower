@@ -27,13 +27,15 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     forecast_hours   the solar forecast for each hour as it stood the day before, to measure it against
                      what the panels really made
     car_charges  car charges planned ahead, which the forecast counts as home use
-    car_levels   the car's battery level (%) as it was given, to estimate it between times
+    car_levels   each car's battery level (%) as it was given, to estimate it between times
+    cars         the electric cars connected: name, the model chosen, and their details (JSON)
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Callable
 
@@ -262,6 +264,42 @@ def _car_charge_plans(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE car_charges ADD COLUMN plan INTEGER")
 
 
+def _cars(conn: sqlite3.Connection) -> None:
+    """More than one car. Each car is a row of `cars` (its details as JSON, app.features.car.service), and its
+    planned charges and levels carry its id. The one car there was, kept in settings until now (numbers in
+    `settings`, text in `kv`, under car_*), becomes the first: if it was connected, or has charges or levels."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cars (id INTEGER PRIMARY KEY, name TEXT, model TEXT, details TEXT NOT NULL,"
+        " position INTEGER NOT NULL, created_at INTEGER NOT NULL)"
+    )
+    conn.execute("ALTER TABLE car_charges ADD COLUMN car INTEGER")
+    conn.execute(
+        "CREATE TABLE car_levels_new (car INTEGER NOT NULL, ts INTEGER NOT NULL, soc REAL NOT NULL,"
+        " source TEXT NOT NULL, PRIMARY KEY (car, ts))"
+    )
+    numbers = dict(conn.execute("SELECT key, value FROM settings WHERE key LIKE 'car\\_%' ESCAPE '\\'"))
+    text = dict(conn.execute("SELECT key, value FROM kv WHERE key LIKE 'car\\_%' ESCAPE '\\'"))
+    used = conn.execute("SELECT EXISTS (SELECT 1 FROM car_charges) OR EXISTS (SELECT 1 FROM car_levels)").fetchone()
+    if numbers.get("car_connected") == 1 or used[0]:
+        details: dict[str, object] = {k: v for k, v in numbers.items() if k != "car_connected"}
+        if "car_charge_mode" in text:
+            details["car_charge_mode"] = text["car_charge_mode"]
+        if text.get("car_days"):
+            details["car_days"] = text["car_days"].split(",")
+        car = conn.execute(
+            "INSERT INTO cars (name, model, details, position, created_at) VALUES (?, ?, ?, 0, strftime('%s'))",
+            (text.get("car_name"), text.get("car_model"), json.dumps(details)),
+        ).lastrowid
+        conn.execute("UPDATE car_charges SET car = ?", (car,))
+        conn.execute(
+            "INSERT INTO car_levels_new (car, ts, soc, source) SELECT ?, ts, soc, source FROM car_levels", (car,)
+        )
+    conn.execute("DROP TABLE car_levels")
+    conn.execute("ALTER TABLE car_levels_new RENAME TO car_levels")
+    conn.execute("DELETE FROM settings WHERE key LIKE 'car\\_%' ESCAPE '\\'")
+    conn.execute("DELETE FROM kv WHERE key LIKE 'car\\_%' ESCAPE '\\'")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -276,6 +314,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _car_charges,
     _car_levels,
     _car_charge_plans,
+    _cars,
 ]
 
 

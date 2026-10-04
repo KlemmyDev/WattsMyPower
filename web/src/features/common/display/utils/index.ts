@@ -8,17 +8,27 @@ import { store, STORE_DISPLAY } from "~/features/common/storage/utils";
  *   data-density   "compact" tightens cards, gaps and charts (the `compact:` variant)
  *   data-contrast  "more" brings muted text and lines closer to the main text colour
  *   data-motion    "reduce" stops animations and transitions, as the device's own setting does
+ * And the clock times are shown on: 24-hour ("14:05") or 12-hour ("2:05 pm"), which the time formatting
+ * (formatting/utils/date) reads as it formats.
  */
 
 export type Size = "small" | "default" | "large" | "larger";
 export type Density = "comfortable" | "compact";
-export type Display = { size: Size; density: Density; contrast: "default" | "more"; motion: "system" | "reduce" };
+export type Clock = "24" | "12";
+export type Display = {
+  size: Size;
+  density: Density;
+  contrast: "default" | "more";
+  motion: "system" | "reduce";
+  clock: Clock;
+};
 
 export const DEFAULT_DISPLAY: Display = {
   size: "default",
   density: "comfortable",
   contrast: "default",
   motion: "system",
+  clock: "24",
 };
 
 export const SIZE_OPTIONS: { value: Size; label: string }[] = [
@@ -33,11 +43,17 @@ export const DENSITY_OPTIONS: { value: Density; label: string }[] = [
   { value: "compact", label: "Compact" },
 ];
 
+export const CLOCK_OPTIONS: { value: Clock; label: string }[] = [
+  { value: "24", label: "24-hour" },
+  { value: "12", label: "12-hour" },
+];
+
 const ALLOWED: { [K in keyof Display]: readonly Display[K][] } = {
   size: ["small", "default", "large", "larger"],
   density: ["comfortable", "compact"],
   contrast: ["default", "more"],
   motion: ["system", "reduce"],
+  clock: ["24", "12"],
 };
 
 let cached: { raw: string; value: Display } | null = null;
@@ -69,6 +85,7 @@ export function applyDisplay(d: Display = savedDisplay()) {
   root.density = d.density;
   root.contrast = d.contrast;
   root.motion = d.motion;
+  root.clock = d.clock;
 }
 
 const listeners = new Set<() => void>();

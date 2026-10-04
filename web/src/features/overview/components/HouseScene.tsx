@@ -1,12 +1,15 @@
-import { Fragment, useMemo } from "react";
+import { useRouter } from "@tanstack/react-router";
+import { Fragment, useMemo, useState, type MouseEvent } from "react";
 import type { Cover, SkyMode } from "~/features/common/weather/utils";
-import { box, dPath, FLOW, group, h, I, ln, poly, sag, type Kid } from "~/features/overview/utils/house/iso";
+import { drawCar, spotOutline, spotTop, type CarBody } from "~/features/overview/utils/house/cars";
+import { box, dPath, FLOW, group, h, I, ln, poly, sag, type Kid, type P3 } from "~/features/overview/utils/house/iso";
 import {
   DEFAULT_HOUSE,
   fitted,
   layoutFor,
   type HouseOptions,
   type Layout,
+  type Spot,
   type Unit,
 } from "~/features/overview/utils/house/layout";
 import { scenery } from "~/features/overview/utils/house/scenery";
@@ -19,8 +22,13 @@ import { sky as drawSky } from "~/features/overview/utils/house/sky";
  *   house is how it's built (Settings → System → Your house): storeys, garage, batteries and inverters
  *   sky is the weather: "sunny" | "cloudy" | "rain" | "storm" | "night"
  *   cover is the weather at night: "clear" | "cloudy" | "rain" | "storm"
+ *   cars are the connected cars, in the order house.cars gives where each would rather park: each one's shape and
+ *     paint, and for the Overview (with links), a label and where it links to
  * houseAnchors() gives {left, top} percentages for the HTML label pills.
  */
+
+/** A connected car, as the drawing needs it. */
+export type SceneCar = { body: CarBody; paint: string; label: string; href: string };
 
 export type HouseFlows = {
   pv: number;
@@ -172,6 +180,8 @@ export function HouseScene({
   cover = "clear",
   house = DEFAULT_HOUSE,
   leaders = true,
+  cars = [],
+  links = false,
 }: {
   flows: HouseFlows;
   sky: SkyMode;
@@ -179,6 +189,9 @@ export function HouseScene({
   house?: HouseOptions;
   /** Lines out to the label pills (the Overview has them; a preview doesn't). */
   leaders?: boolean;
+  cars?: SceneCar[];
+  /** Each parking spot links to its car, or to connecting one (the Overview). */
+  links?: boolean;
 }) {
   const l: Layout = layoutFor(house);
   const S = scenery(l);
@@ -202,84 +215,206 @@ export function HouseScene({
         ),
     );
   const { scale, dx, dy } = l.fit;
+  const fitG = scale === 1 ? undefined : `translate(${dx.toFixed(1)} ${dy.toFixed(1)}) scale(${scale.toFixed(4)})`;
+  // Each spot's car (if one parks there), and the cars drawn nearest last: further right is nearer.
+  const carIn = l.spots.map((_, k) => {
+    const i = l.parked.indexOf(k);
+    return i >= 0 ? cars[i] : undefined;
+  });
+  const parkedCars = (garage: boolean) =>
+    group(
+      l.spots.map((sp, k) => {
+        const c = carIn[k];
+        return sp.garage === garage && c ? drawCar(sp, c.body, c.paint) : null;
+      }),
+    );
+  const emptyBays = group(
+    l.spots.map((sp, k) =>
+      !sp.garage && !carIn[k]
+        ? poly(spotOutline(sp, 0.02), "none", {
+            stroke: "rgba(0,0,0,0.28)",
+            strokeWidth: 1.5,
+            strokeDasharray: "6 6",
+          })
+        : null,
+    ),
+  );
 
   return (
-    // "slice" so a narrower frame (phones use 4:3) crops the empty sky at the sides rather than shrinking the house.
+    <>
+      {/* "slice" so a narrower frame (phones use 4:3) crops the empty sky at the sides rather than shrinking the house. */}
+      <svg
+        viewBox="-200 0 1200 600"
+        preserveAspectRatio="xMidYMid slice"
+        className="house-scene absolute inset-0 size-full overflow-hidden"
+        aria-hidden="true"
+      >
+        {sk.back}
+        <g transform={fitG}>
+          {S.ground}
+          {wetGround && S.wet}
+          {S.house}
+          {S.garageInside}
+          {equipment(inside)}
+          {parkedCars(true)}
+          {S.garageShell}
+          {S.roof}
+          {equipment((u) => !inside(u))}
+          {group(box(ch.x, ch.x + 0.14, ch.y0, ch.y1, ch.z0, ch.z1, "#fafafa", "#f1f1f1", "#d9d9d9"))}
+          {S.yard}
+          {h("circle", { cx: chLed[0], cy: chLed[1], r: 1.8, fill: flows.conn ? FLOW.car : "#bbbbbb" })}
+          {emptyBays}
+          {parkedCars(false)}
+        </g>
+        {night &&
+          h("rect", {
+            x: -204,
+            y: -4,
+            width: 1208,
+            height: 608,
+            fill: "#16203a",
+            fillOpacity: 0.55,
+            style: { mixBlendMode: "multiply" },
+          })}
+        <g transform={fitG}>
+          {night && S.night}
+          {night && equipment(() => true, true)}
+          {/* pole to house */}
+          {flow(sag([-1.5, 8.9, 7.6], l.shape.gridAt, 34), flows.grid, flows.grid > 0, FLOW.grid, night)}
+          {/* roof to each inverter */}
+          {l.pvPaths.map((path, i) => (
+            <Fragment key={i}>{flow(dPath(path), solar[i], true, FLOW.pv, night)}</Fragment>
+          ))}
+          {/* main inverter to each battery */}
+          {l.batteryPaths.map((path, i) => (
+            <Fragment key={i}>{flow(dPath(path), flows.bat, flows.bat > 0, FLOW.bat, night)}</Fragment>
+          ))}
+        </g>
+        {sk.front}
+        <g className="leaders">
+          {(Object.keys(LBL) as LabelKey[])
+            .filter(() => leaders)
+            .filter((k) => k !== "tesla" || flows.conn)
+            .map((k) => {
+              const lp = LBL[k];
+              const an = fitted(l, l.anchors[k]);
+              const lc = LEADER_COLOR[k];
+              return (
+                <Fragment key={k}>
+                  {h("line", {
+                    className: "ld",
+                    x1: lp[0],
+                    y1: lp[1],
+                    x2: an[0],
+                    y2: an[1],
+                    stroke: night ? "#ffffff" : "#111111",
+                    strokeOpacity: 0.35,
+                    strokeWidth: 1,
+                  })}
+                  {h("circle", { cx: an[0], cy: an[1], r: 7, fill: lc, fillOpacity: 0.18 })}
+                  {h("circle", { cx: an[0], cy: an[1], r: 3.5, fill: lc, stroke: "#ffffff", strokeWidth: 1.5 })}
+                </Fragment>
+              );
+            })}
+        </g>
+      </svg>
+      {links && <SpotLinks l={l} cars={carIn} transform={fitG} night={night} />}
+    </>
+  );
+}
+
+/** The outline of a spot's car, standing on it: a hexagon around a box as tall as a car. */
+function standing(sp: Spot): P3[] {
+  const t = 1.7;
+  return [
+    [sp.x0, sp.y1, 0],
+    [sp.x1, sp.y1, 0],
+    [sp.x1, sp.y0, 0],
+    [sp.x1, sp.y0, t],
+    [sp.x0, sp.y0, t],
+    [sp.x0, sp.y1, t],
+  ];
+}
+
+/**
+ * The parking spots as links, over the drawing (which is hidden from screen readers): a car's to its page, an empty
+ * spot to connecting one. Hovering or focusing one outlines it and shows where it goes.
+ */
+function SpotLinks({
+  l,
+  cars,
+  transform,
+  night,
+}: {
+  l: Layout;
+  cars: (SceneCar | undefined)[];
+  transform: string | undefined;
+  night: boolean;
+}) {
+  const router = useRouter();
+  const [on, setOn] = useState<number | null>(null);
+  const go = (href: string) => (e: MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    router.history.push(href);
+  };
+  const anyCar = cars.some(Boolean);
+  return (
     <svg
       viewBox="-200 0 1200 600"
       preserveAspectRatio="xMidYMid slice"
-      className="house-scene absolute inset-0 size-full overflow-hidden"
-      aria-hidden="true"
+      className="absolute inset-0 size-full overflow-hidden"
+      role="group"
+      aria-label="Parking"
     >
-      {sk.back}
-      <g
-        transform={scale === 1 ? undefined : `translate(${dx.toFixed(1)} ${dy.toFixed(1)}) scale(${scale.toFixed(4)})`}
-      >
-        {S.ground}
-        {wetGround && S.wet}
-        {S.house}
-        {S.garageInside}
-        {equipment(inside)}
-        {S.garageShell}
-        {S.roof}
-        {equipment((u) => !inside(u))}
-        {group(box(ch.x, ch.x + 0.14, ch.y0, ch.y1, ch.z0, ch.z1, "#fafafa", "#f1f1f1", "#d9d9d9"))}
-        {S.yard}
-        {h("circle", { cx: chLed[0], cy: chLed[1], r: 1.8, fill: flows.conn ? FLOW.car : "#bbbbbb" })}
-        {!flows.conn && S.parking}
-      </g>
-      {night &&
-        h("rect", {
-          x: -204,
-          y: -4,
-          width: 1208,
-          height: 608,
-          fill: "#16203a",
-          fillOpacity: 0.55,
-          style: { mixBlendMode: "multiply" },
-        })}
-      <g
-        transform={scale === 1 ? undefined : `translate(${dx.toFixed(1)} ${dy.toFixed(1)}) scale(${scale.toFixed(4)})`}
-      >
-        {night && S.night}
-        {night && equipment(() => true, true)}
-        {/* pole to house */}
-        {flow(sag([-1.5, 8.9, 7.6], l.shape.gridAt, 34), flows.grid, flows.grid > 0, FLOW.grid, night)}
-        {/* roof to each inverter */}
-        {l.pvPaths.map((path, i) => (
-          <Fragment key={i}>{flow(dPath(path), solar[i], true, FLOW.pv, night)}</Fragment>
-        ))}
-        {/* main inverter to each battery */}
-        {l.batteryPaths.map((path, i) => (
-          <Fragment key={i}>{flow(dPath(path), flows.bat, flows.bat > 0, FLOW.bat, night)}</Fragment>
-        ))}
-      </g>
-      {sk.front}
-      <g className="leaders">
-        {(Object.keys(LBL) as LabelKey[])
-          .filter(() => leaders)
-          .filter((k) => k !== "tesla" || flows.conn)
-          .map((k) => {
-            const lp = LBL[k];
-            const an = fitted(l, l.anchors[k]);
-            const lc = LEADER_COLOR[k];
-            return (
-              <Fragment key={k}>
-                {h("line", {
-                  className: "ld",
-                  x1: lp[0],
-                  y1: lp[1],
-                  x2: an[0],
-                  y2: an[1],
+      <g transform={transform}>
+        {l.spots.map((sp, k) => {
+          const c = cars[k];
+          const label = c ? c.label : anyCar ? "Connect another EV" : "Connect an EV";
+          const href = c ? c.href : "/settings/integrations/car";
+          const lit = on === k;
+          const [tx, ty] = spotTop(sp);
+          const w = label.length * 6.6 + 34;
+          return (
+            <a
+              key={k}
+              href={href}
+              aria-label={c ? `${c.label}: open its settings` : label}
+              onClick={go(href)}
+              onPointerEnter={() => setOn(k)}
+              onPointerLeave={() => setOn((v) => (v === k ? null : v))}
+              onFocus={() => setOn(k)}
+              onBlur={() => setOn((v) => (v === k ? null : v))}
+              className="cursor-pointer outline-none"
+            >
+              {poly(standing(sp), "transparent")}
+              {lit &&
+                poly(spotOutline(sp), night ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.35)", {
                   stroke: night ? "#ffffff" : "#111111",
-                  strokeOpacity: 0.35,
-                  strokeWidth: 1,
+                  strokeOpacity: 0.55,
+                  strokeWidth: 1.5,
+                  strokeDasharray: "5 4",
+                  pointerEvents: "none",
                 })}
-                {h("circle", { cx: an[0], cy: an[1], r: 7, fill: lc, fillOpacity: 0.18 })}
-                {h("circle", { cx: an[0], cy: an[1], r: 3.5, fill: lc, stroke: "#ffffff", strokeWidth: 1.5 })}
-              </Fragment>
-            );
-          })}
+              {lit && (
+                <g pointerEvents="none" transform={`translate(${tx.toFixed(1)} ${(ty - 14).toFixed(1)})`}>
+                  {h("rect", {
+                    x: -w / 2,
+                    y: -15,
+                    width: w,
+                    height: 30,
+                    rx: 15,
+                    fill: "#111111",
+                    fillOpacity: 0.88,
+                  })}
+                  <text x={0} y={4.5} textAnchor="middle" fill="#ffffff" fontSize={13} fontWeight={600}>
+                    {label} ›
+                  </text>
+                </g>
+              )}
+            </a>
+          );
+        })}
       </g>
     </svg>
   );

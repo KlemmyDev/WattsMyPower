@@ -1,4 +1,4 @@
-/** The car (GET /api/car, /api/car/models; POST /api/car/estimate, /charges, /level and /suggest). */
+/** The cars (GET /api/cars, /api/cars/models; POST /api/cars, and each car's /estimate, /charges, /plans, /level and /suggest). */
 
 /**
  * The car's details, from Settings: battery size (kWh), charging efficiency (%), the charger's current at most and
@@ -19,7 +19,19 @@ export type CarDetails = {
   car_days: Weekday[];
   car_battery_helps: number;
   car_charge_mode: ChargeMode;
+  /** How the Overview draws it: its paint, its shape, and whether it parks in the garage or outside. */
+  car_colour: CarColour;
+  car_body: CarBody;
+  car_park: "garage" | "outside";
 };
+
+/** A paint: one of the named ones, or a colour of its own (#rrggbb). */
+export type CarColour = NamedPaint | `#${string}`;
+export type NamedPaint = "white" | "black" | "grey" | "silver" | "blue" | "red" | "green" | "sand";
+
+/** The shapes the Overview draws a car as: some popular models of their own, and three for every other. */
+export type CarBody =
+  "model3" | "modelY" | "atto3" | "dolphin" | "seal" | "sealion7" | "ioniq5" | "sedan" | "suv" | "hatch";
 
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -40,6 +52,7 @@ export type CarModel = {
   /** A lithium iron phosphate battery: its maker says to charge it to 100% regularly. */
   lfp: boolean;
   target_soc: number;
+  body: CarBody;
 };
 
 /** The car's level now: as last given, plus what planned charges have put in since. */
@@ -70,12 +83,15 @@ export type ChargeEstimate = {
 /** A planned charge: on its own, or one step of a plan (`plan` ties a plan's steps together). */
 export type PlannedCharge = Omit<ChargeEstimate, "hours" | "car_kwh"> & {
   id: number;
+  /** The car it's for. */
+  car: number;
   battery_helps: boolean;
   plan: number | null;
 };
 
+/** A connected car: its name, the model it was chosen from, its details, its level, and its planned charges. */
 export type CarView = {
-  connected: boolean;
+  id: number;
   name: string | null;
   model: CarModel | null;
   car: CarDetails;
@@ -159,3 +175,6 @@ export type Suggestions = {
   /** For a car charged on three phases: the cheapest on one, when it costs noticeably less. */
   single_phase: Omit<SuggestedCharge, "kind"> | null;
 };
+
+/** A car as connected or changed (POST /api/cars, PUT /api/cars/{id}): its name, model and any of its details. */
+export type CarChanges = Partial<CarDetails> & { name?: string | null; model?: string | null };

@@ -1,4 +1,6 @@
-/** Date, time and duration formatting (en-AU, 24-hour). */
+import { savedDisplay } from "~/features/common/display/utils";
+
+/** Date, time and duration formatting (en-AU; times on the clock chosen in Settings → Account, 24-hour unless set to 12). */
 
 type Fmt = { format: (d: Date) => string };
 // The design uses three-letter months and no commas; en-AU writes "Sept" and adds commas.
@@ -13,14 +15,26 @@ const tidy = (opts: Intl.DateTimeFormatOptions): Fmt => {
   };
 };
 
-const timeFmt = new Intl.DateTimeFormat("en-AU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-/** Unix seconds as "14:05". */
-export const hhmm = (ts: number) => timeFmt.format(new Date(ts * 1000));
-/** An hour of the day as "07:00". */
-export const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
-/** Minutes after midnight as "07:30". */
+const time24 = new Intl.DateTimeFormat("en-AU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const time12 = new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", hour12: true });
+/** Times on a 12-hour clock: this browser's choice (Settings → Account → Appearance). */
+const twelve = () => savedDisplay().clock === "12";
+/** "7 am", "12 pm": an hour on a 12-hour clock, midnight at either end of the day "12 am". */
+const ampm = (h: number, m?: number) => {
+  const hr = ((h % 24) + 24) % 24;
+  const mm = m == null ? "" : `:${String(m).padStart(2, "0")}`;
+  return `${hr % 12 || 12}${mm} ${hr < 12 ? "am" : "pm"}`;
+};
+
+/** Unix seconds as "14:05", or "2:05 pm". */
+export const hhmm = (ts: number) => (twelve() ? time12 : time24).format(new Date(ts * 1000));
+/** An hour of the day as "07:00", or "7 am" (24 is the end of the day: "24:00", or "12 am"). */
+export const hourLabel = (h: number) => (twelve() ? ampm(h) : `${String(h).padStart(2, "0")}:00`);
+/** Minutes after midnight as "07:30", or "7:30 am". */
 export const minutesLabel = (m: number) =>
-  `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  twelve()
+    ? ampm(Math.floor(m / 60), m % 60)
+    : `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
 export const fullDate = tidy({ weekday: "long", day: "numeric", month: "long", year: "numeric" });
 export const pillDate = tidy({ weekday: "short", day: "numeric", month: "short" });

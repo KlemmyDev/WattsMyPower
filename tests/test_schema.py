@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -60,3 +61,43 @@ def test_garbled_history_is_cleaned_and_its_rollups_rebuilt(tmp_path: Path) -> N
         # the bucket's averages, rebuilt without the bad values (untouched columns are unchanged)
         assert c.execute("SELECT load_power, pv_power, battery_soc FROM samples_5m").fetchone() == (
             810.0, 3050.0, (50.0 + 50.0 + 51.0) / 3)  # fmt: skip
+
+
+def test_the_one_car_in_settings_becomes_the_first_of_the_cars(tmp_path: Path) -> None:
+    """Before more than one car could be connected, the car lived in settings; its charges and levels move with it."""
+    path = str(tmp_path / "car.db")
+    with sqlite3.connect(path) as conn:
+        cars_at = next(i for i, m in enumerate(MIGRATIONS) if m.__name__ == "_cars")
+        for m in MIGRATIONS[:cars_at]:
+            m(conn)
+        conn.execute(f"PRAGMA user_version = {cars_at}")
+        conn.executemany(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            [("car_connected", 1), ("car_phases", 3), ("car_target_soc", 90), ("pv_kw", 6.6)],
+        )
+        conn.executemany(
+            "INSERT INTO kv (key, value) VALUES (?, ?)",
+            [("car_name", "The Y"), ("car_model", "tesla-model-y-lr"), ("car_days", "wed,fri")],
+        )
+        conn.execute(
+            "INSERT INTO car_charges (start, end, power_w, kwh, amps, phases, battery_helps, created_at)"
+            " VALUES (100, 200, 11040, 0.3, 16, 3, 1, 50)"
+        )
+        conn.execute("INSERT INTO car_levels (ts, soc, source) VALUES (50, 40, 'level')")
+
+    db = Database(path)
+    db.migrate()
+    with db.reading() as c:
+        (car_id, name, model, details) = c.execute("SELECT id, name, model, details FROM cars").fetchone()
+        assert (name, model) == ("The Y", "tesla-model-y-lr")
+        assert json.loads(details) == {"car_phases": 3, "car_target_soc": 90, "car_days": ["wed", "fri"]}
+        assert c.execute("SELECT car FROM car_charges").fetchone() == (car_id,)
+        assert c.execute("SELECT car, ts, soc FROM car_levels").fetchone() == (car_id, 50, 40)
+        # The car's settings are gone; the others stay.
+        assert c.execute("SELECT key FROM settings").fetchall() == [("pv_kw",)]
+        assert c.execute("SELECT COUNT(*) FROM kv WHERE key LIKE 'car%'").fetchone() == (0,)
+
+
+def test_no_car_is_made_when_none_was_used(db: Database) -> None:
+    with db.reading() as c:
+        assert c.execute("SELECT COUNT(*) FROM cars").fetchone() == (0,)
