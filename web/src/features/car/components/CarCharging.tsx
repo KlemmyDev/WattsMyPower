@@ -5,7 +5,7 @@ import { LevelBar, LevelForm, levelSource, rangeWords } from "~/features/car/com
 import { SuggestedCharges } from "~/features/car/components/SuggestedCharges";
 import { useChargeChange } from "~/features/car/hooks";
 import type { CarDetails, CarView, ChargeEstimate, ChargeRequest, PlannedCharge } from "~/features/car/types";
-import { carName, chargeLine, fromLocal, toLocal, when } from "~/features/car/utils";
+import { carName, chargeLine, fromLocal, phaseWord, stepsLine, toLocal, when } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { duration, hhmm } from "~/features/common/formatting/utils/date";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
@@ -19,7 +19,7 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { useNow } from "~/features/common/time/hooks";
-import { midnight } from "~/features/common/time/utils";
+import { midnight, sameDay } from "~/features/common/time/utils";
 
 /** A sensible start: tonight at 22:00 if that's still ahead, else the next quarter hour. */
 function defaultStart(now: number): number {
@@ -78,8 +78,14 @@ export function CarCharging() {
         <div className="flex flex-col gap-2">
           {connected && <h3 className="text-[15px] font-semibold">Planned charges</h3>}
           <ul className="flex flex-col">
-            {charges.map((c) => (
-              <ChargeRow key={c.id} c={c} now={now} onRemove={() => remove.mutate(c.id)} removing={remove.isPending} />
+            {byPlan(charges).map((steps) => (
+              <ChargeRow
+                key={steps[0].id}
+                steps={steps}
+                now={now}
+                onRemove={() => remove.mutate(steps[0].id)}
+                removing={remove.isPending}
+              />
             ))}
           </ul>
         </div>
@@ -127,24 +133,47 @@ function LevelLine({ view, now }: { view: CarView; now: number }) {
   );
 }
 
+/** Planned charges as the list shows them: a plan's steps together, each charge on its own otherwise. */
+function byPlan(charges: PlannedCharge[]): PlannedCharge[][] {
+  const out: PlannedCharge[][] = [];
+  const plans = new Map<number, PlannedCharge[]>();
+  for (const c of charges) {
+    if (c.plan == null) out.push([c]);
+    else if (plans.has(c.plan)) plans.get(c.plan)!.push(c);
+    else {
+      const steps = [c];
+      plans.set(c.plan, steps);
+      out.push(steps);
+    }
+  }
+  return out;
+}
+
+/** A planned charge, or a plan's steps: when, how fast, the car's level at each end, and a way to remove it. */
 function ChargeRow({
-  c,
+  steps,
   now,
   onRemove,
   removing,
 }: {
-  c: PlannedCharge;
+  steps: PlannedCharge[];
   now: number;
   onRemove: () => void;
   removing: boolean;
 }) {
-  const state = c.end <= now ? "Done" : c.start <= now ? "Charging" : null;
+  const first = steps[0];
+  const last = steps[steps.length - 1];
+  const state = last.end <= now ? "Done" : first.start <= now ? "Charging" : null;
+  const wall = steps.reduce((a, c) => a + c.wall_kwh, 0);
+  const levels = first.soc_from != null && last.soc_to != null ? ` · ${pct(first.soc_from)} → ${pct(last.soc_to)}` : "";
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle py-3.5 first:border-t-0 first:pt-0">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-ink tabular-nums">
-          {when(c.start, now)} to {hhmm(c.end)}
-          <span className="font-normal text-ink-muted">({duration(c.end - c.start)})</span>
+          {when(first.start, now)} to {sameDay(first.start, last.end - 1) ? hhmm(last.end) : when(last.end, now)}
+          {sameDay(first.start, last.end - 1) && (
+            <span className="font-normal text-ink-muted">({duration(last.end - first.start)})</span>
+          )}
           {state && (
             <Pill tone={state === "Charging" ? "good" : "neutral"} size="sm">
               {state}
@@ -152,8 +181,10 @@ function ChargeRow({
           )}
         </span>
         <span className="text-[13px] text-pretty text-ink-muted tabular-nums">
-          {chargeLine(c)}
-          {c.battery_helps ? "" : " · the home battery stays out of it"}
+          {steps.length > 1
+            ? `${stepsLine(steps, now)} (${phaseWord(first.phases)})${levels} · about ${kWh(wall)} from the wall`
+            : chargeLine(first)}
+          {first.battery_helps ? "" : " · the home battery stays out of it"}
         </span>
       </div>
       <Button variant="chip" onClick={onRemove} disabled={removing}>

@@ -228,10 +228,10 @@ class ForecastService:
         self._learned: dict[str, Any] | None = None  # MODEL_KEY's value, once read
 
     # ------------------------------------------------------------------ weather
-    def _hours(self, now: int) -> list[Hour]:
-        """The last week and the next few days of hourly weather, refreshing the forecast if it's stale."""
+    def _hours(self, now: int, days: int = OUTLOOK_DAYS) -> list[Hour]:
+        """The last week and the next `days` days of hourly weather, refreshing the forecast if it's stale."""
         self.weather.ensure_fresh()
-        rows = self.weather.hours(now - 7 * 86400 - 3600, now + 3 * 86400)
+        rows = self.weather.hours(now - 7 * 86400 - 3600, now + days * 86400)
         return [hour_of(r) for r in rows]
 
     # ------------------------------------------------------------------ the learned model
@@ -435,11 +435,14 @@ class ForecastService:
             prof[hr] = trimmed_mean(days)
         return prof
 
-    def _steps(self, hours: list[Hour], now: int, k: float, model: SolarModel | None) -> list[Hour]:
-        """The forecast's steps: the rest of the current hour, then whole hours to the end of the day after
-        tomorrow, each with its solar and usual home use (planned car charges not yet added)."""
+    def _steps(
+        self, hours: list[Hour], now: int, k: float, model: SolarModel | None, days: int = OUTLOOK_DAYS
+    ) -> list[Hour]:
+        """The forecast's steps: the rest of the current hour, then whole hours to the end of the `days`th day
+        (the day after tomorrow, for the Plan page), each with its solar and usual home use (planned car charges
+        not yet added)."""
         prof = self._load_profile(now)
-        horizon = day_start(now, OUTLOOK_DAYS)
+        horizon = day_start(now, days)
         steps = []
         for h in hours:
             end = h["ts"] + 3600
@@ -452,16 +455,17 @@ class ForecastService:
             )
         return steps
 
-    def steps(self, now: int | None = None) -> list[Hour] | None:
-        """The forecast's steps from now (see _steps), for planning around: None when there's no forecast."""
+    def steps(self, now: int | None = None, days: int = OUTLOOK_DAYS) -> list[Hour] | None:
+        """The forecast's steps from now to the end of the `days`th day, as far as the weather forecast reaches
+        (see _steps), for planning around: None when there's no forecast."""
         if not self.config.forecast:
             return None
         now = int(now or time.time())
-        hours = self._hours(now)
+        hours = self._hours(now, days)
         if not any(h["ts"] + 3600 > now for h in hours):
             return None
         k, _ = self._calibrate(hours, now)
-        return self._steps(hours, now, k, self._active_model()) or None
+        return self._steps(hours, now, k, self._active_model(), days) or None
 
     def build(self, latest: Snapshot | None, battery_kwh: float, reserve_pct: float) -> dict[str, Any] | None:
         if not self.config.forecast:

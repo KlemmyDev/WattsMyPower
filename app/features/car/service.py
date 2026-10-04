@@ -29,7 +29,7 @@ LEVELS_KEPT = 90 * 86400  # how long a level given is kept
 # The car's details, as settings.
 DETAILS = (
     "car_battery_kwh", "car_efficiency", "car_amps", "car_min_amps", "car_phases", "car_voltage", "car_wh_per_km",
-    "car_target_soc", "car_ready_by", "car_battery_helps",
+    "car_target_soc", "car_ready_by", "car_days", "car_battery_helps", "car_charge_mode",
 )  # fmt: skip
 
 
@@ -177,17 +177,70 @@ class CarService:
                 self._record(conn, now, e["soc_from"], "charge")
         return {**e, "id": cur.lastrowid, "battery_helps": bool(body.get("battery_helps", True))}
 
-    def remove(self, charge_id: int) -> bool:
+    def add_plan(self, body: dict[str, Any], now: int | None = None) -> list[dict[str, Any]]:
+        """Plan a charge in steps (a suggested plan): `steps` of start, end and amps, in order and not overlapping,
+        on `phases`, from the car's level `soc_now`. Each step is kept as a charge, tied to the others by `plan`.
+        Raises ValueError, in words."""
+        now = int(now or time.time())
+        steps = body.get("steps")
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 96:
+            raise ValueError("Give the plan's steps.")
+        phases = int(_number(body, "phases", 1, 3, "Phases") or self.settings.get("car_phases"))
+        soc = _number(body, "soc_now", 0, 100, "The car's charge now")
+        volts = self.settings.get("car_voltage")
+        eff = self.settings.get("car_efficiency") / 100
+        cap = self.settings.get("car_battery_kwh")
+        helps = int(bool(body.get("battery_helps", True)))
+        rows = []
+        last = now - 1
+        for raw in steps:
+            if not isinstance(raw, dict):
+                raise ValueError("Give each step a start, an end and a current.")
+            start = int(_number(raw, "start", 0, 4_102_444_800, "A step's start") or 0)
+            end = int(_number(raw, "end", 0, 4_102_444_800, "A step's end") or 0)
+            amps = _number(raw, "amps", 1, 48, "A step's current") or 0
+            if not start < end or end <= now or start < last or end - start > MAX_HOURS * 3600:
+                raise ValueError("The plan's steps must be in order, not overlap, and not be over already.")
+            last = end
+            power_kw = amps * volts * phases / 1000
+            kwh = power_kw * (end - start) / 3600
+            soc_from = None if soc is None else round(soc, 1)
+            if soc is not None:
+                soc = min(100.0, soc + kwh * eff / cap * 100)
+            rows.append((start, end, power_kw * 1000, round(kwh, 2), amps, phases, soc_from,
+                         None if soc is None else round(soc, 1), helps, now))  # fmt: skip
         with self.db.writing() as conn:
-            return conn.execute("DELETE FROM car_charges WHERE id = ?", (charge_id,)).rowcount > 0
+            ids = [
+                conn.execute(
+                    "INSERT INTO car_charges (start, end, power_w, kwh, amps, phases, soc_from, soc_to, battery_helps,"
+                    " created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    r,
+                ).lastrowid
+                for r in rows
+            ]
+            conn.execute(f"UPDATE car_charges SET plan = ? WHERE id IN ({','.join('?' * len(ids))})", (ids[0], *ids))
+            if rows[0][6] is not None and body.get("level_now", True):
+                self._record(conn, now, rows[0][6], "charge")
+        return [c for c in self.listed(now) if c["plan"] == ids[0]]
+
+    def remove(self, charge_id: int) -> bool:
+        """Remove a charge, or the whole plan it's a step of."""
+        with self.db.writing() as conn:
+            return (
+                conn.execute(
+                    "DELETE FROM car_charges WHERE id = ? OR plan = (SELECT plan FROM car_charges WHERE id = ?)",
+                    (charge_id, charge_id),
+                ).rowcount
+                > 0
+            )
 
     def listed(self, now: int | None = None) -> list[dict[str, Any]]:
         """Charges still to come, under way, or ended in the last 12 hours, soonest first."""
         now = int(now or time.time())
         with self.db.reading() as conn:
             rows = conn.execute(
-                "SELECT id, start, end, power_w, kwh, amps, phases, soc_from, soc_to, battery_helps FROM car_charges"
-                " WHERE end > ? ORDER BY start",
+                "SELECT id, start, end, power_w, kwh, amps, phases, soc_from, soc_to, battery_helps, plan"
+                " FROM car_charges WHERE end > ? ORDER BY start",
                 (now - KEEP_SECONDS,),
             ).fetchall()
         return [
@@ -202,6 +255,7 @@ class CarService:
                 "soc_from": r[7],
                 "soc_to": r[8],
                 "battery_helps": bool(r[9]),
+                "plan": r[10],
             }
             for r in rows
         ]

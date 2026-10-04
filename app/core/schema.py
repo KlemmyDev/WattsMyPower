@@ -256,6 +256,12 @@ def _car_levels(conn: sqlite3.Connection) -> None:
     )
 
 
+def _car_charge_plans(conn: sqlite3.Connection) -> None:
+    """A suggested charge can change its current part-way: each step is a row in car_charges, and `plan` (the
+    first step's id) ties a plan's steps together, so they're listed and removed as one. Null for a single charge."""
+    conn.execute("ALTER TABLE car_charges ADD COLUMN plan INTEGER")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -269,6 +275,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _import_replacing,
     _car_charges,
     _car_levels,
+    _car_charge_plans,
 ]
 
 

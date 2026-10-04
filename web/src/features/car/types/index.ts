@@ -15,8 +15,16 @@ export type CarDetails = {
   car_wh_per_km: number;
   car_target_soc: number;
   car_ready_by: number;
+  /** The days it's needed by car_ready_by; empty for every day. */
+  car_days: Weekday[];
   car_battery_helps: number;
+  car_charge_mode: ChargeMode;
 };
+
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/** What suggested charges aim for: the least on the bill, the most solar, sparing the home battery, or speed. */
+export type ChargeMode = "cheapest" | "solar" | "battery" | "fastest";
 
 /** A car to choose from when connecting one, with its usual details. */
 export type CarModel = {
@@ -59,7 +67,12 @@ export type ChargeEstimate = {
   phases: number;
 };
 
-export type PlannedCharge = Omit<ChargeEstimate, "hours" | "car_kwh"> & { id: number; battery_helps: boolean };
+/** A planned charge: on its own, or one step of a plan (`plan` ties a plan's steps together). */
+export type PlannedCharge = Omit<ChargeEstimate, "hours" | "car_kwh"> & {
+  id: number;
+  battery_helps: boolean;
+  plan: number | null;
+};
 
 export type CarView = {
   connected: boolean;
@@ -84,17 +97,34 @@ export type ChargeRequest = {
 };
 
 /** What to suggest a charge for: missing values are the car's last level, its usual limit and its usual time. */
-export type SuggestRequest = { soc_now?: number; soc_to?: number; ready_by?: number };
+export type SuggestRequest = { soc_now?: number; soc_to?: number; ready_by?: number; mode?: ChargeMode };
 
-/** A suggested charge: one start and one current, to set in the car's app. Cost is what it adds to the bill ($). */
+/** A step of a suggested charge: from start to end at a current. */
+export type ChargeStep = { start: number; end: number; amps: number; power_kw: number };
+
+/** A suggested plan as it's planned (POST /api/car/plans). */
+export type PlanRequest = {
+  steps: { start: number; end: number; amps: number }[];
+  phases: number;
+  soc_now: number;
+  battery_helps: boolean;
+  level_now: boolean;
+};
+
+/**
+ * A suggested charge: one or more steps, each a start, an end and a current, to set in the car's app. Cost is what
+ * it adds to the bill ($); battery_kwh how much more the home battery gives than it would without it.
+ */
 export type SuggestedCharge = {
-  /** best: the cheapest; solar: the most solar; now: starting now at full speed. */
-  kind: "best" | "solar" | "now";
+  kind: ChargeMode;
   start: number;
   end: number;
+  /** The highest current of its steps, and its power. */
   amps: number;
   phases: number;
   power_kw: number;
+  steps: ChargeStep[];
+  battery_helps: boolean;
   wall_kwh: number;
   car_kwh: number;
   soc_from: number;
@@ -103,9 +133,12 @@ export type SuggestedCharge = {
   cost: number;
   solar_kwh: number;
   solar_share: number;
+  battery_kwh: number;
 };
 
 export type Suggestions = {
+  /** What it aimed for: its plan is first in options. */
+  mode: ChargeMode;
   soc_now: number;
   soc_to: number;
   ready_by: number;
@@ -118,9 +151,11 @@ export type Suggestions = {
   km: number;
   /** Solar forecast to go to the grid before it's needed. */
   spare_kwh: number | null;
+  /** Solar beyond the house's use (kW), each forecast hour until it's needed. */
+  spare: { start: number; end: number; kw: number }[];
   /** It can get there in time; if not, the one option is full speed from now, and how far it gets. */
   reachable: boolean;
   options: SuggestedCharge[];
-  /** For a car charged on three phases: the best on one, when it costs noticeably less. */
+  /** For a car charged on three phases: the cheapest on one, when it costs noticeably less. */
   single_phase: Omit<SuggestedCharge, "kind"> | null;
 };

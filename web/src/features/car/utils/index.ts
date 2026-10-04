@@ -1,4 +1,4 @@
-import type { CarView, SuggestedCharge } from "~/features/car/types";
+import type { CarView, ChargeMode, ChargeStep, SuggestedCharge, Weekday } from "~/features/car/types";
 import { hhmm, weekdayLong } from "~/features/common/formatting/utils/date";
 import { kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
@@ -36,11 +36,18 @@ export const timeToMinutes = (v: string) => {
   return h * 60 + (m || 0);
 };
 
-/** The next time of day `minutes` after midnight that's at least an hour away (as the server picks it). */
-export function nextReadyBy(now: number, minutes: number, skip = 0): number {
-  for (let d = 0; d < 4; d++) {
+/** Monday first, as the week is shown; Date.getDay() counts from Sunday. */
+export const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const dayOf = (ts: number): Weekday => WEEKDAYS[(new Date(ts * 1000).getDay() + 6) % 7];
+
+/**
+ * The next time the car's needed (as the server picks it): `minutes` after midnight on one of `days` (every day when
+ * none), at least an hour away. `skip` passes over that many, for the one after.
+ */
+export function nextReadyBy(now: number, minutes: number, days: Weekday[] = [], skip = 0): number {
+  for (let d = 0; d < 16; d++) {
     const t = addDays(midnight(now), d) + minutes * 60;
-    if (t - now >= 3600 && skip-- <= 0) return t;
+    if (t - now >= 3600 && (!days.length || days.includes(dayOf(t))) && skip-- <= 0) return t;
   }
   return addDays(midnight(now), 1) + minutes * 60;
 }
@@ -74,3 +81,37 @@ export function solarWords(c: Pick<SuggestedCharge, "solar_share">): string {
 
 /** The car's name: what it's called, or its model, or just "Your car". */
 export const carName = (v: CarView | undefined) => v?.name || v?.model?.model || "Your car";
+
+/** Each aim's name, and what it does, in words. */
+export const MODE: Record<ChargeMode, { label: string; about: string }> = {
+  cheapest: { label: "Cheapest", about: "The least on your bill, from solar, the home battery or the grid." },
+  solar: {
+    label: "Most solar",
+    about: "Follows the sun, changing the current as it goes, and tops up from the grid at the cheapest times.",
+  },
+  battery: {
+    label: "Spare the battery",
+    about: "Never from the home battery, and only solar it doesn't need. The rest from the grid at the cheapest times.",
+  },
+  fastest: { label: "Fastest", about: "Starts now at full speed." },
+};
+
+export const MODES: ChargeMode[] = ["cheapest", "solar", "battery", "fastest"];
+
+/** A plan's steps in a line: "10 A 06:30–08:00, then 20 A to 14:00"; with the day where it changes. */
+export function stepsLine(steps: ChargeStep[], now?: number): string {
+  const days = new Set(steps.map((s) => midnight(s.start)));
+  const at = (ts: number, k: number) =>
+    days.size > 1 && (k === 0 || midnight(steps[k - 1].start) !== midnight(ts))
+      ? now != null
+        ? when(ts, now)
+        : `${weekdayLong.format(ts * 1000)} ${hhmm(ts)}`
+      : hhmm(ts);
+  return steps
+    .map((s, k) =>
+      k > 0 && steps[k - 1].end === s.start
+        ? `${s.amps} A to ${hhmm(s.end)}`
+        : `${s.amps} A ${at(s.start, k)}–${hhmm(s.end)}`,
+    )
+    .join(", then ");
+}

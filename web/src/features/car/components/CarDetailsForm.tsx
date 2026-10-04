@@ -1,16 +1,20 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import type { CarDetails } from "~/features/car/types";
-import { minutesToTime, timeToMinutes } from "~/features/car/utils";
+import type { CarDetails, ChargeMode, Weekday } from "~/features/car/types";
+import { minutesToTime, MODE, MODES, timeToMinutes, WEEKDAYS } from "~/features/car/utils";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import type { Settings } from "~/features/common/settings/types";
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { Button } from "~/features/common/ui/components/Button";
-import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
+import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
+import { cn } from "~/features/common/ui/utils";
 
-type NumberKey = Exclude<keyof CarDetails, "car_phases" | "car_ready_by" | "car_battery_helps">;
+type NumberKey = Exclude<
+  keyof CarDetails,
+  "car_phases" | "car_ready_by" | "car_days" | "car_battery_helps" | "car_charge_mode"
+>;
 const NUMBERS: NumberKey[] = [
   "car_battery_kwh",
   "car_wh_per_km",
@@ -21,13 +25,21 @@ const NUMBERS: NumberKey[] = [
   "car_target_soc",
 ];
 
-type Values = Record<NumberKey, string> & { phases: "1" | "3"; readyBy: string; helps: boolean };
+type Values = Record<NumberKey, string> & {
+  phases: "1" | "3";
+  readyBy: string;
+  days: Weekday[];
+  helps: boolean;
+  mode: ChargeMode;
+};
 
 const valuesOf = (car: CarDetails): Values => ({
   ...(Object.fromEntries(NUMBERS.map((k) => [k, String(car[k])])) as Record<NumberKey, string>),
   phases: car.car_phases === 3 ? "3" : "1",
   readyBy: minutesToTime(car.car_ready_by),
+  days: car.car_days,
   helps: !!car.car_battery_helps,
+  mode: car.car_charge_mode,
 });
 
 /** The form's values as settings. */
@@ -36,7 +48,10 @@ function settingsOf(v: Values): Partial<Settings> {
     ...Object.fromEntries(NUMBERS.map((k) => [k, Number(v[k])])),
     car_phases: Number(v.phases),
     car_ready_by: timeToMinutes(v.readyBy),
+    // In the week's order, and none for every day.
+    car_days: v.days.length === 7 ? [] : WEEKDAYS.filter((d) => v.days.includes(d)),
     car_battery_helps: v.helps ? 1 : 0,
+    car_charge_mode: v.mode,
   };
 }
 
@@ -75,7 +90,9 @@ export function CarDetailsForm({
   const [error, setError] = useState("");
   const all = settingsOf(v);
   const before = settingsOf(valuesOf(car));
-  const changed = (Object.keys(all) as (keyof Settings)[]).filter((k) => all[k] !== before[k]);
+  const changed = (Object.keys(all) as (keyof Settings)[]).filter(
+    (k) => JSON.stringify(all[k]) !== JSON.stringify(before[k]),
+  );
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -125,10 +142,52 @@ export function CarDetailsForm({
         </div>
         {num("car_voltage", "Voltage", "V", "230 in Australia.")}
       </Group>
-      <Group title="Day to day" sub="Where suggested charges stop, and when they finish by.">
+      <Group title="Day to day" sub="Where suggested charges stop, when they finish by, and what they aim for.">
         {num("car_target_soc", "Charge to", "%", "80 or 90 day to day; 100 for an LFP battery.")}
         <Field label="Usually needed by" help="Suggestions finish before this time.">
           <Input type="time" value={v.readyBy} onChange={set("readyBy")} />
+        </Field>
+        <div className="flex flex-col gap-1.5">
+          <span id="car-days" className="text-[13px] font-semibold">
+            On
+          </span>
+          <div role="group" aria-labelledby="car-days" className="flex flex-wrap gap-1">
+            {WEEKDAYS.map((d) => {
+              const on = !v.days.length || v.days.includes(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    setV((o) => {
+                      const was = o.days.length ? o.days : WEEKDAYS;
+                      const days = was.includes(d) ? was.filter((x) => x !== d) : [...was, d];
+                      return { ...o, days: days.length ? days : was };
+                    })
+                  }
+                  className={cn(
+                    "h-9 w-10 rounded-full border text-[13px] font-semibold capitalize transition-colors",
+                    on ? "border-ink bg-ink text-ink-inverse" : "border-line bg-surface text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {d.slice(0, 2)}
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-xs text-ink-muted">
+            The days it's needed. On a week off, charging can wait for the sunniest days.
+          </span>
+        </div>
+        <Field label="Aim for" help={MODE[v.mode].about}>
+          <Select value={v.mode} onChange={(e) => setV((o) => ({ ...o, mode: e.target.value as ChargeMode }))}>
+            {MODES.map((m) => (
+              <option key={m} value={m}>
+                {MODE[m].label}
+              </option>
+            ))}
+          </Select>
         </Field>
         <div className="flex items-start justify-between gap-4 sm:col-span-2">
           <div className="flex flex-col gap-0.5">
