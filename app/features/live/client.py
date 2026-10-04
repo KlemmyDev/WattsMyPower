@@ -56,7 +56,7 @@ class CollectorClient:
             return json.load(resp)
 
     def _call(self, method: str, path: str, body: dict[str, Any] | None = None, timeout: float = 30) -> Any:
-        """A request to the devices API, with its errors as CollectorError."""
+        """A request to the devices, scan or storage API, with its errors as CollectorError."""
         req = urllib.request.Request(
             f"{self.url}{path}",
             method=method,
@@ -75,9 +75,10 @@ class CollectorClient:
                 detail = json.load(e).get("detail")
             except (ValueError, AttributeError):
                 detail = None
-            # A collector from before devices were managed here answers its framework's plain "Not Found".
-            if e.code == 404 and path.startswith(("/v1/devices", "/v1/scan")) and detail in (None, "Not Found"):
-                detail = "The collector is out of date and can't connect inverters yet. Update it with: bash install.sh"
+            # A collector from before an endpoint existed answers its framework's plain "Not Found".
+            if e.code == 404 and detail in (None, "Not Found"):
+                missing = "report its database" if path == "/v1/storage" else "connect inverters"
+                detail = f"The collector is out of date and can't {missing} yet. Update it with: bash install.sh"
             elif e.code == 401:
                 detail = "The collector refused the dashboard's COLLECTOR_TOKEN. Check both use the same one."
             raise CollectorError(e.code, detail if isinstance(detail, str) else f"The collector said {e.code}.") from e
@@ -92,6 +93,11 @@ class CollectorClient:
         """(rows after `since`, whether there are more). With `wait`, holds until the next poll lands."""
         body = self._get("/v1/readings", {"since": since, "limit": limit, "wait": wait}, timeout=wait + 15)
         return body["readings"], bool(body.get("more"))
+
+    def storage(self) -> dict[str, Any]:
+        """The collector's database, measured table by table (it reads every page, so allow it time)."""
+        result: dict[str, Any] = self._call("GET", "/v1/storage", timeout=120)
+        return result
 
     # -- devices --------------------------------------------------------------
     def devices(self) -> dict[str, Any]:

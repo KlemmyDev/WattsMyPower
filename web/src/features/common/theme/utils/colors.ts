@@ -34,6 +34,8 @@ export const COLOR = {
   warn: v("warn"),
   bad: v("bad"),
   lilac: v("lilac"),
+  /** The collector's raw registers, in Settings → Database. */
+  teal: v("teal"),
   link: v("link"),
   /** Quiet bars: grid power, the supply charge, past days. */
   bar: v("bar"),

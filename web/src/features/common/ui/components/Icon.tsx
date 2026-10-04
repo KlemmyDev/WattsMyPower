@@ -98,6 +98,8 @@ const ICONS = {
     ["circle", { cx: 7.5, cy: 7.5, r: 0.5 }],
   ],
   user: [P("M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"), ["circle", { cx: 12, cy: 7, r: 4 }]],
+  database: ["M3 5a9 3 0 1 0 18 0a9 3 0 1 0 -18 0", "M3 5v14a9 3 0 0 0 18 0V5", "M3 12a9 3 0 0 0 18 0"].map(P),
+  chevD: [P("m6 9 6 6 6-6")],
 } satisfies Record<string, Shape[]>;
 
 export type IconName = keyof typeof ICONS;

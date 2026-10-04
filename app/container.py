@@ -31,6 +31,7 @@ from app.features.plans.service import PlansService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.geocode import Geocoder
 from app.features.settings.store import SettingsStore
+from app.features.storage.service import StorageService
 from app.features.tariffs.store import TariffStore
 from app.features.weather.service import WeatherService
 
@@ -55,6 +56,7 @@ class Services:
     imports: ImportService
     auth: AuthService
     integrations: IntegrationsService
+    storage: StorageService
     onboarding: OnboardingService
     live: LiveService
     alerts: AlertsService
@@ -100,6 +102,7 @@ def build_services(config: Config) -> Services:
         imports=ImportService(db),
         auth=AuthService(db, enabled=config.auth),
         integrations=integrations,
+        storage=StorageService(config, db, collector),
         onboarding=OnboardingService(config, db, integrations),
         live=live,
         alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo),

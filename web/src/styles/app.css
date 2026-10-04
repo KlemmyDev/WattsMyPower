@@ -96,6 +96,8 @@
   --color-bad: #ff8a80;
   --color-danger: #ff6b5e;
   --color-lilac: #c4a7ff;
+  /* the collector's raw registers, in Settings → Database */
+  --color-teal: #4fd1c5;
   --color-track: #26262a;
   --color-bar: #5a5a60;
   --color-bar-faint: #3a3a3e;
@@ -212,6 +214,7 @@
     --color-bad: #c22d29;
     --color-danger: #dc3b2f;
     --color-lilac: #9a6cf0;
+    --color-teal: #0f9488;
     --color-track: #e7e7ea;
     --color-bar: #bcbcc3;
     --color-bar-faint: #d6d6dc;

@@ -23,6 +23,7 @@ from collector.devices.drivers import READERS, build_device, env_devices
 from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_probe
 from collector.poller import Poller
 from collector.scan import Scanner
+from collector.storage import SPECS, measure
 from collector.store import Row, Store
 
 log = logging.getLogger(__name__)
@@ -87,6 +88,18 @@ async def status(request: Request) -> dict[str, Any]:
         "latest_ts": latest,
         "devices": {name: st.as_json() for name, st in poller.status.items()},
     }
+
+
+@router.get("/storage")
+async def storage(request: Request) -> dict[str, Any]:
+    """The database measured table by table (see storage.py), with how long readings are kept."""
+    store: Store = request.app.state.store
+
+    def run() -> dict[str, Any]:
+        with store.reading() as conn:
+            return measure(conn, store.path, SPECS)
+
+    return {**await asyncio.to_thread(run), "retention_days": store.retention_days}
 
 
 # -- devices: the inverters to read, connected in the dashboard (Settings → Integrations) ---------
