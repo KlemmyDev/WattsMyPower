@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { alertsQuery, saveRule } from "~/features/alerts/api";
+import { BrowserNotifications } from "~/features/alerts/components/BrowserNotifications";
 import { ChannelRow } from "~/features/alerts/components/ChannelRow";
-import type { AlertEvent, AlertRule, RuleChange, RuleSetting } from "~/features/alerts/types";
+import type { AlertCategory, AlertEvent, AlertRule, RuleChange, RuleSetting } from "~/features/alerts/types";
 import { errorMessage } from "~/features/common/api/utils";
 import { duration, hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
+import { Notice } from "~/features/common/ui/components/Notice";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
@@ -81,9 +83,14 @@ function RuleRow({ rule }: { rule: AlertRule }) {
             <span id={titleId} className="text-[15px] font-semibold">
               {rule.name}
             </span>
-            {enabled && rule.active_since && (
+            {enabled && rule.active_since && rule.resolves && (
               <Pill tone="bad" size="sm">
                 Since {when(rule.active_since)}
+              </Pill>
+            )}
+            {rule.needs === "amber" && (
+              <Pill tone="neutral" size="sm">
+                Needs Amber
               </Pill>
             )}
           </div>
@@ -110,7 +117,18 @@ function RuleRow({ rule }: { rule: AlertRule }) {
           </div>
           {rule.cooldown_hours != null && (
             <HelpText>
-              Sent at most once every {cooldownText(rule.cooldown_hours)}, with a follow-up when it&apos;s fixed.
+              Sent at most once every {cooldownText(rule.cooldown_hours)}
+              {!rule.resolves
+                ? "."
+                : rule.category === "system"
+                  ? ", with a follow-up when it's fixed."
+                  : ", with a follow-up when it's over."}
+            </HelpText>
+          )}
+          {rule.needs === "amber" && (
+            <HelpText>
+              This watches Amber&apos;s prices, so it stays quiet until your rates are set to Amber in Settings →
+              Tariffs.
             </HelpText>
           )}
         </div>
@@ -150,67 +168,92 @@ function HistoryRow({ event }: { event: AlertEvent }) {
   );
 }
 
-/** Settings → Alerts: where alerts go, which ones to send, and what's been sent. */
+/** A group of rules: its name and what it's about, then each rule. */
+function RuleGroup({ category, rules }: { category: AlertCategory; rules: AlertRule[] }) {
+  const on = rules.filter((r) => r.enabled).length;
+  return (
+    <section aria-labelledby={`h-rules-${category.id}`} className="border-b border-line-subtle last:border-b-0">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 bg-surface-inset px-6 pt-4 pb-3 max-sm:px-5">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h3 id={`h-rules-${category.id}`} className="text-[15px] font-semibold">
+            {category.name}
+          </h3>
+          <span className="text-[13px] text-ink-muted">{category.description}</span>
+        </div>
+        <span className="text-xs text-ink-muted tabular-nums">
+          {on} of {rules.length} on
+        </span>
+      </div>
+      <div className="border-t border-line-subtle">
+        {rules.map((r) => (
+          <RuleRow key={r.id} rule={r} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Settings → Alerts: browser notifications, other places alerts can go, which ones to send, and what's been sent. */
 export function AlertSettings() {
   const { data, isPending, error } = useQuery(alertsQuery);
   const history = data?.history ?? [];
 
+  if (isPending) return <div className="px-1 text-sm text-ink-muted">Loading…</div>;
+  if (error || !data) return <Notice>{errorMessage(error)}</Notice>;
+
   return (
     <>
+      <BrowserNotifications push={data.push} />
+
       <SettingsCard aria-labelledby="h-channels">
-        <div className="border-b border-line-subtle p-6">
+        <div className="border-b border-line-subtle p-6 max-sm:p-5">
           <SettingsTitle
             id="h-channels"
-            title="Where alerts go"
-            sub={
-              !data
-                ? "Get told when something needs attention, rather than having to check."
-                : data.enabled
-                  ? "Alerts are on, and go to every channel switched on here."
-                  : "Alerts are off until you set up somewhere to send them."
-            }
+            title="Other ways to get alerts"
+            sub="Through an app on your phone, or to another system. Each one switched on gets every alert."
           />
         </div>
-        {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Loading…</div>}
-        {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
-        {data?.channels.map((c) => (
+        {data.channels.map((c) => (
           <ChannelRow key={c.kind} channel={c} />
         ))}
       </SettingsCard>
 
-      {data && (
-        <SettingsCard aria-labelledby="h-rules">
-          <div className="border-b border-line-subtle p-6">
-            <SettingsTitle
-              id="h-rules"
-              title="What to tell you about"
-              sub="Each one is checked every minute or so, and only once a problem has lasted, so a passing blip stays quiet."
-            />
-          </div>
-          {data.rules.map((r) => (
-            <RuleRow key={r.id} rule={r} />
-          ))}
-        </SettingsCard>
-      )}
-
-      {data && (
-        <SettingsCard aria-labelledby="h-history">
-          <div className="border-b border-line-subtle p-6">
-            <SettingsTitle id="h-history" title="Recent alerts" sub="What was sent, and whether it arrived." />
-          </div>
-          {history.length ? (
-            <ul className="m-0 list-none p-0">
-              {history.map((e) => (
-                <HistoryRow key={e.id} event={e} />
-              ))}
-            </ul>
-          ) : (
-            <div className="px-6 py-5 text-sm text-ink-muted">
-              Nothing sent yet. Alerts show up here once they go out.
-            </div>
+      <SettingsCard aria-labelledby="h-rules">
+        <div className="flex flex-col gap-4 border-b border-line-subtle p-6 max-sm:p-5">
+          <SettingsTitle
+            id="h-rules"
+            title="What to tell you about"
+            sub="Each is checked every minute or so, and only once it has lasted, so a passing blip stays quiet."
+          />
+          {!data.enabled && (
+            <Notice tone="info">
+              Alerts are off until they have somewhere to go: turn on browser notifications, or set up ntfy, Pushover or
+              a webhook above.
+            </Notice>
           )}
-        </SettingsCard>
-      )}
+        </div>
+        {data.categories.map((c) => {
+          const rules = data.rules.filter((r) => r.category === c.id);
+          return rules.length ? <RuleGroup key={c.id} category={c} rules={rules} /> : null;
+        })}
+      </SettingsCard>
+
+      <SettingsCard aria-labelledby="h-history">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line-subtle p-6 max-sm:p-5">
+          <SettingsTitle id="h-history" title="Recent alerts" sub="What was sent, and whether it arrived." />
+        </div>
+        {history.length ? (
+          <ul className="m-0 list-none p-0">
+            {history.map((e) => (
+              <HistoryRow key={e.id} event={e} />
+            ))}
+          </ul>
+        ) : (
+          <div className="px-6 py-5 text-sm text-ink-muted">
+            Nothing sent yet. Alerts show up here once they go out.
+          </div>
+        )}
+      </SettingsCard>
     </>
   );
 }

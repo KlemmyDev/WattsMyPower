@@ -15,7 +15,11 @@ repeating alerts already sent. For each rule:
 - retry: an alert that reached no channel (often the same outage that cut the home internet) is
   tried again every few minutes while it lasts.
 
-Nothing is evaluated until a channel is set up, so alerts are off on a fresh install.
+Rules for good news (strong solar, a full battery: `resolves` off) go out as "notice" rather than "alert",
+and say nothing when they clear.
+
+Alerts go to every channel switched on (ntfy, Pushover, a webhook) and to every browser that turned on
+notifications (webpush.py). Nothing is evaluated until there's at least one, so alerts are off on a fresh install.
 """
 
 from __future__ import annotations
@@ -32,8 +36,9 @@ from app.core.database import Database
 from app.core.http import post
 from app.features.alerts.channels import KINDS, DeliveryError, Message, Send, clean, deliver, masked
 from app.features.alerts.repository import AlertsRepository, Channel, RuleSettings
-from app.features.alerts.rules import BY_ID, RULES, Check, Facts, Rule, RuleState, Values
+from app.features.alerts.rules import BY_ID, CATEGORIES, RULES, Check, Facts, Rule, RuleState, Values
 from app.features.alerts.sun import daylight_since, elevation
+from app.features.alerts.webpush import PushService
 from app.features.amber.repository import PriceRepository
 from app.features.insights.service import InsightsService
 from app.features.live.ingest import NO_INVERTER
@@ -49,6 +54,9 @@ TICK = 60  # seconds: evaluate at least this often, even when no status arrives
 RETRY = 300  # seconds between attempts to deliver an alert that reached no channel
 TEST_TITLE = "WattsMyPower test"
 TEST_BODY = "This is a test from WattsMyPower. Alerts will arrive like this."
+# Browser notifications, as a channel alongside the configured ones: on while any browser is subscribed.
+BROWSER = Channel("browser", True, {}, 0)
+BROWSER_LABEL = "Browser notifications"
 
 
 class AlertsService:
@@ -71,6 +79,7 @@ class AlertsService:
         self.insights = insights
         self.prices = prices  # Amber's stored prices, for an Amber tariff
         self.send = send
+        self.push = PushService(db, send)
         self._lock = threading.Lock()
         self._perf: tuple[str, dict[str, Any] | None] | None = None  # (hour checked, performance)
         self._queue: asyncio.Queue[Status] | None = None
@@ -122,6 +131,7 @@ class AlertsService:
             frozen_since=live.frozen_since,
             performance=self._performance,
             yesterday=lambda: self._yesterday(now),
+            price=lambda: self._price(now),
         )
 
     def _performance(self) -> dict[str, Any] | None:
@@ -132,6 +142,21 @@ class AlertsService:
         perf: dict[str, Any] | None = self.insights.build(None, 0.0).get("performance")
         self._perf = (hour, perf)
         return perf
+
+    def _amber(self) -> bool:
+        return self.prices is not None and self.tariffs.current()[0].get("type") == "amber"
+
+    def _price(self, now: float) -> dict[str, Any] | None:
+        """On an Amber tariff, the price in force now (import, and what exporting earns), $/kWh."""
+        if self.prices is None or not self._amber():
+            return None
+        t = int(now)
+        general = self.prices.intervals("general", t, t + 1)
+        if not general:
+            return None
+        start, duration, rate, _ = general[-1]
+        feed_in = self.prices.lookup("feedIn", t, t + 1).at(t)
+        return {"import": rate, "feed_in": feed_in, "until": start + duration}
 
     def _yesterday(self, now: float) -> dict[str, Any] | None:
         """Yesterday's energy and cost, priced the same way as the Bills page."""
@@ -162,7 +187,7 @@ class AlertsService:
     def evaluate(self, facts: Facts) -> None:
         """Check every rule switched on against `facts`, and send what needs sending."""
         with self._lock:
-            channels = [c for c in self.repo.channels().values() if c.enabled]
+            channels = self._targets()
             states = self.repo.states()
             if not channels:  # alerts are off: start afresh when they're turned on
                 if states:
@@ -204,9 +229,10 @@ class AlertsService:
                 due = now - s.pending_since >= rule.debounce(values)
                 cooled = s.last_fired is None or now - s.last_fired >= (rule.cooldown or 0)
                 if due and cooled:
-                    msg = Message("alert", rule.id, check.title, check.message, int(now), rule.urgent)
+                    kind = "alert" if rule.resolves else "notice"
+                    msg = Message(kind, rule.id, check.title, check.message, int(now), rule.urgent)
                     status, error = self._deliver(channels, msg)
-                    s.event_id = self.repo.add_event(now, rule.id, "alert", check.title, check.message, status, error)
+                    s.event_id = self.repo.add_event(now, rule.id, kind, check.title, check.message, status, error)
                     s.active_since = s.last_fired = now
                     s.pending_since = None
                     s.delivered = status != "failed"
@@ -234,23 +260,34 @@ class AlertsService:
         if event is None:
             s.retry_at = None
             return
-        msg = Message("alert", s.rule, event["title"], event["message"], int(now), BY_ID[s.rule].urgent)
+        rule = BY_ID[s.rule]
+        kind = "alert" if rule.resolves else "notice"
+        msg = Message(kind, s.rule, event["title"], event["message"], int(now), rule.urgent)
         status, error = self._deliver(channels, msg)
         s.delivered = status != "failed"
         s.retry_at = None if s.delivered else now + RETRY
         self.repo.update_event(event["id"], status=status, error=error)
 
+    def _targets(self) -> list[Channel]:
+        """Where alerts go now: the channels switched on, and browsers, if any is subscribed."""
+        channels = [c for c in self.repo.channels().values() if c.enabled]
+        return [*channels, BROWSER] if self.push.any() else channels
+
     def _deliver(self, channels: list[Channel], msg: Message) -> tuple[str, str | None]:
         """Send to every channel. (sent, partial or failed; what went wrong, by channel)."""
         errors = []
         for c in channels:
+            label = BROWSER_LABEL if c.kind == BROWSER.kind else KINDS[c.kind].label
             try:
-                deliver(c.kind, c.config, msg, self.send)
+                if c.kind == BROWSER.kind:
+                    self.push.send_all(msg, _page(msg))
+                else:
+                    deliver(c.kind, c.config, msg, self.send)
             except DeliveryError as e:
-                errors.append(f"{KINDS[c.kind].label}: {e}")
+                errors.append(f"{label}: {e}")
             except Exception as e:  # a bug in a channel shouldn't stop the others
                 log.exception("Sending through %s failed", c.kind)
-                errors.append(f"{KINDS[c.kind].label}: {type(e).__name__}")
+                errors.append(f"{label}: {type(e).__name__}")
         if errors:
             log.warning("Alert %r not delivered everywhere: %s", msg.title, "; ".join(errors))
         status = "sent" if not errors else "failed" if len(errors) == len(channels) else "partial"
@@ -262,12 +299,35 @@ class AlertsService:
         channels = self.repo.channels()
         saved = self.repo.rules()
         states = self.repo.states()
+        amber = self._amber()
         return {
-            "enabled": any(c.enabled for c in channels.values()),
+            "enabled": bool(self._targets()),
+            "push": self.push_overview(),
             "channels": [self._channel_view(k, channels.get(k)) for k in KINDS],
-            "rules": [self._rule_view(r, saved.get(r.id), states.get(r.id)) for r in RULES],
+            "categories": [{"id": k, "name": n, "description": d} for k, (n, d) in CATEGORIES.items()],
+            "rules": [self._rule_view(r, saved.get(r.id), states.get(r.id), amber) for r in RULES],
             "history": self.history(),
         }
+
+    def push_overview(self) -> dict[str, Any]:
+        """The server's public key (for a browser to subscribe with), and the browsers subscribed."""
+        return {"public_key": self.push.keys().public, "devices": [s.view() for s in self.push.subscriptions()]}
+
+    def subscribe(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Store a browser's push subscription. Raises ValueError, in words."""
+        return self.push.subscribe(body)
+
+    def remove_device(self, device_id: str) -> bool:
+        return self.push.remove(device_id)
+
+    def test_push(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Send a test notification to one browser (`device`), or all of them. Raises DeliveryError if it fails."""
+        device = body.get("device")
+        if device is not None and not any(s.id == device for s in self.push.subscriptions()):
+            raise LookupError("That browser isn't subscribed any more.")
+        msg = Message("test", None, TEST_TITLE, TEST_BODY, int(time.time()))
+        self.push.send_all(msg, _page(msg), only=device)
+        return {"ok": True}
 
     def history(self, limit: int = 50) -> list[dict[str, Any]]:
         events = self.repo.history(limit)
@@ -283,12 +343,20 @@ class AlertsService:
             "updated_at": c.updated_at if c else None,
         }
 
-    def _rule_view(self, rule: Rule, saved: RuleSettings | None, state: RuleState | None) -> dict[str, Any]:
+    def _rule_view(
+        self, rule: Rule, saved: RuleSettings | None, state: RuleState | None, amber: bool | None = None
+    ) -> dict[str, Any]:
         values = rule.values(saved.settings if saved else None)
+        if amber is None:
+            amber = self._amber()
         return {
             "id": rule.id,
             "name": rule.name,
             "description": rule.description,
+            "category": rule.category,
+            "resolves": rule.resolves,
+            # It can't work on this setup (e.g. a price alert without an Amber tariff): it says so, and stays quiet.
+            "needs": rule.needs if rule.needs == "amber" and not amber else None,
             "enabled": saved.enabled if saved else rule.enabled,
             "cooldown_hours": None if rule.cooldown is None else round(rule.cooldown / 3600, 1),
             "settings": [{**asdict(s), "value": values[s.key]} for s in rule.settings],
@@ -351,3 +419,9 @@ class AlertsService:
             raise ValueError(f"Unknown setting: {sorted(unknown)[0]}")
         self.repo.save_rule(rule_id, enabled, values)
         return self._rule_view(rule, RuleSettings(enabled, values), self.repo.states().get(rule_id))
+
+
+def _page(msg: Message) -> str:
+    """Where tapping a notification goes: the page its rule is about."""
+    rule = BY_ID.get(msg.rule or "")
+    return rule.page if rule else "/settings/alerts"

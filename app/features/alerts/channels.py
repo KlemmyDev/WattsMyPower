@@ -31,7 +31,7 @@ Config = dict[str, str]
 
 @dataclass(frozen=True)
 class Message:
-    """One notification. `event` is alert, resolved, summary or test."""
+    """One notification. `event` is alert, resolved, notice (good news), summary or test."""
 
     event: str
     rule: str | None
@@ -143,7 +143,13 @@ def _ntfy(config: Config, msg: Message) -> tuple[str, bytes, str, dict[str, str]
     p = urllib.parse.urlsplit(config["url"].rstrip("/"))
     base, topic = p.path.rsplit("/", 1)
     url = urllib.parse.urlunsplit((p.scheme, p.netloc, base or "/", "", ""))
-    tags = {"alert": ["warning"], "resolved": ["white_check_mark"], "summary": ["sunny"], "test": ["wave"]}
+    tags = {
+        "alert": ["warning"],
+        "resolved": ["white_check_mark"],
+        "notice": ["bulb"],
+        "summary": ["sunny"],
+        "test": ["wave"],
+    }
     body = {
         "topic": topic,
         "title": msg.title,

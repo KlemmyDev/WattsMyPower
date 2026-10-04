@@ -1,6 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type { AlertChannel, AlertRule, AlertsOverview, ChannelKind, RuleChange } from "~/features/alerts/types";
+import type {
+  AlertChannel,
+  AlertRule,
+  AlertsOverview,
+  ChannelKind,
+  PushDevice,
+  RuleChange,
+} from "~/features/alerts/types";
 
 /** Channels, rules and recent alerts. Refreshed every minute, as rules are checked about that often. */
 export const alertsQuery = queryOptions({
@@ -19,3 +26,12 @@ export const testChannel = (kind: ChannelKind, body: Record<string, string>) =>
   apiSend<{ ok: true }>("POST", `alerts/channels/${kind}/test`, body);
 
 export const saveRule = (id: string, change: RuleChange) => apiSend<AlertRule>("PUT", `alerts/rules/${id}`, change);
+
+/** Turn on notifications for this browser: its PushSubscription, and a name to list it by. */
+export const savePushDevice = (subscription: PushSubscriptionJSON, name: string) =>
+  apiSend<PushDevice>("POST", "alerts/push/devices", { subscription, name });
+
+export const removePushDevice = (id: string) => apiSend<{ removed: boolean }>("DELETE", `alerts/push/devices/${id}`);
+
+/** Send a test notification to one browser. */
+export const testPushDevice = (id: string) => apiSend<{ ok: true }>("POST", "alerts/push/test", { device: id });
