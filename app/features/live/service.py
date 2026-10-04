@@ -27,6 +27,7 @@ class LiveService:
         # While the hybrid keeps answering with the same words (see transform.Freeze): when the
         # reading it repeats was taken. Those polls aren't stored, so `latest` stays at that reading.
         self.frozen_since: int | None = None
+        self.next_poll: float | None = None  # when the collector next reads the inverters (unix seconds)
         self.info: dict[str, Any] = {}  # the hybrid's details: model, serial, battery capacity, reserve
         # The second inverter, when the collector has one configured.
         self.pv2: dict[str, Any] | None = None
@@ -92,6 +93,7 @@ class LiveService:
             "mock": self.config.mock,
             "poll_interval": self.config.poll_interval,
             "last_success": self.last_success,
+            "next_poll": self.next_poll,
             "error": self.last_error,
             "frozen_since": self.frozen_since,
         }

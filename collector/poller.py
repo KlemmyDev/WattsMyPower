@@ -85,6 +85,9 @@ class Poller:
         self._landed = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._pruned_at = 0.0
+        # When the next poll starts (unix seconds): the interval, or the backoff after a failed one.
+        # None while there's nothing to read; in the past while a poll is under way.
+        self.next_poll: float | None = None
 
     # -- devices ---------------------------------------------------------------
     def set_devices(self, devices: list[Device], configs: dict[str, DeviceConfig] | None = None) -> None:
@@ -134,6 +137,7 @@ class Poller:
         while True:
             started = time.monotonic()
             if self.hybrid is None:  # nothing connected yet: check again shortly
+                self.next_poll = None
                 await self._sleep(min(cfg.poll_interval, 10))
                 continue
             try:
@@ -143,10 +147,14 @@ class Poller:
                 ok, error = False, f"{type(e).__name__}: {e}"
             if not ok:
                 log.warning("Poll failed (next try in %ss): %s", backoff, error)
+                self.next_poll = self._clock() + backoff
                 await self._sleep(backoff)
                 backoff = min(backoff * 2, cfg.max_backoff)
                 continue
             backoff = cfg.poll_interval
+            # Said before pruning: the feed's waiting requests are already awake and asking.
+            due = started + cfg.poll_interval
+            self.next_poll = self._clock() + due - time.monotonic()
 
             now = self._clock()
             if now - self._pruned_at > PRUNE_EVERY:
@@ -158,7 +166,7 @@ class Poller:
                 except Exception as e:
                     log.warning("Prune failed: %s: %s", type(e).__name__, e)
 
-            await self._sleep(max(0.0, cfg.poll_interval - (time.monotonic() - started)))
+            await self._sleep(max(0.0, due - time.monotonic()))
 
     # -- one poll -------------------------------------------------------------
     async def poll_once(self) -> bool:

@@ -84,6 +84,7 @@ async def status(request: Request) -> dict[str, Any]:
         "version": PROTOCOL_VERSION,
         "poll_interval": poller.config.poll_interval,
         "started_at": poller.started_at,
+        "next_poll": poller.next_poll,
         "oldest_ts": oldest,
         "latest_ts": latest,
         "devices": {name: st.as_json() for name, st in poller.status.items()},

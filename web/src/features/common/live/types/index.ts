@@ -67,6 +67,8 @@ export type LiveStatus = {
   mock: boolean;
   poll_interval: number;
   last_success: number | null;
+  /** When the inverters are next read (unix seconds): a poll interval on, or the backoff after a failed poll. In the past while a poll is under way; null with no inverter connected. */
+  next_poll?: number | null;
   error: string | null;
   /** While the inverter's dongle keeps serving the same registers: when the reading it repeats was taken. The repeats aren't recorded, so `snapshot` stays at that reading. */
   frozen_since?: number | null;

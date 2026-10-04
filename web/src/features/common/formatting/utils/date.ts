@@ -79,6 +79,12 @@ export function duration(secs: number): string {
   return h ? `${h} h ${r} min` : `${r} min`;
 }
 
+/** A countdown in seconds as "0:42" or "4:05". */
+export function clock(secs: number): string {
+  const s = Math.max(0, Math.ceil(secs));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 /** "8, 17, and 24 September" / "30 August and 2 September" from YYYY-MM-DD strings. */
 export function listDays(dates: string[]): string {
   const groups: { m: string; days: number[] }[] = [];
