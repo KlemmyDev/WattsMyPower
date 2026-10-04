@@ -20,6 +20,7 @@ import { locationLabel, reserveOf } from "~/features/common/energy/utils";
 import { CarCharging } from "~/features/car/components/CarCharging";
 import { AccuracyCard } from "~/features/plan/components/AccuracyCard";
 import { BestTimes } from "~/features/plan/components/BestTimes";
+import { DayBreakdown } from "~/features/plan/components/DayBreakdown";
 import { MomentList } from "~/features/plan/components/Moments";
 import { OutlookDays } from "~/features/plan/components/OutlookDays";
 import { PlanChart } from "~/features/plan/components/PlanChart";
@@ -177,6 +178,14 @@ export function PlanPage({ day: selected = 0 }: { day?: number }) {
                 </div>
               </div>
             </div>
+          </Card>
+          <Card key={`breakdown-${day.key}`} aria-labelledby="h-breakdown">
+            <TitleBlock
+              id="h-breakdown"
+              title="Home use and solar"
+              sub={`${day.label}'s totals, and how they're worked out`}
+            />
+            <DayBreakdown day={day} forecast={forecast} system={system} />
           </Card>
           <CarCharging />
           <AccuracyCard accuracy={accuracy} />
