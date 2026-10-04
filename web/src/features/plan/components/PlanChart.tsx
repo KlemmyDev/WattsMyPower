@@ -46,6 +46,9 @@ type P = { t: number; v: number };
  */
 export type Overlay = { pv: (number | null)[]; load: (number | null)[] };
 
+/** How far the recorded lines fade while they're compared with the earlier forecast. */
+const FADED = 0.35;
+
 const STROKE = {
   fill: "none",
   vectorEffect: "non-scaling-stroke",
@@ -323,6 +326,8 @@ export function PlanChart({
   const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
   const left = (t: number) => (c.X(t) / W) * 100;
+  // Comparing with the earlier forecast: what was recorded steps back, so the forecast's dashed lines over it read.
+  const comparing = !!(c.pvWas || c.loadWas);
   // The moments' numbers sit in a row of their own above the best-times strips.
   const top = moments.length || markerRow ? MARKER_ROW : 0;
 
@@ -422,11 +427,23 @@ export function PlanChart({
             className="absolute inset-0 size-full animate-reveal-x overflow-visible"
           >
             {c.band && <path d={c.band} style={{ fill: alpha(COLOR.solar, 0.16) }} />}
-            {c.pvPastArea && <path d={c.pvPastArea} style={{ fill: alpha(COLOR.solarWash, 0.32) }} />}
+            {c.pvPastArea && (
+              <path d={c.pvPastArea} style={{ fill: alpha(COLOR.solarWash, comparing ? 0.14 : 0.32) }} />
+            )}
             {c.pvAheadArea && <path d={c.pvAheadArea} style={{ fill: alpha(COLOR.solarWash, 0.16) }} />}
-            <path d={c.pvPast} {...STROKE} strokeWidth="2" style={{ stroke: COLOR.solar }} />
+            <path
+              d={c.pvPast}
+              {...STROKE}
+              strokeWidth="2"
+              style={{ stroke: COLOR.solar, opacity: comparing ? FADED : 1 }}
+            />
             <path d={c.pvAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
-            <path d={c.loadPast} {...STROKE} strokeWidth="1.5" style={{ stroke: COLOR.ink }} />
+            <path
+              d={c.loadPast}
+              {...STROKE}
+              strokeWidth="1.5"
+              style={{ stroke: COLOR.ink, opacity: comparing ? FADED : 1 }}
+            />
             {/* The earlier forecast for the hours gone, drawn as the forecast is: the legend's "Forecast" covers both. */}
             {c.pvWas && (
               <path d={c.pvWas} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
