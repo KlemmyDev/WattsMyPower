@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { carsQuery, estimateQuery } from "~/features/car/api";
-import { LevelBar, LevelForm, levelSource, rangeWords } from "~/features/car/components/CarLevel";
+import { CarLevelSlider, useCarLevels, type CarLevels } from "~/features/car/components/CarLevel";
 import { SuggestedCharges } from "~/features/car/components/SuggestedCharges";
 import { useChargeChange } from "~/features/car/hooks";
 import type { CarDetails, CarView, ChargeEstimate, ChargeRequest, PlannedCharge } from "~/features/car/types";
@@ -68,8 +68,9 @@ export function CarCharging() {
           }}
         />
       )}
-      {view && <LevelLine key={view.id} view={view} now={now} />}
-      {view && <SuggestedCharges key={`${view.id}-${view.level?.given_at ?? 0}`} view={view} now={now} />}
+      {view && (
+        <CarPlanner key={view.id} view={view} now={now} planning={planning} onPlanned={() => setPlanning(false)} />
+      )}
       {cars && !view && (
         <Notice tone="plain" className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-pretty">
@@ -80,16 +81,6 @@ export function CarCharging() {
             Connect your EV
           </ButtonLink>
         </Notice>
-      )}
-      {planning && view && (
-        <ChargeForm
-          key={view.id}
-          carId={view.id}
-          car={view.car}
-          level={view.level?.soc ?? null}
-          now={now}
-          onDone={() => setPlanning(false)}
-        />
       )}
       {charges.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -127,30 +118,28 @@ export function CarCharging() {
   );
 }
 
-/** The car's level: a bar, the figure, where it came from, and a way to give it afresh. */
-function LevelLine({ view, now }: { view: CarView; now: number }) {
-  const [editing, setEditing] = useState(!view.level);
-  const l = view.level;
+/**
+ * One car's charge on a slider (the charge now and the level to charge to, saved as they're dragged), the best
+ * times to charge it between the two, and a charge planned by hand, which starts from the same two figures.
+ */
+function CarPlanner({
+  view,
+  now,
+  planning,
+  onPlanned,
+}: {
+  view: CarView;
+  now: number;
+  planning: boolean;
+  onPlanned: () => void;
+}) {
+  const levels = useCarLevels(view);
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="text-sm text-ink-muted tabular-nums">
-          <b className="text-[22px] font-light tracking-[-0.5px] text-ink">{l ? pct(l.soc) : "—"}</b>
-          {l ? ` · ${rangeWords(l)} · charged to ${view.car.car_target_soc}%` : " · the car's charge isn't known yet"}
-        </span>
-        {l && !editing && (
-          <Button variant="link" size="sm" onClick={() => setEditing(true)}>
-            Update
-          </Button>
-        )}
-      </div>
-      <LevelBar soc={l?.soc ?? null} target={view.car.car_target_soc} />
-      {editing ? (
-        <LevelForm car={view.id} initial={l?.soc ?? null} onDone={l ? () => setEditing(false) : undefined} />
-      ) : (
-        l && <Muted>{levelSource(l, now)}.</Muted>
-      )}
-    </div>
+    <>
+      <CarLevelSlider view={view} levels={levels} now={now} />
+      <SuggestedCharges view={view} now={now} socNow={levels.soc} socTo={levels.target} />
+      {planning && <ChargeForm carId={view.id} car={view.car} levels={levels} now={now} onDone={onPlanned} />}
+    </>
   );
 }
 
@@ -225,22 +214,21 @@ type Stop = "level" | "time";
 function ChargeForm({
   carId,
   car,
-  level,
+  levels,
   now,
   onDone,
 }: {
   carId: number;
   car: CarDetails;
-  level: number | null;
+  /** The car's charge now and the level to charge to, from the slider. */
+  levels: CarLevels;
   now: number;
   onDone: () => void;
 }) {
   const toast = useToast();
   const { add } = useChargeChange();
   const [start, setStart] = useState(() => toLocal(defaultStart(now)));
-  const [socNow, setSocNow] = useState(level == null ? "" : String(Math.round(level)));
   const [stop, setStop] = useState<Stop>("level");
-  const [socTo, setSocTo] = useState(String(car.car_target_soc));
   const [hours, setHours] = useState("3");
   const [amps, setAmps] = useState(String(car.car_amps));
   const [phases, setPhases] = useState(String(car.car_phases === 3 ? 3 : 1));
@@ -252,8 +240,8 @@ function ChargeForm({
     start: start ? fromLocal(start) : 0,
     amps: num(amps) ?? 0,
     phases: Number(phases),
-    soc_now: num(socNow),
-    soc_to: stop === "level" ? num(socTo) : null,
+    soc_now: levels.soc,
+    soc_to: stop === "level" ? levels.target : null,
     hours: stop === "time" ? num(hours) : null,
     battery_helps: helps,
   };
@@ -289,18 +277,6 @@ function ChargeForm({
         <Field label="Starts">
           <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
         </Field>
-        <Field label="The car's charge now" help={stop === "time" ? "Optional for a set time." : undefined}>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            max="100"
-            unit="%"
-            value={socNow}
-            placeholder="e.g. 40"
-            onChange={(e) => setSocNow(e.target.value)}
-          />
-        </Field>
         <Field label="Current">
           <Input
             type="number"
@@ -319,26 +295,14 @@ function ChargeForm({
           <Segmented<Stop>
             label="Stops"
             options={[
-              { value: "level", label: "At a charge level" },
+              { value: "level", label: `At ${levels.target}%` },
               { value: "time", label: "After a set time" },
             ]}
             value={stop}
             onChange={setStop}
           />
         </div>
-        {stop === "level" ? (
-          <Field label="Charge to" className="w-[140px]" help="100 for full.">
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="1"
-              max="100"
-              unit="%"
-              value={socTo}
-              onChange={(e) => setSocTo(e.target.value)}
-            />
-          </Field>
-        ) : (
+        {stop === "time" && (
           <Field label="For" className="w-[140px]" help="Stops early if the car fills.">
             <Input
               type="number"
@@ -398,7 +362,7 @@ function Estimate({ est, error }: { est: ChargeEstimate | undefined; error: stri
   if (error) return <HelpText tone="bad">{error}</HelpText>;
   if (!est)
     return (
-      <Muted>Give the car's charge now and a level to charge to, or a set time, to see what the charge comes to.</Muted>
+      <Muted>Set the car's charge on the slider above, or choose a set time, to see what the charge comes to.</Muted>
     );
   const figures: [string, string][] = [
     ["Power", `${est.power_kw.toFixed(1)} kW`],

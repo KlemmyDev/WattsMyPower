@@ -26,7 +26,7 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { midnight } from "~/features/common/time/utils";
+import { addDays, midnight } from "~/features/common/time/utils";
 import { cn } from "~/features/common/ui/utils";
 
 type Plannable = Omit<SuggestedCharge, "kind">;
@@ -51,32 +51,66 @@ function usePlanSuggestion(car: number, s: Suggestions | undefined) {
   return { plan, pending: addPlan.isPending, error: addPlan.isError ? errorMessage(addPlan.error) : "" };
 }
 
-type ReadyChoice = "next" | "after" | "other";
+/** A time it could be needed by, for the "Needed by" list. */
+type ReadyOption = { value: string; label: string; ts: number };
+
+const QUARTER = 900;
 
 /**
- * Suggested charges for a connected car: from its level now (as last given, or typed here) to a level by a time.
- * A plan for each aim (cheapest, most solar, sparing the home battery, fastest), the chosen one in full with its
- * steps drawn against the spare solar, and all four side by side. Key it by when the level was last given, so a new
- * one starts the form afresh.
+ * The times to offer for "Needed by", soonest first: in an hour or a few (to the next quarter hour), the car's usual
+ * time and the one after (from its details), and tomorrow morning and evening. A time offered twice keeps its first
+ * name; one less than 15 minutes away (the least the planner takes) isn't offered.
  */
-export function SuggestedCharges({ view, now }: { view: CarView; now: number }) {
-  const c = view.car;
-  const level = view.level?.soc;
-  const [socNow, setSocNow] = useState(level == null ? "" : String(Math.round(level)));
-  const [socTo, setSocTo] = useState(String(c.car_target_soc));
-  const [ready, setReady] = useState<ReadyChoice>("next");
-  const [mode, setMode] = useState<ChargeMode>(c.car_charge_mode);
-  const next = nextReadyBy(now, c.car_ready_by, c.car_days);
-  const after = nextReadyBy(now, c.car_ready_by, c.car_days, 1);
-  const [other, setOther] = useState(() => toLocal(after + 10.5 * 3600));
+export function readyOptions(now: number, minutes: number, days: CarView["car"]["car_days"]): ReadyOption[] {
+  const soon = (h: number) => Math.ceil((now + h * 3600) / QUARTER) * QUARTER;
+  const tomorrow = addDays(midnight(now), 1);
+  const next = nextReadyBy(now, minutes, days);
+  const after = nextReadyBy(now, minutes, days, 1);
+  const all: ReadyOption[] = [
+    { value: "next", label: `${when(next, now)} (usual)`, ts: next },
+    { value: "after", label: `${when(after, now)} (the one after)`, ts: after },
+    ...[1, 2, 4, 8].map((h) => ({
+      value: `in${h}`,
+      label: `In ${h} ${h === 1 ? "hour" : "hours"} (${hhmm(soon(h))})`,
+      ts: soon(h),
+    })),
+    { value: "morning", label: `Tomorrow morning (${hhmm(tomorrow + 7 * 3600)})`, ts: tomorrow + 7 * 3600 },
+    { value: "evening", label: `Tomorrow evening (${hhmm(tomorrow + 17 * 3600)})`, ts: tomorrow + 17 * 3600 },
+  ];
+  const seen = new Set<number>();
+  return all.filter((o) => o.ts - now >= QUARTER && !seen.has(o.ts) && seen.add(o.ts)).sort((a, b) => a.ts - b.ts);
+}
 
-  const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? undefined : Number(v));
+/**
+ * Suggested charges for a connected car: from its charge now to the level to charge it to (both from the slider
+ * above) by a time. A plan for each aim (cheapest, most solar, sparing the home battery, fastest), the chosen one in
+ * full with its steps drawn against the spare solar, and all four side by side, folded away.
+ */
+export function SuggestedCharges({
+  view,
+  now,
+  socNow,
+  socTo,
+}: {
+  view: CarView;
+  now: number;
+  socNow: number | null;
+  socTo: number;
+}) {
+  const c = view.car;
+  const [ready, setReady] = useState("next");
+  const [mode, setMode] = useState<ChargeMode>(c.car_charge_mode);
+  const options = readyOptions(now, c.car_ready_by, c.car_days);
+  const [other, setOther] = useState(() => toLocal(nextReadyBy(now, c.car_ready_by, c.car_days, 1) + 10.5 * 3600));
+  // A relative choice keeps its time as the clock moves on; one that has gone by falls back to the usual time.
+  const picked = options.find((o) => o.value === ready) ?? options.find((o) => o.value === "next") ?? options[0];
+
   const req: SuggestRequest = {
-    soc_now: num(socNow),
-    soc_to: num(socTo),
-    ready_by: ready === "next" ? next : ready === "after" ? after : other ? fromLocal(other) : undefined,
+    soc_now: socNow ?? undefined,
+    soc_to: socTo,
+    ready_by: ready === "other" ? (other ? fromLocal(other) : undefined) : picked?.ts,
   };
-  // Suggestions follow the form, a moment after typing stops. Every aim's plan comes back at once, so choosing
+  // Suggestions follow the form, a moment after the slider or the time stops moving. Every aim's plan comes back at once, so choosing
   // another aim needs no new request.
   const key = JSON.stringify(req);
   const [asked, setAsked] = useState(req);
@@ -98,34 +132,17 @@ export function SuggestedCharges({ view, now }: { view: CarView; now: number }) 
           From the solar forecast, your home use and your rates. Set the times and current in the car's app.
         </Muted>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
-        <Field label="The car's charge now">
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            max="100"
-            unit="%"
-            value={socNow}
-            placeholder="e.g. 40"
-            onChange={(e) => setSocNow(e.target.value)}
-          />
-        </Field>
-        <Field label="Charge to">
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="1"
-            max="100"
-            unit="%"
-            value={socTo}
-            onChange={(e) => setSocTo(e.target.value)}
-          />
-        </Field>
-        <Field label="Needed by">
-          <Select value={ready} onChange={(e) => setReady(e.target.value as ReadyChoice)}>
-            <option value="next">{when(next, now)}</option>
-            <option value="after">{when(after, now)}</option>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] items-start gap-4">
+        <Field label={`Charged to ${socTo}% by`}>
+          <Select
+            value={ready === "other" ? "other" : (picked?.value ?? "other")}
+            onChange={(e) => setReady(e.target.value)}
+          >
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
             <option value="other">Another time…</option>
           </Select>
         </Field>
@@ -150,7 +167,7 @@ export function SuggestedCharges({ view, now }: { view: CarView; now: number }) 
         </span>
       </div>
       {!can ? (
-        <Muted>Give the car's charge now to see the best times to charge it.</Muted>
+        <Muted>Set the car's charge on the slider above to see the best times to charge it.</Muted>
       ) : q.isError ? (
         <HelpText tone="bad">{errorMessage(q.error)}</HelpText>
       ) : !s ? (
@@ -162,7 +179,13 @@ export function SuggestedCharges({ view, now }: { view: CarView; now: number }) 
             <Chosen c={chosen} s={s} asked={mode} now={now} onPlan={() => plan(chosen, now)} pending={pending} />
           )}
           {s.reachable && s.options.length > 1 && (
-            <Compare options={s.options} chosen={chosen?.kind} onChoose={setMode} now={now} />
+            <details className="group flex flex-col">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+                <Icon name="chevR" size={14} className="transition-transform group-open:rotate-90" />
+                Compare the four aims
+              </summary>
+              <Compare options={s.options} chosen={chosen?.kind} onChoose={setMode} now={now} />
+            </details>
           )}
           {s.single_phase && (
             <SinglePhase
@@ -388,8 +411,7 @@ function Compare({
   const sorted = MODES.map((m) => options.find((o) => o.kind === m)).filter((o): o is SuggestedCharge => !!o);
   const cheapest = Math.min(...sorted.map((o) => o.cost));
   return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-[13px] font-semibold">The four aims side by side</h4>
+    <div className="flex flex-col gap-2 pt-2">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] border-collapse text-[13px] tabular-nums">
           <thead>
