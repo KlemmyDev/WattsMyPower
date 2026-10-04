@@ -11,8 +11,11 @@ import { addDays } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import { degrees, hourIcon, hourIconColor } from "~/features/common/weather/utils";
+import type { WeatherHour } from "~/features/weather/types";
 import { hoursOf } from "~/features/history/utils/day";
+import { MARKER_ROW, MomentMarkers } from "~/features/plan/components/Moments";
 import { hourEnd, hourKwh, type PlanDay, type Window } from "~/features/plan/utils";
+import type { Moment } from "~/features/plan/utils/moments";
 import type { Rates } from "~/features/plan/utils/rates";
 
 const W = 1000;
@@ -32,6 +35,8 @@ type Row = {
   h: ForecastHour | null;
 };
 type P = { t: number; v: number };
+/** An hour's weather, from the forecast or (earlier today) as recorded. */
+type Sky = { ts: number; temp: number | null; code: number | null; is_day: number | null };
 
 const STROKE = {
   fill: "none",
@@ -46,6 +51,7 @@ function plot(
   now: number,
   soc0: number | null,
   range: [number, number] | null,
+  recordedSky: WeatherHour[] | undefined,
 ) {
   const start = day.start;
   const span = addDays(start, 1) - start;
@@ -140,10 +146,17 @@ function plot(
           .join(" ")} Z`
       : "";
 
+  // The weather every three hours, from the hour in the middle of each: the forecast's, or what was recorded.
+  const sky = Array.from({ length: 8 }, (_, k): Sky | null => {
+    const t = start + (k * 3 + 1) * 3600;
+    return day.hours.find((h) => h.ts === t) ?? recordedSky?.find((h) => h.ts === t) ?? null;
+  });
+
   return {
     start,
     span,
     rows,
+    sky,
     X,
     nowX: day.today ? X(now) : null,
     pvPast: path(pvPast, py),
@@ -163,7 +176,20 @@ function plot(
 
 const WINDOW_COLOR: Record<Window["kind"], string> = { spare: COLOR.export, avoid: COLOR.bad, paid: COLOR.good };
 
-function RowTooltip({ row, left, width, rates }: { row: Row; left: number; width: number; rates: Rates | null }) {
+function RowTooltip({
+  row,
+  left,
+  width,
+  rates,
+  marked,
+}: {
+  row: Row;
+  left: number;
+  width: number;
+  rates: Rates | null;
+  /** Below the moments' row of numbers (MARKER_ROW). */
+  marked: boolean;
+}) {
   const fahrenheit = useFahrenheit();
   const h = row.h;
   const icon = h ? hourIcon(h) : null;
@@ -173,7 +199,7 @@ function RowTooltip({ row, left, width, rates }: { row: Row; left: number; width
   const price = h && rates ? (selling ? rates.sell : rates.buy)(h.start, hourEnd(h)) : null;
   const name = selling ? "Feed-in" : h && rates ? (rates.name(h.start, hourEnd(h)) ?? "Grid price") : null;
   return (
-    <ChartTooltip left={left} flip={left > 60} width={width} className="top-[22px]">
+    <ChartTooltip left={left} flip={left > 60} width={width} className={marked ? "top-[48px]" : "top-[22px]"}>
       <div className="flex items-end justify-between gap-2 font-medium text-ink">
         <span className="flex flex-col">
           <span className="text-[11px] font-normal text-ink-faint">{h ? "Forecast" : "Recorded"}</span>
@@ -206,7 +232,8 @@ function RowTooltip({ row, left, width, rates }: { row: Row; left: number; width
 /**
  * A day of the plan, midnight to midnight: solar and home use, the battery level, and grid power
  * hour by hour. Today shows what's been recorded up to now and the forecast after it; solar's
- * likely range is shaded around its forecast, and the day's best times are marked across the top.
+ * likely range is shaded around its forecast, and the day's best times are marked across the top, with its key
+ * moments numbered above them.
  */
 export function PlanChart({
   day,
@@ -216,7 +243,9 @@ export function PlanChart({
   reserve,
   range,
   windows,
+  moments,
   rates,
+  recordedSky,
 }: {
   day: PlanDay;
   series: HistorySeries | undefined;
@@ -225,12 +254,21 @@ export function PlanChart({
   reserve: number;
   range: [number, number] | null;
   windows: Window[];
+  moments: Moment[];
   rates: Rates | null;
+  /** Today's weather as recorded, for the hours already gone (the forecast has the rest). */
+  recordedSky?: WeatherHour[];
 }) {
-  const c = useMemo(() => plot(day, series, now, soc0, range), [day, series, now, soc0, range]);
+  const fahrenheit = useFahrenheit();
+  const c = useMemo(
+    () => plot(day, series, now, soc0, range, recordedSky),
+    [day, series, now, soc0, range, recordedSky],
+  );
   const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
   const left = (t: number) => (c.X(t) / W) * 100;
+  // The moments' numbers sit in a row of their own above the best-times strips.
+  const top = moments.length ? MARKER_ROW : 0;
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -271,8 +309,24 @@ export function PlanChart({
           </span>
         )}
       </div>
+      <div className="grid grid-cols-8" aria-label="Weather every three hours">
+        {c.sky.map((h, k) => {
+          const icon = h?.code != null ? hourIcon({ code: h.code, is_day: h.is_day ?? 1 }) : null;
+          return (
+            <div key={k} title={hourLabel(k * 3 + 1)} className="flex flex-col items-center gap-1">
+              <span style={{ color: icon ? hourIconColor(icon) : undefined }} className="flex h-[18px] items-center">
+                {icon ? <Icon name={icon} size={18} /> : <span className="text-xs text-ink-faint">–</span>}
+              </span>
+              <span className="text-xs text-ink-soft tabular-nums">
+                {h?.temp != null ? degrees(h.temp, fahrenheit) : "–"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
       <div
-        className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5 pt-[22px]"
+        className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
+        style={{ paddingTop: top + 22 }}
         onPointerMove={onPoint}
         onPointerDown={onPoint}
         onPointerLeave={() => setHover(null)}
@@ -282,8 +336,8 @@ export function PlanChart({
           <div
             key={`${w.kind}${w.start}`}
             aria-hidden
-            className="pointer-events-none absolute top-0 bottom-0"
-            style={{ left: `${left(w.start)}%`, width: `${left(w.end) - left(w.start)}%` }}
+            className="pointer-events-none absolute bottom-0"
+            style={{ top, left: `${left(w.start)}%`, width: `${left(w.end) - left(w.start)}%` }}
           >
             <div className="h-1.5 rounded-full" style={{ background: WINDOW_COLOR[w.kind] }} />
             <div
@@ -295,8 +349,8 @@ export function PlanChart({
         {c.nowX != null && (
           <div
             aria-hidden
-            className="pointer-events-none absolute top-2.5 bottom-0"
-            style={{ left: `${(c.nowX / W) * 100}%` }}
+            className="pointer-events-none absolute bottom-0"
+            style={{ top: top + 10, left: `${(c.nowX / W) * 100}%` }}
           >
             <span className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink px-1.5 text-[10px] leading-4 font-semibold text-ink-inverse">
               Now
@@ -304,11 +358,12 @@ export function PlanChart({
             <span className="absolute top-2 bottom-0 left-0 border-l border-dashed border-line-strong" />
           </div>
         )}
+        <MomentMarkers moments={moments} left={left} />
         {hover && (
           <div
             aria-hidden
-            className="pointer-events-none absolute top-[22px] bottom-0 rounded-[3px] bg-fg/8"
-            style={{ left: `${left(hover.t0)}%`, width: `${left(hover.t1) - left(hover.t0)}%` }}
+            className="pointer-events-none absolute bottom-0 rounded-[3px] bg-fg/8"
+            style={{ top: top + 22, left: `${left(hover.t0)}%`, width: `${left(hover.t1) - left(hover.t0)}%` }}
           />
         )}
         <div className="relative h-[200px] max-sm:h-[160px] compact:h-[140px]">
@@ -409,7 +464,13 @@ export function PlanChart({
           })}
         </div>
         {hover && (
-          <RowTooltip row={hover} left={left(hover.t0 + (hover.t1 - hover.t0) / 2)} width={width} rates={rates} />
+          <RowTooltip
+            row={hover}
+            left={left(hover.t0 + (hover.t1 - hover.t0) / 2)}
+            width={width}
+            rates={rates}
+            marked={top > 0}
+          />
         )}
       </div>
       <div className="relative h-3.5">

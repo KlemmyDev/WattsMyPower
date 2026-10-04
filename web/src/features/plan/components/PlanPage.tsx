@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef } from "react";
 import { useAmberPrices } from "~/features/amber/hooks";
 import { costsQuery, historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
@@ -19,11 +20,13 @@ import { locationLabel, reserveOf } from "~/features/common/energy/utils";
 import { CarCharging } from "~/features/car/components/CarCharging";
 import { AccuracyCard } from "~/features/plan/components/AccuracyCard";
 import { BestTimes } from "~/features/plan/components/BestTimes";
-import { HourStrip } from "~/features/plan/components/HourStrip";
+import { MomentList } from "~/features/plan/components/Moments";
 import { OutlookDays } from "~/features/plan/components/OutlookDays";
 import { PlanChart } from "~/features/plan/components/PlanChart";
 import { bestTimes, notices, planDays } from "~/features/plan/utils";
+import { moments } from "~/features/plan/utils/moments";
 import { ratesFor } from "~/features/plan/utils/rates";
+import { weatherDayQuery } from "~/features/weather/api";
 
 const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc"];
 
@@ -40,7 +43,8 @@ function recordedBattery(series: HistorySeries | undefined) {
   return { maxSoc, fullAt };
 }
 
-export function PlanPage() {
+/** The Plan page; `day` is the day open (0 today, 1 tomorrow, 2 the day after), from the address. */
+export function PlanPage({ day: selected = 0 }: { day?: number }) {
   const forecast = useForecast();
   const accuracy = useForecastAccuracy();
   const snapshot = useSnapshot();
@@ -52,7 +56,12 @@ export function PlanPage() {
   const { data: history } = useQuery(
     historyQuery({ start, end: addDays(start, 1), points: 288, fields: FIELDS, live: true }),
   );
-  const [selected, setSelected] = useState(0);
+  // Today's weather as recorded, for the hours the forecast no longer covers.
+  const { data: weatherToday } = useQuery(weatherDayQuery(dateKey(start)));
+  const navigate = useNavigate();
+  // The day is in the address, so the Overview can link straight to tomorrow's and Back returns to it.
+  const select = (i: number) =>
+    navigate({ to: "/plan", search: { day: i || undefined }, replace: true, resetScroll: false });
 
   const tariff = system?.tariff;
   const rates = useMemo(() => (tariff ? ratesFor(tariff, prices) : null), [tariff, prices]);
@@ -76,6 +85,20 @@ export function PlanPage() {
   const notes = useMemo(() => notices(days, reserve, accuracy?.actual_mean), [days, reserve, accuracy]);
   const day = days[Math.min(selected, days.length - 1)];
   const times = useMemo(() => (day ? bestTimes(day.hours, rates) : null), [day, rates]);
+  const events = useMemo(
+    () => (day ? moments(day.hours, { now, end: addDays(day.start, 1), fullAt: day.battery.fullAt, reserve }) : []),
+    [day, now, reserve],
+  );
+
+  // Opened on a day from a link (the Overview's "Tomorrow's plan"): bring its plan into view once it's drawn.
+  const card = useRef<HTMLElement>(null);
+  const linked = useRef(selected > 0);
+  const ready = !!(forecast && day && times);
+  useEffect(() => {
+    if (!ready || !linked.current) return;
+    linked.current = false;
+    card.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [ready]);
 
   return (
     <>
@@ -110,9 +133,16 @@ export function PlanPage() {
               ))}
             </div>
           )}
-          <OutlookDays days={days} selected={selected} onSelect={setSelected} now={now} />
+          <OutlookDays days={days} selected={selected} onSelect={select} now={now} />
           {/* Keyed by day, so choosing another rises it into place afresh, chart drawing in. */}
-          <Card key={day.key} id="plan-day" role="tabpanel" aria-labelledby={`plan-tab-${selected}`}>
+          <Card
+            key={day.key}
+            ref={card}
+            id="plan-day"
+            role="tabpanel"
+            aria-labelledby={`plan-tab-${selected}`}
+            className="scroll-mt-6"
+          >
             <TitleBlock
               title={`${day.label}, ${shortDay.format(new Date(day.start * 1000))}`}
               sub={
@@ -130,23 +160,25 @@ export function PlanPage() {
                 reserve={reserve}
                 range={range ? [range.low, range.high] : null}
                 windows={[...times.spare, ...times.paid, ...times.avoid]}
+                moments={events}
                 rates={rates}
+                recordedSky={day.today ? weatherToday?.hours : undefined}
               />
-              <div className="flex flex-col gap-4">
-                <h3 className="text-[15px] font-semibold">Best times to use power</h3>
-                <BestTimes times={times} today={day.today} />
+              <div className="flex flex-col gap-6">
+                {events.length > 0 && (
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-[15px] font-semibold">Key moments</h3>
+                    <MomentList moments={events} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-4">
+                  <h3 className="text-[15px] font-semibold">Best times to use power</h3>
+                  <BestTimes times={times} today={day.today} />
+                </div>
               </div>
             </div>
           </Card>
           <CarCharging />
-          <Card key={`hours-${day.key}`} aria-labelledby="h-hbh">
-            <TitleBlock
-              id="h-hbh"
-              title="Hour by hour"
-              sub="Forecast solar per hour and the battery level at the end of each hour"
-            />
-            <HourStrip forecast={forecast} hours={day.hours} now={day.today} />
-          </Card>
           <AccuracyCard accuracy={accuracy} />
           <Footnote>
             {forecast.calibration.fitted_hours >= 0.5
