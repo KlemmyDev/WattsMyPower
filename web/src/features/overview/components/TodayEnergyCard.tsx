@@ -9,16 +9,16 @@ import { energyToday, reserveOf } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { energyParts, kWh, powerParts } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, CardHeader } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
-import { Pill } from "~/features/common/ui/components/Pill";
 import { useForecastAccuracy } from "~/features/common/weather/hooks";
 import { DayChart } from "~/features/history/components/DayChart";
 import { extremesOf, hoursOf } from "~/features/history/utils/day";
-import { MomentList } from "~/features/plan/components/Moments";
 import { PlanChart } from "~/features/plan/components/PlanChart";
+import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
+import { weatherDayQuery } from "~/features/weather/api";
 import { bestTimes, hourEnd, hourKwh, planDays, type PlanDay } from "~/features/plan/utils";
 import { moments } from "~/features/plan/utils/moments";
 import { ratesFor } from "~/features/plan/utils/rates";
@@ -129,31 +129,15 @@ export function TodayEnergyCard({
       className="col-span-12 grid grid-cols-[minmax(260px,340px)_minmax(0,1fr)] gap-10 max-lg:grid-cols-1 max-lg:gap-6"
     >
       <div className="flex flex-col gap-6">
+        {/* One line whatever the day's name: the title gives way (truncated) before it wraps. */}
         <CardHeader
-          title={
-            <span className="flex items-center gap-2.5">
-              {title}
-              {day && (
-                <Pill tone="neutral" size="sm">
-                  Forecast
-                </Pill>
-              )}
-            </span>
-          }
+          title={title}
           id="h-today-energy"
+          className="[&>h2]:min-w-0 [&>h2]:truncate"
           action={
-            <span className="flex items-center gap-1.5">
-              {day ? (
-                <ButtonLink to="/plan" search={{ day: offset }} variant="chip">
-                  Plan
-                </ButtonLink>
-              ) : (
-                <ButtonLink to="/history" variant="chip">
-                  History
-                </ButtonLink>
-              )}
+            <span className="flex flex-none items-center gap-1.5">
               <Button
-                variant="round"
+                variant="icon"
                 aria-label="Previous day"
                 onClick={() => setOffset((o) => o - 1)}
                 disabled={offset === 0}
@@ -161,7 +145,7 @@ export function TodayEnergyCard({
                 <Icon name="chevL" size={18} />
               </Button>
               <Button
-                variant="round"
+                variant="icon"
                 aria-label={ahead[offset] ? `${ahead[offset].label}'s forecast` : "Next day"}
                 onClick={() => setOffset((o) => o + 1)}
                 disabled={offset >= last}
@@ -172,12 +156,23 @@ export function TodayEnergyCard({
           }
         />
         {day ? <AheadStats day={day} /> : <TodayStats p={p} now={now} />}
+        <div className="mt-auto">
+          {day ? (
+            <ButtonLink to="/plan" search={{ day: offset }} variant="link" size="sm">
+              {day.label}'s plan
+            </ButtonLink>
+          ) : (
+            <ButtonLink to="/history" variant="link" size="sm">
+              Today in History
+            </ButtonLink>
+          )}
+        </div>
       </div>
       <div className="flex min-w-0 flex-col justify-end gap-5">
         {day ? (
           <AheadChart key={day.key} day={day} s={s} now={now} rates={rates} range={range} />
         ) : (
-          <TodayChart now={now} />
+          <TodayChart now={now} f={f} />
         )}
       </div>
     </Card>
@@ -227,13 +222,22 @@ function TodayStats({ p, now }: { p: Snapshot | null; now: number }) {
   );
 }
 
-/** Today's chart, as History draws it. */
-function TodayChart({ now }: { now: number }) {
+/** Today's chart, as History draws it, with the day's weather across the top: as recorded, then as forecast. */
+function TodayChart({ now, f }: { now: number; f: Forecast | null | undefined }) {
   const start = midnight(now);
   const { data } = useQuery(FIELDS_KEY(start));
+  const { data: weather } = useQuery(weatherDayQuery(dateKey(start)));
   const series = data?.series;
   const hours = useMemo(() => hoursOf(series, start), [series, start]);
-  return <DayChart series={series} hours={hours} placeholder={false} />;
+  const sky = useMemo(() => skyEvery3h(start, weather?.hours, f?.hours), [start, weather, f]);
+  return (
+    <DayChart
+      series={series}
+      hours={hours}
+      placeholder={false}
+      top={sky.some(Boolean) ? <WeatherRow sky={sky} /> : undefined}
+    />
+  );
 }
 
 /**
@@ -286,7 +290,7 @@ function AheadStats({ day }: { day: PlanDay }) {
   );
 }
 
-/** A day ahead's chart, as the Plan page draws it, with its key moments listed under it. */
+/** A day ahead's chart, as the Plan page draws it, its key moments numbered across it. */
 function AheadChart({
   day,
   s,
@@ -307,20 +311,17 @@ function AheadChart({
     [day, now, reserve],
   );
   return (
-    <>
-      <PlanChart
-        day={day}
-        series={undefined}
-        now={now}
-        soc0={null}
-        reserve={reserve}
-        range={range ? [range.low, range.high] : null}
-        windows={[...times.spare, ...times.paid, ...times.avoid]}
-        moments={events}
-        rates={rates}
-      />
-      {events.length > 0 && <MomentList moments={events} />}
-    </>
+    <PlanChart
+      day={day}
+      series={undefined}
+      now={now}
+      soc0={null}
+      reserve={reserve}
+      range={range ? [range.low, range.high] : null}
+      windows={[...times.spare, ...times.paid, ...times.avoid]}
+      moments={events}
+      rates={rates}
+    />
   );
 }
 
