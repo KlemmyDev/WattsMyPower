@@ -21,7 +21,7 @@ from app.core.schema import SAMPLE_TABLES
 from app.features.integrations.service import IntegrationsService
 
 KEY = "onboarding"
-STEPS = ("inverter", "plan", "location", "billing")
+STEPS = ("inverter", "system", "plan", "location", "billing")
 MARKS = ("done", "skipped")
 # Settings rows only a person saving from the dashboard writes: the forecast location, the billing
 # period, and older versions' flat rates and system cost. Not any row: values copied in automatically

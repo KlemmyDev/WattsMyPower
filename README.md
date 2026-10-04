@@ -116,11 +116,12 @@ It asks for your time zone and the port for the dashboard (8080 unless you chang
 **Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
 
 - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
+- **Your system:** the solar array's size (the forecast starts from it, and it's 6.6 kW until it's entered), and the battery details your inverter can't report.
 - **Your electricity plan:** load your rates from Energy Made Easy with **Find your plan**, or enter them by hand.
 - **Where you live:** your suburb, for the weather forecast.
 - **Your billing period:** how often you're billed and when a period starts.
 
-Everything in it is also in Settings (Integrations, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
+Everything in it is also in Settings (Integrations, System, Tariffs and Billing), and **Settings → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
 
 ## Everyday use
 

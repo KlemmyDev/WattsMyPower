@@ -1,7 +1,7 @@
 import { StepBody, StepFooter, StepIntro, type StepProps } from "~/features/onboarding/components/StepParts";
 import { BillingFields } from "~/features/settings/components/BillingSettings";
 
-/** Step 4: the billing period, saved as it changes (the defaults are calendar quarters). */
+/** Step 5: the billing period, saved as it changes (the defaults are calendar quarters). */
 export function BillingStep({ nav }: StepProps) {
   return (
     <>

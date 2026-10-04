@@ -3,7 +3,7 @@ import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { StepBody, StepFooter, StepIntro, type StepProps } from "~/features/onboarding/components/StepParts";
 import { LocationForm } from "~/features/settings/components/LocationForm";
 
-/** Step 3: where the panels are, for the solar forecast. Choosing a place saves it and moves on. */
+/** Step 4: where the panels are, for the solar forecast. Choosing a place saves it and moves on. */
 export function LocationStep({ nav }: StepProps) {
   const system = useSystem();
   return (

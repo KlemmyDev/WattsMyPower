@@ -3,6 +3,7 @@ import type { Onboarding, OnboardingChanges, StepId } from "~/features/onboardin
 /** The guide's steps, in order. */
 export const STEPS: { id: StepId; label: string }[] = [
   { id: "inverter", label: "Inverter" },
+  { id: "system", label: "Your system" },
   { id: "plan", label: "Electricity plan" },
   { id: "location", label: "Location" },
   { id: "billing", label: "Billing" },

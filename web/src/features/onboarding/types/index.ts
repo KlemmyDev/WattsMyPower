@@ -1,6 +1,6 @@
 /** The first-run set-up guide's progress (GET/PATCH /api/onboarding). */
 
-export type StepId = "inverter" | "plan" | "location" | "billing";
+export type StepId = "inverter" | "system" | "plan" | "location" | "billing";
 
 export type StepMark = "done" | "skipped";
 
