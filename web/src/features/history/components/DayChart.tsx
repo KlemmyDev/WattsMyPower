@@ -106,11 +106,16 @@ function ReadingTooltip({ r, step, left, width }: { r: Row; step: number; left: 
       />
       <TooltipRow label="Battery" value={pct(r.soc)} color={BATTERY} />
       {r.bat != null && Math.abs(r.bat) > 50 && (
-        <TooltipRow label={r.bat > 0 ? "Discharging" : "Charging"} value={kW(Math.abs(r.bat))} />
+        <TooltipRow
+          label={r.bat > 0 ? "Discharging" : "Charging"}
+          value={kW(Math.abs(r.bat))}
+          color={r.bat > 0 ? FLOW_COLOR.discharge : FLOW_COLOR.charge}
+        />
       )}
       <TooltipRow
         label={g > 50 ? "From the grid" : g < -50 ? "To the grid" : "Grid"}
         value={r.grid == null ? DASH : Math.abs(g) > 50 ? kW(g) : "Idle"}
+        color={g > 50 ? FROM_GRID : g < -50 ? TO_GRID : undefined}
       />
     </ChartTooltip>
   );
