@@ -37,15 +37,16 @@ def test_a_sunny_day_charges_the_car_from_spare_solar() -> None:
     ss = steps(24, pv={h: 8.0 for h in range(9, 15)})
     out = suggest(planner(ss, [0.30] * 24), CAR, now=T0, ready_by=T0 + 24 * HOUR, soc_now=50, soc_to=70)
     best = out["options"][0]
-    assert best["kind"] == "best" and out["reachable"]
+    assert best["kind"] == "cheapest" and out["mode"] == "cheapest" and out["reachable"]
     assert best["start"] >= T0 + 9 * HOUR and best["end"] <= T0 + 15 * HOUR
     assert best["solar_share"] > 0.9
     # It costs only the feed-in it forgoes: about 5c for each of the 16.7 kWh.
     assert best["cost"] == pytest.approx(16.67 * 0.05, abs=0.1)
     assert best["soc_to"] == 70 and best["km"] == round(15 * 1000 / 160)
     # Starting now at full speed is shown too, for comparison, and costs more.
-    now = next(o for o in out["options"] if o["kind"] == "now")
+    now = next(o for o in out["options"] if o["kind"] == "fastest")
     assert now["start"] == T0 and now["amps"] == 16 and now["cost"] > best["cost"] + 3
+    assert [o["kind"] for o in out["options"]] == ["cheapest", "solar", "battery", "fastest"]
     # 7.5 kW spare for six hours, less the 4.5 kWh refilling the battery after it ran the house overnight.
     assert out["spare_kwh"] == pytest.approx(6 * 7.5 - 9 * 0.5)
 
@@ -68,7 +69,7 @@ def test_a_charge_that_cant_be_done_in_time_says_how_far_it_gets() -> None:
     out = suggest(planner(steps(6), [0.3] * 6), CAR, now=T0, ready_by=T0 + 2 * HOUR, soc_now=40, soc_to=100)
     assert not out["reachable"]
     (only,) = out["options"]
-    assert only["kind"] == "now" and only["end"] == T0 + 2 * HOUR
+    assert only["kind"] == "fastest" and only["end"] == T0 + 2 * HOUR
     assert only["soc_to"] == pytest.approx(40 + 11.04 * 2 * 0.9 / 75 * 100, abs=0.1)
 
 
@@ -85,6 +86,54 @@ def test_one_phase_is_suggested_when_three_is_too_much_for_the_sun() -> None:
     assert helped["single_phase"] is None and helped["options"][0]["cost"] == pytest.approx(one["cost"], abs=0.05)
 
 
+# A car on single phase that takes 5 to 20 A (1.15 to 4.6 kW).
+SINGLE = dataclasses.replace(CAR, phases=1, min_amps=5, max_amps=20)
+
+
+def test_overnight_it_can_spare_the_home_battery_and_charge_gently() -> None:
+    # 18:00 to 07:30 the next morning, no sun, a flat 30c, a full home battery that may help the car.
+    ss = steps(14)
+    p = planner(ss, [0.30] * 14, home_soc=1.0)
+    out = suggest(p, SINGLE, now=T0, ready_by=T0 + 13 * HOUR + 1800, soc_now=50, soc_to=80, mode="battery")
+    plans = {o["kind"]: o for o in out["options"]}
+    assert out["options"][0]["kind"] == "battery"  # the aim asked for comes first
+    # Full speed drains the home battery into the car; sparing it, the car takes none of it, at a gentle current
+    # spread over the night instead of 20 A.
+    assert plans["fastest"]["amps"] == 20 and plans["fastest"]["battery_kwh"] > 3
+    spared = plans["battery"]
+    assert spared["battery_kwh"] == pytest.approx(0, abs=0.05) and not spared["battery_helps"]
+    assert spared["amps"] < 20 and spared["end"] - spared["start"] > 6 * HOUR
+    assert sum(s["power_kw"] * (s["end"] - s["start"]) / 3600 for s in spared["steps"]) == pytest.approx(25, abs=0.05)
+
+
+def test_following_the_sun_changes_the_current_as_the_sun_does() -> None:
+    # Solar climbing from 1.5 kW at 06:00 to 6 kW by 10:00; the house uses 0.5 kW and the battery is full.
+    pv = {6: 1.5, 7: 2.5, 8: 4.0, 9: 5.5, 10: 6.0, 11: 6.0, 12: 6.0}
+    ss = steps(16, pv=pv)
+    out = suggest(planner(ss, [0.30] * 16), SINGLE, now=T0, ready_by=T0 + 15 * HOUR, soc_now=60, soc_to=80)
+    sunny = next(o for o in out["options"] if o["kind"] == "solar")
+    amps = [s["amps"] for s in sunny["steps"]]
+    # 4 A of the 1 kW spare at 06:00 is under the 5 A minimum, but 1 kW covers most of it; then up with the sun.
+    assert amps[:4] == [5, 8, 15, 20] and sunny["steps"][0]["start"] == T0 + 6 * HOUR
+    assert sunny["solar_share"] > 0.9 and sunny["cost"] < 1.0
+    assert out["spare"][6] == {"start": T0 + 6 * HOUR, "end": T0 + 7 * HOUR, "kw": 1.0}
+
+
+def test_a_car_not_needed_for_days_charges_from_each_days_sun() -> None:
+    # 36% at 18:00 on a Sunday, needed 05:00 Wednesday: 59 hours. Two sunny days (Monday and Tuesday, 5 kW spare
+    # from 09:00 to 15:00), a flat 30c, the home battery full.
+    pv = {h: 5.5 for d in (24, 48) for h in range(d - 18 + 9, d - 18 + 15)}
+    ss = steps(72, pv=pv)
+    out = suggest(planner(ss, [0.30] * 72), SINGLE, now=T0, ready_by=T0 + 59 * HOUR, soc_now=36, soc_to=80)
+    sunny = next(o for o in out["options"] if o["kind"] == "solar")
+    days = {(st["start"] - T0 + 18 * HOUR) // (24 * HOUR) for st in sunny["steps"]}
+    assert days == {1, 2}  # Monday and Tuesday, nothing overnight
+    # It costs the feed-in forgone, and a little evening grid where the car took what would have refilled the battery.
+    assert sunny["solar_share"] > 0.95 and sunny["cost"] < sunny["wall_kwh"] * 0.1
+    fastest = next(o for o in out["options"] if o["kind"] == "fastest")
+    assert fastest["cost"] > sunny["cost"] + 5
+
+
 def test_the_ready_by_time_is_the_next_one_at_least_an_hour_away() -> None:
     lt = time.localtime(T0)
     six = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 6, 0, 0, 0, 0, -1)))
@@ -93,6 +142,10 @@ def test_the_ready_by_time_is_the_next_one_at_least_an_hour_away() -> None:
     assert next_ready_by(seven_thirty - 1800, 450) == int(
         time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + 1, 7, 30, 0, 0, 0, -1))
     )
+    # Only on Wednesdays and Fridays: the next of those at 05:00.
+    wed = next_ready_by(six, 300, ["wed", "fri"])
+    assert time.localtime(wed).tm_wday in (2, 4) and time.localtime(wed).tm_hour == 5
+    assert 0 < wed - six <= 7 * 86400
 
 
 @pytest.fixture
@@ -127,6 +180,22 @@ def test_the_cars_level_counts_planned_charges_since_it_was_given(car: CarServic
         car.set_level({"soc": 120})
 
 
+def test_a_plan_in_steps_is_kept_and_removed_as_one(car: CarService) -> None:
+    steps_ = [
+        {"start": T0 + HOUR, "end": T0 + 2 * HOUR, "amps": 10},
+        {"start": T0 + 2 * HOUR, "end": T0 + 4 * HOUR, "amps": 16},
+    ]
+    kept = car.add_plan({"steps": steps_, "phases": 1, "soc_now": 40, "battery_helps": False}, now=T0)
+    assert [(c["amps"], c["battery_helps"]) for c in kept] == [(10, False), (16, False)]
+    assert kept[0]["plan"] == kept[1]["plan"] == kept[0]["id"]
+    # Each step's level follows on from the last: 2.3 kWh, then 7.36 kWh, 90% of it into 75 kWh.
+    assert kept[0]["soc_to"] == pytest.approx(40 + 2.3 * 0.9 / 75 * 100, abs=0.1)
+    assert kept[1]["soc_from"] == kept[0]["soc_to"] and soc(car, T0 + 5 * HOUR) == kept[1]["soc_to"]
+    with pytest.raises(ValueError, match="in order"):
+        car.add_plan({"steps": [steps_[1], steps_[0]], "phases": 1}, now=T0)
+    assert car.remove(kept[1]["id"]) and car.listed(T0) == []
+
+
 def test_a_charge_planned_with_the_cars_level_records_it(car: CarService) -> None:
     car.add({"start": T0 + HOUR, "soc_now": 35, "soc_to": 80}, now=T0)
     level = car.level(T0)
@@ -142,7 +211,7 @@ class FakeForecast:
     def __init__(self, ss: list[dict[str, Any]]):
         self.ss = ss
 
-    def steps(self, now: int | None = None) -> list[dict[str, Any]]:
+    def steps(self, now: int | None = None, days: int = 3) -> list[dict[str, Any]]:
         return self.ss
 
 

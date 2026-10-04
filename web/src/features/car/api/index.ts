@@ -7,6 +7,7 @@ import type {
   ChargeEstimate,
   ChargeRequest,
   PlannedCharge,
+  PlanRequest,
   SuggestRequest,
   Suggestions,
 } from "~/features/car/types";
@@ -46,6 +47,8 @@ export const suggestQuery = (req: SuggestRequest) =>
   });
 
 export const addCharge = (req: ChargeRequest) => apiSend<PlannedCharge>("POST", "car/charges", req);
+
+export const addPlan = (req: PlanRequest) => apiSend<PlannedCharge[]>("POST", "car/plans", req);
 
 export const removeCharge = (id: number) => apiSend<{ ok: true }>("DELETE", `car/charges/${id}`);
 

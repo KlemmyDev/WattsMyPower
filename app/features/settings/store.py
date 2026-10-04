@@ -31,12 +31,17 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     ),
     # How the Overview draws the house (Settings → System → Your house).
     "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
+    # What suggested car charges aim for (app.features.car.planner): the least on the bill, the most solar,
+    # sparing the home battery, or the soonest done.
+    "car_charge_mode": (("cheapest", "solar", "battery", "fastest"), "cheapest"),
 }
 # Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
 # battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.
 LISTS: dict[str, tuple[tuple[str, ...], int]] = {
     "inverter_places": (("wall", "garage"), 3),
     "battery_places": (("wall", "garage"), 3),
+    # The days the car is needed, by car_ready_by; none means every day.
+    "car_days": (("mon", "tue", "wed", "thu", "fri", "sat", "sun"), 7),
 }
 # Settings that only take whole numbers.
 WHOLE = {

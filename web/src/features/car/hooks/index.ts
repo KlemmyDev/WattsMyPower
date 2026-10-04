@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { addCharge, removeCharge, setLevel } from "~/features/car/api";
+import { addCharge, addPlan, removeCharge, setLevel } from "~/features/car/api";
 
-/** Plan or remove a charge, then refresh the list and the forecast that counts it. */
+/** Plan a charge (or a suggested plan in steps) or remove one, then refresh the list and the forecast that counts it. */
 export function useChargeChange() {
   const qc = useQueryClient();
   const done = () => {
@@ -10,6 +10,7 @@ export function useChargeChange() {
   };
   return {
     add: useMutation({ mutationFn: addCharge, onSuccess: done }),
+    addPlan: useMutation({ mutationFn: addPlan, onSuccess: done }),
     remove: useMutation({ mutationFn: removeCharge, onSuccess: done }),
   };
 }

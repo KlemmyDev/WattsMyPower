@@ -3,13 +3,14 @@ import { useState } from "react";
 import { carQuery, suggestQuery } from "~/features/car/api";
 import { LevelBar, LevelForm, levelSource, rangeWords } from "~/features/car/components/CarLevel";
 import type { CarView } from "~/features/car/types";
-import { carName, chargeLine, costWords, phaseWord, solarWords, when } from "~/features/car/utils";
+import { carName, chargeLine, costWords, MODE, phaseWord, solarWords, stepsLine, when } from "~/features/car/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { BigNumber, Card, CardHeader, Eyebrow, Muted } from "~/features/common/ui/components/Card";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
+import { sameDay } from "~/features/common/time/utils";
 
 /**
  * The car on the Overview, once one is connected: its level and range, and its next charge (planned, or the best
@@ -65,7 +66,10 @@ function Level({ view, now }: { view: CarView; now: number }) {
 
 /** A charge under way or still to come, else the best time to charge it to its usual level by its usual time. */
 function NextCharge({ view, now }: { view: CarView; now: number }) {
-  const planned = view.charges.find((c) => c.end > now);
+  const next = view.charges.find((c) => c.end > now);
+  // A plan's steps count as one charge: from its first step's start to its last's end.
+  const steps = next?.plan != null ? view.charges.filter((c) => c.plan === next.plan) : next ? [next] : [];
+  const planned = next && { ...steps[0], end: steps[steps.length - 1].end };
   const level = view.level?.soc;
   const target = view.car.car_target_soc;
   const wanted = !planned && level != null && level < target - 0.5;
@@ -77,14 +81,18 @@ function NextCharge({ view, now }: { view: CarView; now: number }) {
       <div className="flex flex-col gap-1.5">
         <Eyebrow>{on ? "Charging, as planned" : "Next charge"}</Eyebrow>
         <span className="flex flex-wrap items-center gap-2 text-[17px] font-medium tabular-nums">
-          {on ? `Until ${hhmm(planned.end)}` : `${when(planned.start, now)} to ${hhmm(planned.end)}`}
+          {on
+            ? `Until ${sameDay(now, planned.end - 1) ? hhmm(planned.end) : when(planned.end, now)}`
+            : `${when(planned.start, now)} to ${sameDay(planned.start, planned.end - 1) ? hhmm(planned.end) : when(planned.end, now)}`}
           {on && (
             <Pill tone="good" size="sm">
               Charging
             </Pill>
           )}
         </span>
-        <Muted className="tabular-nums">{chargeLine(planned)}</Muted>
+        <Muted className="tabular-nums">
+          {steps.length > 1 ? `${stepsLine(steps, now)} (${phaseWord(planned.phases)})` : chargeLine(planned)}
+        </Muted>
       </div>
     );
   }
@@ -114,13 +122,15 @@ function NextCharge({ view, now }: { view: CarView; now: number }) {
       ) : (
         <>
           <span className="text-[17px] font-medium tabular-nums">
-            {when(best.start, now)} to {hhmm(best.end)}
+            {when(best.start, now)} to {sameDay(best.start, best.end - 1) ? hhmm(best.end) : when(best.end, now)}
           </span>
           <Muted className="tabular-nums">
-            {best.amps} A {phaseWord(best.phases)} to {pct(best.soc_to)}
+            {best.steps.length > 1 ? stepsLine(best.steps, now) : `${best.amps} A ${phaseWord(best.phases)}`} to{" "}
+            {pct(best.soc_to)}
             {s.reachable ? ` by ${when(s.ready_by, now)}` : ` (not ${pct(s.soc_to)} in time)`} · costs{" "}
             {costWords(best.cost)} · {solarWords(best)}
           </Muted>
+          <span className="text-xs text-ink-faint">Aiming for: {MODE[best.kind].label.toLowerCase()}</span>
         </>
       )}
     </div>

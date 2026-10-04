@@ -64,8 +64,15 @@ async def add_charge(svc: ServicesDep, body: JsonBody):
     return await _run(svc.car.add, body)
 
 
+@router.post("/plans")
+async def add_plan(svc: ServicesDep, body: JsonBody):
+    """Plan a charge in steps, as suggested: the forecast counts each step as home use from now on."""
+    return await _run(svc.car.add_plan, body)
+
+
 @router.delete("/charges/{charge_id}")
 async def remove_charge(svc: ServicesDep, charge_id: int):
+    """Remove a charge, or the whole plan it's a step of."""
     if not await asyncio.to_thread(svc.car.remove, charge_id):
         raise HTTPException(status_code=404, detail="No such charge.")
     return {"ok": True}

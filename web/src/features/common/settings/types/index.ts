@@ -60,7 +60,9 @@ export type Settings = {
   car_wh_per_km: number;
   car_target_soc: number;
   car_ready_by: number;
+  car_days: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
   car_battery_helps: number;
+  car_charge_mode: "cheapest" | "solar" | "battery" | "fastest";
 };
 
 export type OwnershipKey =
