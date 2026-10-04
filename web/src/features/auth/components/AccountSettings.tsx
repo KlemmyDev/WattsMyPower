@@ -14,7 +14,7 @@ import { useLogout } from "~/features/auth/hooks/useLogout";
 import { useThemeChoice } from "~/features/common/theme/hooks";
 import { THEME_OPTIONS } from "~/features/common/theme/utils";
 import { useDisplay } from "~/features/common/display/hooks";
-import { DENSITY_OPTIONS, SIZE_OPTIONS } from "~/features/common/display/utils";
+import { CLOCK_OPTIONS, DENSITY_OPTIONS, SIZE_OPTIONS } from "~/features/common/display/utils";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 
 /** Settings → Account: who's signed in, how the dashboard looks, change password, sign out. */
@@ -110,6 +110,14 @@ function Appearance() {
           options={DENSITY_OPTIONS}
           value={display.density}
           onChange={(density) => setDisplay({ density })}
+        />
+      </Choice>
+      <Choice id="c-clock" title="Clock" help="Times as 14:05, or as 2:05 pm.">
+        <Segmented
+          label="Clock"
+          options={CLOCK_OPTIONS}
+          value={display.clock}
+          onChange={(clock) => setDisplay({ clock })}
         />
       </Choice>
       <Choice id="c-contrast" title="More contrast" help="Makes secondary text and dividing lines stronger.">
