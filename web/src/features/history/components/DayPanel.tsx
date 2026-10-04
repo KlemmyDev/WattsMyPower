@@ -18,7 +18,7 @@ import { DayChart } from "~/features/history/components/DayChart";
 import { DayWeather, DayWeatherChip } from "~/features/history/components/DayWeather";
 import { HCARD } from "~/features/history/components/parts";
 import { cn } from "~/features/common/ui/utils";
-import { extremesOf, hoursOf } from "~/features/history/utils/day";
+import { extremesOf } from "~/features/history/utils/day";
 import type { Day } from "~/features/history/utils/year";
 
 const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc", "battery_power"];
@@ -111,7 +111,6 @@ export function DayPanel({
   });
   // While the next day loads, the previous one's readings stay up; don't pair them with the new day's numbers.
   const series = q.isPlaceholderData ? undefined : q.data?.series;
-  const hours = useMemo(() => hoursOf(series, day.ts), [series, day.ts]);
   const extremes = useMemo(() => extremesOf(series), [series]);
   return (
     <section
@@ -161,7 +160,7 @@ export function DayPanel({
         </a>
       </div>
       <div className="flex min-w-0 flex-col gap-4">
-        <DayChart series={q.data?.series} hours={hours} placeholder={q.isPlaceholderData} reserve={reserve} />
+        <DayChart series={q.data?.series} placeholder={q.isPlaceholderData} reserve={reserve} />
         <DayWeather date={dateKey(day.ts)} made={day.kind === "data" && !partial ? day.gen : null} />
       </div>
     </section>

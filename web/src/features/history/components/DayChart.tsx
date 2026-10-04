@@ -7,7 +7,7 @@ import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { FLOW_COLOR, FlowBars } from "~/features/history/components/FlowBars";
-import type { Hour } from "~/features/history/utils/day";
+import { HALF_HOUR, slotsOf } from "~/features/history/utils/day";
 
 const W = 1000;
 const H = 220;
@@ -131,13 +131,11 @@ const Dot = ({ left, top, color }: { left: number; top: number | null; color: st
  */
 export function DayChart({
   series,
-  hours,
   placeholder,
   top,
   reserve,
 }: {
   series: HistorySeries | undefined;
-  hours: Hour[];
   placeholder: boolean;
   /** Something to show between the legend and the plots, lined up with them (the Overview's weather row). */
   top?: ReactNode;
@@ -145,6 +143,8 @@ export function DayChart({
   reserve?: number;
 }) {
   const chart = useMemo(() => series && plot(series), [series]);
+  // The grid and battery bars, every half hour.
+  const flows = useMemo(() => (series && chart ? slotsOf(series, chart.start, HALF_HOUR) : []), [series, chart]);
   const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
   const by = (v: number) => BH - 2 - (v / 100) * (BH - 4);
@@ -174,7 +174,8 @@ export function DayChart({
         {[
           ["From grid", FROM_GRID],
           ["Sent to grid", TO_GRID],
-          ["Battery in and out", FLOW_COLOR.battery],
+          ["Battery discharge", FLOW_COLOR.discharge],
+          ["Battery charge", FLOW_COLOR.charge],
         ].map(([label, color]) => (
           <span key={label} className="flex items-center gap-1.5">
             <i className="size-2.5 rounded-[2px]" style={{ background: color }} />
@@ -296,7 +297,7 @@ export function DayChart({
           )}
           {hover && chart && <Dot left={chart.at(hover).left} top={chart.at(hover).soc} color={BATTERY} />}
         </div>
-        <FlowBars hours={hours} className="relative mt-1 h-[72px] compact:h-14" />
+        <FlowBars slots={flows} className="relative mt-1 h-[72px] compact:h-14" />
         {hover && chart && <ReadingTooltip r={hover} step={chart.step} left={chart.at(hover).left} width={width} />}
       </div>
       <div className="relative h-3.5">

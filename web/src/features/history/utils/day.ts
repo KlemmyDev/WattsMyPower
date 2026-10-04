@@ -1,7 +1,7 @@
 import type { HistorySeries } from "~/features/common/readings/types";
 
-/** One hour of a day: energy in kWh (grid + from the grid, − to it), and the battery level at its end. */
-/** An hour's energy (kWh): solar, home use, the grid (+ from it), the battery (+ discharging), and its level at the end (%). */
+/** A stretch of a day's energy (kWh): solar, home use, the grid (+ from it), the battery (+ discharging), and the
+ * battery level at its end (%). */
 export type Hour = {
   pv: number | null;
   load: number | null;
@@ -10,9 +10,16 @@ export type Hour = {
   soc: number | null;
 };
 
-/** A day's 5-minute readings as 24 hours. Each hour's energy is its average power over the hour. */
-export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[] {
-  const acc = Array.from({ length: 24 }, () => ({
+/** Half an hour: the charts' bars are drawn this often. */
+export const HALF_HOUR = 1800;
+
+/**
+ * A day's 5-minute readings as equal stretches of `seconds` from midnight (24 hours by default). Each stretch's energy
+ * is its average power over the stretch.
+ */
+export function slotsOf(series: HistorySeries | undefined, dayTs: number, seconds = 3600): Hour[] {
+  const n = Math.round(86400 / seconds);
+  const acc = Array.from({ length: n }, () => ({
     pv: [0, 0],
     load: [0, 0],
     grid: [0, 0],
@@ -20,9 +27,9 @@ export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[
     soc: null as number | null,
   }));
   series?.t.forEach((t, i) => {
-    const h = Math.floor((t - dayTs) / 3600);
-    if (h < 0 || h > 23) return;
-    for (const [k, f] of [
+    const k = Math.floor((t - dayTs) / seconds);
+    if (k < 0 || k >= n) return;
+    for (const [key, f] of [
       ["pv", "pv_power"],
       ["load", "load_power"],
       ["grid", "grid_power"],
@@ -30,16 +37,19 @@ export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[
     ] as const) {
       const v = series[f]?.[i];
       if (v != null) {
-        acc[h][k][0] += v;
-        acc[h][k][1]++;
+        acc[k][key][0] += v;
+        acc[k][key][1]++;
       }
     }
     const soc = series.battery_soc?.[i];
-    if (soc != null) acc[h].soc = soc;
+    if (soc != null) acc[k].soc = soc;
   });
-  const kwh = ([sum, n]: number[]) => (n ? sum / n / 1000 : null);
+  const kwh = ([sum, c]: number[]) => (c ? (sum / c / 1000) * (seconds / 3600) : null);
   return acc.map((a) => ({ pv: kwh(a.pv), load: kwh(a.load), grid: kwh(a.grid), bat: kwh(a.bat), soc: a.soc }));
 }
+
+/** A day's 5-minute readings as 24 hours. Each hour's energy is its average power over the hour. */
+export const hoursOf = (series: HistorySeries | undefined, dayTs: number): Hour[] => slotsOf(series, dayTs);
 
 /** The day's highest solar reading (W) and when, and its lowest battery level (%). */
 export function extremesOf(series: HistorySeries | undefined) {
