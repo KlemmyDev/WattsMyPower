@@ -16,7 +16,7 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { useForecastAccuracy } from "~/features/common/weather/hooks";
 import { DayChart } from "~/features/history/components/DayChart";
-import { extremesOf, hoursOf } from "~/features/history/utils/day";
+import { extremesOf } from "~/features/history/utils/day";
 import { PlanChart, type Overlay } from "~/features/plan/components/PlanChart";
 import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
 import { weatherDayQuery } from "~/features/weather/api";
@@ -312,15 +312,9 @@ function TodayChart({
 }) {
   const start = midnight(now);
   const { data: weather } = useQuery(weatherDayQuery(dateKey(start)));
-  const hours = useMemo(() => hoursOf(series, start), [series, start]);
   const sky = useMemo(() => skyEvery3h(start, weather?.hours, f?.hours), [start, weather, f]);
   return (
-    <DayChart
-      series={series}
-      hours={hours}
-      placeholder={false}
-      top={sky.some(Boolean) ? <WeatherRow sky={sky} /> : undefined}
-    />
+    <DayChart series={series} placeholder={false} top={sky.some(Boolean) ? <WeatherRow sky={sky} /> : undefined} />
   );
 }
 

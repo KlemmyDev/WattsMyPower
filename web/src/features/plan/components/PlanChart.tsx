@@ -12,8 +12,8 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import { degrees, hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import type { WeatherHour } from "~/features/weather/types";
-import { hoursOf } from "~/features/history/utils/day";
-import { FLOW_COLOR, FlowBars } from "~/features/history/components/FlowBars";
+import { HALF_HOUR, hoursOf, slotsOf } from "~/features/history/utils/day";
+import { FLOW_COLOR, FlowBars, type Flow } from "~/features/history/components/FlowBars";
 import { MARKER_ROW, MomentMarkers } from "~/features/plan/components/Moments";
 import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
 import { hourEnd, hourKwh, type PlanDay, type Window } from "~/features/plan/utils";
@@ -167,6 +167,20 @@ function plot(
           .join(" ")} Z`
       : "";
 
+  // The grid and battery bars every half hour: from the readings for the half hours gone, else each forecast hour
+  // shared over its halves (the part of one it covers, for the half hour under way).
+  const halves = day.today ? slotsOf(series, start, HALF_HOUR) : [];
+  const flows: Flow[] = Array.from({ length: Math.round(span / HALF_HOUR) }, (_, k) => {
+    const a = start + k * HALF_HOUR;
+    if (day.today && a + HALF_HOUR <= now) return { grid: halves[k]?.grid ?? null, bat: halves[k]?.bat ?? null };
+    const h = hrs.find((x) => x.ts <= a && a < x.ts + 3600);
+    if (!h) return { grid: null, bat: null };
+    const covered = Math.max(0, Math.min(a + HALF_HOUR, hourEnd(h)) - Math.max(a, h.start));
+    const share = covered / Math.max(1, hourEnd(h) - h.start);
+    const bat = hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh;
+    return { grid: h.grid_kwh * share, bat: bat * share, forecast: true };
+  });
+
   // The weather every three hours: the forecast's, or (earlier today) what was recorded.
   const sky = skyEvery3h(start, day.hours, recordedSky);
 
@@ -174,6 +188,7 @@ function plot(
     start,
     span,
     rows,
+    flows,
     sky,
     X,
     nowX: day.today ? X(now) : null,
@@ -319,7 +334,8 @@ export function PlanChart({
     ["Battery level", COLOR.battery, "line"],
     ["From grid", COLOR.fromGrid, "box"],
     ["Sent to grid", COLOR.export, "box"],
-    ["Battery in and out", FLOW_COLOR.battery, "box"],
+    ["Battery discharge", FLOW_COLOR.discharge, "box"],
+    ["Battery charge", FLOW_COLOR.charge, "box"],
     ...(c.carAhead ? [["Car charging", COLOR.lilac, "line"] as [string, string, "line"]] : []),
   ];
 
@@ -489,10 +505,7 @@ export function PlanChart({
             />
           </svg>
         </div>
-        <FlowBars
-          hours={c.rows.map((r) => ({ grid: r.grid, bat: r.bat, forecast: !!r.h }))}
-          className="relative mt-1 h-[64px] compact:h-12"
-        />
+        <FlowBars slots={c.flows} className="relative mt-1 h-[64px] compact:h-12" />
         {hover && (
           <RowTooltip
             row={hover}
