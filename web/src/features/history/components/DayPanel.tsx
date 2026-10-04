@@ -1,3 +1,5 @@
+import { reserveOf } from "~/features/common/energy/utils";
+import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useId, useMemo, type Ref } from "react";
 import { exportCsvUrl } from "~/features/history/api";
@@ -19,7 +21,7 @@ import { cn } from "~/features/common/ui/utils";
 import { extremesOf, hoursOf } from "~/features/history/utils/day";
 import type { Day } from "~/features/history/utils/year";
 
-const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc"];
+const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc", "battery_power"];
 
 /** Today's weather, next to today's numbers. */
 function WeatherChip() {
@@ -102,6 +104,7 @@ export function DayPanel({
   const dateId = useId();
   const dt = new Date(day.ts * 1000);
   const partial = day.kind === "data" && day.partial;
+  const reserve = reserveOf(useSystem());
   const q = useQuery({
     ...historyQuery({ start: day.ts, end: addDays(day.ts, 1), points: 288, fields: FIELDS, live: isToday }),
     placeholderData: keepPreviousData,
@@ -113,8 +116,13 @@ export function DayPanel({
   return (
     <section
       ref={ref}
+      id="day"
       aria-labelledby={dateId}
-      className={cn(HCARD, "grid grid-cols-[minmax(260px,340px)_minmax(0,1fr)] gap-10 max-lg:grid-cols-1 max-lg:gap-6")}
+      // Clear of the sticky top bar when it's scrolled to (History's "#day": the Overview's "Today in History").
+      className={cn(
+        HCARD,
+        "grid scroll-mt-28 grid-cols-[minmax(260px,340px)_minmax(0,1fr)] gap-10 max-lg:grid-cols-1 max-lg:gap-6",
+      )}
     >
       <div className="flex flex-col gap-6">
         <div className="flex min-h-9 items-center justify-between gap-3">
@@ -153,7 +161,7 @@ export function DayPanel({
         </a>
       </div>
       <div className="flex min-w-0 flex-col gap-4">
-        <DayChart series={q.data?.series} hours={hours} placeholder={q.isPlaceholderData} />
+        <DayChart series={q.data?.series} hours={hours} placeholder={q.isPlaceholderData} reserve={reserve} />
         <DayWeather date={dateKey(day.ts)} made={day.kind === "data" && !partial ? day.gen : null} />
       </div>
     </section>

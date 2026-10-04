@@ -3,7 +3,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef } from "react";
 import { useAmberPrices } from "~/features/amber/hooks";
 import { costsQuery, historyQuery } from "~/features/common/readings/api";
-import type { HistorySeries } from "~/features/common/readings/types";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, Footnote, TitleBlock } from "~/features/common/ui/components/Card";
@@ -24,25 +23,12 @@ import { DayBreakdown } from "~/features/plan/components/DayBreakdown";
 import { MomentList } from "~/features/plan/components/Moments";
 import { OutlookDays } from "~/features/plan/components/OutlookDays";
 import { PlanChart } from "~/features/plan/components/PlanChart";
-import { bestTimes, notices, planDays } from "~/features/plan/utils";
+import { bestTimes, notices, planDays, recordedBattery } from "~/features/plan/utils";
 import { moments } from "~/features/plan/utils/moments";
 import { ratesFor } from "~/features/plan/utils/rates";
 import { weatherDayQuery } from "~/features/weather/api";
 
-const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc"];
-
-/** Today's highest battery level so far, and when it first reached full. */
-function recordedBattery(series: HistorySeries | undefined) {
-  let maxSoc: number | null = null;
-  let fullAt: number | null = null;
-  series?.t.forEach((t, i) => {
-    const soc = series.battery_soc?.[i];
-    if (soc == null) return;
-    maxSoc = Math.max(maxSoc ?? 0, soc);
-    if (fullAt == null && soc >= 99.5) fullAt = t;
-  });
-  return { maxSoc, fullAt };
-}
+const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc", "battery_power"];
 
 /** The Plan page; `day` is the day open (0 today, 1 tomorrow, 2 the day after), from the address. */
 export function PlanPage({ day: selected = 0 }: { day?: number }) {

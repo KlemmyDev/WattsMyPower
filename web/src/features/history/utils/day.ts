@@ -1,7 +1,14 @@
 import type { HistorySeries } from "~/features/common/readings/types";
 
 /** One hour of a day: energy in kWh (grid + from the grid, − to it), and the battery level at its end. */
-export type Hour = { pv: number | null; load: number | null; grid: number | null; soc: number | null };
+/** An hour's energy (kWh): solar, home use, the grid (+ from it), the battery (+ discharging), and its level at the end (%). */
+export type Hour = {
+  pv: number | null;
+  load: number | null;
+  grid: number | null;
+  bat: number | null;
+  soc: number | null;
+};
 
 /** A day's 5-minute readings as 24 hours. Each hour's energy is its average power over the hour. */
 export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[] {
@@ -9,6 +16,7 @@ export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[
     pv: [0, 0],
     load: [0, 0],
     grid: [0, 0],
+    bat: [0, 0],
     soc: null as number | null,
   }));
   series?.t.forEach((t, i) => {
@@ -18,6 +26,7 @@ export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[
       ["pv", "pv_power"],
       ["load", "load_power"],
       ["grid", "grid_power"],
+      ["bat", "battery_power"],
     ] as const) {
       const v = series[f]?.[i];
       if (v != null) {
@@ -29,7 +38,7 @@ export function hoursOf(series: HistorySeries | undefined, dayTs: number): Hour[
     if (soc != null) acc[h].soc = soc;
   });
   const kwh = ([sum, n]: number[]) => (n ? sum / n / 1000 : null);
-  return acc.map((a) => ({ pv: kwh(a.pv), load: kwh(a.load), grid: kwh(a.grid), soc: a.soc }));
+  return acc.map((a) => ({ pv: kwh(a.pv), load: kwh(a.load), grid: kwh(a.grid), bat: kwh(a.bat), soc: a.soc }));
 }
 
 /** The day's highest solar reading (W) and when, and its lowest battery level (%). */

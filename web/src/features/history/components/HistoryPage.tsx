@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef } from "react";
+import { getRouteApi, useLocation } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { costsQuery } from "~/features/common/readings/api";
 import { dailyQuery, statsQuery } from "~/features/history/api";
 import { PageBody } from "~/features/common/layout/components/AppShell";
@@ -141,6 +141,19 @@ export function HistoryPage() {
     },
     [select],
   );
+  // Opened at "#day" (the Overview's "Today in History"): go to the day's chart once everything above it has
+  // loaded, so it doesn't move off as the year's totals and heatmap fill in. Once per arrival, on any screen size.
+  const hash = useLocation({ select: (l) => l.hash });
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (hash !== "day") {
+      arrived.current = false;
+      return;
+    }
+    if (!loaded || arrived.current) return;
+    arrived.current = true;
+    requestAnimationFrame(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [hash, loaded]);
   const setYear = (y: number) =>
     navigate({ search: (prev) => ({ year: y === thisYear ? undefined : y, metric: prev.metric }), resetScroll: false });
   const setMetric = (m: Metric) =>
