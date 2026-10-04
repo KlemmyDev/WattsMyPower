@@ -1,13 +1,18 @@
 """
-Sungrow SH-RS / SH-RT hybrid inverters (e.g. SH5.0RS): decodes the raw registers the collector
-stored (collector/PROTOCOL.md) into a snapshot. The collector only reads and stores the words;
+Sungrow's SH hybrid inverters (e.g. SH5.0RS): decodes the raw registers the collector stored
+(collector/PROTOCOL.md) into a snapshot. The whole SH family shares one register map, Sungrow's
+"Communication Protocol of Residential Hybrid Inverter": the SH-RS and SH-RT, the three-phase SH-T,
+the older SH-K (SH5K-20, SH3K6...) and the MG-RL. Registers a model doesn't have aren't read (the
+collector skips them), and come out as None. The collector only reads and stores the words;
 everything about what they mean lives here, so a fix can be re-applied to history
 (`python -m app reprocess`).
 
 Register addresses, scaling and quirks come from
 https://github.com/berndverhofstadt/sungrow-poc (MIT), which transcribed them
 from Sungrow's "Communication Protocol of Residential Hybrid Inverter" V1.1.5
-and verified them against an SH5.0RS + WiNet-S2.
+and verified them against an SH5.0RS + WiNet-S2. The device type codes are from the same protocol, as
+listed by https://github.com/mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant and
+https://github.com/bohdan-s/SunGather.
 """
 
 from __future__ import annotations
@@ -44,7 +49,9 @@ REGISTERS = [
     Reg("battery_voltage", 13020, 1, False, 0.1),
     # Doc says unsigned, but real SH5.0RS hardware reports charging current as negative.
     Reg("battery_current", 13021, 1, True, 0.1),
-    Reg("battery_power_raw", 13022, 1, False, 1),
+    # Unsigned on firmware before late 2024, signed on later firmware (positive charging): either way
+    # its size is the power, and the power-flow bits say which way (see derive).
+    Reg("battery_power_raw", 13022, 1, True, 1),
     Reg("battery_soc", 13023, 1, False, 0.1),
     Reg("battery_soh", 13024, 1, False, 0.1),
     Reg("battery_temp", 13025, 1, True, 0.1),
@@ -84,23 +91,62 @@ RUNNING_STATE = {
     0x9100: "Warn run",
 }
 
+# Register 5000, the device type code, for the SH family (they all share this register map).
 DEVICE_TYPES = {
-    0x0D17: "SH3.0RS",
+    # SH-K: the first single-phase hybrids
+    0x0D03: "SH5K-V13",
+    0x0D06: "SH3K6",
+    0x0D07: "SH4K6",
+    0x0D09: "SH5K-20",
+    0x0D0A: "SH3K6-30",
+    0x0D0B: "SH4K6-30",
+    0x0D0C: "SH5K-30",
+    # SH-RS: single phase
     0x0D0D: "SH3.6RS",
-    0x0D18: "SH4.0RS",
+    0x0D0E: "SH4.6RS",
     0x0D0F: "SH5.0RS",
     0x0D10: "SH6.0RS",
+    0x0D17: "SH3.0RS",
+    0x0D18: "SH4.0RS",
     0x0D1A: "SH8.0RS",
     0x0D1B: "SH10RS",
+    # MG-RL: single phase
+    0x0D27: "MG5RL",
+    0x0D28: "MG6RL",
+    # SH-RT: three phase
     0x0E00: "SH5.0RT",
     0x0E01: "SH6.0RT",
     0x0E02: "SH8.0RT",
     0x0E03: "SH10RT",
+    0x0E08: "SH5.0RT-V122",
+    0x0E09: "SH6.0RT-V122",
+    0x0E0A: "SH8.0RT-V122",
+    0x0E0B: "SH10RT-V122",
+    0x0E0C: "SH5.0RT-V112",
+    0x0E0D: "SH6.0RT-V112",
+    0x0E0E: "SH8.0RT-V112",
+    0x0E0F: "SH10RT-V112",
     0x0E10: "SH5.0RT-20",
     0x0E11: "SH6.0RT-20",
     0x0E12: "SH8.0RT-20",
     0x0E13: "SH10RT-20",
+    # SH-T: three phase, larger
+    0x0E20: "SH5T",
+    0x0E21: "SH6T",
+    0x0E22: "SH8T",
+    0x0E23: "SH10T",
+    0x0E24: "SH12T",
+    0x0E25: "SH15T",
+    0x0E26: "SH20T",
+    0x0E28: "SH25T",
 }
+
+
+def hybrid_code(code: int) -> bool:
+    """Whether a device type code is in the ranges Sungrow gives its residential hybrids (0x0Dxx single phase,
+    0x0Exx three phase), so a model newer than the list above is still read, just not yet named."""
+    return 0x0D00 <= code <= 0x0EFF
+
 
 FLOW_BATTERY_CHARGING = 1 << 1
 FLOW_BATTERY_DISCHARGING = 1 << 2
@@ -117,7 +163,7 @@ def derive(values: dict[str, float | None]) -> Snapshot:
     flow = int(values.get("power_flow") or 0)
     bp = values.get("battery_power_raw")
     if bp is not None:
-        snap["battery_power"] = -bp if flow & FLOW_BATTERY_CHARGING else bp
+        snap["battery_power"] = -abs(bp) if flow & FLOW_BATTERY_CHARGING else abs(bp)
     else:
         snap["battery_power"] = None
 
@@ -163,7 +209,13 @@ def decode_info(raw: Raw) -> Info:
         info["serial"] = b"".join(x.to_bytes(2, "big") for x in w).decode("ascii", "replace").strip("\x00 ")
     w = span(inp, 5000, 3)  # device type, nominal power (0.1 kW), output type
     if w:
-        info["model"] = DEVICE_TYPES.get(w[0], f"Unknown (0x{w[0]:04X})")
+        if w[0] in DEVICE_TYPES:
+            info["model"] = DEVICE_TYPES[w[0]]
+        elif hybrid_code(w[0]):  # a hybrid newer than the list: same registers, model not named yet
+            info["model"] = f"SH hybrid (type 0x{w[0]:04X})"
+            info["untested"] = True
+        else:
+            info["model"] = f"Unknown (0x{w[0]:04X})"
         info["nominal_kw"] = round(w[1] * 0.1, 1)
         info["phases"] = {0: "Single phase", 1: "Three phase", 2: "Three phase"}.get(w[2])
     w = span(inp, 5639, 1)  # battery capacity, 0.01 kWh

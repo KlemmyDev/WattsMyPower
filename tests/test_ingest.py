@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+import pytest
+
 from app.core.config import Config
 from app.core.database import Database
 from app.features.inverters import drivers
@@ -68,6 +70,42 @@ def test_decode_info() -> None:
     info = sh_rs.decode_info({"input": words, "holding": {13059: 50}})
     assert info == {"brand": "Sungrow", "serial": "A23A0903744", "model": "SH5.0RS", "nominal_kw": 5.0, "phases": "Single phase",
                     "battery_kwh": 16.0, "reserve": 5.0}  # fmt: skip
+
+
+def info_for(code: int) -> dict[str, Any]:
+    return sh_rs.decode_info({"input": {5000: code, 5001: 46, 5002: 0}})
+
+
+@pytest.mark.parametrize(
+    ("code", "model"),
+    [(0x0D0E, "SH4.6RS"), (0x0D0D, "SH3.6RS"), (0x0E03, "SH10RT"), (0x0E0F, "SH10RT-V112"), (0x0E0B, "SH10RT-V122"),
+     (0x0E23, "SH10T"), (0x0E28, "SH25T"), (0x0D09, "SH5K-20"), (0x0D0C, "SH5K-30"), (0x0D27, "MG5RL")],
+)  # fmt: skip
+def test_the_sh_family_is_known_by_name(code: int, model: str) -> None:
+    info = info_for(code)
+    assert info["model"] == model and "untested" not in info
+
+
+def test_a_newer_hybrid_is_read_but_marked_untested() -> None:
+    """A device type in the hybrids' ranges that isn't listed yet: the same registers, named by its code."""
+    assert info_for(0x0E2A) == {"brand": "Sungrow", "model": "SH hybrid (type 0x0E2A)", "untested": True,
+                                "nominal_kw": 4.6, "phases": "Single phase"}  # fmt: skip
+    # Something else answering the same registers (an SG string inverter) isn't a hybrid.
+    assert info_for(0x2435)["model"] == "Unknown (0x2435)"
+
+
+@pytest.mark.parametrize(
+    ("raw", "flow", "power"),
+    [
+        (1500, sh_rs.FLOW_BATTERY_CHARGING, -1500),  # older firmware: unsigned, the flags say which way
+        (1500, sh_rs.FLOW_BATTERY_DISCHARGING, 1500),
+        (1500, sh_rs.FLOW_BATTERY_CHARGING, -1500),  # newer firmware: positive while charging
+        (0x10000 - 1200, sh_rs.FLOW_BATTERY_DISCHARGING, 1200),  # newer firmware: negative while discharging
+    ],
+)
+def test_battery_power_from_either_firmware(raw: int, flow: int, power: int) -> None:
+    words = {**hybrid_words(), "13022": raw, "13001": flow}
+    assert sh_rs.decode({"input": words})["battery_power"] == power
 
 
 def test_decode_second_inverter() -> None:

@@ -175,6 +175,7 @@ class IntegrationsService:
                             for k in ("driver", "role", "label", "via", "brand", "model", "serial", "nominal_kw")
                         },
                         "supported": True,
+                        "untested": False,
                         "connected_as": connected["role"],
                         "rescan": False,
                     }

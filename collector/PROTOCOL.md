@@ -20,7 +20,7 @@ longer read. Changes take effect from the next poll, without a restart.
 
 | Driver          | Role     | What                                        | Input ranges read every poll (start, count)      | Read every 6 h ("info")                                    |
 |-----------------|----------|---------------------------------------------|--------------------------------------------------|------------------------------------------------------------|
-| `sungrow.sh_rs` | `hybrid` | Sungrow SH-RS/RT via WiNet-S, Modbus TCP     | (5008, 29), (13000, 41), (13041, 2), (13045, 3) | input (4990, 10), (5000, 3), (5639, 1); holding (13059, 1) |
+| `sungrow.sh_rs` | `hybrid` | Sungrow SH hybrids (RS, RT, T, K, MG-RL), Modbus TCP | (5008, 29), (13000, 41), (13041, 2), (13045, 3) | input (4990, 10), (5000, 3), (5639, 1); holding (13059, 1) |
 | `sungrow.sg_d`  | `pv2`    | Sungrow SG-D via its encrypted Wi-Fi dongle | (5000, 9), (5011, 8), (5031, 2)                  | — (5000-5008 already carry type, nominal, hours)           |
 
 If a range is rejected by the device, the collector falls back to reading its registers one at a time;

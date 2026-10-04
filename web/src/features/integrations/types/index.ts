@@ -46,8 +46,10 @@ export type FoundDevice = {
   model: string | null;
   serial: string | null;
   nominal_kw: number | null;
-  /** A model its driver knows. */
+  /** A model its driver reads. */
   supported: boolean;
+  /** Read, but not a model the driver knows by name: a newer model of a family that shares its registers. */
+  untested?: boolean;
   connected_as: InverterRole | null;
   /** It was connected when scanned (so not asked what it is) and has been removed since: scan again. */
   rescan: boolean;
@@ -87,5 +89,11 @@ export type ConnectRequest = {
 };
 
 export type ConnectResult = ConnectedInverter & {
-  identified: { brand: string | null; model: string | null; serial: string | null; supported: boolean };
+  identified: {
+    brand: string | null;
+    model: string | null;
+    serial: string | null;
+    supported: boolean;
+    untested?: boolean;
+  };
 };

@@ -1,6 +1,8 @@
 """
-Sungrow SH-RS / SH-RT hybrid inverters (e.g. SH5.0RS): reads their registers over plain Modbus TCP,
-through the WiNet-S / WiNet-S2 dongle. Decoded by the API's driver of the same id.
+Sungrow's SH hybrid inverters (SH-RS, SH-RT, SH-T, the older SH-K and the MG-RL, e.g. SH5.0RS): reads their
+registers over plain Modbus TCP, through the WiNet-S / WiNet-S2 dongle. They share one register map; a model
+that lacks a register in a range answers the rest one at a time (modbus.read_ranges). Decoded by the API's
+driver of the same id.
 
 Register ranges are from Sungrow's "Communication Protocol of Residential Hybrid Inverter" V1.1.5
 (as transcribed by https://github.com/berndverhofstadt/sungrow-poc, MIT) and verified against an

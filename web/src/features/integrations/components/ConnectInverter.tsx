@@ -102,6 +102,12 @@ function FoundRow({
           {title}
         </span>
         <span className="text-[13px] text-ink-muted tabular-nums">{sub}</span>
+        {found.untested && found.supported && !found.connected_as && (
+          <span className="text-xs text-ink-muted">
+            Not a model WattsMyPower knows by name yet. Sungrow&apos;s hybrids share their registers, so it should read
+            fine: if anything looks wrong, an issue with its type code gets it sorted.
+          </span>
+        )}
         {confirming && replaces && (
           <span className="text-xs text-ink-muted">
             Replaces the {deviceName(replaces)} at {replaces.host} as your {ROLE_NAME[replaces.role]}.
