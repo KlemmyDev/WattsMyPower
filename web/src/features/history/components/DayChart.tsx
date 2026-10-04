@@ -173,9 +173,9 @@ export function DayChart({
         ))}
         {[
           ["From grid", FROM_GRID],
+          ["Battery charge", FLOW_COLOR.charge],
           ["Sent to grid", TO_GRID],
           ["Battery discharge", FLOW_COLOR.discharge],
-          ["Battery charge", FLOW_COLOR.charge],
         ].map(([label, color]) => (
           <span key={label} className="flex items-center gap-1.5">
             <i className="size-2.5 rounded-[2px]" style={{ background: color }} />

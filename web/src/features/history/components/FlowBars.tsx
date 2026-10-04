@@ -17,15 +17,16 @@ function stack(f: Flow) {
   const g = f.grid ?? 0;
   const b = f.bat ?? 0;
   return {
-    up: [Math.max(0, g), Math.max(0, b)], // from the grid, then the battery discharging into the home
-    down: [Math.max(0, -g), Math.max(0, -b)], // sent to the grid, then the battery charging
+    up: [Math.max(0, g), Math.max(0, -b)], // from the grid, then the battery charging
+    down: [Math.max(0, -g), Math.max(0, b)], // sent to the grid, then the battery discharging
   };
 }
 
 /**
  * A day's grid and battery flows as one bar per slot (equal slots from midnight: half hours on the charts), on one
- * scale. Above the line, what the home drew in: from the grid, and the battery discharging stacked on it. Below,
- * what went out: to the grid, and the battery charging under it.
+ * scale. Above the line, energy from the grid and the battery charging stacked on it; below, energy sent to the grid
+ * and the battery discharging under it. The battery's parts go the way its level does: up as it charges, down as it
+ * discharges.
  */
 export function FlowBars({ slots, className }: { slots: Flow[]; className?: string }) {
   const stacks = slots.map(stack);
@@ -49,9 +50,9 @@ export function FlowBars({ slots, className }: { slots: Flow[]; className?: stri
           return (
             <div key={i} className="relative min-w-0 flex-1">
               {piece(50 - gUp, gUp, FLOW_COLOR.fromGrid, bUp >= 0.5 ? "" : "rounded-t-[2px]")}
-              {piece(50 - gUp - bUp, bUp, FLOW_COLOR.discharge, "rounded-t-[2px]")}
+              {piece(50 - gUp - bUp, bUp, FLOW_COLOR.charge, "rounded-t-[2px]")}
               {piece(50, gDown, FLOW_COLOR.toGrid, bDown >= 0.5 ? "" : "rounded-b-[2px]")}
-              {piece(50 + gDown, bDown, FLOW_COLOR.charge, "rounded-b-[2px]")}
+              {piece(50 + gDown, bDown, FLOW_COLOR.discharge, "rounded-b-[2px]")}
             </div>
           );
         })}
