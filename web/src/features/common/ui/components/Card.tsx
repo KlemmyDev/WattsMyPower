@@ -1,8 +1,8 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { cn } from "~/features/common/ui/utils";
 
 /** The standard rounded panel. */
-export function Card({ className, ...rest }: HTMLAttributes<HTMLElement>) {
+export function Card({ className, ...rest }: ComponentProps<"section">) {
   return (
     <section
       className={cn(

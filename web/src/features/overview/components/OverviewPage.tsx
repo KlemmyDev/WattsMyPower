@@ -30,7 +30,7 @@ export function OverviewPage() {
         <CarCards now={now} />
         {prices && <AmberPricesCard prices={prices} now={now} />}
       </div>
-      <Next24Card p={p} s={s} f={f} now={now} prices={prices} />
+      <Next24Card s={s} f={f} now={now} prices={prices} />
     </>
   );
 }

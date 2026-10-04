@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { carsQuery, suggestQuery } from "~/features/car/api";
-import { LevelBar, LevelForm, levelSource, rangeWords } from "~/features/car/components/CarLevel";
+import { CarLevelSlider, useCarLevels } from "~/features/car/components/CarLevel";
 import type { CarView } from "~/features/car/types";
 import {
   carName,
@@ -16,8 +15,8 @@ import {
 } from "~/features/car/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
-import { Button, ButtonLink } from "~/features/common/ui/components/Button";
-import { BigNumber, Card, CardHeader, Eyebrow, Muted } from "~/features/common/ui/components/Card";
+import { ButtonLink } from "~/features/common/ui/components/Button";
+import { Card, CardHeader, Eyebrow, Muted } from "~/features/common/ui/components/Card";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { sameDay } from "~/features/common/time/utils";
@@ -63,28 +62,13 @@ function CarCard({ view, now, half }: { view: CarView; now: number; half: boolea
   );
 }
 
+/** The car's charge and the level it's charged to, set by dragging. */
 function Level({ view, now }: { view: CarView; now: number }) {
-  const [editing, setEditing] = useState(false);
-  const l = view.level;
-  const target = view.car.car_target_soc;
+  const levels = useCarLevels(view);
   return (
     <div className="flex flex-col gap-3">
       <Eyebrow>Charge</Eyebrow>
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
-        <BigNumber>{l ? pct(l.soc) : "—"}</BigNumber>
-        {l && <span className="pb-2 text-sm text-ink-muted tabular-nums">{rangeWords(l)}</span>}
-      </div>
-      <LevelBar soc={l?.soc ?? null} target={target} />
-      {editing || !l ? (
-        <LevelForm car={view.id} initial={l?.soc ?? null} onDone={l ? () => setEditing(false) : undefined} />
-      ) : (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Muted>{levelSource(l, now)}.</Muted>
-          <Button variant="link" size="sm" onClick={() => setEditing(true)}>
-            Update
-          </Button>
-        </div>
-      )}
+      <CarLevelSlider view={view} levels={levels} now={now} big />
     </div>
   );
 }

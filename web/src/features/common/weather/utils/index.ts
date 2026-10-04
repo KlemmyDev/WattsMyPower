@@ -35,7 +35,7 @@ export function codeIcon(code: number, isDay: boolean): IconName {
 }
 
 /** Icon for a forecast hour. */
-export function hourIcon(h: ForecastHour): IconName {
+export function hourIcon(h: Pick<ForecastHour, "code" | "is_day">): IconName {
   if (isWet(h.code)) return "rain";
   if (!h.is_day) return h.code >= 3 ? "cloud" : "moon";
   return h.code <= 1 ? "sun" : h.code === 2 ? "cloudSun" : "cloud";
