@@ -53,6 +53,11 @@ DEFAULT_LOAD = [0.4, 0.35, 0.35, 0.35, 0.35, 0.4, 0.8, 1.5, 1.2, 0.7, 0.6, 0.6,
 OUTLOOK_DAYS = 3  # today and the next two: as far as the stored weather forecast reaches
 LOAD_DAYS = 14  # days of home use the forecast's typical day is worked out from
 MIN_LOAD_HOURS = 20  # hours of a day with readings before its home use is shown as a whole day
+# Solar power readings run a little above the energy the inverters count (an SH5.0RS 2% over, an SG5K-D 4%: power
+# read before the inverter's own losses), so what the panels made is the readings scaled to the day's count.
+COUNTED_ROLLUPS = 260  # rollups with solar power before a day's count and readings are compared (of 288)
+COUNTED_RANGE = (0.8, 1.1)  # a day's count over its readings outside this is a bad count or bad readings
+COUNTED_DAYS = 30  # recent days whose typical ratio stands in for a day without one of its own
 MIN_RANGE_DAYS = 7  # days of day-ahead forecast against actual solar before a likely range is given
 
 RAIN_CODES = set(range(51, 68)) | set(range(80, 83)) | set(range(95, 100))
@@ -253,12 +258,31 @@ class ForecastService:
                 self._learned = json.loads(row[0]) if row else {}
             return self._learned or None
 
+    def counted(self, start: int, end: int) -> dict[str, float]:
+        """For each day in [start, end), what to scale its solar power readings by to make what the inverters counted:
+        the day's own count over its readings, for a whole day of readings whose two agree within COUNTED_RANGE, else the
+        typical one of the last COUNTED_DAYS such days (1 with none, or no counter). Keyed by local date; a day missing
+        takes the typical one too (`counted(...).get(day, typical)`; the typical one is under "")."""
+        rows = self.repo.daily_solar(min(start, end - COUNTED_DAYS * 86400), end)
+        own: dict[str, float] = {}
+        for d, count, measured, n in rows:
+            if count is None or not measured or measured < 1 or count < 1 or n < COUNTED_ROLLUPS:
+                continue
+            ratio = count / measured
+            if COUNTED_RANGE[0] <= ratio <= COUNTED_RANGE[1]:
+                own[d] = ratio
+        recent = [own[d] for d in sorted(own)[-COUNTED_DAYS:]]
+        typical = statistics.median(recent) if recent else 1.0
+        return {**{d: own.get(d, typical) for d, *_ in rows}, "": typical}
+
     def samples(self, start: int, end: int) -> list[Sample]:
-        """Stored weather hours in [start, end) as the model sees them, with what the panels made in each."""
+        """Stored weather hours in [start, end) as the model sees them, with what the panels made in each: the hour's
+        solar power readings, scaled to what the inverters counted that day (see `counted`)."""
         panels = self.weather.panels()
         rows = self.weather.hours(start, end)
         if not rows:
             return []
+        scale = self.counted(start, end)
         made: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # hour -> [W sum, rollups, full]
         align = rows[0]["ts"] % 3600  # weather hours sit on the half hour in some time zones
         for ts, pv, soc in self.weather.repo.solar_rollups(start, end):
@@ -272,7 +296,8 @@ class ForecastService:
             s = learning.sample(row, panels, local_date(row["ts"]))
             hour = made.get(row["ts"])
             if hour and hour[1] >= 10:  # at least 50 minutes of readings in the hour
-                s.actual = hour[0] / hour[1] / 1000  # mean kW over the hour = kWh
+                # mean kW over the hour = kWh, as the inverters count it
+                s.actual = hour[0] / hour[1] / 1000 * scale.get(s.day, scale[""])
                 s.full = bool(hour[2])
             out.append(s)
         return out
@@ -382,7 +407,7 @@ class ForecastService:
 
     def _calibrate(self, hours: list[Hour], now: int) -> tuple[float, float]:
         """
-        kWh of PV per kWh/m² of radiation, fitted on the past week's actual output.
+        kWh of PV per kWh/m² of radiation, fitted on the past week's actual output (as the inverters count it).
         Works on 5-minute rollups against radiation interpolated between hourly means,
         so it starts adapting after ~30 minutes of daylight data instead of whole hours.
         Returns (k, hours of data it was fitted on).
@@ -404,12 +429,14 @@ class ForecastService:
             return mids[-1][1]
 
         rows = self.readings.rollups(past[0]["ts"], now - 300, ["pv_power"], not_null="pv_power")
+        scale = self.counted(past[0]["ts"], now)
         # Output beyond what the array could ever make is a bad reading, not sunshine.
         ceiling = 1.5 * pv_kw * 1000
         by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
         for ts, pv in rows:
             if 0 <= pv <= ceiling and (r := rad_at(ts + 150)) >= 0.1:
-                by_day[time.strftime("%Y-%m-%d", time.localtime(ts))].append((pv / 1000, r))
+                day = time.strftime("%Y-%m-%d", time.localtime(ts))
+                by_day[day].append((pv / 1000 * scale.get(day, scale[""]), r))
         pairs = sum(len(p) for p in by_day.values())
         if pairs < 6:
             return default, 0.0

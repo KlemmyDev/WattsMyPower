@@ -208,8 +208,8 @@ class ReadingsRepository:
                     d[i][0] += step
                     d[i][1] += by_power[i]
                     d[i][3] += 1
-                elif today[i] is not None and 0 <= today[i] <= most:
-                    d[i][2] += max(today[i], by_power[i])  # a counter left at 0 still has this rollup's power
+                elif (counted := today[i]) is not None and 0 <= counted <= most:
+                    d[i][2] += max(counted, by_power[i])  # a counter left at 0 still has this rollup's power
                     d[i][3] += 1
                 elif grid is not None:
                     d[i][2] += by_power[i]

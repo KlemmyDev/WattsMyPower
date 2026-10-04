@@ -23,3 +23,19 @@ class ForecastRepository:
                 " FROM samples_5m WHERE ts >= ? AND load_power IS NOT NULL GROUP BY d, h",
                 (since,),
             ).fetchall()
+
+    def daily_solar(self, start: int, end: int) -> list[tuple[str, float | None, float, int]]:
+        """(local date, kWh the inverters counted, kWh the solar power readings add up to, rollups with solar power)
+        for each day in [start, end).
+
+        The count is the day's highest daily solar counter, leaving out the first 10 minutes after midnight (when a
+        lagging inverter clock may not have reset yesterday's yet), as the daily totals do.
+        """
+        with self.db.reading() as conn:
+            return conn.execute(
+                "SELECT date(ts, 'unixepoch', 'localtime') AS d,"
+                " MAX(CASE WHEN strftime('%H%M', ts, 'unixepoch', 'localtime') >= '0010' THEN daily_pv END),"
+                " SUM(MAX(pv_power, 0)) * 300 / 3.6e6, COUNT(pv_power)"
+                " FROM samples_5m WHERE ts >= ? AND ts < ? GROUP BY d",
+                (start, end),
+            ).fetchall()
