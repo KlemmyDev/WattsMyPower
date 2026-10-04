@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { amberQuery } from "~/features/amber/api";
+import { carQuery } from "~/features/car/api";
+import { carName } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useForecast } from "~/features/common/weather/hooks";
-import { IntegrationLink, IntegrationTile } from "~/features/integrations/components/IntegrationLink";
+import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { useInverters } from "~/features/integrations/hooks";
 import type { InverterState } from "~/features/integrations/utils";
 
@@ -109,9 +111,36 @@ function AmberLink() {
   );
 }
 
+function CarLink() {
+  const { data: view, isPending, error } = useQuery(carQuery);
+  const [label, detail] = isPending
+    ? ["Checking", "Checking for a car…"]
+    : error || !view
+      ? ["Unavailable", errorMessage(error)]
+      : !view.connected
+        ? ["Not connected", "Tell it about your EV, and Plan suggests when to charge it from spare solar"]
+        : [
+            "Connected",
+            [carName(view), view.level ? `${Math.round(view.level.soc)}%` : null, "charge times suggested on Plan"]
+              .filter(Boolean)
+              .join(" · "),
+          ];
+  return (
+    <IntegrationLink
+      card
+      to="/settings/integrations/car"
+      icon="car"
+      name="Electric vehicle"
+      status={label}
+      on={!!view?.connected}
+      detail={detail}
+    />
+  );
+}
+
 /**
  * Settings → Integrations: each integration as a card with how it's doing, opening to its own page. Your
- * inverters first, then the services, then what's coming; two across where there's room.
+ * inverters first, then the services and the car; two across where there's room.
  */
 export function IntegrationSettings() {
   return (
@@ -119,13 +148,7 @@ export function IntegrationSettings() {
       <SungrowLink />
       <WeatherLink />
       <AmberLink />
-      <IntegrationTile
-        card
-        icon="car"
-        name="Tesla"
-        status="Coming soon"
-        detail="Charge your car with excess solar while keeping enough for the home battery"
-      />
+      <CarLink />
     </section>
   );
 }

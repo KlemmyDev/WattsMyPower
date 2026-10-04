@@ -1,13 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiSend } from "~/features/common/api/utils";
 import { liveQuery, patchSystem } from "~/features/common/live/api";
-import {
-  CAR_SETTINGS,
-  OWNERSHIP_SETTINGS,
-  SYSTEM_SETTINGS,
-  WEATHER_SETTINGS,
-  type Settings,
-} from "~/features/common/settings/types";
+import { OWNERSHIP_SETTINGS, SYSTEM_SETTINGS, WEATHER_SETTINGS, type Settings } from "~/features/common/settings/types";
 
 /** Save the forecast location, billing period or system details, and refresh what depends on it. */
 export function useSaveSettings() {
@@ -28,7 +22,7 @@ export function useSaveSettings() {
         qc.invalidateQueries({ queryKey: ["forecast"] });
         qc.invalidateQueries({ queryKey: ["insights"] });
       }
-      if (CAR_SETTINGS.some((k) => k in changes)) {
+      if (Object.keys(changes).some((k) => k.startsWith("car_"))) {
         qc.invalidateQueries({ queryKey: ["car"] });
         qc.invalidateQueries({ queryKey: ["forecast"] });
       }

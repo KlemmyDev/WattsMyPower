@@ -435,18 +435,10 @@ class ForecastService:
             prof[hr] = trimmed_mean(days)
         return prof
 
-    def build(self, latest: Snapshot | None, battery_kwh: float, reserve_pct: float) -> dict[str, Any] | None:
-        if not self.config.forecast:
-            return None
-        now = int(time.time())
-        hours = self._hours(now)
-        if not any(h["ts"] + 3600 > now for h in hours):
-            return None  # no forecast stored for the hours to come
-        k, fitted = self._calibrate(hours, now)
-        model = self._active_model()
+    def _steps(self, hours: list[Hour], now: int, k: float, model: SolarModel | None) -> list[Hour]:
+        """The forecast's steps: the rest of the current hour, then whole hours to the end of the day after
+        tomorrow, each with its solar and usual home use (planned car charges not yet added)."""
         prof = self._load_profile(now)
-
-        # Steps: the rest of the current hour, then whole hours to the end of the day after tomorrow.
         horizon = day_start(now, OUTLOOK_DAYS)
         steps = []
         for h in hours:
@@ -458,9 +450,32 @@ class ForecastService:
             steps.append(
                 {**h, "start": start, "dur": end - start, "pv_kw": self._pv_kw(h, k, model), "load_kw": prof[hr]}
             )
+        return steps
+
+    def steps(self, now: int | None = None) -> list[Hour] | None:
+        """The forecast's steps from now (see _steps), for planning around: None when there's no forecast."""
+        if not self.config.forecast:
+            return None
+        now = int(now or time.time())
+        hours = self._hours(now)
+        if not any(h["ts"] + 3600 > now for h in hours):
+            return None
+        k, _ = self._calibrate(hours, now)
+        return self._steps(hours, now, k, self._active_model()) or None
+
+    def build(self, latest: Snapshot | None, battery_kwh: float, reserve_pct: float) -> dict[str, Any] | None:
+        if not self.config.forecast:
+            return None
+        now = int(time.time())
+        hours = self._hours(now)
+        if not any(h["ts"] + 3600 > now for h in hours):
+            return None  # no forecast stored for the hours to come
+        k, fitted = self._calibrate(hours, now)
+        model = self._active_model()
+        steps = self._steps(hours, now, k, model)
 
         if self.car is not None and steps:
-            add_car(steps, self.car.charges(steps[0]["start"], horizon))
+            add_car(steps, self.car.charges(steps[0]["start"], day_start(now, OUTLOOK_DAYS)))
 
         cap = battery_kwh or 10.0
         soc_pct = (latest or {}).get("battery_soc")
