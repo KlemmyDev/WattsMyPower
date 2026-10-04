@@ -83,10 +83,15 @@ def service(config: Config, collector: FakeCollector) -> IntegrationsService:
 def test_identity_registers_say_what_an_inverter_is() -> None:
     assert identify("sungrow.sh_rs", {k: int(v) for k, v in SH5.items()}) == {
         "brand": "Sungrow", "model": "SH5.0RS", "serial": "A23A0903744", "nominal_kw": 5.0, "supported": True,
+        "untested": False,
     }  # fmt: skip
     assert identify("sungrow.sg_d", {k: int(v) for k, v in SG5K.items()})["model"] == "SG5K-D"
     assert identify("sungrow.sh_rs", {"5000": 0x2C12, "5001": 50, "5002": 0})["supported"] is False
-    assert identify(None, {}) == {"brand": None, "model": None, "serial": None, "nominal_kw": None, "supported": False}
+    # A hybrid newer than the list can still be connected, marked as not tested.
+    newer = identify("sungrow.sh_rs", {"5000": 0x0D2C, "5001": 50, "5002": 0})
+    assert newer["supported"] is True and newer["untested"] is True and newer["model"] == "SH hybrid (type 0x0D2C)"
+    assert identify(None, {}) == {"brand": None, "model": None, "serial": None, "nominal_kw": None, "supported": False,
+                                  "untested": False}  # fmt: skip
 
 
 def test_a_scan_says_what_it_found(service: IntegrationsService, collector: FakeCollector) -> None:
@@ -110,7 +115,7 @@ def test_connecting_checks_the_kind_matches_the_role(service: IntegrationsServic
     with pytest.raises(IntegrationError, match="which kind"):
         service.connect("hybrid", {"driver": "acme.x", "host": "192.168.0.10"})
     with pytest.raises(
-        IntegrationError, match=r"Nothing at 192\.168\.0\.99 answered like a Sungrow SH-RS / SH-RT hybrid"
+        IntegrationError, match=r"Nothing at 192\.168\.0\.99 answered like a Sungrow SH-series hybrid"
     ) as e:
         service.connect("hybrid", {"driver": "sungrow.sh_rs", "host": "192.168.0.99"})
     assert e.value.status == 422
@@ -206,7 +211,7 @@ def test_the_integrations_api(client: TestClient, collector: FakeCollector) -> N
     r = client.put("/api/integrations/hybrid", json={"driver": "sungrow.sh_rs", "host": "192.168.0.244"})
     assert r.status_code == 200 and r.json()["identified"]["model"] == "SH5.0RS"
     [device] = client.get("/api/integrations").json()["devices"]
-    assert device["host"] == "192.168.0.244" and device["label"] == "SH-RS / SH-RT hybrid"
+    assert device["host"] == "192.168.0.244" and device["label"] == "SH-series hybrid"
 
     assert (
         client.post("/api/integrations/scan", json={"network": "192.168.0.0/24"}).json()["found"][0]["model"]

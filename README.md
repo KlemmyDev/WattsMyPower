@@ -1,6 +1,6 @@
 # WattsMyPower
 
-A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / SH-RT series). It talks to the inverter directly on your home network (Modbus TCP through its WiNet-S dongle), records a reading every minute in a small SQLite database, and serves a live web dashboard: what your solar, battery, home and grid are doing right now, what today has cost and saved, history, a solar and battery forecast, the system's health, and bills. Nothing goes through Sungrow's cloud, so readings are live rather than delayed.
+A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (the SH series: SH-RS, SH-RT, SH-T and older). It talks to the inverter directly on your home network (Modbus TCP through its WiNet-S dongle), records a reading every minute in a small SQLite database, and serves a live web dashboard: what your solar, battery, home and grid are doing right now, what today has cost and saved, history, a solar and battery forecast, the system's health, and bills. Nothing goes through Sungrow's cloud, so readings are live rather than delayed.
 
 ## What it does
 
@@ -18,7 +18,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 
 ## What you need
 
-- A Sungrow SH-RS or SH-RT hybrid inverter with a **WiNet-S or WiNet-S2** dongle on your home network. The dashboard finds it by scanning your network; if it can't, you'll need its **IP address** (from your router's list of connected devices, or the iSolarCloud app).
+- A Sungrow SH hybrid inverter (SH-RS, SH-RT, SH-T, the older SH-K, or MG-RL; see [Supported inverters](#supported-inverters)) with a **WiNet-S or WiNet-S2** dongle on your home network (or, on models that have one, its own network port). Any battery it runs (Sungrow SBR or SBH, or another make it supports) is read through the inverter, so the battery's model doesn't matter. The dashboard finds it by scanning your network; if it can't, you'll need its **IP address** (from your router's list of connected devices, or the iSolarCloud app).
 - A **computer on the same network that stays on**, to run it in Docker:
   - **Linux** (the best fit): a Proxmox LXC container or VM, a Raspberry Pi, or any Debian or Ubuntu box. The install script sets up Docker on it if needed.
   - **A Mac**, with Docker Desktop.
@@ -222,8 +222,12 @@ Each inverter is handled by a driver: one for the hybrid (with the battery and g
 
 | Driver | Role | Inverters | Connection |
 |---|---|---|---|
-| `sungrow.sh_rs` | hybrid | Sungrow SH-RS and SH-RT (tested on an SH5.0RS) | Modbus TCP through the WiNet-S / WiNet-S2 dongle |
+| `sungrow.sh_rs` | hybrid | Sungrow's SH hybrids, which share one register map (tested on an SH5.0RS): SH3.0RS to SH10RS (including the SH3.6RS and SH4.6RS), SH5.0RT to SH10RT (and their -20, -V112 and -V122 versions), SH5T to SH25T, SH5K-20, SH5K-30, SH3K6, SH4K6, SH5K-V13, MG5RL and MG6RL | Modbus TCP through the WiNet-S / WiNet-S2 dongle, or the inverter's own network port |
 | `sungrow.sg_d` | second inverter | Sungrow SG-D string inverters (tested on an SG5K-D) | Sungrow's encrypted Modbus through the Wi-Fi dongle |
+
+A Sungrow hybrid that isn't in that list but reports a hybrid's device type (a newer model) can still be connected: it's shown as an untested SH hybrid with its type code, read with the same registers. If yours works (or doesn't), an issue saying its model and type code gets it named. Batteries aren't read on their own, so any battery behind a supported inverter works.
+
+Since firmware from late 2024, Sungrow hybrids report battery power as a signed value; earlier firmware reports it unsigned. Both are read correctly: the size comes from the register, the direction from the inverter's power-flow flags.
 
 A driver has two halves with the same id. The collector's reader (`collector/devices/<brand>/<model>.py`, listed in `collector/devices/drivers.py`) only fetches raw registers. The dashboard's decoder (`app/features/inverters/<brand>/<model>.py`, listed in `app/features/inverters/drivers.py`) turns them into readings in the shape described in `app/features/inverters/types.py`. Every stored reading records which driver read it, so swapping inverters later doesn't confuse the history. To add an inverter, write both halves and add them to the two lists. Everything past the decoder (merging, costs, the dashboard) works unchanged.
 

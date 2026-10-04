@@ -37,7 +37,7 @@ class Kind:
 
 
 KINDS: dict[str, Kind] = {
-    "sungrow.sh_rs": Kind("hybrid", "Sungrow", "SH-RS / SH-RT hybrid", "WiNet-S or WiNet-S2 dongle", "SH5.0RS"),
+    "sungrow.sh_rs": Kind("hybrid", "Sungrow", "SH-series hybrid", "WiNet-S or WiNet-S2 dongle", "SH5.0RS"),
     "sungrow.sg_d": Kind("pv2", "Sungrow", "SG-D string inverter", "Wi-Fi dongle (encrypted Modbus)", "SG5K-D"),
 }
 
@@ -52,7 +52,8 @@ def solar(driver: str | None) -> SolarDriver | None:
 
 def identify(driver: str | None, words: dict[str, int]) -> dict[str, Any]:
     """What a device's identity registers (read by the collector's probe) say it is: brand, model,
-    serial, nominal_kw, and whether that model is one this driver supports."""
+    serial, nominal_kw, whether that model is one this driver supports, and whether it's one the driver reads
+    but doesn't know by name yet (`untested`: a newer model of a family that shares its registers)."""
     decoder = HYBRIDS.get(driver or "") or SOLAR.get(driver or "")
     info = decoder.decode_info({"input": words}) if decoder and words else {}
     model = info.get("model")
@@ -62,4 +63,5 @@ def identify(driver: str | None, words: dict[str, int]) -> dict[str, Any]:
         "serial": info.get("serial") or None,
         "nominal_kw": info.get("nominal_kw"),
         "supported": bool(model) and not str(model).startswith("Unknown"),
+        "untested": bool(info.get("untested")),
     }
