@@ -1,6 +1,10 @@
 """
-Car charges planned ahead: until the car can be charged from spare solar automatically, you say when it
-will charge and how, and the forecast counts it as home use (app.features.forecast).
+The car: its details (Settings → Integrations → Electric vehicle), its battery level, and charges planned ahead.
+Until the car can be charged from spare solar automatically, you say when it will charge and how (or take a
+suggested charge, app.features.car.planner), and the forecast counts it as home use (app.features.forecast).
+
+Its level is what you last said it was, plus what planned charges have put in since (as if they ran as planned).
+Driving isn't known, so the level only goes up between times you give it.
 
 A charge draws amps × volts × phases from the wall for as long as it runs. Only some of that reaches the
 car's battery (the charger and battery lose the rest as heat; `car_efficiency`, about 90% on a home AC
@@ -15,10 +19,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.database import Database
+from app.features.car.catalog import BY_ID
 from app.features.settings.store import SettingsStore
 
 KEEP_SECONDS = 12 * 3600  # how long a charge stays listed after it ends
 MAX_HOURS = 48  # the longest charge that can be planned
+LEVELS_KEPT = 90 * 86400  # how long a level given is kept
+
+# The car's details, as settings.
+DETAILS = (
+    "car_battery_kwh", "car_efficiency", "car_amps", "car_min_amps", "car_phases", "car_voltage", "car_wh_per_km",
+    "car_target_soc", "car_ready_by", "car_battery_helps",
+)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -30,6 +42,23 @@ class Charge:
     end: int
     power_w: float
     battery_helps: bool
+
+
+@dataclass(frozen=True)
+class CarSpec:
+    """How the car charges, for suggesting charges (app.features.car.planner)."""
+
+    capacity_kwh: float
+    efficiency: float  # %, of what comes from the wall that reaches the battery
+    volts: float
+    phases: int
+    min_amps: float
+    max_amps: float
+    battery_helps: bool
+    wh_per_km: float
+
+    def power_kw(self, amps: float, phases: int | None = None) -> float:
+        return amps * self.volts * (phases or self.phases) / 1000
 
 
 def estimate(
@@ -143,6 +172,9 @@ class CarService:
                     now,
                 ),
             )
+            # The car's charge now, as given with the charge (unless it's where an earlier planned charge leaves it).
+            if e["soc_from"] is not None and body.get("level_now", True):
+                self._record(conn, now, e["soc_from"], "charge")
         return {**e, "id": cur.lastrowid, "battery_helps": bool(body.get("battery_helps", True))}
 
     def remove(self, charge_id: int) -> bool:
@@ -183,6 +215,80 @@ class CarService:
             ).fetchall()
         return [Charge(s, e, p, bool(b)) for s, e, p, b in rows]
 
+    # ------------------------------------------------------------------ the car's level
+    @staticmethod
+    def _record(conn: Any, ts: int, soc: float, source: str) -> None:
+        conn.execute("INSERT OR REPLACE INTO car_levels (ts, soc, source) VALUES (?, ?, ?)", (ts, soc, source))
+        conn.execute("DELETE FROM car_levels WHERE ts < ?", (ts - LEVELS_KEPT,))
+
+    def set_level(self, body: dict[str, Any], now: int | None = None) -> dict[str, Any] | None:
+        """The car's charge now, as given. Raises ValueError, in words."""
+        now = int(now or time.time())
+        soc = _number(body, "soc", 0, 100, "The car's charge")
+        if soc is None:
+            raise ValueError("Give the car's charge, 0 to 100%.")
+        with self.db.writing() as conn:
+            self._record(conn, now, soc, "level")
+        return self.level(now)
+
+    def _added(self, since: int, until: int, soc: float) -> float:
+        """The car's level after the planned charges running between `since` and `until`, from `soc` at `since`:
+        each adds what reaches the battery while it runs, up to the level it was planned to stop at."""
+        cap = self.settings.get("car_battery_kwh")
+        eff = self.settings.get("car_efficiency") / 100
+        with self.db.reading() as conn:
+            rows = conn.execute(
+                "SELECT start, end, power_w, soc_to FROM car_charges WHERE end > ? AND start < ? ORDER BY start",
+                (since, until),
+            ).fetchall()
+        for start, end, power_w, soc_to in rows:
+            ran = min(end, until) - max(start, since)
+            if ran > 0:
+                stop = soc_to if soc_to is not None else 100.0
+                soc = max(soc, min(stop, soc + power_w / 1000 * ran / 3600 * eff / cap * 100))
+        return min(100.0, soc)
+
+    def level(self, now: int | None = None) -> dict[str, Any] | None:
+        """The car's level now: as last given, plus what planned charges have put in since. None if never given."""
+        now = int(now or time.time())
+        with self.db.reading() as conn:
+            row = conn.execute(
+                "SELECT ts, soc FROM car_levels WHERE ts <= ? ORDER BY ts DESC LIMIT 1", (now,)
+            ).fetchone()
+        if row is None:
+            return None
+        at, given = row
+        soc = self._added(at, now, given)
+        km = soc / 100 * self.settings.get("car_battery_kwh") * 1000 / self.settings.get("car_wh_per_km")
+        return {"soc": round(soc, 1), "given": given, "given_at": at, "charged": soc > given + 0.05, "km": round(km)}
+
+    def planned_soc(self, soc: float, start: int, end: int) -> float:
+        """The car's level at `end` from `soc` at `start`, with the planned charges between."""
+        return round(self._added(start, end, soc), 1)
+
+    # ------------------------------------------------------------------ the car
+    def spec(self) -> CarSpec:
+        g = self.settings.get
+        return CarSpec(
+            capacity_kwh=g("car_battery_kwh"),
+            efficiency=g("car_efficiency"),
+            volts=g("car_voltage"),
+            phases=int(g("car_phases")),
+            min_amps=min(g("car_min_amps"), g("car_amps")),
+            max_amps=g("car_amps"),
+            battery_helps=bool(g("car_battery_helps")),
+            wh_per_km=g("car_wh_per_km"),
+        )
+
     def view(self, now: int | None = None) -> dict[str, Any]:
-        keys = ("car_battery_kwh", "car_efficiency", "car_amps", "car_phases", "car_voltage")
-        return {"car": {k: self.settings.get(k) for k in keys}, "charges": self.listed(now)}
+        """The car: whether one's connected, its name and model, its details, its level, and its planned charges."""
+        model = self.settings.get_text("car_model")
+        values = self.settings.all_values()  # whole numbers as such
+        return {
+            "connected": bool(self.settings.get("car_connected")),
+            "name": self.settings.get_text("car_name"),
+            "model": BY_ID.get(model or ""),
+            "car": {k: values[k] for k in DETAILS},
+            "level": self.level(now),
+            "charges": self.listed(now),
+        }

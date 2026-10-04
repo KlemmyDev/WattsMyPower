@@ -15,6 +15,7 @@ from app.features.alerts.service import AlertsService
 from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.bills.service import BillsService
+from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
 from app.features.imports.service import ImportService
@@ -48,6 +49,7 @@ class Services:
     forecast: ForecastService
     insights: InsightsService
     car: CarService
+    charge_planner: ChargePlanner
     meter: MeterService
     bills: BillsService
     imports: ImportService
@@ -92,6 +94,7 @@ def build_services(config: Config) -> Services:
         forecast=forecast,
         insights=insights,
         car=car,
+        charge_planner=ChargePlanner(car, forecast, settings, tariffs, amber.repo),
         meter=meter,
         bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),
         imports=ImportService(db),

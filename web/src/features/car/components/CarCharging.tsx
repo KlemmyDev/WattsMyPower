@@ -1,49 +1,25 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { carQuery, estimateQuery } from "~/features/car/api";
+import { LevelBar, LevelForm, levelSource, rangeWords } from "~/features/car/components/CarLevel";
+import { SuggestedCharges } from "~/features/car/components/SuggestedCharges";
 import { useChargeChange } from "~/features/car/hooks";
-import type { CarDetails, ChargeEstimate, ChargeRequest, PlannedCharge } from "~/features/car/types";
+import type { CarDetails, CarView, ChargeEstimate, ChargeRequest, PlannedCharge } from "~/features/car/types";
+import { carName, chargeLine, fromLocal, toLocal, when } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
-import { duration, hhmm, weekdayLong } from "~/features/common/formatting/utils/date";
+import { duration, hhmm } from "~/features/common/formatting/utils/date";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
-import { useSaveSettings } from "~/features/common/settings/hooks";
-import { CAR_SETTINGS, type Settings } from "~/features/common/settings/types";
-import { saveSettingsError } from "~/features/common/settings/utils";
-import { Button } from "~/features/common/ui/components/Button";
+import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { Notice } from "~/features/common/ui/components/Notice";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { useNow } from "~/features/common/time/hooks";
-import { addDays, midnight } from "~/features/common/time/utils";
-
-/** "Tonight 22:00", "Tomorrow 06:30", "Monday 18:00": when a charge starts, in words. */
-function when(ts: number, now: number): string {
-  const day = midnight(ts);
-  const today = midnight(now);
-  const name =
-    day === today
-      ? new Date(ts * 1000).getHours() >= 18
-        ? "Tonight"
-        : "Today"
-      : day === addDays(today, 1)
-        ? "Tomorrow"
-        : weekdayLong.format(ts * 1000);
-  return `${name} ${hhmm(ts)}`;
-}
-
-const phaseWord = (n: number) => (n === 3 ? "three-phase" : n === 1 ? "single phase" : `${n}-phase`);
-
-/** A local "YYYY-MM-DDTHH:mm" for a datetime-local input, and back. */
-const toLocal = (ts: number) => {
-  const d = new Date(ts * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-};
-const fromLocal = (v: string) => Math.floor(new Date(v).getTime() / 1000);
+import { midnight } from "~/features/common/time/utils";
 
 /** A sensible start: tonight at 22:00 if that's still ahead, else the next quarter hour. */
 function defaultStart(now: number): number {
@@ -51,78 +27,103 @@ function defaultStart(now: number): number {
   return tonight > now + 900 ? tonight : Math.ceil(now / 900) * 900;
 }
 
-/** One line for a charge: its power, the car's charge at each end, and the energy from the wall. */
-function chargeLine(c: {
-  amps: number;
-  phases: number;
-  power_kw: number;
-  soc_from: number | null;
-  soc_to: number | null;
-  wall_kwh: number;
-}) {
-  const levels = c.soc_from != null && c.soc_to != null ? ` · ${pct(c.soc_from)} → ${pct(c.soc_to)}` : "";
-  return `${c.amps} A ${phaseWord(c.phases)} (${c.power_kw.toFixed(1)} kW)${levels} · about ${kWh(c.wall_kwh)} from the wall`;
-}
-
 /**
- * Car charges planned ahead. Until the car can be charged from spare solar automatically, say when it
- * will charge and how, and the forecast counts it as home use: the battery, grid use and costs on this
- * page and the Overview include it.
+ * The car on the Plan page. Connected: its level, the best times to charge it, and charges planned. Either way, a
+ * charge can be planned by hand, and the forecast counts planned charges as home use: the battery, grid use and
+ * costs on this page and the Overview include them.
  */
 export function CarCharging() {
   const { data } = useQuery(carQuery);
   const now = useNow();
   const [planning, setPlanning] = useState(false);
-  const [details, setDetails] = useState(false);
   const { remove } = useChargeChange();
   const charges = data?.charges ?? [];
+  const connected = !!data?.connected;
   return (
-    <Card aria-labelledby="h-car">
+    <Card id="car" aria-labelledby="h-car" className="scroll-mt-24">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <TitleBlock
           id="h-car"
-          title="Car charging"
-          sub="Plan when the car will charge, and the forecast counts it as home use"
+          title={connected ? `Charging ${carName(data)}` : "Car charging"}
+          sub={
+            connected
+              ? "When to charge it for the least on your bill, and the charges planned, which the forecast counts as home use"
+              : "Plan when the car will charge, and the forecast counts it as home use"
+          }
         />
         {!planning && (
           <Button variant="outline" size="sm" onClick={() => setPlanning(true)} disabled={!data}>
             <Icon name="plus" size={16} />
-            Plan a charge
+            {connected ? "Plan your own" : "Plan a charge"}
           </Button>
         )}
       </div>
-      {planning && data && <ChargeForm car={data.car} now={now} onDone={() => setPlanning(false)} />}
-      {charges.length > 0 ? (
-        <ul className="flex flex-col">
-          {charges.map((c) => (
-            <ChargeRow key={c.id} c={c} now={now} onRemove={() => remove.mutate(c.id)} removing={remove.isPending} />
-          ))}
-        </ul>
-      ) : (
-        !planning && <Muted>No charges planned.</Muted>
+      {data && connected && <LevelLine view={data} now={now} />}
+      {data && connected && <SuggestedCharges key={data.level?.given_at ?? 0} view={data} now={now} />}
+      {data && !connected && (
+        <Notice tone="plain" className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-pretty">
+            Connect your EV and this suggests when to charge it: from spare solar where it can, at the cheapest rates
+            where it can't.
+          </span>
+          <ButtonLink to="/settings/integrations/car" variant="outline" size="sm">
+            Connect your EV
+          </ButtonLink>
+        </Notice>
       )}
-      <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
-        <button
-          type="button"
-          aria-expanded={details}
-          onClick={() => setDetails((v) => !v)}
-          className="flex items-center gap-1.5 self-start border-0 bg-transparent p-0 text-[13px] font-semibold text-ink-muted hover:text-ink"
-        >
-          <Icon
-            name="chevR"
-            size={16}
-            className={details ? "rotate-90 transition-transform" : "transition-transform"}
-          />
-          Car details
-          {data && (
-            <span className="font-normal text-ink-faint">
-              · {data.car.car_battery_kwh} kWh battery, {data.car.car_efficiency}% efficient
-            </span>
-          )}
-        </button>
-        {details && data && <CarDetailsForm car={data.car} />}
-      </div>
+      {planning && data && (
+        <ChargeForm car={data.car} level={data.level?.soc ?? null} now={now} onDone={() => setPlanning(false)} />
+      )}
+      {charges.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {connected && <h3 className="text-[15px] font-semibold">Planned charges</h3>}
+          <ul className="flex flex-col">
+            {charges.map((c) => (
+              <ChargeRow key={c.id} c={c} now={now} onRemove={() => remove.mutate(c.id)} removing={remove.isPending} />
+            ))}
+          </ul>
+        </div>
+      ) : (
+        !planning && !connected && <Muted>No charges planned.</Muted>
+      )}
+      {data && (
+        <div className="flex flex-wrap items-center gap-x-2 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+          <span>
+            {data.car.car_battery_kwh} kWh battery, {data.car.car_efficiency}% efficient, up to {data.car.car_amps} A
+          </span>
+          <ButtonLink to="/settings/integrations/car" variant="link" size="sm">
+            Car details
+          </ButtonLink>
+        </div>
+      )}
     </Card>
+  );
+}
+
+/** The car's level: a bar, the figure, where it came from, and a way to give it afresh. */
+function LevelLine({ view, now }: { view: CarView; now: number }) {
+  const [editing, setEditing] = useState(!view.level);
+  const l = view.level;
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="text-sm text-ink-muted tabular-nums">
+          <b className="text-[22px] font-light tracking-[-0.5px] text-ink">{l ? pct(l.soc) : "—"}</b>
+          {l ? ` · ${rangeWords(l)} · charged to ${view.car.car_target_soc}%` : " · the car's charge isn't known yet"}
+        </span>
+        {l && !editing && (
+          <Button variant="link" size="sm" onClick={() => setEditing(true)}>
+            Update
+          </Button>
+        )}
+      </div>
+      <LevelBar soc={l?.soc ?? null} target={view.car.car_target_soc} />
+      {editing ? (
+        <LevelForm initial={l?.soc ?? null} onDone={l ? () => setEditing(false) : undefined} />
+      ) : (
+        l && <Muted>{levelSource(l, now)}.</Muted>
+      )}
+    </div>
   );
 }
 
@@ -165,17 +166,27 @@ function ChargeRow({
 type Stop = "level" | "time";
 
 /** Plan a charge: when it starts, how it stops, how fast, and whether the home battery helps; with what it comes to. */
-function ChargeForm({ car, now, onDone }: { car: CarDetails; now: number; onDone: () => void }) {
+function ChargeForm({
+  car,
+  level,
+  now,
+  onDone,
+}: {
+  car: CarDetails;
+  level: number | null;
+  now: number;
+  onDone: () => void;
+}) {
   const toast = useToast();
   const { add } = useChargeChange();
   const [start, setStart] = useState(() => toLocal(defaultStart(now)));
-  const [socNow, setSocNow] = useState("");
+  const [socNow, setSocNow] = useState(level == null ? "" : String(Math.round(level)));
   const [stop, setStop] = useState<Stop>("level");
-  const [socTo, setSocTo] = useState("90");
+  const [socTo, setSocTo] = useState(String(car.car_target_soc));
   const [hours, setHours] = useState("3");
   const [amps, setAmps] = useState(String(car.car_amps));
   const [phases, setPhases] = useState(String(car.car_phases === 3 ? 3 : 1));
-  const [helps, setHelps] = useState(true);
+  const [helps, setHelps] = useState(!!car.car_battery_helps);
   const [error, setError] = useState("");
 
   const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? null : Number(v));
@@ -344,59 +355,5 @@ function Estimate({ est, error }: { est: ChargeEstimate | undefined; error: stri
         </div>
       ))}
     </dl>
-  );
-}
-
-type Values = Record<(typeof CAR_SETTINGS)[number], string>;
-
-/** The car's battery, how efficiently it charges, and how it's usually charged. */
-function CarDetailsForm({ car }: { car: CarDetails }) {
-  const save = useSaveSettings();
-  const toast = useToast();
-  const [values, setValues] = useState<Values>(
-    () => Object.fromEntries(CAR_SETTINGS.map((k) => [k, String(car[k])])) as Values,
-  );
-  const [error, setError] = useState("");
-  const changed = CAR_SETTINGS.filter((k) => Number(values[k]) !== car[k]);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    const bad = changed.find((k) => values[k].trim() === "" || Number.isNaN(Number(values[k])));
-    if (bad) return setError("Enter a number for each detail.");
-    const changes: Partial<Settings> = Object.fromEntries(changed.map((k) => [k, Number(values[k])]));
-    save.mutate(changes, {
-      onSuccess: () => toast("Car details saved."),
-      onError: (err) => setError(saveSettingsError(err)),
-    });
-  };
-  const field = (k: keyof Values, label: string, unit: string, help: string) => (
-    <Field label={label} help={help}>
-      <Input
-        type="number"
-        inputMode="decimal"
-        unit={unit}
-        value={values[k]}
-        onChange={(e) => setValues((v) => ({ ...v, [k]: e.target.value }))}
-      />
-    </Field>
-  );
-  return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] items-start gap-4">
-        {field("car_battery_kwh", "Battery", "kWh", "Its usable size: the car's specs, or its app.")}
-        {field("car_efficiency", "Charging efficiency", "%", "What reaches the battery: about 90% at home.")}
-        {field("car_amps", "Usual current", "A", "What it usually charges at.")}
-        {field("car_phases", "Usual phases", "", "1, or 3 on a three-phase socket.")}
-        {field("car_voltage", "Voltage", "V", "230 in Australia.")}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" size="sm" disabled={!changed.length || save.isPending}>
-          {save.isPending ? "Saving…" : "Save car details"}
-        </Button>
-        <HelpText tone="bad" role="alert">
-          {error}
-        </HelpText>
-      </div>
-    </form>
   );
 }

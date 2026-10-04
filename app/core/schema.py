@@ -26,6 +26,8 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                      forecast can learn from it
     forecast_hours   the solar forecast for each hour as it stood the day before, to measure it against
                      what the panels really made
+    car_charges  car charges planned ahead, which the forecast counts as home use
+    car_levels   the car's battery level (%) as it was given, to estimate it between times
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -246,6 +248,14 @@ def _car_charges(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS car_charges_end ON car_charges (end)")
 
 
+def _car_levels(conn: sqlite3.Connection) -> None:
+    """The car's battery level (%) as given from the dashboard (app.features.car), at unix seconds `ts`.
+    `source` says where it was given: "level" (told directly) or "charge" (with a planned charge)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS car_levels (ts INTEGER PRIMARY KEY, soc REAL NOT NULL, source TEXT NOT NULL)"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -258,6 +268,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _weather,
     _import_replacing,
     _car_charges,
+    _car_levels,
 ]
 
 

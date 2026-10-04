@@ -1,4 +1,4 @@
-"""Car charges planned ahead (the Plan page): the car's details and charges, an estimate, add and remove."""
+"""The car (the EV integration, the Plan page and the Overview): its details, level, planned and suggested charges."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.dependencies import JsonBody, ServicesDep
+from app.features.car.catalog import MODELS
 
 router = APIRouter(prefix="/api/car")
 
@@ -21,8 +22,34 @@ async def _run(fn: Any, *args: Any) -> Any:
 
 @router.get("")
 async def get_car(svc: ServicesDep):
-    """The car's details (from Settings) and its planned charges: still to come, under way or just ended."""
+    """Whether a car is connected, its details (from Settings), its level, and its planned charges: still to come,
+    under way or just ended."""
     return await asyncio.to_thread(svc.car.view)
+
+
+@router.get("/models")
+async def get_models():
+    """Cars to choose from when connecting one, with their usual details."""
+    return MODELS
+
+
+@router.post("/level")
+async def set_level(svc: ServicesDep, body: JsonBody):
+    """The car's charge now (%), as read from the car or its app."""
+    return await _run(svc.car.set_level, body)
+
+
+@router.post("/suggest")
+async def suggest(svc: ServicesDep, body: JsonBody):
+    """The best times to charge the car to a level by a time, from the forecast and the prices, with what each costs.
+    Leave out its level now, the level to reach or the time, for its last known level, its usual limit and time."""
+    live = svc.live
+    soc = (live.latest or {}).get("battery_soc")
+    return await _run(
+        lambda: svc.charge_planner.suggest(
+            body, home_soc=soc, battery_kwh=live.battery_kwh(), reserve_pct=live.reserve()
+        )
+    )
 
 
 @router.post("/estimate")
