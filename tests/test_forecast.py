@@ -89,6 +89,54 @@ def test_solar_fit_ignores_a_day_of_garbled_readings(db: Database, service: Fore
     assert k == pytest.approx(9.0, rel=0.05) and fitted > 24
 
 
+def write_counted(db: Database, rows: list[tuple[int, float | None, float | None]], ratio: dict[str, float]) -> None:
+    """Rollups with the inverters' daily solar counter too: each day's power readings added up, times its `ratio`."""
+    made: dict[str, float] = {}
+    out = []
+    for ts, pv, load in rows:
+        day = time.strftime("%Y-%m-%d", time.localtime(ts))
+        made[day] = made.get(day, 0.0) + (pv or 0) * 300 / 3.6e6
+        out.append((ts, pv, load, made[day] * ratio[day] if day in ratio else None))
+    with db.writing() as conn:
+        conn.executemany(
+            "INSERT OR REPLACE INTO samples_5m (ts, pv_power, load_power, daily_pv) VALUES (?, ?, ?, ?)", out
+        )
+
+
+def test_solar_is_what_the_inverters_counted_not_what_the_power_readings_add_up_to(
+    db: Database, service: ForecastService
+) -> None:
+    """Power readings run a few percent over the counted energy (before the inverter's losses): an SH5.0RS + SG5K-D
+    counted 61.0 kWh on a day their power readings came to 62.9. The fit learns from what was counted."""
+    rows = history(k=9.0)
+    days = sorted({time.strftime("%Y-%m-%d", time.localtime(ts)) for ts, *_ in rows})
+    whole = days[1:-1]  # the first and last are part days
+    write_counted(db, rows, {d: 0.97 for d in whole})
+    scale = service.counted(NOW - DAYS * 86400, NOW)
+    assert all(scale[d] == pytest.approx(0.97) for d in whole)
+    assert scale[days[-1]] == pytest.approx(0.97)  # today so far: the typical day's
+    assert scale[""] == pytest.approx(0.97)
+
+    hours = [{"ts": ts, "rad": sun(ts + 1800)} for ts in range(NOW - 7 * 86400, NOW, 3600)]
+    k, _ = service._calibrate(hours, NOW)
+    assert k == pytest.approx(9.0 * 0.97, rel=0.02)
+
+
+def test_a_count_that_disagrees_with_the_readings_is_not_believed(db: Database, service: ForecastService) -> None:
+    rows = history(k=9.0)
+    days = sorted({time.strftime("%Y-%m-%d", time.localtime(ts)) for ts, *_ in rows})
+    ratio = {d: 0.97 for d in days[1:-1]}
+    ratio[days[3]] = 0.4  # a counter that stuck part way through the day
+    write_counted(db, rows, ratio)
+    scale = service.counted(NOW - DAYS * 86400, NOW)
+    assert scale[days[3]] == pytest.approx(0.97) and scale[days[4]] == pytest.approx(0.97)
+
+
+def test_without_a_solar_counter_the_readings_stand(db: Database, service: ForecastService) -> None:
+    write_5m(db, history(k=9.0))
+    assert service.counted(NOW - DAYS * 86400, NOW)[""] == 1.0
+
+
 # ------------------------------------------------------------------ the days ahead
 def outlook_weather(now: int) -> dict[str, object]:
     """Open-Meteo's hourly weather from a little before now to past the day after tomorrow: sun by day."""
