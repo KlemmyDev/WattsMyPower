@@ -13,13 +13,14 @@ import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, CardHeader } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { cn } from "~/features/common/ui/utils";
 import { useForecastAccuracy } from "~/features/common/weather/hooks";
 import { DayChart } from "~/features/history/components/DayChart";
 import { extremesOf, hoursOf } from "~/features/history/utils/day";
-import { PlanChart } from "~/features/plan/components/PlanChart";
+import { PlanChart, type Overlay } from "~/features/plan/components/PlanChart";
 import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
 import { weatherDayQuery } from "~/features/weather/api";
-import { bestTimes, hourEnd, hourKwh, planDays, type PlanDay } from "~/features/plan/utils";
+import { bestTimes, hourEnd, hourKwh, planDays, recordedBattery, type PlanDay } from "~/features/plan/utils";
 import { moments } from "~/features/plan/utils/moments";
 import { ratesFor } from "~/features/plan/utils/rates";
 
@@ -58,7 +59,20 @@ function sources(e: Totals) {
   return { solar: covered - battery, battery, grid: Math.min(e.imp, e.home), ss: e.home > 0 ? covered / e.home : 0 };
 }
 
-function Stat({ label, value, unit, color }: { label: string; value: string; unit?: string; color: string }) {
+function Stat({
+  label,
+  value,
+  unit,
+  color,
+  note,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  color: string;
+  /** A line under the figure: what today should come to by midnight, a forecast's likely range, the peak's time. */
+  note?: string;
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="flex items-center gap-1.5 text-xs text-ink-dim">
@@ -69,6 +83,8 @@ function Stat({ label, value, unit, color }: { label: string; value: string; uni
         {value}
         {unit && <small className="ml-1 text-[13px] font-normal tracking-normal text-ink-label">{unit}</small>}
       </span>
+      {/* Always a line, empty or not, so the grid is the same height on every day. */}
+      <span className="truncate text-xs leading-4 text-ink-faint tabular-nums">{note || "\u00a0"}</span>
     </div>
   );
 }
@@ -82,8 +98,9 @@ const energy = (v: number | null | undefined) => {
 /**
  * Today at a glance on the Overview, and the next two days' forecast: step forward to see tomorrow and the day after
  * as the Plan page has them. Today shows its totals so far (live, from the inverter's daily counters or today's
- * readings), where the home's power came from, and the day's chart as History draws it. A day ahead shows the same
- * figures as forecast, with the Plan page's chart (forecast lines dashed, the weather, the key moments numbered).
+ * readings) with what they should come to by midnight, where the home's power came from, and the Plan page's chart
+ * of the day: recorded so far, forecast (dashed) for the rest, and on request the earlier forecast for the hours
+ * gone, over what happened. A day ahead shows the same figures as forecast, with its Plan chart.
  */
 export function TodayEnergyCard({
   p,
@@ -99,12 +116,16 @@ export function TodayEnergyCard({
   prices?: AmberPrices;
 }) {
   const [offset, setOffset] = useState(0);
+  const [compare, setCompare] = useState(false);
+  const start = midnight(now);
+  const { data: history } = useQuery(FIELDS_KEY(start));
+  const series = history?.series;
   const accuracy = useForecastAccuracy();
   const tariff = s?.tariff;
   const rates = useMemo(() => (tariff ? ratesFor(tariff, prices) : null), [tariff, prices]);
   const range = accuracy?.range ?? null;
-  // The days ahead, as the Plan page works them out (today's own figures come from its readings here).
-  const ahead = useMemo(
+  // The days as the Plan page works them out: today's rest of the day, then the days ahead.
+  const days = useMemo(
     () =>
       f
         ? planDays(f, {
@@ -114,11 +135,13 @@ export function TodayEnergyCard({
             rates,
             todayCost: undefined,
             range,
-            recorded: { maxSoc: null, fullAt: null },
-          }).filter((d) => !d.today)
+            recorded: recordedBattery(series),
+          })
         : [],
-    [f, now, p, tariff, rates, range],
+    [f, now, p, tariff, rates, range, series],
   );
+  const today = days.find((d) => d.today);
+  const ahead = days.filter((d) => !d.today);
   const day = offset > 0 ? ahead[offset - 1] : undefined;
   const last = ahead.length;
   const title = day ? `${day.label}'s energy` : "Today's energy";
@@ -155,24 +178,47 @@ export function TodayEnergyCard({
             </span>
           }
         />
-        {day ? <AheadStats day={day} /> : <TodayStats p={p} now={now} />}
-        <div className="mt-auto">
+        {day ? <AheadStats day={day} /> : <TodayStats p={p} series={series} plan={today} />}
+        <div className="mt-auto flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-2">
           {day ? (
             <ButtonLink to="/plan" search={{ day: offset }} variant="link" size="sm">
               {day.label}'s plan
             </ButtonLink>
           ) : (
-            <ButtonLink to="/history" variant="link" size="sm">
+            <ButtonLink to="/history" hash="day" variant="link" size="sm">
               Today in History
             </ButtonLink>
+          )}
+          {!day && today && (
+            <Button
+              variant="chip"
+              aria-pressed={compare}
+              onClick={() => setCompare(!compare)}
+              className={cn(compare && "border-ink/40 text-ink")}
+            >
+              {compare && <Icon name="check" size={12} />}
+              Compare with forecast
+            </Button>
           )}
         </div>
       </div>
       <div className="flex min-w-0 flex-col justify-end gap-5">
         {day ? (
-          <AheadChart key={day.key} day={day} s={s} now={now} rates={rates} range={range} />
+          <DayPlanChart key={day.key} day={day} s={s} now={now} rates={rates} range={range} />
+        ) : today ? (
+          <TodayPlanChart
+            day={today}
+            s={s}
+            p={p}
+            f={f}
+            now={now}
+            rates={rates}
+            range={range}
+            series={series}
+            compare={compare}
+          />
         ) : (
-          <TodayChart now={now} f={f} />
+          <TodayChart now={now} series={series} f={f} />
         )}
       </div>
     </Card>
@@ -182,10 +228,19 @@ export function TodayEnergyCard({
 const FIELDS_KEY = (start: number) =>
   historyQuery({ start, end: addDays(start, 1), points: 288, fields: FIELDS, live: true });
 
-/** Today's totals so far, and where the home's power came from. */
-function TodayStats({ p, now }: { p: Snapshot | null; now: number }) {
-  const { data } = useQuery(FIELDS_KEY(midnight(now)));
-  const series = data?.series;
+/**
+ * Today's totals so far, with what they should come to by midnight (so far, plus the forecast for the hours left),
+ * and where the home's power came from.
+ */
+function TodayStats({
+  p,
+  series,
+  plan,
+}: {
+  p: Snapshot | null;
+  series: HistorySeries | undefined;
+  plan: PlanDay | undefined;
+}) {
   const { peak } = useMemo(() => extremesOf(series), [series]);
   // The inverter's daily counters, unless they're missing or still at nothing while the readings show a day
   // under way (a dongle that's restarted, or one that doesn't keep them): then today's readings added up.
@@ -197,11 +252,20 @@ function TodayStats({ p, now }: { p: Snapshot | null; now: number }) {
       : summed;
   const from = e && sources(e);
   const [peakValue, peakUnit] = peak ? powerParts(peak.w) : ["—", ""];
+  // Nothing to add once the day's forecast hours have run out.
+  const rest = plan && plan.hours.length ? plan.day : null;
+  const by = (so: number | undefined, more: number) =>
+    rest && so != null ? `${kWh(so + more)} by midnight` : undefined;
   return (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-        <Stat label="Solar made" {...energy(e?.pv)} color={COLOR.solar} />
-        <Stat label="Home use" {...energy(e?.home)} color={COLOR.ink} />
+        <Stat label="Solar made" {...energy(e?.pv)} color={COLOR.solar} note={by(e?.pv, rest?.pv_kwh ?? 0)} />
+        <Stat
+          label="Home use"
+          {...energy(e?.home)}
+          color={COLOR.ink}
+          note={by(e?.home, (rest?.load_kwh ?? 0) + (rest?.car_kwh ?? 0))}
+        />
         <Stat
           label="Self-sufficiency"
           value={from ? String(Math.round(from.ss * 100)) : "—"}
@@ -211,23 +275,43 @@ function TodayStats({ p, now }: { p: Snapshot | null; now: number }) {
         <Stat
           label="Peak solar"
           value={peakValue}
-          unit={peak ? `${peakUnit} at ${hhmm(peak.t)}` : undefined}
+          unit={peak ? peakUnit : undefined}
+          note={peak ? `at ${hhmm(peak.t)}` : undefined}
           color={COLOR.solar}
         />
-        <Stat label="From the grid" {...energy(e?.imp)} color={COLOR.fromGrid} />
-        <Stat label="Sent to the grid" {...energy(e?.exp)} color={COLOR.export} />
+        <Stat
+          label="From the grid"
+          {...energy(e?.imp)}
+          color={COLOR.fromGrid}
+          note={by(e?.imp, rest?.import_kwh ?? 0)}
+        />
+        <Stat
+          label="Sent to the grid"
+          {...energy(e?.exp)}
+          color={COLOR.export}
+          note={by(e?.exp, rest?.export_kwh ?? 0)}
+        />
       </div>
       {e && from && e.home > 0.05 && <HomeSources from={from} home={e.home} />}
     </>
   );
 }
 
-/** Today's chart, as History draws it, with the day's weather across the top: as recorded, then as forecast. */
-function TodayChart({ now, f }: { now: number; f: Forecast | null | undefined }) {
+/**
+ * Today's chart as History draws it, with the day's weather across the top (as recorded, then as forecast): for
+ * when there's no forecast to plan the rest of the day with.
+ */
+function TodayChart({
+  now,
+  series,
+  f,
+}: {
+  now: number;
+  series: HistorySeries | undefined;
+  f: Forecast | null | undefined;
+}) {
   const start = midnight(now);
-  const { data } = useQuery(FIELDS_KEY(start));
   const { data: weather } = useQuery(weatherDayQuery(dateKey(start)));
-  const series = data?.series;
   const hours = useMemo(() => hoursOf(series, start), [series, start]);
   const sky = useMemo(() => skyEvery3h(start, weather?.hours, f?.hours), [start, weather, f]);
   return (
@@ -273,13 +357,19 @@ function AheadStats({ day }: { day: PlanDay }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-        <Stat label="Solar forecast" {...energy(e.pv)} color={COLOR.solar} />
+        <Stat
+          label="Solar forecast"
+          {...energy(e.pv)}
+          color={COLOR.solar}
+          note={day.pvRange ? `likely ${Math.round(day.pvRange[0])}–${kWh(day.pvRange[1])}` : undefined}
+        />
         <Stat label="Home use" {...energy(e.home)} color={COLOR.ink} />
         <Stat label="Self-sufficiency" value={String(Math.round(from.ss * 100))} unit="%" color={COLOR.good} />
         <Stat
           label="Peak solar"
           value={peakValue}
-          unit={peak ? `${peakUnit} around ${hhmm(peak.t)}` : undefined}
+          unit={peak ? peakUnit : undefined}
+          note={peak ? `around ${hhmm(peak.t)}` : undefined}
           color={COLOR.solar}
         />
         <Stat label="From the grid" {...energy(e.imp)} color={COLOR.fromGrid} />
@@ -291,7 +381,7 @@ function AheadStats({ day }: { day: PlanDay }) {
 }
 
 /** A day ahead's chart, as the Plan page draws it, its key moments numbered across it. */
-function AheadChart({
+function DayPlanChart({
   day,
   s,
   now,
@@ -321,6 +411,66 @@ function AheadChart({
       windows={[...times.spare, ...times.paid, ...times.avoid]}
       moments={events}
       rates={rates}
+      markerRow
+    />
+  );
+}
+
+/**
+ * Today's chart, as the Plan page draws it: recorded so far, the forecast (dashed) for the rest, the weather and the
+ * key moments. "Compare with forecast" (under the figures) adds, over the hours gone, what they were forecast to bring (dotted): solar
+ * from the day-ahead forecast kept with each hour's weather, home use from the typical day.
+ */
+function TodayPlanChart({
+  day,
+  s,
+  p,
+  f,
+  now,
+  rates,
+  range,
+  series,
+  compare,
+}: {
+  day: PlanDay;
+  s: SystemInfo | undefined;
+  p: Snapshot | null;
+  f: Forecast | null | undefined;
+  now: number;
+  rates: ReturnType<typeof ratesFor> | null;
+  range: { low: number; high: number } | null;
+  series: HistorySeries | undefined;
+  compare: boolean;
+}) {
+  const reserve = reserveOf(s);
+  const { data: weather } = useQuery(weatherDayQuery(dateKey(day.start)));
+  const times = useMemo(() => bestTimes(day.hours, rates), [day, rates]);
+  const events = useMemo(
+    () => moments(day.hours, { now, end: addDays(day.start, 1), fullAt: day.battery.fullAt, reserve }),
+    [day, now, reserve],
+  );
+  const overlay = useMemo((): Overlay | null => {
+    if (!compare) return null;
+    const pv = Array.from(
+      { length: 24 },
+      (_, k) => weather?.hours.find((h) => h.ts === day.start + k * 3600)?.pv_forecast ?? null,
+    );
+    return { pv, load: f?.load_basis?.profile_kw ?? [] };
+  }, [compare, weather, f, day.start]);
+  return (
+    <PlanChart
+      day={day}
+      series={series}
+      now={now}
+      soc0={p?.battery_soc ?? null}
+      reserve={reserve}
+      range={range ? [range.low, range.high] : null}
+      windows={[...times.spare, ...times.paid, ...times.avoid]}
+      moments={events}
+      rates={rates}
+      recordedSky={weather?.hours}
+      overlay={overlay}
+      markerRow
     />
   );
 }

@@ -1,4 +1,4 @@
-import type { CostDay } from "~/features/common/readings/types";
+import type { CostDay, HistorySeries } from "~/features/common/readings/types";
 import type { Snapshot } from "~/features/common/live/types";
 import type { Tariff } from "~/features/common/tariffs/types";
 import type { Forecast, ForecastAccuracy, ForecastDay, ForecastHour } from "~/features/common/weather/types";
@@ -48,6 +48,19 @@ export type PlanDay = {
   /** The day's bill, supply charge included: today's so far plus the rest. Null without rates. */
   cost: number | null;
 };
+
+/** Today's highest battery level so far, and when it first reached full. */
+export function recordedBattery(series: HistorySeries | undefined) {
+  let maxSoc: number | null = null;
+  let fullAt: number | null = null;
+  series?.t.forEach((t, i) => {
+    const soc = series.battery_soc?.[i];
+    if (soc == null) return;
+    maxSoc = Math.max(maxSoc ?? 0, soc);
+    if (fullAt == null && soc >= 99.5) fullAt = t;
+  });
+  return { maxSoc, fullAt };
+}
 
 /** Today and the next two days, as the outlook cards and the day plan show them. */
 export function planDays(

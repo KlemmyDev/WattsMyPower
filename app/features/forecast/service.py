@@ -452,7 +452,8 @@ class ForecastService:
         """What the home-use forecast is worked out from, to show how it got its figure: each of the last
         LOAD_DAYS days' home use (whole days only, those with readings for most of their hours, scaled up for
         the hours missing), how many hours of the typical day come from the readings (the rest are a rough
-        default), and the typical day itself (kWh)."""
+        default), and the typical day itself: in all (kWh), and hour by hour (kW, from midnight), which is also
+        what the hours already gone today were forecast to use."""
         hourly = self._hourly_load(now)
         prof, known = self._profile(hourly)
         by_day: dict[str, list[float]] = defaultdict(list)
@@ -464,7 +465,13 @@ class ForecastService:
             for d, v in sorted(by_day.items())
             if d != today and len(v) >= MIN_LOAD_HOURS
         ]
-        return {"window_days": LOAD_DAYS, "days": days, "hours_known": known, "typical_kwh": round(sum(prof), 1)}
+        return {
+            "window_days": LOAD_DAYS,
+            "days": days,
+            "hours_known": known,
+            "typical_kwh": round(sum(prof), 1),
+            "profile_kw": [round(kw, 3) for kw in prof],
+        }
 
     def _steps(
         self, hours: list[Hour], now: int, k: float, model: SolarModel | None, days: int = OUTLOOK_DAYS
