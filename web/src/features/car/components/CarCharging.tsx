@@ -137,7 +137,7 @@ function CarPlanner({
   return (
     <>
       <CarLevelSlider view={view} levels={levels} now={now} />
-      <SuggestedCharges view={view} now={now} socNow={levels.soc} socTo={levels.target} />
+      <SuggestedCharges view={view} now={now} socNow={levels.committed.soc} socTo={levels.committed.target} />
       {planning && <ChargeForm carId={view.id} car={view.car} levels={levels} now={now} onDone={onPlanned} />}
     </>
   );
@@ -240,8 +240,8 @@ function ChargeForm({
     start: start ? fromLocal(start) : 0,
     amps: num(amps) ?? 0,
     phases: Number(phases),
-    soc_now: levels.soc,
-    soc_to: stop === "level" ? levels.target : null,
+    soc_now: levels.committed.soc,
+    soc_to: stop === "level" ? levels.committed.target : null,
     hours: stop === "time" ? num(hours) : null,
     battery_helps: helps,
   };

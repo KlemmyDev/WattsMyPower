@@ -83,6 +83,8 @@ export function OutlookDays({
               </span>
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px] tabular-nums">
+              <dt className="text-ink-dim">Home use</dt>
+              <dd className="text-right font-medium text-ink">{kWh(d.load + d.car)}</dd>
               <dt className="text-ink-dim">Battery</dt>
               <dd className="text-right font-medium" style={{ color: filled ? COLOR.battery : COLOR.ink }}>
                 {batteryLine(d, now)}

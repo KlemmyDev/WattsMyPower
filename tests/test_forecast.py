@@ -58,6 +58,20 @@ def test_home_use_ignores_a_day_of_garbled_readings(db: Database, service: Forec
     assert sum(profile) == pytest.approx(24 * 0.8)
 
 
+def test_the_home_use_basis_lists_whole_days_and_the_typical_day(db: Database, service: ForecastService) -> None:
+    rows = history()
+    patchy = day_start(NOW, -5)  # a day with only a few hours of readings isn't shown as a day
+    rows = [r for r in rows if not (patchy <= r[0] < patchy + 86400 and time.localtime(r[0]).tm_hour >= 6)]
+    write_5m(db, rows)
+    basis = service.load_basis(NOW)
+    dates = [d["date"] for d in basis["days"]]
+    assert time.strftime("%Y-%m-%d", time.localtime(patchy)) not in dates
+    assert time.strftime("%Y-%m-%d", time.localtime(NOW)) not in dates  # today isn't over
+    assert len(dates) == DAYS - 2 and all(d["kwh"] == pytest.approx(24 * 0.8) for d in basis["days"])
+    assert basis["hours_known"] == 24 and basis["typical_kwh"] == pytest.approx(24 * 0.8)
+    assert basis["window_days"] == 14
+
+
 def test_home_use_counts_negative_readings_as_zero(db: Database, service: ForecastService) -> None:
     write_5m(db, [(ts, pv, -600.0 if time.localtime(ts).tm_hour == 7 else load) for ts, pv, load in history()])
     assert service._load_profile(NOW)[7] == 0.0

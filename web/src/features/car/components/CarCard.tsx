@@ -120,7 +120,8 @@ function NextCharge({ view, now }: { view: CarView; now: number }) {
         <Muted>It's at or above the {target}% it's charged to.</Muted>
       </div>
     );
-  const best = s?.options[0];
+  // The plan for the aim set in the car's details; the first there is (the fastest) when that one can't make it.
+  const best = s?.options.find((o) => o.kind === view.car.car_charge_mode) ?? s?.options[0];
   return (
     <div className="flex flex-col gap-1.5">
       <Eyebrow>Best time to charge</Eyebrow>
@@ -139,7 +140,11 @@ function NextCharge({ view, now }: { view: CarView; now: number }) {
             {s.reachable ? ` by ${when(s.ready_by, now)}` : ` (not ${pct(s.soc_to)} in time)`} · costs{" "}
             {costWords(best.cost)} · {solarWords(best)}
           </Muted>
-          <span className="text-xs text-ink-faint">Aiming for: {MODE[best.kind].label.toLowerCase()}</span>
+          <span className="text-xs text-ink-faint">
+            {s.reachable
+              ? `Aiming for: ${MODE[best.kind].label.toLowerCase()}`
+              : `Starting now at full speed: it can't reach ${pct(s.soc_to)} by ${when(s.ready_by, now)}, so there's no ${MODE[view.car.car_charge_mode].label.toLowerCase()} plan to choose`}
+          </span>
         </>
       )}
     </div>

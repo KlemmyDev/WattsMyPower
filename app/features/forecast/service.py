@@ -51,6 +51,8 @@ DEFAULT_LOAD = [0.4, 0.35, 0.35, 0.35, 0.35, 0.4, 0.8, 1.5, 1.2, 0.7, 0.6, 0.6,
                 0.7, 0.8, 0.7, 0.7, 0.9, 1.4, 2.2, 2.4, 2.0, 1.4, 0.8, 0.5]  # fmt: skip
 
 OUTLOOK_DAYS = 3  # today and the next two: as far as the stored weather forecast reaches
+LOAD_DAYS = 14  # days of home use the forecast's typical day is worked out from
+MIN_LOAD_HOURS = 20  # hours of a day with readings before its home use is shown as a whole day
 MIN_RANGE_DAYS = 7  # days of day-ahead forecast against actual solar before a likely range is given
 
 RAIN_CODES = set(range(51, 68)) | set(range(80, 83)) | set(range(95, 100))
@@ -160,6 +162,8 @@ def summarise_days(steps: list[Hour], now: int, soc0: float) -> list[dict[str, A
                 "from": day[0]["start"],
                 "pv_kwh": round(sum(s["pv_kw"] * s["dur"] for s in day) / 3600, 2),
                 "load_kwh": round(sum(s["load_kw"] * s["dur"] for s in day) / 3600, 2),
+                # Sunlight on flat ground (kWh/m²): what the simple solar model multiplies by its calibration.
+                "sun_kwh_m2": round(sum((s.get("rad") or 0) * s["dur"] for s in day) / 3600, 2),
                 "car_kwh": round(sum(s.get("car_kw", 0.0) * s["dur"] for s in day) / 3600, 2),
                 "import_kwh": round(sum(max(0.0, s["grid_kwh"]) for s in day), 2),
                 "export_kwh": round(sum(max(0.0, -s["grid_kwh"]) for s in day), 2),
@@ -419,21 +423,48 @@ class ForecastService:
             k = sum(a for a, _ in every) / sum(r for _, r in every)
         return min(max(k, 0.05 * pv_kw), 1.2 * pv_kw), round(pairs / 12, 1)
 
+    def _hourly_load(self, now: int) -> list[tuple[str, int, float]]:
+        """(local date, local hour, kW) for each hour of the last LOAD_DAYS days with at least half an hour of data."""
+        rows = self.repo.hourly_load(now - LOAD_DAYS * 86400)
+        return [(d, hr, avg / 1000) for d, hr, avg, n in rows if n >= 6]
+
+    @staticmethod
+    def _profile(hourly: list[tuple[str, int, float]]) -> tuple[list[float], int]:
+        """The typical day (kW for each local hour) and how many of its hours come from the readings."""
+        by_hour: dict[int, list[float]] = defaultdict(list)
+        for _, hr, kw in hourly:
+            by_hour[hr].append(kw)
+        prof = list(DEFAULT_LOAD)
+        for hr, days in by_hour.items():
+            prof[hr] = trimmed_mean(days)
+        return prof, len(by_hour)
+
     def _load_profile(self, now: int) -> list[float]:
-        """Typical home use (kW) for each local hour of day over the last 14 days.
+        """Typical home use (kW) for each local hour of day over the last LOAD_DAYS days.
 
         Each hour's figure is the mean across days after dropping the highest and lowest fifth, so
         a one-off (guests, a long car charge) or a bad reading doesn't set what every day expects,
         while loads that happen most days still count in full.
         """
-        by_hour: dict[int, list[float]] = defaultdict(list)
-        for _, hr, avg, n in self.repo.hourly_load(now - 14 * 86400):
-            if n >= 6:  # at least half an hour of data for that hour
-                by_hour[hr].append(avg / 1000)
-        prof = list(DEFAULT_LOAD)
-        for hr, days in by_hour.items():
-            prof[hr] = trimmed_mean(days)
-        return prof
+        return self._profile(self._hourly_load(now))[0]
+
+    def load_basis(self, now: int) -> dict[str, Any]:
+        """What the home-use forecast is worked out from, to show how it got its figure: each of the last
+        LOAD_DAYS days' home use (whole days only, those with readings for most of their hours, scaled up for
+        the hours missing), how many hours of the typical day come from the readings (the rest are a rough
+        default), and the typical day itself (kWh)."""
+        hourly = self._hourly_load(now)
+        prof, known = self._profile(hourly)
+        by_day: dict[str, list[float]] = defaultdict(list)
+        for d, _, kw in hourly:
+            by_day[d].append(kw)
+        today = time.strftime("%Y-%m-%d", time.localtime(now))
+        days = [
+            {"date": d, "kwh": round(sum(v) * 24 / len(v), 1)}
+            for d, v in sorted(by_day.items())
+            if d != today and len(v) >= MIN_LOAD_HOURS
+        ]
+        return {"window_days": LOAD_DAYS, "days": days, "hours_known": known, "typical_kwh": round(sum(prof), 1)}
 
     def _steps(
         self, hours: list[Hour], now: int, k: float, model: SolarModel | None, days: int = OUTLOOK_DAYS
@@ -530,4 +561,5 @@ class ForecastService:
                 "tomorrow_morning": tomorrow_morning,
             },
             "days": summarise_days(steps, now, soc0),
+            "load_basis": self.load_basis(now),
         }

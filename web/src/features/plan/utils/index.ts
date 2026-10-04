@@ -37,6 +37,8 @@ export type PlanDay = {
   load: number;
   /** Planned car charging (kWh from the wall), still to come. */
   car: number;
+  /** Today only: what's been recorded so far (kWh); the rest of `pv` and `load` is forecast. */
+  soFar: { pv: number; load: number } | null;
   imp: number;
   exp: number;
   /** Solar on 8 in 10 days like it, from how the forecast has done (today's recorded part counts as it is). */
@@ -92,6 +94,7 @@ export function planDays(
       pv: pvSoFar + day.pv_kwh,
       load: (so?.home ?? 0) + day.load_kwh,
       car: day.car_kwh ?? 0,
+      soFar: so ? { pv: so.pv, load: so.home } : null,
       imp: (so?.imp ?? 0) + day.import_kwh,
       exp: (so?.exp ?? 0) + day.export_kwh,
       // No range for a day whose solar is already in.

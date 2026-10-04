@@ -22,6 +22,8 @@ export type ForecastDay = {
   from: number; // when its forecast starts: now for today, midnight otherwise
   pv_kwh: number;
   load_kwh: number;
+  /** Sunlight on flat ground over the day's forecast hours (kWh/m²). */
+  sun_kwh_m2?: number;
   /** Planned car charging that day (kWh from the wall). */
   car_kwh: number;
   import_kwh: number;
@@ -58,6 +60,16 @@ export type Forecast = {
   hours: ForecastHour[];
   /** Today and the next two days, summed up. */
   days: ForecastDay[];
+  /**
+   * What the home-use forecast comes from: the last `window_days` days' home use (whole days only), how many hours
+   * of its typical day come from the readings (the others are a rough default), and that typical day in kWh.
+   */
+  load_basis?: {
+    window_days: number;
+    days: { date: string; kwh: number }[];
+    hours_known: number;
+    typical_kwh: number;
+  };
   summary: {
     pv_kwh_24h: number;
     full_at: number | null;
