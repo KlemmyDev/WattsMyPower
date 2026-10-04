@@ -1,4 +1,4 @@
-import { useMemo, useState, type PointerEvent } from "react";
+import { useMemo, useState, type PointerEvent, type ReactNode } from "react";
 import { priceLabel } from "~/features/amber/utils";
 import type { HistorySeries } from "~/features/common/readings/types";
 import type { ForecastHour } from "~/features/common/weather/types";
@@ -13,6 +13,7 @@ import { useFahrenheit } from "~/features/common/weather/hooks";
 import { degrees, hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import type { WeatherHour } from "~/features/weather/types";
 import { hoursOf } from "~/features/history/utils/day";
+import { FLOW_COLOR, FlowBars } from "~/features/history/components/FlowBars";
 import { MARKER_ROW, MomentMarkers } from "~/features/plan/components/Moments";
 import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
 import { hourEnd, hourKwh, type PlanDay, type Window } from "~/features/plan/utils";
@@ -30,12 +31,19 @@ type Row = {
   pv: number | null;
   load: number | null;
   grid: number | null; // kWh, + from the grid
+  bat: number | null; // kWh, + discharging
   soc: number | null;
   /** Planned car charging (kWh), forecast hours only; the inverter's readings count it in home use. */
   car: number | null;
   h: ForecastHour | null;
 };
 type P = { t: number; v: number };
+/**
+ * What today's hours were forecast to bring, hour by hour from midnight (kW, or kWh in the hour): solar, from the
+ * day-ahead forecast kept with each hour's weather, and home use, the typical day's. Drawn over the hours already
+ * gone, to set against what actually happened.
+ */
+export type Overlay = { pv: (number | null)[]; load: (number | null)[] };
 
 const STROKE = {
   fill: "none",
@@ -51,6 +59,7 @@ function plot(
   soc0: number | null,
   range: [number, number] | null,
   recordedSky: WeatherHour[] | undefined,
+  overlay: Overlay | null,
 ) {
   const start = day.start;
   const span = addDays(start, 1) - start;
@@ -71,6 +80,7 @@ function plot(
         pv: r?.pv ?? null,
         load: r?.load ?? null,
         grid: r?.grid ?? null,
+        bat: r?.bat ?? null,
         soc: r?.soc ?? null,
         car: null,
         h: null,
@@ -82,11 +92,13 @@ function plot(
         pv: h.pv_kwh,
         load: hourKwh(h, h.load_kw),
         grid: h.grid_kwh,
+        // What the battery gave (+) or took: what the house and car used, less solar and the grid.
+        bat: hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh,
         soc: h.soc,
         car: hourKwh(h, h.car_kw ?? 0),
         h,
       });
-    } else rows.push({ t0, t1, pv: null, load: null, grid: null, soc: null, car: null, h: null });
+    } else rows.push({ t0, t1, pv: null, load: null, grid: null, bat: null, soc: null, car: null, h: null });
   }
 
   // Recorded lines from the 5-minute readings before now.
@@ -116,13 +128,23 @@ function plot(
   const loadAhead = ahead("load_kw");
   // Planned car charging, drawn only on a day with some.
   const carAhead = hrs.some((h) => (h.car_kw ?? 0) > 0) ? ahead("car_kw") : [];
+  // The earlier forecast for the hours gone, through the middle of each.
+  const before = (vals: (number | null)[] | undefined): P[] =>
+    !day.today || !vals
+      ? []
+      : vals.flatMap((v, k) => {
+          const t = start + k * 3600 + 1800;
+          return v != null && t <= now ? [{ t, v }] : [];
+        });
+  const pvWas = before(overlay?.pv);
+  const loadWas = before(overlay?.load);
   const socAhead: P[] = hrs.length
     ? [{ t: from, v: soc0 ?? hrs[0].soc }, ...hrs.map((h) => ({ t: Math.min(start + span, hourEnd(h)), v: h.soc }))]
     : [];
 
   const top = Math.max(
     1,
-    ...[...pvPast, ...loadPast, ...loadAhead, ...carAhead].map((p) => p.v),
+    ...[...pvPast, ...loadPast, ...loadAhead, ...carAhead, ...pvWas, ...loadWas].map((p) => p.v),
     ...pvAhead.map((p) => p.v * (range ? range[1] : 1)),
   );
   const mx = top * 1.1;
@@ -164,9 +186,10 @@ function plot(
     loadAhead: path(loadAhead, py),
     carAhead: path(carAhead, py),
     socAhead: path(socAhead, by),
+    pvWas: path(pvWas, py),
+    loadWas: path(loadWas, py),
     band,
     by,
-    gMax: Math.max(0.5, ...rows.map((r) => Math.abs(r.grid ?? 0))) * 1.1,
   };
 }
 
@@ -178,11 +201,14 @@ function RowTooltip({
   width,
   rates,
   marked,
+  was,
 }: {
   row: Row;
   left: number;
   width: number;
   rates: Rates | null;
+  /** A recorded hour's earlier forecast (kWh), with the overlay on. */
+  was: { pv: number | null; load: number | null } | null;
   /** Below the moments' row of numbers (MARKER_ROW). */
   marked: boolean;
 }) {
@@ -211,11 +237,16 @@ function RowTooltip({
         )}
       </div>
       <TooltipRow label="Solar" value={kWh(row.pv)} color={COLOR.solar} />
+      {was?.pv != null && <TooltipRow label="Forecast solar" value={kWh(was.pv)} />}
       <TooltipRow label="Home use" value={kWh(row.load)} color={COLOR.ink} />
+      {was?.load != null && <TooltipRow label="Typical home use" value={kWh(was.load)} />}
       {row.car != null && row.car >= 0.05 && (
         <TooltipRow label="Car charging" value={kWh(row.car)} color={COLOR.lilac} />
       )}
       <TooltipRow label="Battery" value={row.soc == null ? DASH : pct(row.soc)} color={COLOR.battery} />
+      {row.bat != null && Math.abs(row.bat) >= 0.05 && (
+        <TooltipRow label={row.bat > 0 ? "Discharged" : "Charged"} value={kWh(Math.abs(row.bat))} />
+      )}
       <TooltipRow
         label={g >= 0.05 ? "From the grid" : g <= -0.05 ? "To the grid" : "Grid"}
         value={row.grid == null ? DASH : Math.abs(g) >= 0.05 ? kWh(Math.abs(g)) : "Idle"}
@@ -242,6 +273,9 @@ export function PlanChart({
   moments,
   rates,
   recordedSky,
+  overlay = null,
+  legendExtra,
+  markerRow = false,
 }: {
   day: PlanDay;
   series: HistorySeries | undefined;
@@ -254,16 +288,23 @@ export function PlanChart({
   rates: Rates | null;
   /** Today's weather as recorded, for the hours already gone (the forecast has the rest). */
   recordedSky?: WeatherHour[];
+  /** Today: the earlier forecast for the hours gone, drawn over what happened (see Overlay). */
+  overlay?: Overlay | null;
+  /** Something at the end of the legend's row. */
+  legendExtra?: ReactNode;
+  /** Keep the row for the moments' numbers even on a day with none, so charts side by side (or one after another, as
+   * the Overview steps through days) stay the same height. */
+  markerRow?: boolean;
 }) {
   const c = useMemo(
-    () => plot(day, series, now, soc0, range, recordedSky),
-    [day, series, now, soc0, range, recordedSky],
+    () => plot(day, series, now, soc0, range, recordedSky, overlay),
+    [day, series, now, soc0, range, recordedSky, overlay],
   );
   const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
   const left = (t: number) => (c.X(t) / W) * 100;
   // The moments' numbers sit in a row of their own above the best-times strips.
-  const top = moments.length ? MARKER_ROW : 0;
+  const top = moments.length || markerRow ? MARKER_ROW : 0;
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -278,6 +319,7 @@ export function PlanChart({
     ["Battery level", COLOR.battery, "line"],
     ["From grid", COLOR.fromGrid, "box"],
     ["Sent to grid", COLOR.export, "box"],
+    ["Battery in and out", FLOW_COLOR.battery, "box"],
     ...(c.carAhead ? [["Car charging", COLOR.lilac, "line"] as [string, string, "line"]] : []),
   ];
 
@@ -303,6 +345,13 @@ export function PlanChart({
             Likely solar range
           </span>
         )}
+        {(c.pvWas || c.loadWas) && (
+          <span className="flex items-center gap-1.5">
+            <i className="w-3.5 border-t-2 border-dotted border-ink-muted" />
+            Forecast earlier
+          </span>
+        )}
+        {legendExtra && <span className="ml-auto flex items-center">{legendExtra}</span>}
       </div>
       <WeatherRow sky={c.sky} />
       <div
@@ -363,6 +412,24 @@ export function PlanChart({
             <path d={c.pvPast} {...STROKE} strokeWidth="2" style={{ stroke: COLOR.solar }} />
             <path d={c.pvAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
             <path d={c.loadPast} {...STROKE} strokeWidth="1.5" style={{ stroke: COLOR.ink }} />
+            {c.pvWas && (
+              <path
+                d={c.pvWas}
+                {...STROKE}
+                strokeWidth="2"
+                strokeDasharray="1 4"
+                style={{ stroke: alpha(COLOR.solar, 0.85) }}
+              />
+            )}
+            {c.loadWas && (
+              <path
+                d={c.loadWas}
+                {...STROKE}
+                strokeWidth="1.75"
+                strokeDasharray="1 4"
+                style={{ stroke: alpha(COLOR.ink, 0.6) }}
+              />
+            )}
             <path d={c.loadAhead} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
             {c.carAhead && (
               <path d={c.carAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.lilac }} />
@@ -422,28 +489,10 @@ export function PlanChart({
             />
           </svg>
         </div>
-        <div className="relative mt-1 h-[64px] compact:h-12">
-          <div className="absolute inset-x-0 top-1/2 border-t border-fg/12" />
-          {c.rows.map((r) => {
-            const g = r.grid ?? 0;
-            const hh = (Math.abs(g) / c.gMax) * 50;
-            if (Math.abs(g) < 0.05) return null;
-            return (
-              <div
-                key={r.t0}
-                className="absolute rounded-[2px]"
-                style={{
-                  left: `calc(${left(r.t0)}% + 1px)`,
-                  width: `calc(${left(r.t1) - left(r.t0)}% - 2px)`,
-                  top: `${(g > 0 ? 50 - hh : 50).toFixed(2)}%`,
-                  height: `${Math.max(1, hh).toFixed(2)}%`,
-                  background: g > 0 ? COLOR.fromGrid : COLOR.export,
-                  opacity: r.h ? 0.55 : 1,
-                }}
-              />
-            );
-          })}
-        </div>
+        <FlowBars
+          hours={c.rows.map((r) => ({ grid: r.grid, bat: r.bat, forecast: !!r.h }))}
+          className="relative mt-1 h-[64px] compact:h-12"
+        />
         {hover && (
           <RowTooltip
             row={hover}
@@ -451,6 +500,14 @@ export function PlanChart({
             width={width}
             rates={rates}
             marked={top > 0}
+            was={
+              overlay && !hover.h && day.today
+                ? {
+                    pv: overlay.pv[Math.round((hover.t0 - c.start) / 3600)] ?? null,
+                    load: overlay.load[Math.round((hover.t0 - c.start) / 3600)] ?? null,
+                  }
+                : null
+            }
           />
         )}
       </div>

@@ -69,6 +69,8 @@ export type Forecast = {
     days: { date: string; kwh: number }[];
     hours_known: number;
     typical_kwh: number;
+    /** The typical day hour by hour (kW, from midnight): also what today's hours gone were forecast to use. */
+    profile_kw?: number[];
   };
   summary: {
     pv_kwh_24h: number;

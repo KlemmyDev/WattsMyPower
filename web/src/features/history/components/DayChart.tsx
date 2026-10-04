@@ -5,18 +5,27 @@ import { cn } from "~/features/common/ui/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
 import { addDays, midnight } from "~/features/common/time/utils";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { FLOW_COLOR, FlowBars } from "~/features/history/components/FlowBars";
 import type { Hour } from "~/features/history/utils/day";
 
 const W = 1000;
 const H = 220;
+const BH = 64; // the battery level's strip, as the Plan chart has it
 const SOLAR = COLOR.solar;
 const HOME = COLOR.ink;
 const BATTERY = COLOR.battery;
 const FROM_GRID = COLOR.fromGrid;
 const TO_GRID = COLOR.export;
 
-type Row = { t: number; pv: number | null; load: number | null; soc: number | null; grid: number | null };
+type Row = {
+  t: number;
+  pv: number | null;
+  load: number | null;
+  soc: number | null;
+  grid: number | null;
+  bat: number | null; // W, + discharging
+};
 type Key = "pv" | "load" | "soc";
 
 /** Runs of consecutive readings, so gaps in the data show as gaps in the line. */
@@ -40,6 +49,7 @@ function plot(series: HistorySeries) {
     load: series.load_power?.[i] ?? null,
     soc: series.battery_soc?.[i] ?? null,
     grid: series.grid_power?.[i] ?? null,
+    bat: series.battery_power?.[i] ?? null,
   }));
   // The chart's day comes from its own readings, so the previous day stays drawn while the next one loads.
   const start = rows.length ? midnight(rows[0].t) : 0;
@@ -48,7 +58,7 @@ function plot(series: HistorySeries) {
   const mx = Math.max(1000, ...values) * 1.1;
   const X = (t: number) => (((t - start) / span) * W).toFixed(1);
   const Yk = (v: number) => (H - (Math.max(0, v) / mx) * (H - 10)).toFixed(1);
-  const Ys = (v: number) => (H - (v / 100) * (H - 10)).toFixed(1);
+  const Ys = (v: number) => (BH - 2 - (v / 100) * (BH - 4)).toFixed(1);
   const step = rows.length > 1 ? rows[1].t - rows[0].t : 300;
   const line = (pts: Row[], k: Key, fy: (v: number) => string) =>
     pts.map((r, i) => `${i ? "L" : "M"}${X(r.t)} ${fy(r[k] ?? 0)}`).join(" ");
@@ -68,7 +78,7 @@ function plot(series: HistorySeries) {
       left: ((r.t - start) / span) * 100,
       pv: r.pv == null ? null : (+Yk(r.pv) / H) * 100,
       load: r.load == null ? null : (+Yk(r.load) / H) * 100,
-      soc: r.soc == null ? null : (+Ys(r.soc) / H) * 100,
+      soc: r.soc == null ? null : (+Ys(r.soc) / BH) * 100,
     }),
   };
 }
@@ -95,6 +105,9 @@ function ReadingTooltip({ r, step, left, width }: { r: Row; step: number; left: 
         color={HOME}
       />
       <TooltipRow label="Battery" value={pct(r.soc)} color={BATTERY} />
+      {r.bat != null && Math.abs(r.bat) > 50 && (
+        <TooltipRow label={r.bat > 0 ? "Discharging" : "Charging"} value={kW(Math.abs(r.bat))} />
+      )}
       <TooltipRow
         label={g > 50 ? "From the grid" : g < -50 ? "To the grid" : "Grid"}
         value={r.grid == null ? DASH : Math.abs(g) > 50 ? kW(g) : "Idle"}
@@ -121,17 +134,20 @@ export function DayChart({
   hours,
   placeholder,
   top,
+  reserve,
 }: {
   series: HistorySeries | undefined;
   hours: Hour[];
   placeholder: boolean;
   /** Something to show between the legend and the plots, lined up with them (the Overview's weather row). */
   top?: ReactNode;
+  /** The battery's backup reserve (%), marked on its strip. */
+  reserve?: number;
 }) {
   const chart = useMemo(() => series && plot(series), [series]);
   const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
-  const gMax = Math.max(0.5, ...hours.map((h) => Math.abs(h.grid ?? 0))) * 1.1;
+  const by = (v: number) => BH - 2 - (v / 100) * (BH - 4);
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -158,6 +174,7 @@ export function DayChart({
         {[
           ["From grid", FROM_GRID],
           ["Sent to grid", TO_GRID],
+          ["Battery in and out", FLOW_COLOR.battery],
         ].map(([label, color]) => (
           <span key={label} className="flex items-center gap-1.5">
             <i className="size-2.5 rounded-[2px]" style={{ background: color }} />
@@ -211,9 +228,6 @@ export function DayChart({
               {chart.home.map((d, i) => (
                 <path key={i} d={d} {...STROKE} strokeWidth="1.5" style={{ stroke: HOME }} />
               ))}
-              {chart.soc.map((d, i) => (
-                <path key={i} d={d} {...STROKE} strokeWidth="1.5" strokeDasharray="5 5" style={{ stroke: BATTERY }} />
-              ))}
             </svg>
           )}
           {chart && !placeholder && !chart.readings.length && (
@@ -229,34 +243,60 @@ export function DayChart({
                 <>
                   <Dot left={at.left} top={at.pv} color={SOLAR} />
                   <Dot left={at.left} top={at.load} color={HOME} />
-                  <Dot left={at.left} top={at.soc} color={BATTERY} />
                 </>
               );
             })()}
         </div>
-        <div className="relative h-[72px] compact:h-14">
-          <div className="absolute inset-x-0 top-1/2 border-t border-fg/12" />
-          <div className="absolute inset-0 flex gap-0.5">
-            {hours.map((h, i) => {
-              const g = h.grid ?? 0;
-              const hh = (Math.abs(g) / gMax) * 50;
-              return (
-                <div key={i} className="relative min-w-0 flex-1">
-                  {Math.abs(g) >= 0.05 && (
-                    <div
-                      className="absolute inset-x-0 rounded-[2px]"
-                      style={{
-                        top: `${(g > 0 ? 50 - hh : 50).toFixed(2)}%`,
-                        height: `${Math.max(1, hh).toFixed(2)}%`,
-                        background: g > 0 ? FROM_GRID : TO_GRID,
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
+        {reserve != null && (
+          <div className="mt-1 flex items-center justify-end text-[11px] text-ink-dim tabular-nums">
+            Reserve {reserve}%
           </div>
+        )}
+        {/* The battery level on a strip of its own, as the Plan chart draws it: full at the top, the reserve dashed. */}
+        <div className={cn("relative h-16 compact:h-12", reserve == null && "mt-1")}>
+          {chart && (
+            <svg
+              key={chart.start}
+              viewBox={`0 0 ${W} ${BH}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
+            >
+              <line
+                x1="0"
+                x2={W}
+                y1={by(100)}
+                y2={by(100)}
+                vectorEffect="non-scaling-stroke"
+                style={{ stroke: alpha(COLOR.fg, 0.08) }}
+              />
+              {reserve != null && (
+                <line
+                  x1="0"
+                  x2={W}
+                  y1={by(reserve)}
+                  y2={by(reserve)}
+                  strokeDasharray="3 4"
+                  vectorEffect="non-scaling-stroke"
+                  style={{ stroke: alpha(COLOR.fg, 0.3) }}
+                />
+              )}
+              {chart.soc.map((d, i) => (
+                <path key={i} d={d} {...STROKE} strokeWidth="2.25" style={{ stroke: BATTERY }} />
+              ))}
+              <line
+                x1="0"
+                x2={W}
+                y1={BH - 2}
+                y2={BH - 2}
+                vectorEffect="non-scaling-stroke"
+                style={{ stroke: alpha(COLOR.fg, 0.12) }}
+              />
+            </svg>
+          )}
+          {hover && chart && <Dot left={chart.at(hover).left} top={chart.at(hover).soc} color={BATTERY} />}
         </div>
+        <FlowBars hours={hours} className="relative mt-1 h-[72px] compact:h-14" />
         {hover && chart && <ReadingTooltip r={hover} step={chart.step} left={chart.at(hover).left} width={width} />}
       </div>
       <div className="relative h-3.5">

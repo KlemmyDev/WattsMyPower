@@ -70,6 +70,7 @@ def test_the_home_use_basis_lists_whole_days_and_the_typical_day(db: Database, s
     assert len(dates) == DAYS - 2 and all(d["kwh"] == pytest.approx(24 * 0.8) for d in basis["days"])
     assert basis["hours_known"] == 24 and basis["typical_kwh"] == pytest.approx(24 * 0.8)
     assert basis["window_days"] == 14
+    assert basis["profile_kw"] == [pytest.approx(0.8)] * 24
 
 
 def test_home_use_counts_negative_readings_as_zero(db: Database, service: ForecastService) -> None:
