@@ -53,11 +53,14 @@ transaction, with the same `ts`, so readers never see half a poll.
   Response: `{"readings": [...], "more": true|false}` (`more`: there are further rows after these).
 - `GET /v1/status`:
   ```json
-  {"version": 1, "poll_interval": 60, "started_at": 1790850000, "oldest_ts": 1759310000, "latest_ts": 1790852400,
+  {"version": 1, "poll_interval": 60, "started_at": 1790850000, "next_poll": 1790852460.0,
+   "oldest_ts": 1759310000, "latest_ts": 1790852400,
    "devices": {"hybrid": {"host": "192.168.0.244", "driver": "sungrow.sh_rs", "last_success": 1790852400.2, "error": null,
                           "info": {"input": {"4990": 16691, "5000": 3597}, "holding": {"13059": 50}}},
                "pv2": {"host": "192.168.0.10", "driver": "sungrow.sg_d", "last_success": 1790852400.9, "error": null, "info": {"input": {}}}}}
   ```
+  `next_poll` is when the next poll starts: a poll interval after the last one started, or the backoff after
+  a failed one. It's null while no hybrid is connected, and in the past while a poll is under way.
   `info` holds the most recent info registers read. `pv2` is absent when no second inverter is connected,
   and `devices` is empty until a hybrid is (nothing is read without one). Each device also reports its
   `port`, `unit` and `settings`.

@@ -165,6 +165,33 @@ def test_pv2_failures_dont_back_off(cfg: Config, store: Store) -> None:
     assert all(59 < s <= 60 for s in sleeps)
 
 
+def test_next_poll_is_when_the_loop_wakes(cfg: Config, store: Store) -> None:
+    poller, hybrid, _, clock = make(cfg, store)
+    assert poller.next_poll is None  # not started
+    hybrid.fail = True
+    due: list[tuple[float, float]] = []
+
+    async def sleep(s: float) -> None:
+        assert poller.next_poll is not None
+        due.append((s, poller.next_poll - clock.t))
+        hybrid.fail = False
+        if len(due) >= 2:
+            raise Stop
+
+    poller._sleep = sleep
+    with pytest.raises(Stop):
+        asyncio.run(poller._run())
+    assert due[0] == (60, 60)  # after a failed poll: its backoff
+    assert due[1][0] == pytest.approx(due[1][1], abs=0.01) and 59 < due[1][1] <= 60  # the interval from its start
+
+
+def test_no_next_poll_without_a_hybrid(cfg: Config, store: Store) -> None:
+    poller = Poller(cfg, store, None)
+    poller.next_poll = 1.0
+    run_loop(poller, [], 1)
+    assert poller.next_poll is None
+
+
 def test_the_loop_prunes_old_rows(cfg: Config) -> None:
     store = Store(cfg.db_path, retention_days=1)
     store.migrate()

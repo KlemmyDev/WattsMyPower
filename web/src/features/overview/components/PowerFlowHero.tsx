@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { carsQuery } from "~/features/car/api";
 import { carName, paintOf } from "~/features/car/utils";
 import type { Forecast } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
+import { useLive } from "~/features/common/live/hooks/useLive";
+import { clock, duration } from "~/features/common/formatting/utils/date";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { batteryState, gridVerb } from "~/features/common/energy/utils";
@@ -115,14 +117,12 @@ function Scene({
               Live from your inverter · updated every minute
             </span>
           </div>
-          <div
-            className={cn(
-              "flex items-center gap-2 rounded-full py-1.5 pr-3 pl-2 text-[13px] font-medium backdrop-blur-[8px]",
-              dark ? "bg-white/14 text-white" : "bg-white/75 text-[#111111]",
-            )}
-          >
-            <Icon name={liveWeatherIcon(wx)} size={16} />
-            <span>{wx.label}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={chip(dark)}>
+              <Icon name={liveWeatherIcon(wx)} size={16} />
+              <span>{wx.label}</span>
+            </div>
+            <NextPoll dark={dark} />
           </div>
         </div>
       </div>
@@ -189,6 +189,59 @@ function Scene({
         </ValuePill>
       </div>
     </>
+  );
+}
+
+const chip = (dark: boolean) =>
+  cn(
+    "flex items-center gap-2 rounded-full py-1.5 pr-3 pl-2 text-[13px] font-medium backdrop-blur-[8px]",
+    dark ? "bg-white/14 text-white" : "bg-white/75 text-[#111111]",
+  );
+
+/** Counts down to the collector's next read of the inverters, ticking on its own so the scene doesn't re-render each second. */
+function NextPoll({ dark }: { dark: boolean }) {
+  const st = useLive();
+  // Its own clock, to the fraction of a second: whole seconds a second apart would run up to two behind.
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now() / 1000), 250);
+    return () => clearInterval(id);
+  }, []);
+  const next = st?.next_poll;
+  if (!st || next == null) return null;
+  const left = next - now;
+  // Long past: the status has stopped arriving (the collector's unreachable), so there's nothing to count to.
+  if (left < -30) return null;
+  const interval = st.poll_interval || 60;
+  const retry = !!st.error;
+  const share = Math.min(1, Math.max(0, left / interval));
+  return (
+    <div
+      className={chip(dark)}
+      title={
+        retry
+          ? "The inverter didn't answer; the next try backs off"
+          : `The inverters are read every ${duration(interval)}`
+      }
+    >
+      <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden className="-rotate-90">
+        <circle cx={8} cy={8} r={6} fill="none" stroke="currentColor" strokeOpacity={0.2} strokeWidth={2} />
+        <circle
+          cx={8}
+          cy={8}
+          r={6}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          pathLength={1}
+          strokeDasharray={`${share} 1`}
+          className="transition-[stroke-dasharray] duration-250 ease-linear"
+        />
+      </svg>
+      <span className="tabular-nums" role="timer" aria-live="off">
+        {left > 0 ? `${retry ? "Retry" : "Next poll"} in ${clock(left)}` : "Polling now…"}
+      </span>
+    </div>
   );
 }
 

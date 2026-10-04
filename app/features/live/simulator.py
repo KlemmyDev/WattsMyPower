@@ -57,5 +57,7 @@ class Simulator:
             await asyncio.to_thread(self.readings.insert, conn, ts, snap)
             self.live.latest = {"ts": ts, **snap}
             self.live.last_success, self.live.last_error = time.time(), None
+            wait = max(0.0, self.config.poll_interval - (time.monotonic() - started))
+            self.live.next_poll = time.time() + wait
             self.live.publish()
-            await asyncio.sleep(max(0.0, self.config.poll_interval - (time.monotonic() - started)))
+            await asyncio.sleep(wait)

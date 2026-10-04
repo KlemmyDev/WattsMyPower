@@ -167,6 +167,7 @@ class FakeCollector:
     def status(self) -> dict[str, Any]:
         return {
             "oldest_ts": min(r["ts"] for r in self.feed),
+            "next_poll": 183.0,
             "devices": {
                 "hybrid": {"host": "inverter", "driver": "sungrow.sh_rs", "last_success": 123.0, "error": None,
                            "info": {"input": {"5000": 0x0D0F, "5001": 50, "5002": 0}, "holding": {"13059": 50}}},
@@ -202,6 +203,7 @@ def test_ingest_writes_readings_and_status(db: Database, config: Config) -> None
     assert status["model"] == "SH5.0RS" and status["system"]["battery_reserve"] == 5.0
     assert status["system"]["pv2"]["host"] == "dongle" and status["system"]["pv2"]["behind_meter"] is True
     assert status["snapshot"]["ts"] == DAY + 300
+    assert status["next_poll"] == 183.0
     # The first rollup has nothing before it, so 2 kW of export for 5 minutes stands in; the
     # second is what the meter's lifetime counter moved. The Today card and the day agree.
     assert status["snapshot"]["daily_export"] == round(2000 * 300 / 3.6e6 + 0.1, 2)

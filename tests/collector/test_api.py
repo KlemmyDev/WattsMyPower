@@ -116,7 +116,7 @@ def test_without_wait_an_empty_feed_answers_at_once(client: TestClient) -> None:
 def test_status_shape(client: TestClient) -> None:
     body = client.get("/v1/status", headers=AUTH).json()
     assert body["version"] == 1 and body["poll_interval"] == 60 and isinstance(body["started_at"], int)
-    assert body["oldest_ts"] is None and body["latest_ts"] is None
+    assert body["oldest_ts"] is None and body["latest_ts"] is None and body["next_poll"] is None
     assert body["devices"] == {
         "hybrid": {
             "host": "10.0.0.1",

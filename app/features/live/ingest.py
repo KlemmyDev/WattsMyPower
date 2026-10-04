@@ -84,6 +84,7 @@ class CollectorIngest:
 
     def apply_status(self, status: dict[str, Any]) -> None:
         """The collector's view of the devices: connection state and their details."""
+        self.live.next_poll = status.get("next_poll")
         devices = status.get("devices") or {}
         h = devices.get("hybrid")
         if h is None:  # none connected yet (or it was removed): nothing to show about one
@@ -145,8 +146,10 @@ class CollectorIngest:
         more = True  # catching up: don't wait for new polls until there's nothing left
         while True:
             try:
-                self.apply_status(await asyncio.to_thread(self.client.status))
                 rows, more = await asyncio.to_thread(self.client.readings, cursor, BATCH, 0 if more else WAIT)
+                # After the wait, so what's published with a poll's readings is the status after it
+                # (when it was read, and when the next one is due).
+                self.apply_status(await asyncio.to_thread(self.client.status))
                 if rows:
                     cursor = await asyncio.to_thread(self._ingest, conn, rows)
                     if more:
