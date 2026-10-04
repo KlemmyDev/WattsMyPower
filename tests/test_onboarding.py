@@ -147,13 +147,18 @@ def test_a_fresh_install_is_guided_until_it_finishes(
     body = client.patch("/api/onboarding", json={"steps": {"inverter": "done"}}).json()
     assert body["show"] is True and body["steps"] == {"inverter": "done"}
 
+    # The system step saves the array size; that doesn't end the guide either.
+    assert client.put("/api/settings", json={"pv_kw": 13.2}).is_success
+    body = client.patch("/api/onboarding", json={"steps": {"system": "done"}}).json()
+    assert body["show"] is True and body["steps"] == {"inverter": "done", "system": "done"}
+
     client.patch("/api/onboarding", json={"steps": {"plan": "skipped", "location": "done"}})
     body = client.patch("/api/onboarding", json={"steps": {"billing": "done"}, "complete": True}).json()
     assert body == {
         "complete": True,
         "dismissed": False,
         "show": False,
-        "steps": {"inverter": "done", "plan": "skipped", "location": "done", "billing": "done"},
+        "steps": {"inverter": "done", "system": "done", "plan": "skipped", "location": "done", "billing": "done"},
     }
     assert open_app().get("/api/onboarding").json()["show"] is False
 

@@ -111,6 +111,45 @@ def test_the_live_snapshot_gets_todays_metered_totals(readings: ReadingsReposito
     assert snap["daily_export"] == 1.2 and snap["daily_import"] == 0.0
 
 
+def test_a_day_first_read_part_way_through_counts_the_grid_from_midnight(readings: ReadingsRepository) -> None:
+    """Connected at 2 pm: the inverter's daily counters already hold the morning's import and export,
+    as daily_pv holds its solar. Without them, the morning's export would come out as home use."""
+    two_pm = MIDNIGHT + 14 * 3600
+    conn = readings.db.connect()
+    readings.insert_many(conn, [
+        (two_pm + i * 60, {"grid_power": -600.0, "daily_pv": 40.0, "daily_import": 3.0, "daily_export": 25.0 + 0.01 * i,
+                           "total_import": 2000.0, "total_pv_export": 9000.0, "total_export": 500 + 0.01 * i})
+        for i in range(60)
+    ])  # fmt: skip
+    conn.close()
+    (day,) = readings.daily(MIDNIGHT, MIDNIGHT + 86400)
+    # The morning (25.04 kWh at the first rollup) and then the lifetime counter's steps: 0.55 kWh.
+    assert day["daily_export"] == round(25.04 + 0.01 * 59 - 0.01 * 4, 2)
+    assert day["daily_import"] == 3.0
+    snap = readings.with_metered_today({"ts": two_pm + 3540, "daily_export": 0.0, "daily_import": 0.0})
+    assert snap["daily_export"] == day["daily_export"]
+
+
+def test_a_day_read_from_midnight_doesnt_add_the_daily_counter(readings: ReadingsRepository) -> None:
+    """Read through midnight: the counters say it all, and a just-past-midnight daily counter (maybe not yet
+    reset) is left alone."""
+    _day_of_export(readings, MIDNIGHT, grid_power=-500.0, daily_export=30.0, total_pv_export=9000.0,
+                   total_export=lambda i: 100 + 0.01 * i)  # fmt: skip
+    (day,) = readings.daily(MIDNIGHT, MIDNIGHT + 86400)
+    assert day["daily_export"] == round(0.01 * 124 - 0.01 * 4, 2)
+
+
+def test_a_late_start_doesnt_take_an_impossible_daily_counter(readings: ReadingsRepository) -> None:
+    """A garbled daily counter (more than the grid could carry since midnight) falls back to grid power."""
+    one_am = MIDNIGHT + 3600
+    conn = readings.db.connect()
+    readings.insert_many(conn, [(one_am + i * 60, {"grid_power": -600.0, "daily_export": 6000.0, "total_pv_export": 9000.0,
+                                                   "total_export": 500.0 + 0.01 * i}) for i in range(10)])  # fmt: skip
+    conn.close()
+    (day,) = readings.daily(MIDNIGHT, MIDNIGHT + 86400)
+    assert day["daily_export"] == round(600 * 300 / 3.6e6 + 0.05, 2)
+
+
 def test_export_starts_with_a_header(readings: ReadingsRepository) -> None:
     _fill(readings, RECENT, 2, pv_power=1.0)
     rows = list(readings.export_rows(RECENT, RECENT + 600, rollup=False))

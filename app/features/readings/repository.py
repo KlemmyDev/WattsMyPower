@@ -27,6 +27,8 @@ DAILY_COLS = [
     "daily_pv2",
 ]
 KWH_PER_W_ROLLUP = ROLLUP / 3.6e6  # one rollup of 1 W, in kWh
+# How long after midnight the inverter's daily counters are trusted to have reset (see `daily`).
+SINCE_MIDNIGHT = 600
 DEFAULT_FIELDS = ["pv_power", "load_power", "grid_power", "battery_power", "battery_soc"]
 
 _INSERT = f"INSERT OR REPLACE INTO samples (ts, {', '.join(COLS)}) VALUES (?{', ?' * len(COLS)})"
@@ -158,8 +160,15 @@ class ReadingsRepository:
         power stands in. Export counters only count from when total_pv_export was recorded too:
         before that, total_export held the hybrid's own panels' export, not the meter's.
         A day whose counter didn't move while grid power says it should have uses grid power.
+
+        A day whose readings start part-way through (the day the inverter was connected, or after an
+        outage overnight) has nothing to count the hours before from, while its solar and battery
+        figures are the inverter's own daily counters, kept since midnight. Leaving those hours' grid
+        out made everything exported before the first reading look like home use. So the first rollup
+        of such a day takes the inverter's daily import/export counters as they stand, which counted
+        from midnight (on a unit that leaves them at 0, nothing is added).
         """
-        cols = "ts, total_import, total_export, total_pv_export, grid_power"
+        cols = "ts, total_import, total_export, total_pv_export, grid_power, daily_import, daily_export"
         with self.db.reading() as conn:
             prev = conn.execute(f"SELECT {cols} FROM samples_5m WHERE ts < ? ORDER BY ts DESC LIMIT 1", (start,))
             rows = [
@@ -170,10 +179,12 @@ class ReadingsRepository:
         # Per day and direction: [kWh from counters, grid kWh where counters were used, grid kWh
         # otherwise, rollups with anything to go on].
         days: dict[str, list[list[float]]] = {}
-        for p, (ts, imp, exp, pv_exp, grid) in zip([None, *rows], rows, strict=False):
+        for p, (ts, imp, exp, pv_exp, grid, day_imp, day_exp) in zip([None, *rows], rows, strict=False):
             if ts < start:
                 continue
-            date = time.strftime("%Y-%m-%d", time.localtime(ts))
+            lt = time.localtime(ts)
+            date = time.strftime("%Y-%m-%d", lt)
+            first = p is None or time.strftime("%Y-%m-%d", time.localtime(p[0])) != date
             d = days.setdefault(date, [[0.0] * 4, [0.0] * 4])
             g = grid or 0.0
             by_power = (max(g, 0.0) * KWH_PER_W_ROLLUP, max(-g, 0.0) * KWH_PER_W_ROLLUP)
@@ -182,11 +193,23 @@ class ReadingsRepository:
                 (p[1], imp) if p else (None, None),
                 (p[2], exp) if p and p[3] is not None and pv_exp is not None else (None, None),
             )
+            # The inverter's own count since midnight, for a day whose readings start late. Not in
+            # the first SINCE_MIDNIGHT seconds, when a lagging inverter clock may not have reset it yet.
+            since = lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec
+            today = (
+                (day_imp, day_exp if pv_exp is not None else None)
+                if first and since >= SINCE_MIDNIGHT
+                else (None, None)
+            )
+            most = MAX_W / 1000 * since / 3600
             for i, (before, after) in enumerate(counters):
                 step = after - before if before is not None and after is not None else None
                 if step is not None and 0 <= step <= cap:
                     d[i][0] += step
                     d[i][1] += by_power[i]
+                    d[i][3] += 1
+                elif today[i] is not None and 0 <= today[i] <= most:
+                    d[i][2] += max(today[i], by_power[i])  # a counter left at 0 still has this rollup's power
                     d[i][3] += 1
                 elif grid is not None:
                     d[i][2] += by_power[i]

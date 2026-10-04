@@ -10,6 +10,7 @@ import { BillingStep } from "~/features/onboarding/components/BillingStep";
 import { InverterStep } from "~/features/onboarding/components/InverterStep";
 import { LocationStep } from "~/features/onboarding/components/LocationStep";
 import { PlanStep } from "~/features/onboarding/components/PlanStep";
+import { SystemStep } from "~/features/onboarding/components/SystemStep";
 import { Progress, type StepNav, type StepProps } from "~/features/onboarding/components/StepParts";
 import { useMarkOnboarding } from "~/features/onboarding/hooks/useMarkOnboarding";
 import type { StepId, StepMark } from "~/features/onboarding/types";
@@ -17,6 +18,7 @@ import { resumeAt, STEPS } from "~/features/onboarding/utils";
 
 const BODIES: Record<StepId, ComponentType<StepProps>> = {
   inverter: InverterStep,
+  system: SystemStep,
   plan: PlanStep,
   location: LocationStep,
   billing: BillingStep,
@@ -24,7 +26,7 @@ const BODIES: Record<StepId, ComponentType<StepProps>> = {
 
 /**
  * The set-up guide (/welcome), shown after the account is created on a new install: connect the
- * inverter, the electricity plan, the location and the billing period. Every step can be skipped, and
+ * inverter, the system details it can't report (the solar array's size), the electricity plan, the location and the billing period. Every step can be skipped, and
  * the whole thing put off; Finish opens the Overview. The step is in the URL, so Back in the browser
  * goes to the previous one.
  */
@@ -91,7 +93,7 @@ export function WelcomePage({ step }: { step: StepId | undefined }) {
             {finished ? "Set-up guide" : `Welcome${session?.username ? `, ${session.username}` : ""}`}
           </h1>
           <p className="m-0 text-[15px] leading-6 text-pretty text-ink-muted">
-            Four quick steps to get your dashboard showing your system, your costs and your forecast. Skip anything
+            Five quick steps to get your dashboard showing your system, your costs and your forecast. Skip anything
             you'd rather do later: it's all in Settings too.
           </p>
         </div>

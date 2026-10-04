@@ -7,7 +7,7 @@ import { STEPS } from "~/features/onboarding/utils";
 
 /** What a step can do: move on (marking it done or skipped), or go back. */
 export type StepNav = {
-  /** "Step 2 of 4". */
+  /** "Step 2 of 5". */
   position: string;
   last: boolean;
   done: () => void;

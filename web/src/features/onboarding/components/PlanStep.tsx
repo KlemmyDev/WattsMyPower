@@ -11,7 +11,7 @@ import { EDITOR_START, editorReducer } from "~/features/settings/utils";
 const SAVE = "Save and continue";
 
 /**
- * Step 2: the electricity plan, from Energy Made Easy or typed in. The same search and rates form as
+ * Step 3: the electricity plan, from Energy Made Easy or typed in. The same search and rates form as
  * Settings → Tariffs, but the rates only appear once a plan is loaded (or asked for), and the step's own
  * button saves them.
  */
