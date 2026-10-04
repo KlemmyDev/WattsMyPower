@@ -26,7 +26,7 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { cn } from "~/features/common/ui/utils";
 
 type Plannable = Omit<SuggestedCharge, "kind">;
@@ -51,34 +51,17 @@ function usePlanSuggestion(car: number, s: Suggestions | undefined) {
   return { plan, pending: addPlan.isPending, error: addPlan.isError ? errorMessage(addPlan.error) : "" };
 }
 
-/** A time it could be needed by, for the "Needed by" list. */
+/** A time it could be needed by, for the "Needed by" list: keyed by its date, so a choice stays on its day. */
 type ReadyOption = { value: string; label: string; ts: number };
 
-const QUARTER = 900;
-
 /**
- * The times to offer for "Needed by", soonest first: in an hour or a few (to the next quarter hour), the car's usual
- * time and the one after (from its details), and tomorrow morning and evening. A time offered twice keeps its first
- * name; one less than 15 minutes away (the least the planner takes) isn't offered.
+ * The days to offer for "Needed by", each at the car's usual time: today while that's still an hour away, then
+ * tomorrow and each day after it for a week ("Tomorrow 07:00", "Tuesday 07:00"...).
  */
-export function readyOptions(now: number, minutes: number, days: CarView["car"]["car_days"]): ReadyOption[] {
-  const soon = (h: number) => Math.ceil((now + h * 3600) / QUARTER) * QUARTER;
-  const tomorrow = addDays(midnight(now), 1);
-  const next = nextReadyBy(now, minutes, days);
-  const after = nextReadyBy(now, minutes, days, 1);
-  const all: ReadyOption[] = [
-    { value: "next", label: `${when(next, now)} (usual)`, ts: next },
-    { value: "after", label: `${when(after, now)} (the one after)`, ts: after },
-    ...[1, 2, 4, 8].map((h) => ({
-      value: `in${h}`,
-      label: `In ${h} ${h === 1 ? "hour" : "hours"} (${hhmm(soon(h))})`,
-      ts: soon(h),
-    })),
-    { value: "morning", label: `Tomorrow morning (${hhmm(tomorrow + 7 * 3600)})`, ts: tomorrow + 7 * 3600 },
-    { value: "evening", label: `Tomorrow evening (${hhmm(tomorrow + 17 * 3600)})`, ts: tomorrow + 17 * 3600 },
-  ];
-  const seen = new Set<number>();
-  return all.filter((o) => o.ts - now >= QUARTER && !seen.has(o.ts) && seen.add(o.ts)).sort((a, b) => a.ts - b.ts);
+export function readyOptions(now: number, minutes: number): ReadyOption[] {
+  return Array.from({ length: 8 }, (_, d) => addDays(midnight(now), d) + minutes * 60)
+    .filter((ts) => ts - now >= 3600)
+    .map((ts) => ({ value: dateKey(ts), label: when(ts, now), ts }));
 }
 
 /**
@@ -98,12 +81,14 @@ export function SuggestedCharges({
   socTo: number;
 }) {
   const c = view.car;
-  const [ready, setReady] = useState("next");
   const [mode, setMode] = useState<ChargeMode>(c.car_charge_mode);
-  const options = readyOptions(now, c.car_ready_by, c.car_days);
+  const options = readyOptions(now, c.car_ready_by);
+  // The next day it's usually needed (on the days set in its details), to start with.
+  const usual = dateKey(nextReadyBy(now, c.car_ready_by, c.car_days));
+  const [ready, setReady] = useState(usual);
   const [other, setOther] = useState(() => toLocal(nextReadyBy(now, c.car_ready_by, c.car_days, 1) + 10.5 * 3600));
-  // A relative choice keeps its time as the clock moves on; one that has gone by falls back to the usual time.
-  const picked = options.find((o) => o.value === ready) ?? options.find((o) => o.value === "next") ?? options[0];
+  // A day that has gone by (or is under an hour away) falls back to the next usual one.
+  const picked = options.find((o) => o.value === ready) ?? options.find((o) => o.value === usual) ?? options[0];
 
   const req: SuggestRequest = {
     soc_now: socNow ?? undefined,

@@ -18,13 +18,15 @@ export function levelSource(l: CarLevel, now: number): string {
   return `You said ${pct(l.given)} ${at}${l.charged ? ", plus planned charging since" : ""}`;
 }
 
-const SAVE_AFTER = 600; // ms after the last move before a level is saved
+const KEYS_SETTLE = 600; // ms after the last key press before a level moved with the keys is saved
 
 /**
- * The car's charge now and the level it's charged to, as the slider moves them. Each is saved a moment after it
- * stops moving: the charge as the car's level now, the target as the car's "charged to" level. The figures follow
- * the server again once nothing is waiting to be saved. The target never sits below the charge: moving the charge
- * past it takes it along.
+ * The car's charge now and the level it's charged to, as the slider moves them. Moving a handle only changes what's
+ * shown; it's saved when it's let go (`commit`), or a moment after the last key press: the charge as the car's
+ * level now, the target as the car's "charged to" level. `committed` holds the figures as last let go, for what's
+ * worked out from them (the best times to charge), so a drag doesn't ask for them at every step. The figures
+ * follow the server again once nothing is waiting to be saved. The target never sits below the charge: moving the
+ * charge past it takes it along.
  */
 export function useCarLevels(view: CarView) {
   const given = view.level ? Math.round(view.level.soc) : null;
@@ -35,17 +37,19 @@ export function useCarLevels(view: CarView) {
   const { update } = useCarChange();
   const waiting = useRef<{ soc?: number; target?: number }>({});
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [committed, setCommitted] = useState({ soc: given, target: saved });
 
   const flush = () => {
+    clearTimeout(timer.current);
     const w = waiting.current;
     waiting.current = {};
+    if (w.soc == null && w.target == null) return;
+    setCommitted((c) => ({ soc: w.soc ?? c.soc, target: w.target ?? c.target }));
     if (w.soc != null) level.mutate({ car: view.id, soc: w.soc });
     if (w.target != null) update.mutate({ id: view.id, car_target_soc: w.target });
   };
-  const later = (w: { soc?: number; target?: number }) => {
+  const hold = (w: { soc?: number; target?: number }) => {
     waiting.current = { ...waiting.current, ...w };
-    clearTimeout(timer.current);
-    timer.current = setTimeout(flush, SAVE_AFTER);
   };
   // Leaving the page part way: save what was set rather than drop it.
   const flushRef = useRef(flush);
@@ -60,26 +64,37 @@ export function useCarLevels(view: CarView) {
     [],
   );
   useEffect(() => {
-    if (waiting.current.soc == null) setSoc(given);
+    if (waiting.current.soc != null) return;
+    setSoc(given);
+    setCommitted((c) => ({ ...c, soc: given }));
   }, [given]);
   useEffect(() => {
-    if (waiting.current.target == null) setTarget(saved);
+    if (waiting.current.target != null) return;
+    setTarget(saved);
+    setCommitted((c) => ({ ...c, target: saved }));
   }, [saved]);
 
   return {
     soc,
     target,
+    committed,
     setSoc: (v: number) => {
       setSoc(v);
       if (v > target) {
         setTarget(v);
-        later({ soc: v, target: v });
-      } else later({ soc: v });
+        hold({ soc: v, target: v });
+      } else hold({ soc: v });
     },
     setTarget: (v: number) => {
       const t = Math.max(1, v, soc ?? 0);
       setTarget(t);
-      later({ target: t });
+      hold({ target: t });
+    },
+    /** Save what's been moved: straight away when a handle is let go, `settle` ms after the last key press. */
+    commit: (settle = 0) => {
+      clearTimeout(timer.current);
+      if (settle) timer.current = setTimeout(flush, settle);
+      else flush();
     },
     saving: level.isPending || update.isPending,
     error: level.isError ? errorMessage(level.error) : update.isError ? errorMessage(update.error) : "",
@@ -128,7 +143,14 @@ export function CarLevelSlider({
           {range ? ` · ${range} · charged to ${target}%` : " · the car's charge isn't known yet"}
         </span>
       )}
-      <ChargeSlider soc={soc} target={target} onSoc={levels.setSoc} onTarget={levels.setTarget} />
+      <ChargeSlider
+        soc={soc}
+        target={target}
+        onSoc={levels.setSoc}
+        onTarget={levels.setTarget}
+        onRelease={() => levels.commit()}
+        onKeyed={() => levels.commit(KEYS_SETTLE)}
+      />
       {levels.error ? (
         <HelpText tone="bad">{levels.error}</HelpText>
       ) : (
@@ -159,12 +181,18 @@ export function ChargeSlider({
   target,
   onSoc,
   onTarget,
+  onRelease,
+  onKeyed,
   className,
 }: {
   soc: number | null;
   target: number;
   onSoc: (v: number) => void;
   onTarget: (v: number) => void;
+  /** A handle dragged (or the bar pressed) has been let go. */
+  onRelease: () => void;
+  /** A handle has moved with a key. */
+  onKeyed: () => void;
   className?: string;
 }) {
   const bar = useRef<HTMLDivElement>(null);
@@ -203,6 +231,12 @@ export function ChargeSlider({
     if (to == null) return;
     e.preventDefault();
     set(t, to);
+    onKeyed();
+  };
+  const release = () => {
+    if (!drag) return;
+    setDrag(null);
+    onRelease();
   };
 
   const thumb = (t: Thumb, value: number, label: string, text: string) => (
@@ -232,8 +266,8 @@ export function ChargeSlider({
       className={cn("relative h-7 cursor-pointer touch-pan-y select-none", className)}
       onPointerDown={down}
       onPointerMove={(e) => drag && set(drag, at(e))}
-      onPointerUp={() => setDrag(null)}
-      onPointerCancel={() => setDrag(null)}
+      onPointerUp={release}
+      onPointerCancel={release}
     >
       <div className="absolute inset-x-0 top-1/2 h-2.5 -translate-y-1/2 overflow-hidden rounded-full bg-track">
         <div
