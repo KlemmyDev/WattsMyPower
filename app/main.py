@@ -31,6 +31,7 @@ from app.features.plans.router import router as plans_router
 from app.features.readings.router import router as readings_router
 from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
+from app.features.storage.router import router as storage_router
 from app.features.tariffs.router import router as tariffs_router
 from app.features.weather.router import router as weather_router
 
@@ -43,6 +44,7 @@ ROUTERS = [
     tariffs_router,
     amber_router,
     settings_router,
+    storage_router,
     forecast_router,
     weather_router,
     insights_router,

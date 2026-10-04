@@ -75,4 +75,12 @@ transaction, with the same `ts`, so readers never see half a poll.
   "driver", "input", "connected"?}]}`. `found` lists every address with Modbus TCP port 502 open: `driver`
   is the first reader whose probe recognised it (null if none did), with the words its probe read; addresses
   of connected devices are marked `connected` and not probed.
+- `GET /v1/storage`: the database measured, for the dashboard's Settings → Database. Reads every page, so it
+  can take a few seconds on a large database. `{"path", "files": {"database", "wal", "shm"}, "page_size",
+  "pages", "free_pages", "schema_version", "sqlite_version", "journal_mode", "measured", "retention_days",
+  "tables": [{"name", "rows", "data_bytes", "index_bytes", "payload_bytes", "unused_bytes", "pages", "oldest",
+  "newest", "recent_rows", "parts": [{"label", "rows", "share", "bytes"}], "columns": [{"name", "type"}],
+  "indexes": [{"name", "bytes"}]}]}`. Sizes are bytes; `measured` is false (and the per-table sizes null) when
+  SQLite was built without `dbstat`. `oldest` / `newest` / `recent_rows` (rows in the last 7 days) are for
+  dated tables; `parts` breaks `readings` down by device.
 - `GET /healthz` (no token): `{"ok": true, "fresh": <hybrid read within max(120, poll_interval * 6) s>}`.

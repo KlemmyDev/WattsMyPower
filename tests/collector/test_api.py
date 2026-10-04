@@ -169,3 +169,21 @@ def test_mock_mode_backfills_an_empty_database(cfg: Config) -> None:
         poll(c)
         body = c.get(f"/v1/readings?since={status['latest_ts']}", headers=AUTH).json()
         assert body["readings"][0]["device"] == "hybrid" and "13045" in body["readings"][0]["input"]
+
+
+def test_storage_measures_the_database(client: TestClient) -> None:
+    """GET /v1/storage: the files, and each table's size and rows, readings broken down by device."""
+    assert client.get("/v1/storage").status_code == 401
+    poll(client)
+    body = client.get("/v1/storage", headers=AUTH).json()
+    assert body["retention_days"] == 365 and body["measured"] is True
+    assert body["files"]["database"] > 0 and body["schema_version"] >= 1
+    tables = {t["name"]: t for t in body["tables"]}
+    readings = tables["readings"]
+    assert readings["rows"] == 1 and readings["recent_rows"] == 1
+    assert readings["data_bytes"] >= body["page_size"] and readings["index_bytes"] > 0  # the (ts, device) key
+    assert [(p["label"], p["rows"], p["share"]) for p in readings["parts"]] == [
+        ("Hybrid inverter (sungrow.sh_rs)", 1, 1)
+    ]
+    assert {c["name"] for c in readings["columns"]} == {"ts", "device", "driver", "input", "holding"}
+    assert {"devices", "kv", "sqlite_schema"} <= tables.keys()

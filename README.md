@@ -13,6 +13,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (SH-RS / S
 - **Imported history:** bring in the days before it was set up (or fill gaps) from iSolarCloud's 5-minute power-curve exports, under **Settings → Integrations → Sungrow → Import history from iSolarCloud**, which also explains what to export.
 - **A second, older Sungrow inverter** (for example an SG5K-D on an AC-coupled system) can be added, so both systems count.
 - **Alerts** to your phone (ntfy or Pushover) or any webhook: the inverter not answering, the battery low or not charging in the sun, solar underperforming, and an optional daily summary.
+- **Your data, in the open:** **Settings → Database** shows everything stored, in both databases (the dashboard's and the collector's): each table's size on disk and its indexes, rows, the dates it covers, how long it's kept, how fast it's growing and where it levels off, what's in it (inverter by inverter, recorded or imported, forecast or past weather), and its columns. Saved settings show their names only, never what's in them.
 - Works on desktop and phones.
 
 ## What you need
@@ -381,6 +382,7 @@ collector/              the collector service: reads the inverters, stores raw r
   PROTOCOL.md           the feed's contract: devices, register ranges, rows, endpoints
   devices/              the device interface, the reader registry (drivers.py), Modbus helpers, and a
                         package per brand with a reader per model family (sungrow/sh_rs.py, sungrow/sg_d.py)
+  storage.py            measures its database for Settings → Database (a copy of app's storage/measure.py)
 app/
   main.py               the FastAPI app (create_app), its middleware and routers
   container.py          builds every service once from the config; routers get them via app/dependencies.py
@@ -409,6 +411,8 @@ app/
                         delivery (channels.py), and the background task that checks them (service.py)
     auth/               sign-in: the household account, sessions, and the /api guard
     onboarding/         the first-run set-up guide's progress, and spotting installs already set up
+    storage/            Settings → Database: both databases measured table by table (measure.py) and
+                        described in plain words (catalog.py)
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
