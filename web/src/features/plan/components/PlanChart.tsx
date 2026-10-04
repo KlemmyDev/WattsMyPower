@@ -14,6 +14,7 @@ import { degrees, hourIcon, hourIconColor } from "~/features/common/weather/util
 import type { WeatherHour } from "~/features/weather/types";
 import { hoursOf } from "~/features/history/utils/day";
 import { MARKER_ROW, MomentMarkers } from "~/features/plan/components/Moments";
+import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
 import { hourEnd, hourKwh, type PlanDay, type Window } from "~/features/plan/utils";
 import type { Moment } from "~/features/plan/utils/moments";
 import type { Rates } from "~/features/plan/utils/rates";
@@ -35,8 +36,6 @@ type Row = {
   h: ForecastHour | null;
 };
 type P = { t: number; v: number };
-/** An hour's weather, from the forecast or (earlier today) as recorded. */
-type Sky = { ts: number; temp: number | null; code: number | null; is_day: number | null };
 
 const STROKE = {
   fill: "none",
@@ -146,11 +145,8 @@ function plot(
           .join(" ")} Z`
       : "";
 
-  // The weather every three hours, from the hour in the middle of each: the forecast's, or what was recorded.
-  const sky = Array.from({ length: 8 }, (_, k): Sky | null => {
-    const t = start + (k * 3 + 1) * 3600;
-    return day.hours.find((h) => h.ts === t) ?? recordedSky?.find((h) => h.ts === t) ?? null;
-  });
+  // The weather every three hours: the forecast's, or (earlier today) what was recorded.
+  const sky = skyEvery3h(start, day.hours, recordedSky);
 
   return {
     start,
@@ -259,7 +255,6 @@ export function PlanChart({
   /** Today's weather as recorded, for the hours already gone (the forecast has the rest). */
   recordedSky?: WeatherHour[];
 }) {
-  const fahrenheit = useFahrenheit();
   const c = useMemo(
     () => plot(day, series, now, soc0, range, recordedSky),
     [day, series, now, soc0, range, recordedSky],
@@ -309,21 +304,7 @@ export function PlanChart({
           </span>
         )}
       </div>
-      <div className="grid grid-cols-8" aria-label="Weather every three hours">
-        {c.sky.map((h, k) => {
-          const icon = h?.code != null ? hourIcon({ code: h.code, is_day: h.is_day ?? 1 }) : null;
-          return (
-            <div key={k} title={hourLabel(k * 3 + 1)} className="flex flex-col items-center gap-1">
-              <span style={{ color: icon ? hourIconColor(icon) : undefined }} className="flex h-[18px] items-center">
-                {icon ? <Icon name={icon} size={18} /> : <span className="text-xs text-ink-faint">–</span>}
-              </span>
-              <span className="text-xs text-ink-soft tabular-nums">
-                {h?.temp != null ? degrees(h.temp, fahrenheit) : "–"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <WeatherRow sky={c.sky} />
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
         style={{ paddingTop: top + 22 }}

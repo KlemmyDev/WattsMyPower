@@ -1,4 +1,4 @@
-import { useMemo, useState, type PointerEvent } from "react";
+import { useMemo, useState, type PointerEvent, type ReactNode } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { ChartTooltip, nearest, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
@@ -120,10 +120,13 @@ export function DayChart({
   series,
   hours,
   placeholder,
+  top,
 }: {
   series: HistorySeries | undefined;
   hours: Hour[];
   placeholder: boolean;
+  /** Something to show between the legend and the plots, lined up with them (the Overview's weather row). */
+  top?: ReactNode;
 }) {
   const chart = useMemo(() => series && plot(series), [series]);
   const [hover, setHover] = useState<Row | null>(null);
@@ -162,6 +165,7 @@ export function DayChart({
           </span>
         ))}
       </div>
+      {top}
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
         onPointerMove={onPoint}
