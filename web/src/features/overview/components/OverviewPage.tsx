@@ -8,7 +8,6 @@ import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { useNow } from "~/features/common/time/hooks";
 import { greeting } from "~/features/common/time/utils";
 import { BatteryCard } from "~/features/overview/components/BatteryCard";
-import { Next24Card } from "~/features/overview/components/Next24Card";
 import { PowerFlowHero } from "~/features/overview/components/PowerFlowHero";
 import { TodayCard } from "~/features/overview/components/TodayCard";
 import { TodayEnergyCard } from "~/features/overview/components/TodayEnergyCard";
@@ -26,11 +25,10 @@ export function OverviewPage() {
         <PowerFlowHero p={p} s={s} f={f} now={now} />
         <BatteryCard p={p} s={s} f={f} now={now} />
         <TodayCard tariff={s?.tariff} now={now} />
-        <TodayEnergyCard p={p} now={now} />
+        <TodayEnergyCard p={p} s={s} f={f} now={now} prices={prices} />
         <CarCards now={now} />
         {prices && <AmberPricesCard prices={prices} now={now} />}
       </div>
-      <Next24Card s={s} f={f} now={now} prices={prices} />
     </>
   );
 }
