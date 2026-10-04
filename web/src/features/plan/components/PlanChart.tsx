@@ -12,7 +12,7 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import { degrees, hourIcon, hourIconColor } from "~/features/common/weather/utils";
 import type { WeatherHour } from "~/features/weather/types";
-import { HALF_HOUR, hoursOf, slotsOf } from "~/features/history/utils/day";
+import { HALF_HOUR, slotsOf } from "~/features/history/utils/day";
 import { FLOW_COLOR, FlowBars, type Flow } from "~/features/history/components/FlowBars";
 import { MARKER_ROW, MomentMarkers } from "~/features/plan/components/Moments";
 import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
@@ -24,7 +24,7 @@ const W = 1000;
 const PH = 200; // solar and home use
 const BH = 64; // battery level
 
-/** One hour of the day as the chart reads it: recorded (today, before now) or forecast. */
+/** Half an hour of the day as the chart reads it (energy in kWh): recorded (today, before now) or forecast. */
 type Row = {
   t0: number;
   t1: number;
@@ -33,8 +33,9 @@ type Row = {
   grid: number | null; // kWh, + from the grid
   bat: number | null; // kWh, + discharging
   soc: number | null;
-  /** Planned car charging (kWh), forecast hours only; the inverter's readings count it in home use. */
+  /** Planned car charging (kWh), forecast half hours only; the inverter's readings count it in home use. */
   car: number | null;
+  /** The forecast hour it's part of; null for one recorded. */
   h: ForecastHour | null;
 };
 type P = { t: number; v: number };
@@ -66,12 +67,15 @@ function plot(
   const from = day.today ? now : start;
   const X = (t: number) => ((Math.min(start + span, Math.max(start, t)) - start) / span) * W;
 
-  // Hour by hour: recorded hours from the readings, the rest from the forecast.
-  const recorded = day.today ? hoursOf(series, start) : [];
+  // Half hour by half hour: those gone (today) from the readings, the rest from the forecast. The forecast is hourly,
+  // so each hour is shared over its halves (the part of one it covers, for the half hour under way), and its battery
+  // level is drawn straight from the hour before's to its own.
+  const recorded = day.today ? slotsOf(series, start, HALF_HOUR) : [];
   const rows: Row[] = [];
-  for (let t0 = start, i = 0; t0 < start + span; t0 += 3600, i++) {
-    const t1 = t0 + 3600;
-    const h = day.hours.find((x) => x.ts === t0) ?? null;
+  for (let t0 = start, i = 0; t0 < start + span; t0 += HALF_HOUR, i++) {
+    const t1 = t0 + HALF_HOUR;
+    const k = day.hours.findIndex((x) => x.ts <= t0 && t0 < x.ts + 3600);
+    const h = k >= 0 ? day.hours[k] : null;
     if (day.today && t1 <= now) {
       const r = recorded[i];
       rows.push({
@@ -86,16 +90,20 @@ function plot(
         h: null,
       });
     } else if (h) {
+      const len = Math.max(1, hourEnd(h) - h.start);
+      const share = Math.max(0, Math.min(t1, hourEnd(h)) - Math.max(t0, h.start)) / len;
+      const before = k > 0 ? day.hours[k - 1].soc : (soc0 ?? h.soc);
+      const done = Math.min(1, Math.max(0, (Math.min(t1, hourEnd(h)) - h.start) / len));
       rows.push({
-        t0: h.start,
+        t0,
         t1,
-        pv: h.pv_kwh,
-        load: hourKwh(h, h.load_kw),
-        grid: h.grid_kwh,
+        pv: h.pv_kwh * share,
+        load: hourKwh(h, h.load_kw) * share,
+        grid: h.grid_kwh * share,
         // What the battery gave (+) or took: what the house and car used, less solar and the grid.
-        bat: hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh,
-        soc: h.soc,
-        car: hourKwh(h, h.car_kw ?? 0),
+        bat: (hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh) * share,
+        soc: before + (h.soc - before) * done,
+        car: hourKwh(h, h.car_kw ?? 0) * share,
         h,
       });
     } else rows.push({ t0, t1, pv: null, load: null, grid: null, bat: null, soc: null, car: null, h: null });
@@ -167,19 +175,8 @@ function plot(
           .join(" ")} Z`
       : "";
 
-  // The grid and battery bars every half hour: from the readings for the half hours gone, else each forecast hour
-  // shared over its halves (the part of one it covers, for the half hour under way).
-  const halves = day.today ? slotsOf(series, start, HALF_HOUR) : [];
-  const flows: Flow[] = Array.from({ length: Math.round(span / HALF_HOUR) }, (_, k) => {
-    const a = start + k * HALF_HOUR;
-    if (day.today && a + HALF_HOUR <= now) return { grid: halves[k]?.grid ?? null, bat: halves[k]?.bat ?? null };
-    const h = hrs.find((x) => x.ts <= a && a < x.ts + 3600);
-    if (!h) return { grid: null, bat: null };
-    const covered = Math.max(0, Math.min(a + HALF_HOUR, hourEnd(h)) - Math.max(a, h.start));
-    const share = covered / Math.max(1, hourEnd(h) - h.start);
-    const bat = hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh;
-    return { grid: h.grid_kwh * share, bat: bat * share, forecast: true };
-  });
+  // The grid and battery bars, a half hour each.
+  const flows: Flow[] = rows.map((r) => ({ grid: r.grid, bat: r.bat, forecast: !!r.h }));
 
   // The weather every three hours: the forecast's, or (earlier today) what was recorded.
   const sky = skyEvery3h(start, day.hours, recordedSky);
@@ -208,6 +205,13 @@ function plot(
   };
 }
 
+/** The earlier forecast for half of hour `k` (kWh): half the hour's solar, and half an hour of its typical use. */
+function halfOf(o: Overlay, k: number) {
+  const pv = o.pv[k];
+  const load = o.load[k];
+  return { pv: pv == null ? null : pv / 2, load: load == null ? null : load / 2 };
+}
+
 const WINDOW_COLOR: Record<Window["kind"], string> = { spare: COLOR.export, avoid: COLOR.bad, paid: COLOR.good };
 
 function RowTooltip({
@@ -233,8 +237,9 @@ function RowTooltip({
   const g = row.grid ?? 0;
   // What the hour's grid power is priced at: feed-in while it exports, the buy price otherwise.
   const selling = g <= -0.05;
-  const price = h && rates ? (selling ? rates.sell : rates.buy)(h.start, hourEnd(h)) : null;
-  const name = selling ? "Feed-in" : h && rates ? (rates.name(h.start, hourEnd(h)) ?? "Grid price") : null;
+  const from = h ? Math.max(row.t0, h.start) : row.t0;
+  const price = h && rates ? (selling ? rates.sell : rates.buy)(from, row.t1) : null;
+  const name = selling ? "Feed-in" : h && rates ? (rates.name(from, row.t1) ?? "Grid price") : null;
   return (
     <ChartTooltip left={left} flip={left > 60} width={width} className={marked ? "top-[48px]" : "top-[22px]"}>
       <div className="flex items-end justify-between gap-2 font-medium text-ink">
@@ -333,9 +338,9 @@ export function PlanChart({
     ["Home use", COLOR.ink, "line"],
     ["Battery level", COLOR.battery, "line"],
     ["From grid", COLOR.fromGrid, "box"],
+    ["Battery charge", FLOW_COLOR.charge, "box"],
     ["Sent to grid", COLOR.export, "box"],
     ["Battery discharge", FLOW_COLOR.discharge, "box"],
-    ["Battery charge", FLOW_COLOR.charge, "box"],
     ...(c.carAhead ? [["Car charging", COLOR.lilac, "line"] as [string, string, "line"]] : []),
   ];
 
@@ -359,12 +364,6 @@ export function PlanChart({
           <span className="flex items-center gap-1.5">
             <i className="size-2.5 rounded-[2px]" style={{ background: alpha(COLOR.solar, 0.22) }} />
             Likely solar range
-          </span>
-        )}
-        {(c.pvWas || c.loadWas) && (
-          <span className="flex items-center gap-1.5">
-            <i className="w-3.5 border-t-2 border-dotted border-ink-muted" />
-            Forecast earlier
           </span>
         )}
         {legendExtra && <span className="ml-auto flex items-center">{legendExtra}</span>}
@@ -428,23 +427,12 @@ export function PlanChart({
             <path d={c.pvPast} {...STROKE} strokeWidth="2" style={{ stroke: COLOR.solar }} />
             <path d={c.pvAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
             <path d={c.loadPast} {...STROKE} strokeWidth="1.5" style={{ stroke: COLOR.ink }} />
+            {/* The earlier forecast for the hours gone, drawn as the forecast is: the legend's "Forecast" covers both. */}
             {c.pvWas && (
-              <path
-                d={c.pvWas}
-                {...STROKE}
-                strokeWidth="2"
-                strokeDasharray="1 4"
-                style={{ stroke: alpha(COLOR.solar, 0.85) }}
-              />
+              <path d={c.pvWas} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
             )}
             {c.loadWas && (
-              <path
-                d={c.loadWas}
-                {...STROKE}
-                strokeWidth="1.75"
-                strokeDasharray="1 4"
-                style={{ stroke: alpha(COLOR.ink, 0.6) }}
-              />
+              <path d={c.loadWas} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
             )}
             <path d={c.loadAhead} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
             {c.carAhead && (
@@ -513,14 +501,7 @@ export function PlanChart({
             width={width}
             rates={rates}
             marked={top > 0}
-            was={
-              overlay && !hover.h && day.today
-                ? {
-                    pv: overlay.pv[Math.round((hover.t0 - c.start) / 3600)] ?? null,
-                    load: overlay.load[Math.round((hover.t0 - c.start) / 3600)] ?? null,
-                  }
-                : null
-            }
+            was={overlay && !hover.h && day.today ? halfOf(overlay, Math.floor((hover.t0 - c.start) / 3600)) : null}
           />
         )}
       </div>

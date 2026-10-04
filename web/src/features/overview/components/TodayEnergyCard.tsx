@@ -412,7 +412,7 @@ function DayPlanChart({
 
 /**
  * Today's chart, as the Plan page draws it: recorded so far, the forecast (dashed) for the rest, the weather and the
- * key moments. "Compare with forecast" (under the figures) adds, over the hours gone, what they were forecast to bring (dotted): solar
+ * key moments. "Compare with forecast" (under the figures) adds, over the hours gone, what they were forecast to bring (dashed, as the forecast is): solar
  * from the day-ahead forecast kept with each hour's weather, home use from the typical day.
  */
 function TodayPlanChart({
