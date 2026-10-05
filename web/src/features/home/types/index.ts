@@ -77,6 +77,8 @@ export type HomeDevice = {
   kind: DeviceKind;
   model: string | null;
   hidden: boolean;
+  /** The group it's shown in on the Home page, with the others in it as one ("Study"); null: on its own. */
+  group: string | null;
   now: DeviceNow | null;
   last_run: HomeRun | null;
   /** It can be switched on and off from here. */

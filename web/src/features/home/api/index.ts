@@ -66,8 +66,17 @@ export const findHomeDevices = (id: string) =>
 
 export const disconnectHome = (id: string) => apiSend<HomeOverview>("DELETE", `home/integrations/${id}`);
 
-export const updateDevice = ({ id, ...changes }: { id: number; name?: string; kind?: string; hidden?: boolean }) =>
-  apiSend<HomeOverview>("PATCH", `home/devices/${id}`, changes);
+export const updateDevice = ({
+  id,
+  ...changes
+}: {
+  id: number;
+  name?: string;
+  kind?: string;
+  hidden?: boolean;
+  /** A group's name, or null to take it out of its group. */
+  group?: string | null;
+}) => apiSend<HomeOverview>("PATCH", `home/devices/${id}`, changes);
 
 /** Switch a device on or off. A fridge or freezer is only switched off with `confirm`. */
 export const switchDevice = ({ id, on, confirm }: { id: number; on: boolean; confirm?: boolean }) =>

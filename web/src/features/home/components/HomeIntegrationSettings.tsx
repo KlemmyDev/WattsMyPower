@@ -12,7 +12,8 @@ import { cn } from "~/features/common/ui/utils";
 import { deviceRawQuery, homeHintsQuery, homeQuery } from "~/features/home/api";
 import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeIntegration, HomeOverview } from "~/features/home/types";
-import { integrationIcon, kindIcon, nowLine } from "~/features/home/utils";
+import { GroupInput } from "~/features/home/components/GroupInput";
+import { groupNames, integrationIcon, kindIcon, nowLine, suggestedGroup } from "~/features/home/utils";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
@@ -222,8 +223,19 @@ function Properties({ device }: { device: HomeDevice }) {
   );
 }
 
-/** A device the account brought: rename it, say what it is, keep it out of the breakdown, see what it sends. */
-function DeviceRow({ device, kinds }: { device: HomeDevice; kinds: HomeOverview["kinds"] }) {
+/**
+ * A device the account brought: rename it, say what it is, put it in a group, keep it out of the breakdown, see what
+ * it sends.
+ */
+function DeviceRow({
+  device,
+  kinds,
+  groups,
+}: {
+  device: HomeDevice;
+  kinds: HomeOverview["kinds"];
+  groups: Map<string, number>;
+}) {
   const { update } = useHomeChange();
   const [name, setName] = useState(device.name);
   const [raw, setRaw] = useState(false);
@@ -259,6 +271,15 @@ function DeviceRow({ device, kinds }: { device: HomeDevice; kinds: HomeOverview[
           </option>
         ))}
       </Select>
+      <GroupInput
+        key={device.group ?? ""}
+        className="w-[190px]"
+        value={device.group}
+        groups={groups}
+        suggestion={suggestedGroup(device.name)}
+        disabled={update.isPending}
+        onChange={(group) => update.mutate({ id: device.id, group })}
+      />
       <label className="flex items-center gap-2 text-[13px] text-ink-muted">
         <Switch
           on={!device.hidden}
@@ -289,6 +310,7 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
   const { data, isPending, error } = useQuery(homeQuery);
   const integration = data?.integrations.find((i) => i.id === id);
   const devices = (data?.devices ?? []).filter((d) => d.integration === id);
+  const groups = groupNames(data?.devices ?? []); // a group can hold devices from any integration
   return (
     <>
       <SubPageHeader
@@ -323,13 +345,13 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
               title="Devices"
               sub={
                 devices.length
-                  ? "Name each one, and say what it is: a smart plug can be set as the appliance it powers, so its runs are recorded. Turn one out of the breakdown to leave it off the Home page."
+                  ? "Name each one, and say what it is: a smart plug can be set as the appliance it powers, so its runs are recorded. Put plugs in the same room in a group, and the Home page shows them as one. Turn one out of the breakdown to leave it off the Home page."
                   : "Its devices appear here after the first reading, within a minute or so."
               }
             />
           </div>
           {devices.map((d) => (
-            <DeviceRow key={d.id} device={d} kinds={data.kinds} />
+            <DeviceRow key={d.id} device={d} kinds={data.kinds} groups={groups} />
           ))}
         </SettingsCard>
       )}
