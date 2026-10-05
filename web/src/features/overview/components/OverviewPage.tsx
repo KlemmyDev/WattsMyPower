@@ -2,6 +2,7 @@ import { AmberPricesCard } from "~/features/amber/components/AmberPricesCard";
 import { CarCards } from "~/features/car/components/CarCard";
 import { useAmberPrices } from "~/features/amber/hooks";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { RunningNowCard } from "~/features/home/components/RunningNowCard";
 import { useForecast } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -24,6 +25,7 @@ export function OverviewPage() {
       <div className="grid grid-cols-12 gap-5">
         <PowerFlowHero p={p} s={s} f={f} now={now} />
         <BatteryCard p={p} s={s} f={f} now={now} />
+        <RunningNowCard />
         <TodayCard tariff={s?.tariff} now={now} />
         <TodayEnergyCard p={p} s={s} f={f} now={now} prices={prices} />
         <CarCards now={now} />

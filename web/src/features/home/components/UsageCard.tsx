@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { hourLabel, shortDay } from "~/features/common/formatting/utils/date";
-import { kWh } from "~/features/common/formatting/utils/number";
+import { kWh, money } from "~/features/common/formatting/utils/number";
 import { Card } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { Segmented } from "~/features/common/ui/components/Segmented";
@@ -38,30 +38,65 @@ function axisLabel(t: number, i: number, n: number, bucket: "hour" | "day") {
   return i % 5 === 0 || i === n - 1 ? String(d.getDate()) : null;
 }
 
+/** "a, b and c". */
+const listed = (parts: string[]) =>
+  parts.length < 2 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+
+/**
+ * What the period cost, in a line: the biggest devices' parts of it, everything else, and the supply charges. "Your
+ * home cost $4.25 today: the Dryer $1.10, the Fridge $0.60, everything else $1.50 and $1.05 in supply charges."
+ */
+function costLine(usage: HomeUsage, devices: HomeUsage["devices"], rangeWords: string) {
+  const c = usage.total.cost;
+  if (c.import < 0.01)
+    return `Your home cost ${money(c.supply)} ${rangeWords}, all of it supply charges: everything it used came from your panels and battery.`;
+  const top = [...devices].filter((d) => d.cost >= 0.01).sort((a, b) => b.cost - a.cost);
+  const named = top.slice(0, 3).map((d) => `${d.name} ${money(d.cost)}`);
+  if (top.length > 3) named.push(`your other devices ${money(top.slice(3).reduce((a, d) => a + d.cost, 0))}`);
+  const parts = [...named, `everything else ${money(c.other)}`];
+  return `Your home cost ${money(c.import + c.supply)} ${rangeWords}: ${listed(parts)}, and ${money(c.supply)} in supply charges.`;
+}
+
 /**
  * Where the home's power went: everything the home used, each device's part of it, and what no device measures
- * ("everything else"). The share as one bar with its key, then the same split hour by hour, or day by day.
+ * ("everything else"), with what it cost. The share as one bar with its key, then the same split hour by hour, or
+ * day by day. Each part of the key hides or shows its part of the chart (double-click: only it), so one room's use
+ * can be seen on its own.
  */
 export function UsageCard({
   usage,
   colors,
   range,
+  rangeWords,
   onRange,
 }: {
   usage: HomeUsage | undefined;
   colors: Map<number, string>;
   range: Range;
+  /** The period in words, for the cost line: "today", "in 7 days". */
+  rangeWords: string;
   onRange: (r: Range) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [off, setOff] = useState<Set<number>>(new Set()); // parts hidden from the chart (0: everything else)
   const devices = (usage?.devices ?? []).filter((d) => colors.has(d.id));
   const total = usage?.total;
   const parts = [
-    ...devices.map((d) => ({ id: d.id, label: d.name, kwh: d.total, color: colors.get(d.id)! })),
-    ...(total?.other != null ? [{ id: 0, label: "Everything else", kwh: total.other, color: OTHER_COLOR }] : []),
+    ...devices.map((d) => ({ id: d.id, label: d.name, kwh: d.total, cost: d.cost, color: colors.get(d.id)! })),
+    ...(total?.other != null
+      ? [{ id: 0, label: "Everything else", kwh: total.other, cost: total.cost.other, color: OTHER_COLOR }]
+      : []),
   ];
   const whole = total?.home ?? null;
   const sum = parts.reduce((a, p) => a + p.kwh, 0);
+  const toggle = (id: number) =>
+    setOff((o) => {
+      const next = new Set(o);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next.size === parts.length ? new Set() : next; // hiding the last one shows them all again
+    });
+  const only = (id: number) => setOff(new Set(parts.map((p) => p.id).filter((p) => p !== id)));
 
   return (
     <Card aria-labelledby="h-usage" className="col-span-12 gap-6">
@@ -86,14 +121,24 @@ export function UsageCard({
                 {whole != null ? kWh(whole) : "—"}
               </span>
             </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] text-ink-muted">Cost</span>
+              <span className="text-[40px] leading-11 font-light tracking-[-1.5px] tabular-nums">
+                {money(usage.total.cost.import + usage.total.cost.supply)}
+              </span>
+            </div>
             <div className="flex flex-col gap-1 pb-1.5 text-sm text-ink-muted tabular-nums">
               <span>
                 <b className="font-semibold text-ink">{kWh(total?.measured ?? 0)}</b> measured by your devices
                 {whole ? ` (${share(total?.measured ?? 0, whole)})` : ""}
               </span>
+              {usage.total.cost.credit > 0 && <span>{money(usage.total.cost.credit)} earned from feed-in</span>}
               {whole == null && <span>No inverter readings in this period, so only what the devices measured</span>}
             </div>
           </div>
+          {usage.total.cost.import + usage.total.cost.supply > 0 && (
+            <p className="m-0 -mt-2 text-sm text-pretty text-ink-muted">{costLine(usage, devices, rangeWords)}</p>
+          )}
 
           {sum > 0 && (
             <div className="flex flex-col gap-3">
@@ -105,23 +150,59 @@ export function UsageCard({
                 {parts
                   .filter((p) => p.kwh > 0)
                   .map((p) => (
-                    <span key={p.id} style={{ flexGrow: p.kwh, background: p.color }} className="min-w-[3px]" />
+                    <span
+                      key={p.id}
+                      style={{ flexGrow: p.kwh, background: p.color }}
+                      className={cn("min-w-[3px] transition-opacity", off.has(p.id) && "opacity-25")}
+                    />
                   ))}
               </div>
-              <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-6 gap-y-2 p-0">
+              <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-1 p-0">
                 {parts.map((p) => (
-                  <li key={p.id} className="flex items-center gap-2 text-sm tabular-nums">
-                    <Swatch color={p.color} size={10} />
-                    <span className="min-w-0 flex-1 truncate text-ink-muted">{p.label}</span>
-                    <span className="font-medium">{kWh(p.kwh)}</span>
-                    <span className="w-10 text-right text-ink-faint">{share(p.kwh, whole) ?? ""}</span>
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      aria-pressed={!off.has(p.id)}
+                      title="Hide or show it in the chart (double-click: only it)"
+                      onClick={() => toggle(p.id)}
+                      onDoubleClick={() => only(p.id)}
+                      className={cn(
+                        "-mx-1.5 flex w-[calc(100%+12px)] cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-1.5 py-1 text-left font-sans text-sm text-ink tabular-nums hover:bg-surface-raised",
+                        off.has(p.id) && "opacity-45",
+                      )}
+                    >
+                      <Swatch color={p.color} size={10} />
+                      <span className={cn("min-w-0 flex-1 truncate text-ink-muted", off.has(p.id) && "line-through")}>
+                        {p.label}
+                      </span>
+                      <span className="font-medium">{kWh(p.kwh)}</span>
+                      <span className="w-12 text-right text-ink-faint">{p.cost >= 0.005 ? money(p.cost) : ""}</span>
+                      <span className="w-9 text-right text-ink-faint">{share(p.kwh, whole) ?? ""}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
+              {off.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setOff(new Set())}
+                  className="cursor-pointer self-start border-0 bg-transparent p-0 font-sans text-[13px] text-brand hover:underline"
+                >
+                  Show everything
+                </button>
+              )}
             </div>
           )}
 
-          <Bars usage={usage} devices={devices} colors={colors} hover={hover} setHover={setHover} />
+          <Bars
+            usage={usage}
+            devices={devices.filter((d) => !off.has(d.id))}
+            other={!off.has(0)}
+            filtered={off.size > 0}
+            colors={colors}
+            hover={hover}
+            setHover={setHover}
+          />
         </>
       )}
     </Card>
@@ -131,20 +212,27 @@ export function UsageCard({
 function Bars({
   usage,
   devices,
+  other,
+  filtered,
   colors,
   hover,
   setHover,
 }: {
   usage: HomeUsage;
+  /** The devices shown. */
   devices: HomeUsage["devices"];
+  /** Everything else is shown. */
+  other: boolean;
+  /** Some parts are hidden: the chart is scaled to what's shown, rather than the home's whole use. */
+  filtered: boolean;
   colors: Map<number, string>;
   hover: number | null;
   setHover: (i: number | null) => void;
 }) {
   const [width, setWidth] = useState(0);
   const n = usage.t.length;
-  const height = (i: number) =>
-    Math.max(usage.home[i] ?? 0, devices.reduce((a, d) => a + d.kwh[i], 0) + (usage.other[i] ?? 0));
+  const shown = (i: number) => devices.reduce((a, d) => a + d.kwh[i], 0) + (other ? (usage.other[i] ?? 0) : 0);
+  const height = (i: number) => (filtered ? shown(i) : Math.max(usage.home[i] ?? 0, shown(i)));
   const top = niceMax(Math.max(0, ...usage.t.map((_, i) => height(i))));
   const pc = (v: number) => `${Math.max(0, (v / top) * 100)}%`;
   const h = hover != null ? hover : null;
@@ -193,7 +281,7 @@ function Bars({
                   />
                 ) : null,
               )}
-              {(usage.other[i] ?? 0) > 0 && (
+              {other && (usage.other[i] ?? 0) > 0 && (
                 <span
                   className="w-full flex-none rounded-t-[4px]"
                   style={{ height: pc(usage.other[i]!), background: OTHER_COLOR }}
@@ -210,9 +298,10 @@ function Bars({
               .map((d) => (
                 <TooltipRow key={d.id} label={d.name} value={kWh(d.kwh[h])} color={colors.get(d.id)} />
               ))}
-            {usage.other[h] != null && (
+            {other && usage.other[h] != null && (
               <TooltipRow label="Everything else" value={kWh(usage.other[h])} color={OTHER_COLOR} />
             )}
+            {filtered && <TooltipRow label="Shown" value={kWh(shown(h))} />}
             <TooltipRow label="Used at home" value={usage.home[h] != null ? kWh(usage.home[h]) : "—"} />
           </ChartTooltip>
         )}

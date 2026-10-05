@@ -151,6 +151,12 @@ const weighted = (parts: Used[], value: (u: Used) => number | null) => {
   return runs ? counted.reduce((a, u) => a + value(u)! * u.runs, 0) / runs : null;
 };
 
+/** The share of parts' energy that came from the panels or the battery, together. */
+const solarShare = (parts: Used[]) => {
+  const total = parts.reduce((a, u) => a + u.total, 0);
+  return total > 0 ? parts.reduce((a, u) => a + (u.solar_share ?? 0) * u.total, 0) / total : null;
+};
+
 /** The breakdown with each group's members added up into one, standing in by the group's id and named for it. */
 export function groupUsage(usage: HomeUsage, items: HomeItem[]): HomeUsage {
   const byId = new Map(usage.devices.map((u) => [u.id, u]));
@@ -168,6 +174,8 @@ export function groupUsage(usage: HomeUsage, items: HomeItem[]): HomeUsage {
         runs: parts.reduce((a, u) => a + u.runs, 0),
         run_kwh: weighted(parts, (u) => u.run_kwh),
         run_minutes: weighted(parts, (u) => u.run_minutes),
+        cost: parts.reduce((a, u) => a + u.cost, 0),
+        solar_share: solarShare(parts),
       },
     ];
   });

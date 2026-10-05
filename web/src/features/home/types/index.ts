@@ -108,8 +108,19 @@ export type HomeUsage = {
     runs: number;
     run_kwh: number | null;
     run_minutes: number | null;
+    /** What it cost ($): its share of what came from the grid, at the rate of the time. */
+    cost: number;
+    /** The share of its energy that came from the panels or the battery (null: it used nothing). */
+    solar_share: number | null;
   }[];
-  total: { home: number | null; measured: number; other: number | null };
+  total: {
+    home: number | null;
+    measured: number;
+    other: number | null;
+    /** What the period cost, as Bills prices it ($): the import, split between the devices and everything else, the
+     * daily supply charges, and the feed-in credit. */
+    cost: { import: number; supply: number; credit: number; devices: number; other: number };
+  };
 };
 
 /** A device's habits over the last eight weeks. */
@@ -132,3 +143,45 @@ export type DevicePattern = {
 };
 
 export type DeviceRaw = { id: number; name: string; ts: number | null; properties: Record<string, unknown> };
+
+/** What the home draws all the time, at night: the home's and each device's (W), and what it comes to a year ($). */
+export type Standby = {
+  nights: number;
+  home_w: number | null;
+  yearly_cost: number | null;
+  devices: { id: number; w: number; yearly_cost: number }[];
+  measured_w: number;
+  rate: number;
+};
+
+/** A habit in what no device measures: a block of use that comes back at about the same time on several days. */
+export type Habit = {
+  /** When it usually starts, minutes into the day. */
+  at: number;
+  minutes: number;
+  kw: number;
+  days: number;
+  of_days: number;
+  kwh_per_day: number;
+  guess: string | null;
+  guess_label: string | null;
+};
+
+/** When to start an appliance that runs in cycles, today or tomorrow. */
+export type BestTime = {
+  id: number;
+  start: number;
+  end: number;
+  /** The share of a typical run spare solar would cover. */
+  solar_share: number;
+  /** What the rest would cost from the grid ($). */
+  cost: number;
+  /** "solar": covered by spare solar; "cheapest": the least it would cost from the grid. */
+  why: "solar" | "cheapest";
+  run_kwh: number;
+};
+
+export type HomeInsights = { standby: Standby; unexplained: { days: number; habits: Habit[] }; best_times: BestTime[] };
+
+/** A run with what the appliance drew through it (W per 5 minutes). */
+export type RunCurve = { run: HomeRun; t: number[]; w: number[] };
