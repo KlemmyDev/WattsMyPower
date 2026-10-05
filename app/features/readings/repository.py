@@ -127,26 +127,40 @@ class ReadingsRepository:
         """
         Per-local-day energy totals (kWh) from the inverter's daily counters, except grid import
         and export, which come from the meter (see `metered`).
+
+        A day's counters are what the dashboard recorded. Rollups imported to fill time it didn't record
+        (app.features.imports) carry daily totals added up from the file's power readings, which read
+        high (a 5-minute sample held for 5 minutes), while the inverter's own counters kept counting
+        through the gap: so where a day has recorded counters, imported ones don't count. A day with
+        none takes the imported totals, and an import that replaces what was recorded wins.
         """
         # Skip the first 10 minutes after midnight: if the inverter's clock lags
         # ours, yesterday's un-reset counter would otherwise count as today's max.
-        select = ", ".join(f"MAX({c})" for c in DAILY_COLS)
+        select = ", ".join(f"MAX(s.{c})" for c in DAILY_COLS)
+        # 2: an import replacing what was recorded, 1: recorded, 0: an import filling a gap.
+        source = "CASE WHEN s.import_id IS NULL THEN 1 WHEN i.replaces = 1 THEN 2 ELSE 0 END"
         sql = (
-            f"SELECT date(ts, 'unixepoch', 'localtime') AS d, {select} FROM samples_5m "
-            f"WHERE ts >= ? AND ts < ? AND strftime('%H%M', ts, 'unixepoch', 'localtime') >= '0010' "
-            f"GROUP BY d ORDER BY d"
+            f"SELECT date(s.ts, 'unixepoch', 'localtime') AS d, {source} AS src, {select}"
+            " FROM samples_5m s LEFT JOIN imports i ON i.id = s.import_id"
+            " WHERE s.ts >= ? AND s.ts < ? AND strftime('%H%M', s.ts, 'unixepoch', 'localtime') >= '0010'"
+            " GROUP BY d, src ORDER BY d, src DESC"
         )
         with self.db.reading() as conn:
             rows = conn.execute(sql, (start, end)).fetchall()
         grid = self.metered(start, end)
+        days: dict[str, dict[str, float | None]] = {}
+        for date, _src, *values in rows:  # the most trusted source first
+            day = days.setdefault(date, dict.fromkeys(DAILY_COLS))
+            for c, v in zip(DAILY_COLS, values, strict=True):
+                if day[c] is None and v is not None:
+                    day[c] = round(v, 2)
         out = []
-        for r in rows:
-            day = {c: (round(v, 2) if v is not None else None) for c, v in zip(DAILY_COLS, r[1:], strict=True)}
-            imp, exp = grid.get(r[0], (None, None))
+        for date, day in days.items():
+            imp, exp = grid.get(date, (None, None))
             # Days with nothing to go on keep the inverter's own counters.
             day["daily_import"] = imp if imp is not None else day["daily_import"]
             day["daily_export"] = exp if exp is not None else day["daily_export"]
-            out.append({"date": r[0], **day})
+            out.append({"date": date, **day})
         return out
 
     def metered(self, start: int, end: int) -> dict[str, tuple[float | None, float | None]]:
