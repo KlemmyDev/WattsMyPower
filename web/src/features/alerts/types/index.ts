@@ -23,7 +23,7 @@ export type RuleSetting = {
   value: number;
 };
 
-export type RuleCategory = "system" | "solar" | "grid" | "prices" | "summary";
+export type RuleCategory = "system" | "solar" | "grid" | "prices" | "bills" | "summary";
 
 export type AlertCategory = { id: RuleCategory; name: string; description: string };
 
@@ -34,8 +34,8 @@ export type AlertRule = {
   category: RuleCategory;
   /** A follow-up is sent when it clears. False for good news (strong solar, a full battery). */
   resolves: boolean;
-  /** What it needs and this setup lacks, e.g. "amber" for a price alert without an Amber tariff. */
-  needs: "amber" | null;
+  /** What it needs and this setup lacks: "amber" for a price alert without an Amber tariff, "budget" for the bill alert without a budget. */
+  needs: "amber" | "budget" | null;
   enabled: boolean;
   /** After an alert, the least time before this rule sends another. Null for one sent on a schedule. */
   cooldown_hours: number | null;

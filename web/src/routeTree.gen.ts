@@ -25,6 +25,7 @@ import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/ind
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsAlertsRouteImport } from './routes/_app/settings/alerts'
 import { Route as AppSettingsBillingRouteImport } from './routes/_app/settings/billing'
+import { Route as AppSettingsBillsRouteImport } from './routes/_app/settings/bills'
 import { Route as AppSettingsDatabaseRouteImport } from './routes/_app/settings/database'
 import { Route as AppSettingsImportRouteImport } from './routes/_app/settings/import'
 import { Route as AppSettingsSystemRouteImport } from './routes/_app/settings/system'
@@ -118,6 +119,11 @@ const AppSettingsAlertsRoute = AppSettingsAlertsRouteImport.update({
 const AppSettingsBillingRoute = AppSettingsBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSettingsBillsRoute = AppSettingsBillsRouteImport.update({
+  id: '/bills',
+  path: '/bills',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
 const AppSettingsDatabaseRoute = AppSettingsDatabaseRouteImport.update({
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
+  '/settings/bills': typeof AppSettingsBillsRoute
   '/settings/database': typeof AppSettingsDatabaseRoute
   '/settings/import': typeof AppSettingsImportRoute
   '/settings/system': typeof AppSettingsSystemRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/alerts': typeof AppSettingsAlertsRoute
   '/settings/billing': typeof AppSettingsBillingRoute
+  '/settings/bills': typeof AppSettingsBillsRoute
   '/settings/database': typeof AppSettingsDatabaseRoute
   '/settings/import': typeof AppSettingsImportRoute
   '/settings/system': typeof AppSettingsSystemRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/alerts': typeof AppSettingsAlertsRoute
   '/_app/settings/billing': typeof AppSettingsBillingRoute
+  '/_app/settings/bills': typeof AppSettingsBillsRoute
   '/_app/settings/database': typeof AppSettingsDatabaseRoute
   '/_app/settings/import': typeof AppSettingsImportRoute
   '/_app/settings/system': typeof AppSettingsSystemRoute
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/alerts'
     | '/settings/billing'
+    | '/settings/bills'
     | '/settings/database'
     | '/settings/import'
     | '/settings/system'
@@ -350,6 +360,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/alerts'
     | '/settings/billing'
+    | '/settings/bills'
     | '/settings/database'
     | '/settings/import'
     | '/settings/system'
@@ -383,6 +394,7 @@ export interface FileRouteTypes {
     | '/_app/settings/account'
     | '/_app/settings/alerts'
     | '/_app/settings/billing'
+    | '/_app/settings/bills'
     | '/_app/settings/database'
     | '/_app/settings/import'
     | '/_app/settings/system'
@@ -521,6 +533,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsBillingRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/bills': {
+      id: '/_app/settings/bills'
+      path: '/bills'
+      fullPath: '/settings/bills'
+      preLoaderRoute: typeof AppSettingsBillsRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/database': {
       id: '/_app/settings/database'
       path: '/database'
@@ -633,6 +652,7 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
   AppSettingsAlertsRoute: typeof AppSettingsAlertsRoute
   AppSettingsBillingRoute: typeof AppSettingsBillingRoute
+  AppSettingsBillsRoute: typeof AppSettingsBillsRoute
   AppSettingsDatabaseRoute: typeof AppSettingsDatabaseRoute
   AppSettingsImportRoute: typeof AppSettingsImportRoute
   AppSettingsSystemRoute: typeof AppSettingsSystemRoute
@@ -653,6 +673,7 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
   AppSettingsAlertsRoute: AppSettingsAlertsRoute,
   AppSettingsBillingRoute: AppSettingsBillingRoute,
+  AppSettingsBillsRoute: AppSettingsBillsRoute,
   AppSettingsDatabaseRoute: AppSettingsDatabaseRoute,
   AppSettingsImportRoute: AppSettingsImportRoute,
   AppSettingsSystemRoute: AppSettingsSystemRoute,

@@ -81,7 +81,7 @@ function Explanation({ s }: { s: NonNullable<Reconciliation["summary"]> }) {
   return null;
 }
 
-/** Settings → Billing: the meter's daily import and export against the dashboard's, and the days that differ. */
+/** Settings → Bills: the meter's daily import and export against the dashboard's, and the days that differ. */
 export function MeterComparison() {
   const { data } = useQuery(reconcileQuery);
   const [all, setAll] = useState(false);

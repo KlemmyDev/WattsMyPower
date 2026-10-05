@@ -16,6 +16,9 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "bill_months": 3,
         "bill_day": 1,
         "bill_anchor": 1,
+        "bill_discount_pct": 0,
+        "bill_credits_year": 0,
+        "bill_budget": 0,
         "pv_kw": config.pv_kw,
         "battery_kwh_override": config.battery_kwh,
         "battery_reserve_fallback": config.battery_reserve,
@@ -33,6 +36,7 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "battery_warranty_mwh": 0,
         "location_name": None,
         "weather_model": "best_match",
+        "bill_discount_on": "usage",
         "house_style": "estate",
         "inverter_places": [],
         "battery_places": [],
@@ -99,3 +103,14 @@ def test_clearing_a_text_setting_removes_it(db: Database, config: Config) -> Non
     store.save({"location_name": "Brisbane City, QLD"})
     store.save({"location_name": None})
     assert store.get_text("location_name") is None
+
+
+def test_bill_discounts_are_checked(db: Database, config: Config) -> None:
+    store = SettingsStore(db, config)
+    store.load()
+    with pytest.raises(ValueError, match=r"The discount must be between 0 and 50%\."):
+        store.save({"bill_discount_pct": 60})
+    with pytest.raises(ValueError, match="bill_discount_on must be one of usage, usage_supply"):
+        store.save({"bill_discount_on": "supply"})
+    saved = store.save({"bill_discount_pct": 7.5, "bill_discount_on": "usage_supply", "bill_budget": 400})
+    assert (saved["bill_discount_pct"], saved["bill_discount_on"], saved["bill_budget"]) == (7.5, "usage_supply", 400)

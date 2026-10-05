@@ -47,6 +47,9 @@ class Facts:
     # On an Amber tariff, the price now: {"import": $/kWh, "feed_in": $/kWh (what exporting earns), "until": the
     # interval's end}. None on another tariff, or with no price for now.
     price: Callable[[], dict[str, Any] | None] = lambda: None
+    # The current bill against the budget set in Settings → Bills: {"start", "end" (YYYY-MM-DD), "day" (of the
+    # period), "expected" ($, or None without an estimate yet), "budget" ($)}. None with no budget set.
+    bill: Callable[[], dict[str, Any] | None] = lambda: None
 
     def fresh(self, ts: float | None) -> bool:
         """Whether something read at `ts` is current: within the last three polls."""
@@ -115,7 +118,7 @@ class Rule:
     page: str = "/health"
     # When it clears, a follow-up says so. Off for good news, which needs no "it's over".
     resolves: bool = True
-    # What it works only with: "amber" for an Amber tariff (it watches Amber's prices).
+    # What it works only with: "amber" for an Amber tariff (it watches Amber's prices), "budget" for a bill budget.
     needs: str | None = None
 
     def values(self, saved: dict[str, Any] | None = None) -> Values:
@@ -342,6 +345,40 @@ def daily_summary(f: Facts, v: Values, s: RuleState) -> Check:
     return Check("report", title, f"{day_name(yday)}\n" + "\n".join(lines), data={"date": yday})
 
 
+# -- bills ----------------------------------------------------------------------------
+BUDGET_FROM_DAY = 5  # an expected bill steadies after the first few days of a period
+BUDGET_BACK_UNDER = 0.97  # back within budget only once comfortably under, so it doesn't flap at the line
+
+
+def _span_words(start: str, end: str) -> str:
+    a, b = time.strptime(start, "%Y-%m-%d"), time.strptime(end, "%Y-%m-%d")
+    return f"{a.tm_mday} {time.strftime('%B', a)} to {b.tm_mday} {time.strftime('%B', b)}"
+
+
+def bill_budget(f: Facts, v: Values, s: RuleState) -> Check:
+    b = f.bill()
+    if b is None:
+        return Check("ok")  # no budget (or it was taken away): an alert out ends quietly
+    if b["day"] < BUDGET_FROM_DAY or b["expected"] is None:
+        return UNKNOWN
+    expected, budget = b["expected"], b["budget"]
+    period = _span_words(b["start"], b["end"])
+    if expected > budget:
+        return Check(
+            "bad",
+            "Your bill is heading over budget",
+            f"This bill ({period}) is on course for about ${expected:,.0f}, ${expected - budget:,.0f} over your "
+            f"${budget:,.0f} budget. Ways to lower this bill on the Bills page shows where it can come down.",
+        )
+    if expected <= budget * BUDGET_BACK_UNDER:
+        return Check(
+            "ok",
+            "Your bill is back within budget",
+            f"This bill ({period}) is now on course for about ${expected:,.0f}, under your ${budget:,.0f} budget.",
+        )
+    return UNKNOWN
+
+
 # -- good to know: solar, battery, grid and prices ---------------------------------------
 def today(f: Facts, snap: Snapshot) -> str | None:
     """Today's date, if the reading is from today and its daily counters have had time to start afresh (an
@@ -499,6 +536,7 @@ CATEGORIES: dict[str, tuple[str, str]] = {
     "solar": ("Solar and battery", "Good times to use power, and milestones. Off until you turn them on."),
     "grid": ("Grid", "When the house leans on the grid."),
     "prices": ("Prices", "When Amber's price spikes or goes negative."),
+    "bills": ("Bills", "When a bill is on course to cost more than you planned."),
     "summary": ("Summaries", "A look back at the day."),
 }
 
@@ -566,6 +604,17 @@ RULES: tuple[Rule, ...] = (
             Setting("days", "On", "clear days in a row", 1, 5, 2),
         ),
         cooldown=3 * DAY,
+    ),
+    Rule(
+        "bill_budget",
+        "Bill over budget",
+        "The current bill is on course to cost more than the budget set in Settings → Bills, going by what it has "
+        "cost so far and what the rest of the period is expected to. Checked from the fifth day of each period.",
+        bill_budget,
+        cooldown=7 * DAY,
+        category="bills",
+        page="/bills",
+        needs="budget",
     ),
     Rule(
         "daily_summary",

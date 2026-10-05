@@ -69,7 +69,7 @@ function say(tip: BillTip, bills: Bills, tariff: Tariff | undefined): Said {
           </>
         ),
         action: (
-          <ButtonLink to="/settings/tariffs" variant="link" size="sm">
+          <ButtonLink to="/settings/bills" hash="rates" variant="link" size="sm">
             Find a plan
           </ButtonLink>
         ),

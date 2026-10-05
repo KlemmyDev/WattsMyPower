@@ -164,7 +164,7 @@ function ImportRow({ item }: { item: MeterImport }) {
   );
 }
 
-/** Settings → Billing: import the smart meter's interval data (NEM12), see what's imported, and remove it. */
+/** Settings → Bills: import the smart meter's interval data (NEM12), see what's imported, and remove it. */
 export function MeterDataSettings() {
   const { data: imports, isPending, error } = useQuery(meterImportsQuery);
   const input = useRef<HTMLInputElement>(null);

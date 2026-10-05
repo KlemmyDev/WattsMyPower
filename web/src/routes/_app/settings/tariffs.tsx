@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { TariffSettings } from "~/features/settings/components/TariffSettings";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Rates moved into Settings → Bills; old links land on them there. */
 export const Route = createFileRoute("/_app/settings/tariffs")({
-  head: () => ({ meta: [{ title: "Settings · WattsMyPower" }] }),
-  component: TariffSettings,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/bills", hash: "rates", replace: true });
+  },
 });
