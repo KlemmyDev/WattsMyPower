@@ -15,7 +15,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from app.features.home.types import Integration, Reading
+from app.features.home.types import Hints, Integration, Reading
 
 MIN = 60
 WASH = 75 * MIN
@@ -82,7 +82,7 @@ class Demo(Integration):
     demo = True
 
     @classmethod
-    def sign_in(cls, form: dict[str, str]) -> dict[str, Any]:
+    def sign_in(cls, form: dict[str, str], hints: Hints) -> dict[str, Any]:
         return {"connected": True}
 
     def label(self) -> str:

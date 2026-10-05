@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 
 from app.features.home.integrations.connectlife.appliances import reading
 from app.features.home.integrations.connectlife.client import ConnectLifeClient, Transport, _transport
-from app.features.home.types import Field, Integration, Reading
+from app.features.home.types import Field, Hints, Integration, Reading
 
 TOKENS = ("access_token", "expires_at", "refresh_token", "refresh_expires_at")
 
@@ -40,7 +40,7 @@ class ConnectLife(Integration):
     transport: ClassVar[Transport] = staticmethod(_transport)
 
     @classmethod
-    def sign_in(cls, form: dict[str, str]) -> dict[str, Any]:
+    def sign_in(cls, form: dict[str, str], hints: Hints) -> dict[str, Any]:
         client = ConnectLifeClient(form["email"], form["password"], transport=cls.transport)
         client.sign_in()
         return {"email": form["email"], "password": form["password"], **client.tokens}

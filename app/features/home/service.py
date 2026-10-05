@@ -30,7 +30,7 @@ from app.core.database import Database
 from app.features.home.energy import Meter, step
 from app.features.home.registry import INTEGRATIONS
 from app.features.home.repository import Account, Device, HomeRepository
-from app.features.home.types import KINDS, Integration, IntegrationError, Reading
+from app.features.home.types import KINDS, Hints, Integration, IntegrationError, Reading
 
 log = logging.getLogger(__name__)
 
@@ -115,6 +115,7 @@ class HomeService:
                     "help": f.help,
                     "secret": f.secret,
                     "placeholder": f.placeholder,
+                    "optional": f.optional,
                 }
                 for f in cls.fields
             ],
@@ -160,24 +161,24 @@ class HomeService:
     # -- connecting ---------------------------------------------------------------
     def _form(self, cls: type[Integration], form: dict[str, Any]) -> dict[str, str]:
         values = {f.key: str(form.get(f.key) or "").strip() for f in cls.fields}
-        missing = next((f for f in cls.fields if not values[f.key]), None)
+        missing = next((f for f in cls.fields if not f.optional and not values[f.key]), None)
         if missing:
             raise HomeSetupError(f"Enter your {missing.label.lower()}.")
         return values
 
-    def _sign_in(self, cls: type[Integration], form: dict[str, Any]) -> dict[str, Any]:
+    def _sign_in(self, cls: type[Integration], form: dict[str, Any], hints: Hints) -> dict[str, Any]:
         try:
-            return cls.sign_in(self._form(cls, form))
+            return cls.sign_in(self._form(cls, form), hints)
         except IntegrationError as e:
             raise HomeSetupError(str(e), 422 if e.signed_out else 502) from e
 
-    def connect(self, integration_id: str, form: dict[str, Any]) -> dict[str, Any]:
+    def connect(self, integration_id: str, form: dict[str, Any], hints: Hints | None = None) -> dict[str, Any]:
         """Sign in to an integration and keep the account. Its devices arrive with the first poll (asked for at once:
         call wake()), and from before it was connected if the integration can look back."""
         cls = self._integration(integration_id)
         if any(a.integration == cls.id for a in self.repo.accounts()):
             raise HomeSetupError(f"{cls.name} is already connected. Sign in again from its page to change it.", 409)
-        saved = self._sign_in(cls, form)
+        saved = self._sign_in(cls, form, hints or Hints())
         ts = int(self.clock())
         with self._lock, self.db.writing() as conn:
             account_id = self.repo.add_account(conn, cls.id, saved, ts)
@@ -193,13 +194,13 @@ class HomeService:
         self._due.pop(account_id, None)
         return self.overview()
 
-    def sign_in_again(self, integration_id: str, form: dict[str, Any]) -> dict[str, Any]:
+    def sign_in_again(self, integration_id: str, form: dict[str, Any], hints: Hints | None = None) -> dict[str, Any]:
         """Sign in to a connected integration afresh (a changed password), keeping its devices and what they've used."""
         cls = self._integration(integration_id)
         account = next((a for a in self.repo.accounts() if a.integration == cls.id), None)
         if account is None:
             raise HomeSetupError(f"{cls.name} isn't connected.", 404)
-        saved = self._sign_in(cls, form)
+        saved = self._sign_in(cls, form, hints or Hints())
         with self._lock, self.db.writing() as conn:
             self.repo.save_account(conn, account.id, saved=saved, state={})
         self._due.pop(account.id, None)
