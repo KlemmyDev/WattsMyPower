@@ -5,7 +5,9 @@ usually runs, and what it uses through the day and the week.
 
 The home's use for a day is the inverter's counters (solar + imported − exported + from the battery − into it),
 as in app.features.tariffs.costs, or, for a day without them, its 5-minute readings added up. By the hour, it's
-the readings. A device's energy is its own (app.features.home.energy). Hidden devices are left out.
+the readings, scaled to the day's counters. A device's energy is its own (app.features.home.energy), and is part of
+the home's, never added to it: "everything else" is the home's less what the devices measured. Hidden devices are
+left out.
 """
 
 from __future__ import annotations
@@ -40,25 +42,44 @@ def buckets(start: int, end: int, by: Bucket) -> list[int]:
     return out
 
 
+def counted_home(c: dict[str, Any]) -> float | None:
+    """What the home used in a day by the inverter's daily counters (as History, the Overview and Bills count it):
+    solar + imported − exported + from the battery − into it. None without them."""
+    if c.get("daily_pv") is None or c.get("daily_import") is None or c.get("daily_export") is None:
+        return None
+    return max(
+        0.0,
+        c["daily_pv"]
+        + c["daily_import"]
+        - c["daily_export"]
+        + (c.get("daily_discharge") or 0)
+        - (c.get("daily_charge") or 0),
+    )
+
+
 def home_use(readings: ReadingsRepository, start: int, end: int, by: Bucket) -> dict[int, float]:
-    """What the home used in each local hour or day of [start, end), kWh. Only buckets with readings."""
-    out: dict[int, float] = defaultdict(float)
+    """What the home used in each local hour or day of [start, end), kWh. Only buckets with readings.
+
+    A day is the inverter's counters. By the hour, the readings give the shape through the day, scaled so a day's
+    hours add up to what its counters say (as Bills splits a day between rates), so the Home page's total is the
+    Overview's and History's. A day without counters is its readings as they are."""
+    readings_kwh: dict[int, float] = defaultdict(float)
     for ts, pv, grid, bat in readings.rollups(start, end, ["pv_power", "grid_power", "battery_power"]):
-        out[bucket_start(ts, by)] += max(0.0, (pv or 0) + (grid or 0) + (bat or 0)) * KWH_PER_W_ROLLUP
+        readings_kwh[bucket_start(ts, by)] += max(0.0, (pv or 0) + (grid or 0) + (bat or 0)) * KWH_PER_W_ROLLUP
+    counted: dict[int, float] = {}
+    for c in readings.daily(start, end):
+        if (kwh := counted_home(c)) is not None:
+            counted[int(time.mktime(time.strptime(c["date"], "%Y-%m-%d")))] = kwh
     if by == "day":
-        for c in readings.daily(start, end):
-            if c.get("daily_pv") is None or c.get("daily_import") is None:
-                continue
-            day = time.mktime(time.strptime(c["date"], "%Y-%m-%d"))
-            out[int(day)] = max(
-                0.0,
-                (c.get("daily_pv") or 0)
-                + (c.get("daily_import") or 0)
-                - (c.get("daily_export") or 0)
-                + (c.get("daily_discharge") or 0)
-                - (c.get("daily_charge") or 0),
-            )
-    return dict(out)
+        return {**readings_kwh, **counted}
+    out = dict(readings_kwh)
+    for day, kwh in counted.items():
+        hours = [b for b in readings_kwh if bucket_start(b, "day") == day]
+        read = sum(readings_kwh[b] for b in hours)
+        if read > 0:
+            for b in hours:
+                out[b] = readings_kwh[b] * kwh / read
+    return out
 
 
 def breakdown(repo: HomeRepository, readings: ReadingsRepository, start: int, end: int, by: Bucket) -> dict[str, Any]:

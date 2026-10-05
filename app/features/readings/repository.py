@@ -226,18 +226,19 @@ class ReadingsRepository:
         return {date: (total(i), total(e)) for date, (i, e) in days.items()}
 
     def with_metered_today(self, snap: Snapshot) -> Snapshot:
-        """A live snapshot with today's grid import/export as `metered` counts them."""
+        """A live snapshot with today's daily counters as `daily` counts them (grid import/export as `metered` counts
+        them), so the live figures for today are the ones History and the Home page show for it."""
         ts = snap.get("ts")
         if ts is None:
             return snap
         lt = time.localtime(ts)
         midnight = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
-        imp, exp = self.metered(midnight, ts + 1).get(time.strftime("%Y-%m-%d", lt), (None, None))
-        return {
-            **snap,
-            "daily_import": imp if imp is not None else snap.get("daily_import"),
-            "daily_export": exp if exp is not None else snap.get("daily_export"),
-        }
+        date = time.strftime("%Y-%m-%d", lt)
+        today = next((d for d in self.daily(midnight, ts + 1) if d["date"] == date), None)
+        if today is None:  # just after midnight, before `daily` trusts the counters: the meter's grid figures only
+            imp, exp = self.metered(midnight, ts + 1).get(date, (None, None))
+            today = {"daily_import": imp, "daily_export": exp}
+        return {**snap, **{c: v for c, v in today.items() if c != "date" and v is not None}}
 
     def rollups(self, start: int, end: int, columns: list[str], not_null: str | None = None) -> list[tuple[Any, ...]]:
         """(ts, *columns) for each 5-minute rollup in the range, oldest first."""

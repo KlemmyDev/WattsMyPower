@@ -242,12 +242,13 @@ function TodayStats({
   plan: PlanDay | undefined;
 }) {
   const { peak } = useMemo(() => extremesOf(series), [series]);
-  // The inverter's daily counters, unless they're missing or still at nothing while the readings show a day
-  // under way (a dongle that's restarted, or one that doesn't keep them): then today's readings added up.
+  // The inverter's daily counters as History counts the day (the server keeps today's highest, so a dongle that
+  // restarts and starts them over doesn't lose the morning), unless they're missing or at nothing while the readings
+  // show a day under way (one that doesn't keep them): then today's readings added up.
   const counted = energyToday(p);
   const summed = useMemo(() => totalsOf(series), [series]);
   const e =
-    counted && (!summed || counted.pv + counted.imp + counted.home >= 0.5 * (summed.pv + summed.imp + summed.home))
+    counted && (!summed || counted.pv + counted.imp + counted.home > 0.05 || summed.pv + summed.imp + summed.home < 0.5)
       ? counted
       : summed;
   const from = e && sources(e);

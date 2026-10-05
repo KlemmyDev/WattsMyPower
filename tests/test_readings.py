@@ -111,6 +111,17 @@ def test_the_live_snapshot_gets_todays_metered_totals(readings: ReadingsReposito
     assert snap["daily_export"] == 1.2 and snap["daily_import"] == 0.0
 
 
+def test_the_live_snapshot_has_todays_counters_as_history_counts_them(readings: ReadingsRepository) -> None:
+    """A counter that's lower now than earlier today (the second inverter's share missing from the latest reading)
+    is today's highest, as History's day has it, so the Overview's figures are the same."""
+    _fill(readings, MIDNIGHT + 3600, 10, daily_pv=12.0, daily_charge=3.0, daily_discharge=1.0)
+    _fill(readings, MIDNIGHT + 7200, 1, daily_pv=8.0, daily_charge=3.0, daily_discharge=1.0)
+    (day,) = readings.daily(MIDNIGHT, MIDNIGHT + 86400)
+    snap = readings.with_metered_today({"ts": MIDNIGHT + 7200, "daily_pv": 8.0, "pv_power": 0.0})
+    assert snap["daily_pv"] == day["daily_pv"] == 12.0
+    assert (snap["daily_charge"], snap["daily_discharge"], snap["pv_power"]) == (3.0, 1.0, 0.0)
+
+
 def test_a_day_first_read_part_way_through_counts_the_grid_from_midnight(readings: ReadingsRepository) -> None:
     """Connected at 2 pm: the inverter's daily counters already hold the morning's import and export,
     as daily_pv holds its solar. Without them, the morning's export would come out as home use."""

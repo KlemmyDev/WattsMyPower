@@ -390,6 +390,37 @@ def test_by_the_day_the_home_is_what_the_inverters_counted(db: Database, reading
     assert usage.home_use(readings, day, day + 86400, "day") == {day: pytest.approx(15.0)}  # 20 + 5 − 8 + 4 − 6
 
 
+def test_by_the_hour_the_days_hours_add_up_to_what_the_inverters_counted_and_devices_arent_added(
+    home: HomeService, db: Database, readings: ReadingsRepository
+) -> None:
+    """The readings say 2.4 kWh between 9 and 10 and 1.2 between 10 and 11; the counters say the day used 6.8 (solar 4,
+    3.6 from the grid by the meter, none sent to it, 1.2 from the battery, 2 into it). The hours keep their shape (2 to
+    1) and add up to the counters, as History and the Overview count the day. What the devices measured is part of
+    that, not added to it."""
+    day = usage.bucket_start(T0, "day")
+    nine = day + 9 * 3600
+    _rollups(
+        db, [(nine + i * ROLLUP, 2400.0) for i in range(12)] + [(nine + 3600 + i * ROLLUP, 1200.0) for i in range(12)]
+    )
+    with db.writing() as conn:
+        conn.execute(
+            "UPDATE samples_5m SET daily_pv = 4, daily_import = 5, daily_export = 1, daily_charge = 2,"
+            " daily_discharge = 1.2 WHERE ts = ?",
+            (nine + 3600 + 11 * ROLLUP,),
+        )
+    home.connect("fake", FORM)
+    with db.writing() as conn:
+        plug = home.repo.add_device(conn, 1, "p", "Plug", "plug", None, T0)
+        home.repo.add_energy(conn, plug.id, [(nine, 1.0)])
+    out = usage.breakdown(home.repo, readings, day, day + 86400, "hour")
+    i = out["t"].index(nine)
+    assert out["home"][i : i + 2] == [pytest.approx(4.533, abs=0.001), pytest.approx(2.267, abs=0.001)]
+    assert out["total"]["home"] == pytest.approx(6.8)
+    assert out["total"]["measured"] == pytest.approx(1.0) and out["total"]["other"] == pytest.approx(5.8)
+    by_day = usage.breakdown(home.repo, readings, day, day + 86400, "day")
+    assert by_day["total"]["home"] == pytest.approx(6.8)
+
+
 def test_patterns_say_which_days_an_appliance_usually_runs(home: HomeService, clock: Clock) -> None:
     clock.t = time.time()
     view = home.connect("demo", {})
