@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
+import { alpha } from "~/features/common/theme/utils/colors";
 import { Card } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
-import { Swatch } from "~/features/common/ui/components/Swatch";
 import { cn } from "~/features/common/ui/utils";
 import type { HomeUsage } from "~/features/home/types";
 import { CAR_COLOR, CAR_ID, OTHER_COLOR, WEEKDAY_SHORT } from "~/features/home/utils";
@@ -161,31 +161,47 @@ export function UsageCard({
                     />
                   ))}
               </div>
-              <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-1 p-0">
-                {parts.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      aria-pressed={!off.has(p.id)}
-                      title="Hide or show it in the chart (double-click: only it)"
-                      onClick={() => toggle(p.id)}
-                      onDoubleClick={() => only(p.id)}
-                      className={cn(
-                        "-mx-1.5 flex w-[calc(100%+12px)] cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-1.5 py-1 text-left font-sans text-sm text-ink tabular-nums hover:bg-surface-raised",
-                        off.has(p.id) && "opacity-45",
-                      )}
-                    >
-                      <Swatch color={p.color} size={10} />
-                      <span className={cn("min-w-0 flex-1 truncate text-ink-muted", off.has(p.id) && "line-through")}>
-                        {p.label}
-                      </span>
-                      <span className="font-medium">{kWh(p.kwh)}</span>
-                      <span className="w-12 text-right text-ink-faint">{p.cost >= 0.005 ? money(p.cost) : ""}</span>
-                      <span className="w-9 text-right text-ink-faint">{share(p.kwh, whole) ?? ""}</span>
-                    </button>
-                  </li>
-                ))}
+              <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-0">
+                {parts.map((p) => {
+                  const shown = !off.has(p.id);
+                  return (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        aria-pressed={shown}
+                        title="Show or hide it in the chart (double-click: only it)"
+                        onClick={() => toggle(p.id)}
+                        onDoubleClick={() => only(p.id)}
+                        style={
+                          shown ? { borderColor: alpha(p.color, 0.55), background: alpha(p.color, 0.1) } : undefined
+                        }
+                        className={cn(
+                          "flex h-full w-full cursor-pointer flex-col gap-1 rounded-xl border px-3 py-2.5 text-left font-sans text-ink tabular-nums transition-[background,border-color,opacity] select-none",
+                          shown
+                            ? "hover:brightness-110"
+                            : "border-dashed border-line bg-transparent opacity-55 hover:opacity-80",
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span
+                            className="size-2.5 flex-none rounded-full border-2"
+                            style={{ borderColor: p.color, background: shown ? p.color : "transparent" }}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{p.label}</span>
+                        </span>
+                        <span className="text-[17px] leading-5 font-semibold">{kWh(p.kwh)}</span>
+                        <span className="text-xs text-ink-faint">
+                          {[p.cost >= 0.005 ? money(p.cost) : null, share(p.kwh, whole)].filter(Boolean).join(" · ") ||
+                            "\u00a0"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
+              <span className="-mt-1 text-xs text-ink-faint">
+                Tap a card to show or hide it in the chart, or double-click to see it on its own.
+              </span>
               {off.size > 0 && (
                 <button
                   type="button"
