@@ -4,12 +4,13 @@ import type { DevicePattern, DeviceRaw, HomeOverview, HomeRun, HomeUsage } from 
 
 const MIN = 60_000;
 
-/** The integrations, their accounts and every device with what it's doing. Devices are read every minute. */
+/** The integrations, their accounts and every device with what it's doing: plugs on the network are read every 15
+ * seconds, so it's refreshed as often. */
 export const homeQuery = queryOptions({
   queryKey: ["home"],
   queryFn: ({ signal }) => apiGet<HomeOverview>("home", undefined, { signal }),
-  staleTime: 30_000,
-  refetchInterval: MIN,
+  staleTime: 10_000,
+  refetchInterval: 15_000,
 });
 
 /** Where the home's power went over [start, end), by the hour or day. */
@@ -35,6 +36,13 @@ export const homeRunsQuery = (start: number, end: number, device?: number) =>
     queryFn: ({ signal }) => apiGet<HomeRun[]>("home/runs", { start, end, device }, { signal }),
     staleTime: MIN,
   });
+
+/** What a connect form left blank falls back to: the home network devices are looked for on. */
+export const homeHintsQuery = queryOptions({
+  queryKey: ["home", "hints"],
+  queryFn: ({ signal }) => apiGet<{ network: string | null }>("home/hints", undefined, { signal }),
+  staleTime: 5 * MIN,
+});
 
 /** A device's properties as its integration last sent them. */
 export const deviceRawQuery = (id: number) =>

@@ -2,8 +2,9 @@
 What every home integration speaks: the kinds of device, a device's reading as the dashboard needs it, and the
 contract an integration (a smart-appliance cloud, smart plugs on the network…) fulfils.
 
-An integration only translates. It signs in, and on each poll says what every device on the account is doing now,
-in the terms below. Turning those readings into energy, runs of an appliance and the home's breakdown is done once,
+An integration only translates. It signs in (or finds its devices on the network), and on each poll says what every
+device is doing now, in the terms below. Prefer reading devices directly on the home network; a vendor's cloud only
+when there's no other way. Turning those readings into energy, runs of an appliance and the home's breakdown is done once,
 for all of them (app.features.home.energy, app.features.home.service).
 """
 
@@ -52,7 +53,7 @@ class Reading:
     online: bool = True
     power_w: float | None = None  # what it's drawing now
     # An energy counter, kWh. "total": only ever goes up (it may reset to 0 if the device is reset). "cycle": counts
-    # from 0 each time a cycle starts. A counter is used over power when there's both.
+    # from 0 again each time it starts over (each cycle, or each day). A counter is used over power when there's both.
     energy_kwh: float | None = None
     counter: Literal["total", "cycle"] = "total"
     running: bool | None = None  # a cycle under way (None: it doesn't say; power decides, for kinds with cycles)
@@ -76,6 +77,15 @@ class Field:
     # Kept on the server and never sent back to the browser (shown masked, or not at all).
     secret: bool = False
     placeholder: str = ""
+    optional: bool = False
+
+
+@dataclass(frozen=True)
+class Hints:
+    """What the dashboard knows that may help an integration find its devices."""
+
+    # The home network, e.g. "192.168.0.0/24": where the inverters are, else where the dashboard was opened from.
+    network: str | None = None
 
 
 class IntegrationError(Exception):
@@ -111,9 +121,9 @@ class Integration(ABC):
 
     @classmethod
     @abstractmethod
-    def sign_in(cls, form: dict[str, str]) -> dict[str, Any]:
-        """Check what was entered in the connect form (signing in, if there's an account) and return what to keep
-        for polling. Raises IntegrationError, in words, if it can't be used."""
+    def sign_in(cls, form: dict[str, str], hints: Hints) -> dict[str, Any]:
+        """Check what was entered in the connect form (signing in, if there's an account; finding devices, if they're
+        on the network) and return what to keep for polling. Raises IntegrationError, in words, if it can't be used."""
 
     @abstractmethod
     def poll(self) -> list[Reading]:

@@ -9,6 +9,7 @@ says in words what the collector's raw identity registers mean, and adds each de
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import ipaddress
 import os
@@ -146,6 +147,14 @@ class IntegrationsService:
             return any(d.get("role") == "hybrid" for d in self.collector.devices().get("devices", []))
         except CollectorError:
             return None
+
+    def home_network(self, client_host: str | None, server_host: str | None = None) -> str:
+        """The home network to look for other devices on (smart plugs): the inverters', as suggest_network finds it."""
+        devices: list[dict[str, Any]] = []
+        if self.collector is not None:
+            with contextlib.suppress(CollectorError):
+                devices = self.collector.devices().get("devices", [])
+        return self.suggest_network(devices, client_host, server_host)
 
     def suggest_network(
         self, devices: list[dict[str, Any]], client_host: str | None, server_host: str | None = None

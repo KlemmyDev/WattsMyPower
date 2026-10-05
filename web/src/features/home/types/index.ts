@@ -8,6 +8,8 @@ export type HomeField = {
   help: string;
   secret: boolean;
   placeholder: string;
+  /** Can be left empty. */
+  optional: boolean;
 };
 
 export type HomeAccount = {

@@ -9,7 +9,7 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
-import { deviceRawQuery, homeQuery } from "~/features/home/api";
+import { deviceRawQuery, homeHintsQuery, homeQuery } from "~/features/home/api";
 import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeIntegration, HomeOverview } from "~/features/home/types";
 import { integrationIcon, kindIcon, nowLine } from "~/features/home/utils";
@@ -32,7 +32,9 @@ function SignInForm({
   const { connect, signIn } = useHomeChange();
   const send = again ? signIn : connect;
   const [form, setForm] = useState<Record<string, string>>({});
-  const ready = integration.fields.every((f) => form[f.key]?.trim());
+  const network = useQuery({ ...homeHintsQuery, enabled: integration.fields.some((f) => f.key === "where") }).data
+    ?.network;
+  const ready = integration.fields.every((f) => f.optional || form[f.key]?.trim());
   const submit = (e: FormEvent) => {
     e.preventDefault();
     send.mutate({ id: integration.id, form }, { onSuccess: () => (setForm({}), onDone?.()) });
@@ -40,12 +42,21 @@ function SignInForm({
   return (
     <form onSubmit={submit} className={cn("flex max-w-[460px] flex-col gap-4", className)}>
       {integration.fields.map((f) => (
-        <Field key={f.key} label={f.label} help={f.help || undefined}>
+        <Field
+          key={f.key}
+          label={
+            <>
+              {f.label}
+              {f.optional && <span className="ml-1.5 font-normal text-ink-muted">optional</span>}
+            </>
+          }
+          help={f.help || undefined}
+        >
           <Input
             type={f.type}
             autoComplete={f.secret ? "off" : f.type === "email" ? "email" : "off"}
             spellCheck={false}
-            placeholder={f.placeholder || undefined}
+            placeholder={(f.key === "where" && network ? `${network} if left empty` : f.placeholder) || undefined}
             value={form[f.key] ?? ""}
             onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
             invalid={send.isError}
@@ -54,7 +65,7 @@ function SignInForm({
       ))}
       {send.isError && <HelpText tone="bad">{errorMessage(send.error)}</HelpText>}
       <div className="flex items-center gap-3">
-        <Button type="submit" size="sm" disabled={(!ready && integration.fields.length > 0) || send.isPending}>
+        <Button type="submit" size="sm" disabled={!ready || send.isPending}>
           {send.isPending ? `Connecting to ${integration.name}…` : again ? "Sign in" : "Connect"}
         </Button>
         {again && onDone && (

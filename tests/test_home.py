@@ -18,7 +18,7 @@ from app.features.home import usage
 from app.features.home.energy import GAP, QUIET, TAIL, Meter, spread, step
 from app.features.home.integrations.demo import Demo
 from app.features.home.service import BACKOFF_MAX, HomeService, HomeSetupError
-from app.features.home.types import Field, Integration, IntegrationError, Reading
+from app.features.home.types import Field, Hints, Integration, IntegrationError, Reading
 from app.features.readings.repository import ReadingsRepository
 from app.main import create_app
 
@@ -152,7 +152,7 @@ class Fake(Integration):
     script: ClassVar[list[Any]] = []  # what each poll returns (or raises), in turn
 
     @classmethod
-    def sign_in(cls, form: dict[str, str]) -> dict[str, Any]:
+    def sign_in(cls, form: dict[str, str], hints: Hints) -> dict[str, Any]:
         if form["password"] != "right":
             raise IntegrationError("Fakebrand didn't accept that email and password.", signed_out=True)
         return {"email": form["email"], "password": form["password"], "token": "t"}
@@ -400,7 +400,7 @@ def client(config: Config) -> Iterator[TestClient]:
 
 
 def test_home_through_the_api(client: TestClient) -> None:
-    assert [i["id"] for i in client.get("/api/home").json()["integrations"]] == ["connectlife", "demo"]
+    assert [i["id"] for i in client.get("/api/home").json()["integrations"]] == ["tapo", "connectlife", "demo"]
     assert client.post("/api/home/integrations/nothing", json={}).status_code == 404
     view = client.post("/api/home/integrations/demo", json={}).json()
     demo = next(i for i in view["integrations"] if i["id"] == "demo")
