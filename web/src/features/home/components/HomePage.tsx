@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { STORE_HOME_RANGE, store } from "~/features/common/storage/utils";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -93,9 +94,10 @@ export function HomePage({ range }: { range: Range }) {
           usage={usage.data}
           colors={colors}
           range={range}
-          onRange={(r) =>
-            void navigate({ to: "/home", search: { range: r === "week" ? undefined : r }, replace: true })
-          }
+          onRange={(r) => {
+            store.set(STORE_HOME_RANGE, r); // opened again (or refreshed) later, it shows this period
+            void navigate({ to: "/home", search: { range: r }, replace: true });
+          }}
         />
         {overview.data && !devices.length && <ConnectPrompt />}
         {visible.map((d) => (

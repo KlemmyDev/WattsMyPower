@@ -356,3 +356,35 @@ def test_plugs_through_the_dashboard(lan: Network, db: Database, config: Config)
     assert devices["Lounge TV"]["kind"] == "plug" and devices["Lounge TV"]["now"]["power_w"] == 110.0
     tv = devices["Lounge TV"]["id"]
     assert sum(kwh for _, d, kwh in home.repo.energy(0, 2**40) if d == tv) == pytest.approx(0.025)
+
+
+# -- looking for new plugs ---------------------------------------------------------------------------------
+def test_looking_for_new_plugs_adds_one_set_up_since(lan: Network, db: Database, config: Config) -> None:
+    home = HomeService(config, db, {"tapo": Tapo}, clock=lambda: 1_790_000_000.0)
+    home.connect("tapo", FORM, NET)
+    home.poll(home.repo.accounts()[0].id)
+    assert len(home.overview()["devices"]) == 2
+    # Every plug is answering, so a poll alone doesn't look for more.
+    lan.plugs["192.168.0.23"] = Plug("192.168.0.23", "dev-kettle", name="Kettle", power_mw=2_000_000)
+    home.poll(home.repo.accounts()[0].id)
+    assert len(home.overview()["devices"]) == 2
+    view = home.find("tapo")
+    assert view["found"] == {"new": 1, "answered": 3, "message": "Found 1 new device."}
+    kettle = next(d for d in view["devices"] if d["name"] == "Kettle")
+    assert kettle["now"]["power_w"] == 2000.0  # read straight away
+    assert home.find("tapo")["found"]["message"] == "No new devices: 3 answered, all already here."
+
+
+def test_looking_for_new_plugs_needs_a_working_sign_in(lan: Network, db: Database, config: Config) -> None:
+    home = HomeService(config, db, {"tapo": Tapo}, clock=lambda: 1_790_000_000.0)
+    with pytest.raises(HomeSetupError) as e:
+        home.find("tapo")
+    assert e.value.status == 404
+    home.connect("tapo", FORM, NET)
+    for p in lan.plugs.values():
+        p.owner = auth_hash(EMAIL, "a new password")
+        p.restart()
+    forget_sessions()
+    with pytest.raises(HomeSetupError, match="Sign in again") as e:
+        home.find("tapo")
+    assert e.value.status == 422

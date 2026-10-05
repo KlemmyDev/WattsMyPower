@@ -36,6 +36,8 @@ export type HomeIntegration = {
   poll_seconds: number;
   /** Only offered in mock mode. */
   demo: boolean;
+  /** The button to look for devices added since it was connected ("Look for new plugs"), if it has one. */
+  find_label: string | null;
   account: HomeAccount | null;
 };
 

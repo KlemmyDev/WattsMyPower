@@ -121,6 +121,7 @@ class HomeService:
             ],
             "poll_seconds": cls.poll_seconds,
             "demo": cls.demo,
+            "find_label": cls.find_label,
             "account": self._account_view(cls, account, devices) if account else None,
         }
 
@@ -206,6 +207,32 @@ class HomeService:
         self._due.pop(account.id, None)
         self._failures.pop(account.id, None)
         return self.overview()
+
+    def find(self, integration_id: str) -> dict[str, Any]:
+        """Look for devices added to a connected integration since (Look for new plugs), and read them at once."""
+        cls = self._integration(integration_id)
+        account = next((a for a in self.repo.accounts() if a.integration == cls.id), None)
+        if account is None:
+            raise HomeSetupError(f"{cls.name} isn't connected.", 404)
+        if cls.find_label is None:
+            raise HomeSetupError(f"{cls.name} finds its devices by itself.", 404)
+        integration = cls(dict(account.saved))
+        try:
+            new, answered = integration.find()
+        except IntegrationError as e:
+            raise HomeSetupError(str(e), 422 if e.signed_out else 502) from e
+        with self._lock, self.db.writing() as conn:
+            current = self.repo.account(conn, account.id)
+            if current is None:
+                raise HomeSetupError(f"{cls.name} isn't connected.", 404)
+            if _same(current.saved, account.saved):  # unless it was signed in again meanwhile
+                self.repo.save_account(conn, account.id, saved=integration.saved)
+        self.poll(account.id)  # read them now, so new ones are on the page
+        word = lambda n: "device" if n == 1 else "devices"  # noqa: E731
+        message = (f"Found {new} new {word(new)}." if new
+                   else f"No new devices: {answered} answered, all already here." if answered
+                   else "Nothing answered.")  # fmt: skip
+        return {**self.overview(), "found": {"new": new, "answered": answered, "message": message}}
 
     def disconnect(self, integration_id: str) -> dict[str, Any]:
         """Forget an account: its devices, and everything they've used."""

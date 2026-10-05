@@ -21,3 +21,4 @@ export const STORE_BRAND = "wmp-brand";
 export const STORE_THEME = "wmp-theme";
 export const STORE_DISPLAY = "wmp-display";
 export const STORE_IMPORT_WEATHER = "wmp-import-weather";
+export const STORE_HOME_RANGE = "wmp-home-range";
