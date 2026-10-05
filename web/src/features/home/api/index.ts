@@ -68,3 +68,7 @@ export const disconnectHome = (id: string) => apiSend<HomeOverview>("DELETE", `h
 
 export const updateDevice = ({ id, ...changes }: { id: number; name?: string; kind?: string; hidden?: boolean }) =>
   apiSend<HomeOverview>("PATCH", `home/devices/${id}`, changes);
+
+/** Switch a device on or off. A fridge or freezer is only switched off with `confirm`. */
+export const switchDevice = ({ id, on, confirm }: { id: number; on: boolean; confirm?: boolean }) =>
+  apiSend<HomeOverview>("POST", `home/devices/${id}/switch`, { on, confirm: !!confirm });

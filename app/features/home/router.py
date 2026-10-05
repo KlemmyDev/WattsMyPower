@@ -82,6 +82,12 @@ async def update_device(svc: ServicesDep, device_id: int, body: JsonBody):
     return await _run(svc.home.update_device, device_id, body)
 
 
+@router.post("/devices/{device_id}/switch")
+async def switch_device(svc: ServicesDep, device_id: int, body: JsonBody):
+    """Switch a device on or off ({"on": true}). A fridge or freezer is only switched off with {"confirm": true}."""
+    return await _run(svc.home.switch, device_id, body.get("on"), body.get("confirm", False))
+
+
 @router.get("/devices/{device_id}/raw")
 async def raw(svc: ServicesDep, device_id: int):
     """A device's properties as its integration last sent them, to check how they're read."""

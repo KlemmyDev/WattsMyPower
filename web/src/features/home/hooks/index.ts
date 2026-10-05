@@ -5,11 +5,12 @@ import {
   findHomeDevices,
   homeQuery,
   signInHomeAgain,
+  switchDevice,
   updateDevice,
 } from "~/features/home/api";
 import type { HomeOverview } from "~/features/home/types";
 
-/** Connect, sign in again, look for new devices, disconnect, or change a device; each answers with everything connected, as it now is. */
+/** Connect, sign in again, look for new devices, disconnect, change a device, or switch one; each answers with everything connected, as it now is. */
 export function useHomeChange() {
   const qc = useQueryClient();
   const done = (overview: HomeOverview) => {
@@ -23,5 +24,6 @@ export function useHomeChange() {
     disconnect: useMutation({ mutationFn: disconnectHome, onSuccess: done }),
     find: useMutation({ mutationFn: findHomeDevices, onSuccess: done }),
     update: useMutation({ mutationFn: updateDevice, onSuccess: done }),
+    switch: useMutation({ mutationFn: switchDevice, onSuccess: done }),
   };
 }

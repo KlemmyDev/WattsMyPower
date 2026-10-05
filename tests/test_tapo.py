@@ -91,11 +91,14 @@ class Plug:
         assert body[:32] == _sha256(s.sig, seq.to_bytes(4, "big", signed=True), body[32:]), "bad signature"
         request = json.loads(s.decrypt(body, seq))
         self.calls.append(request["method"])
-        reply = json.dumps(self.answer(request["method"])).encode()
+        reply = json.dumps(self.answer(request["method"], request.get("params"))).encode()
         cipher = AES.new(s.key, AES.MODE_CBC, s._iv(seq)).encrypt(pad(reply, 16))
         return 200, [], _sha256(s.sig, cipher) + cipher
 
-    def answer(self, method: str) -> dict[str, Any]:
+    def answer(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        if method == "set_device_info" and params and isinstance(params.get("device_on"), bool):
+            self.on = params["device_on"]
+            return {"error_code": 0}
         if method == "get_device_info":
             return {"error_code": 0, "result": {"device_id": self.device_id, "model": self.model, "device_on": self.on,
                     "nickname": base64.b64encode(self.name.encode()).decode(), "type": "SMART.TAPOPLUG"}}  # fmt: skip
@@ -303,7 +306,7 @@ def test_a_poll_reads_each_plugs_power_and_todays_energy(lan: Network) -> None:
     tv, fridge = by_key["dev-tv"], by_key["dev-fridge"]
     assert (tv.name, tv.kind, tv.model, tv.power_w, tv.energy_kwh, tv.counter) == ("Lounge TV", "plug", "P110", 110.0,
                                                                                     0.42, "cycle")  # fmt: skip
-    assert fridge.power_w == 0 and fridge.details == {"Switched": "Off"}
+    assert fridge.power_w == 0 and fridge.switched_on is False and tv.switched_on is True
     assert tv.raw["energy"]["current_power"] == 110_000
 
 
@@ -388,3 +391,48 @@ def test_looking_for_new_plugs_needs_a_working_sign_in(lan: Network, db: Databas
     with pytest.raises(HomeSetupError, match="Sign in again") as e:
         home.find("tapo")
     assert e.value.status == 422
+
+
+# -- switching -------------------------------------------------------------------------------------------
+def test_a_plug_is_switched_off_and_on(lan: Network, db: Database, config: Config) -> None:
+    home = HomeService(config, db, {"tapo": Tapo}, clock=lambda: 1_790_000_000.0)
+    home.connect("tapo", FORM, NET)
+    home.poll(home.repo.accounts()[0].id)
+    tv = next(d for d in home.overview()["devices"] if d["name"] == "Lounge TV")
+    assert tv["can_switch"] and tv["now"]["switched_on"] is True
+    view = home.switch(tv["id"], False)
+    assert lan.plugs["192.168.0.21"].on is False
+    assert next(d for d in view["devices"] if d["id"] == tv["id"])["now"]["switched_on"] is False  # read again
+    home.switch(tv["id"], True)
+    assert lan.plugs["192.168.0.21"].on is True
+    with pytest.raises(HomeSetupError, match="on or off"):
+        home.switch(tv["id"], "off")
+    with pytest.raises(HomeSetupError) as e:
+        home.switch(999, True)
+    assert e.value.status == 404
+
+
+def test_a_fridge_is_only_switched_off_when_thats_confirmed(lan: Network, db: Database, config: Config) -> None:
+    home = HomeService(config, db, {"tapo": Tapo}, clock=lambda: 1_790_000_000.0)
+    home.connect("tapo", FORM, NET)
+    home.poll(home.repo.accounts()[0].id)
+    fridge = next(d for d in home.overview()["devices"] if d["name"] == "Fridge")
+    home.update_device(fridge["id"], {"kind": "fridge"})
+    with pytest.raises(HomeSetupError, match="stops keeping food cold") as e:
+        home.switch(fridge["id"], False)
+    assert e.value.status == 409 and lan.plugs["192.168.0.22"].on is True
+    home.switch(fridge["id"], False, confirm=True)
+    assert lan.plugs["192.168.0.22"].on is False
+    home.switch(fridge["id"], True)  # on needs no confirming
+    assert lan.plugs["192.168.0.22"].on is True
+
+
+def test_a_plug_that_cant_be_reached_says_so(lan: Network, db: Database, config: Config) -> None:
+    home = HomeService(config, db, {"tapo": Tapo}, clock=lambda: 1_790_000_000.0)
+    home.connect("tapo", FORM, NET)
+    home.poll(home.repo.accounts()[0].id)
+    tv = next(d for d in home.overview()["devices"] if d["name"] == "Lounge TV")
+    lan.plugs.pop("192.168.0.21")
+    with pytest.raises(HomeSetupError, match="couldn't be switched off") as e:
+        home.switch(tv["id"], False)
+    assert e.value.status == 502
