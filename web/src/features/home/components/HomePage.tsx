@@ -10,9 +10,9 @@ import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { homePatternsQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
-import { DeviceCard } from "~/features/home/components/DeviceCard";
+import { DeviceCard, GroupCard } from "~/features/home/components/DeviceCard";
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
-import { deviceColors } from "~/features/home/utils";
+import { deviceColors, groupPattern, groupUsage, homeItems } from "~/features/home/utils";
 
 const RANGE_WORDS: Record<Range, string> = { today: "today", week: "in 7 days", month: "in 30 days" };
 
@@ -60,6 +60,10 @@ export function HomePage({ range }: { range: Range }) {
   const visible = devices.filter((d) => !d.hidden);
   for (const d of devices) if (d.hidden) colors.delete(d.id);
   const kinds = new Map((overview.data?.kinds ?? []).map((k) => [k.id, k]));
+  const kindLabels = new Map([...kinds].map(([id, k]) => [id, k.label]));
+  // Grouped devices (the plugs in a room) are shown as one, in the breakdown and as a card.
+  const items = homeItems(devices);
+  const used = usage.data && groupUsage(usage.data, items);
   const running = visible.filter((d) => d.now?.running && !d.now.stale);
   const problems = (overview.data?.integrations ?? []).filter((i) => i.account?.error);
 
@@ -91,7 +95,7 @@ export function HomePage({ range }: { range: Range }) {
       ))}
       <div className="grid grid-cols-12 gap-5">
         <UsageCard
-          usage={usage.data}
+          usage={used}
           colors={colors}
           range={range}
           onRange={(r) => {
@@ -100,19 +104,34 @@ export function HomePage({ range }: { range: Range }) {
           }}
         />
         {overview.data && !devices.length && <ConnectPrompt />}
-        {visible.map((d) => (
-          <DeviceCard
-            key={d.id}
-            device={d}
-            used={usage.data?.devices.find((u) => u.id === d.id)}
-            pattern={patterns.data?.find((p) => p.id === d.id)}
-            cycles={!!kinds.get(d.kind)?.cycles}
-            kindLabel={kinds.get(d.kind)?.label ?? "Device"}
-            color={colors.get(d.id)!}
-            home={usage.data?.total.home ?? null}
-            rangeLabel={RANGE_WORDS[range]}
-          />
-        ))}
+        {items.map((item) =>
+          item.group ? (
+            <GroupCard
+              key={`group:${item.group}`}
+              name={item.group}
+              members={item.members}
+              used={used?.devices.find((u) => u.id === item.id)}
+              pattern={patterns.data && groupPattern(patterns.data, item)}
+              cycles={item.members.every((d) => kinds.get(d.kind)?.cycles)}
+              kindLabels={kindLabels}
+              color={colors.get(item.id)!}
+              home={usage.data?.total.home ?? null}
+              rangeLabel={RANGE_WORDS[range]}
+            />
+          ) : (
+            <DeviceCard
+              key={item.id}
+              device={item.members[0]}
+              used={used?.devices.find((u) => u.id === item.id)}
+              pattern={patterns.data?.find((p) => p.id === item.id)}
+              cycles={!!kinds.get(item.members[0].kind)?.cycles}
+              kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
+              color={colors.get(item.id)!}
+              home={usage.data?.total.home ?? null}
+              rangeLabel={RANGE_WORDS[range]}
+            />
+          ),
+        )}
       </div>
     </>
   );

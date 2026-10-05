@@ -313,6 +313,22 @@ def test_devices_can_be_renamed_set_as_what_they_power_and_hidden(home: HomeServ
     assert e.value.status == 404
 
 
+def test_devices_can_be_grouped_and_a_group_is_named_as_it_was_first(home: HomeService) -> None:
+    home.connect("fake", FORM)
+    Fake.script = [[Reading("l", "Study (Left)", "plug"), Reading("r", "Study (Right)", "plug")]]
+    home.poll_due()
+    left, right = home.repo.devices()
+    assert home.overview()["devices"][0]["group"] is None
+    home.update_device(left.id, {"group": "  Study  "})
+    groups = [d["group"] for d in home.update_device(right.id, {"group": "study"})["devices"]]
+    assert groups == ["Study", "Study"]
+    assert home.update_device(right.id, {"group": ""})["devices"][1]["group"] is None
+    assert home.update_device(left.id, {"group": None})["devices"][0]["group"] is None
+    for bad in ({"group": 3}, {"group": "x" * 61}):
+        with pytest.raises(HomeSetupError, match="group"):
+            home.update_device(left.id, bad)
+
+
 def test_the_demo_is_only_offered_in_mock_mode(db: Database, config: Config) -> None:
     live = Config(db_path=config.db_path, mock=False, auth=False)
     assert "demo" not in HomeService(live, db).available()

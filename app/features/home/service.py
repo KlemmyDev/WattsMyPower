@@ -6,7 +6,8 @@ Each connected account is polled on its integration's interval (Integration.poll
 poll's readings go through each device's meter (app.features.home.energy), which adds its energy and runs to the
 database, and are kept in memory as what each device is doing now. Devices are added the first time their account
 reports them, as their integration says they are; the household can rename one, say what it is (a smart plug
-powering the washer), or hide it from the breakdown.
+powering the washer), put it in a group with others (the plugs in a room, which the Home page shows as one), or hide it
+from the breakdown.
 
 There's one account per integration: a second sign-in to the same one would count its devices twice. A poll that
 fails tries again later, backing off to BACKOFF_MAX; one whose sign-in no longer works stops until it's signed in
@@ -157,6 +158,7 @@ class HomeService:
             "kind": d.kind,
             "model": d.model,
             "hidden": d.hidden,
+            "group": d.group,
             "now": now,
             "last_run": last_run,
             "can_switch": bool(cls and cls.can_switch),
@@ -288,7 +290,8 @@ class HomeService:
         return self.overview()
 
     def update_device(self, device_id: int, body: dict[str, Any]) -> dict[str, Any]:
-        """Rename a device, say what it is, or hide it from the breakdown."""
+        """Rename a device, say what it is, put it in a group (or take it out, with an empty one), or hide it from the
+        breakdown. A group named as one that's there already, but for its capitals, is that one."""
         changes: dict[str, Any] = {}
         if "name" in body:
             name = str(body["name"] or "").strip()
@@ -303,9 +306,19 @@ class HomeService:
             if not isinstance(body["hidden"], bool):
                 raise HomeSetupError("Say whether to leave it out of the breakdown.")
             changes["hidden"] = int(body["hidden"])
+        if "group" in body:
+            if body["group"] is not None and not isinstance(body["group"], str):
+                raise HomeSetupError("Name the group, or leave it empty.")
+            group = " ".join((body["group"] or "").split())
+            if len(group) > NAME_MAX:
+                raise HomeSetupError(f"Give the group a name of up to {NAME_MAX} characters.")
+            changes["group"] = group or None
         with self._lock, self.db.writing() as conn:
             if self.repo.device(conn, device_id) is None:
                 raise HomeSetupError("There's no such device.", 404)
+            if changes.get("group"):
+                there = {d.group.casefold(): d.group for d in self.repo.devices(conn) if d.group}
+                changes["group"] = there.get(changes["group"].casefold(), changes["group"])
             self.repo.update_device(conn, device_id, **changes)
         return self.overview()
 

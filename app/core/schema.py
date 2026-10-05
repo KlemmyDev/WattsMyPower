@@ -33,7 +33,8 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                  the keys to encrypt for them (app.features.alerts.webpush)
     home_accounts    smart-home integrations connected (a Hisense account, smart plugs…): what each keeps to
                      sign in, and how its polling is going (app.features.home)
-    home_devices     the devices they brought: washer, dryer, fridge, plug…, what each is set as, and its meter
+    home_devices     the devices they brought: washer, dryer, fridge, plug…, what each is set as, its group, and its
+                     meter
     home_energy      each device's energy, kWh per 5 minutes
     home_runs        each run of an appliance that runs in cycles (a wash, a dry): when, how long, how much
 
@@ -347,6 +348,12 @@ def _home(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS home_runs_by_device ON home_runs (device, start)")
 
 
+def _home_groups(conn: sqlite3.Connection) -> None:
+    """A device can be put in a group (`group_name`, e.g. "Study" for the plugs "Study (Left)" and "Study (Right)"),
+    which the Home page shows as one. Null: on its own."""
+    conn.execute("ALTER TABLE home_devices ADD COLUMN group_name TEXT")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -364,6 +371,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _cars,
     _push_subscriptions,
     _home,
+    _home_groups,
 ]
 
 
