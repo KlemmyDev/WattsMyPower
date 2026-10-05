@@ -40,6 +40,7 @@ from app.features.alerts.rules import BY_ID, CATEGORIES, RULES, Check, Facts, Ru
 from app.features.alerts.sun import daylight_since, elevation
 from app.features.alerts.webpush import PushService
 from app.features.amber.repository import PriceRepository
+from app.features.bills.service import BillsService
 from app.features.insights.service import InsightsService
 from app.features.live.ingest import NO_INVERTER
 from app.features.live.service import LiveService, Status
@@ -70,6 +71,7 @@ class AlertsService:
         insights: InsightsService,
         send: Send = post,
         prices: PriceRepository | None = None,
+        bills: BillsService | None = None,
     ):
         self.repo = AlertsRepository(db)
         self.live = live
@@ -78,10 +80,12 @@ class AlertsService:
         self.tariffs = tariffs
         self.insights = insights
         self.prices = prices  # Amber's stored prices, for an Amber tariff
+        self.bills = bills  # for the current bill against its budget
         self.send = send
         self.push = PushService(db, send)
         self._lock = threading.Lock()
         self._perf: tuple[str, dict[str, Any] | None] | None = None  # (hour checked, performance)
+        self._bill: tuple[str, dict[str, Any]] | None = None  # (hour checked, the bill's expected total)
         self._queue: asyncio.Queue[Status] | None = None
         self._task: asyncio.Task[None] | None = None
 
@@ -132,6 +136,7 @@ class AlertsService:
             performance=self._performance,
             yesterday=lambda: self._yesterday(now),
             price=lambda: self._price(now),
+            bill=lambda: self._current_bill(now),
         )
 
     def _performance(self) -> dict[str, Any] | None:
@@ -142,6 +147,25 @@ class AlertsService:
         perf: dict[str, Any] | None = self.insights.build(None, 0.0).get("performance")
         self._perf = (hour, perf)
         return perf
+
+    def _current_bill(self, now: float) -> dict[str, Any] | None:
+        """The current bill's expected total against the budget. Working it out prices a year of days, and
+        it moves slowly, so it's worked out once an hour (or when the budget changes)."""
+        budget = self.settings.get("bill_budget")
+        if not budget or self.bills is None:
+            return None
+        hour = time.strftime("%Y-%m-%d %H", time.localtime(now))
+        if not (self._bill and self._bill[0] == hour):
+            out = self.bills.build(int(now))
+            p, expected = out["period"], out["current"]["expected"]
+            bill = {
+                "start": p["start"],
+                "end": p["end"],
+                "day": p["day"],
+                "expected": expected["net_cost"] if expected else None,
+            }
+            self._bill = (hour, bill)
+        return {**self._bill[1], "budget": budget}
 
     def _amber(self) -> bool:
         return self.prices is not None and self.tariffs.current()[0].get("type") == "amber"
@@ -356,7 +380,12 @@ class AlertsService:
             "category": rule.category,
             "resolves": rule.resolves,
             # It can't work on this setup (e.g. a price alert without an Amber tariff): it says so, and stays quiet.
-            "needs": rule.needs if rule.needs == "amber" and not amber else None,
+            "needs": (
+                rule.needs
+                if (rule.needs == "amber" and not amber)
+                or (rule.needs == "budget" and not self.settings.get("bill_budget"))
+                else None
+            ),
             "enabled": saved.enabled if saved else rule.enabled,
             "cooldown_hours": None if rule.cooldown is None else round(rule.cooldown / 3600, 1),
             "settings": [{**asdict(s), "value": values[s.key]} for s in rule.settings],

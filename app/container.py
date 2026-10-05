@@ -72,6 +72,7 @@ def build_services(config: Config) -> Services:
     amber = AmberService(db, tariffs)
     plans = PlansService(tariffs)
     meter = MeterService(db, readings)
+    bills = BillsService(db, readings, settings, tariffs, meter, amber.repo)
     live = LiveService(config, settings, tariffs)
     collector = None if config.mock else CollectorClient(config.collector_url, config.collector_token)
     source: CollectorIngest | Simulator = (
@@ -98,13 +99,13 @@ def build_services(config: Config) -> Services:
         car=car,
         charge_planner=ChargePlanner(car, forecast, settings, tariffs, amber.repo),
         meter=meter,
-        bills=BillsService(db, readings, settings, tariffs, meter, amber.repo),
+        bills=bills,
         imports=ImportService(db),
         auth=AuthService(db, enabled=config.auth),
         integrations=integrations,
         storage=StorageService(config, db, collector),
         onboarding=OnboardingService(config, db, integrations),
         live=live,
-        alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo),
+        alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo, bills=bills),
         source=source,
     )

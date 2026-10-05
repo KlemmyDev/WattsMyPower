@@ -78,6 +78,29 @@ def test_the_current_bill_is_what_has_happened_plus_the_recent_average(
     assert out["bands"] == [{"name": "All times", "import_kwh": so_far["import_kwh"], "cost": so_far["import_cost"]}]
 
 
+def test_discounts_and_credits_come_off_each_bill(db: Database, config: Config, readings: ReadingsRepository) -> None:
+    # $3.60 of usage and $1 supply a day, as above; 10% off usage, and $365 of credits a year ($1 a day).
+    _import(readings, dt.date(2026, 9, 10), dt.datetime.fromtimestamp(NOW), 500)
+    bills = _bills(db, config, readings)
+    bills.settings.save({"bill_discount_pct": 10, "bill_credits_year": 365, "bill_budget": 100})
+    out = bills.build(NOW)
+    expected = out["current"]["expected"]
+    assert expected["discount"] == pytest.approx(31 * 0.36, abs=0.1)
+    assert expected["credits"] == pytest.approx(31, abs=0.01)
+    assert expected["net_cost"] == pytest.approx(31 * (4.6 - 0.36 - 1), abs=0.1)
+    # With no solar here, the bill without it is the same bill.
+    assert expected["without_solar"] == pytest.approx(expected["net_cost"], abs=0.05)
+    assert out["upcoming"][0]["net_cost"] == pytest.approx(30 * (4.6 - 0.36 - 1), abs=0.1)
+    assert out["budget"] == 100
+    # Each day stays at the rates alone: what comes off is the bill's.
+    assert out["days"][0]["net_cost"] == pytest.approx(4.6, abs=0.01)
+
+    bills.settings.save({"bill_discount_on": "usage_supply", "bill_credits_year": 0, "bill_budget": 0})
+    out = bills.build(NOW)
+    assert out["current"]["expected"]["discount"] == pytest.approx(31 * 0.46, abs=0.1)
+    assert out["budget"] is None
+
+
 def test_upcoming_bills_follow_the_same_weeks_last_year(
     db: Database, config: Config, readings: ReadingsRepository
 ) -> None:

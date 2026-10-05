@@ -1,6 +1,6 @@
 """
 Settings people can change from the dashboard: the forecast location (and its place
-name), the billing period, and the system details the inverter doesn't report (array
+name), the billing period with its discounts, credits and budget, and the system details the inverter doesn't report (array
 size, battery overrides). Tariffs are structured, so they have their own store.
 
 Environment variables provide the defaults; anything saved from the Settings page is
@@ -28,6 +28,8 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
         ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
         "best_match",
     ),
+    # What a bill's discount comes off (Settings → Bills): usage alone, or usage and the supply charge.
+    "bill_discount_on": (("usage", "usage_supply"), "usage"),
     # How the Overview draws the house (Settings → System → Your house).
     "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
 }
@@ -59,7 +61,13 @@ OWNERSHIP: dict[str, tuple[str, str]] = {
     "battery_warranty_years": ("Battery warranty", " years"),
     "battery_warranty_mwh": ("Battery warranty energy", " MWh"),
 }
-NAMED = SYSTEM | OWNERSHIP
+# Discounts, credits and the budget (Settings → Bills), named the same way.
+BILLS: dict[str, tuple[str, str]] = {
+    "bill_discount_pct": ("The discount", "%"),
+    "bill_credits_year": ("Credits a year", ""),
+    "bill_budget": ("The budget", ""),
+}
+NAMED = SYSTEM | OWNERSHIP | BILLS
 # kv marker: the system details have been copied from the environment (see seed_system).
 SYSTEM_SEEDED = "system_seeded"
 
@@ -76,6 +84,12 @@ class SettingsStore:
             "bill_months": (1, 3, 3),
             "bill_day": (1, 28, 1),
             "bill_anchor": (1, 12, 1),
+            # A retailer's discount (% off usage, or usage and supply: bill_discount_on), credits a year that
+            # come off bills (concessions, government rebates: dollars, spread over the days), and a budget a
+            # bill (dollars). 0 = none.
+            "bill_discount_pct": (0, 50, 0),
+            "bill_credits_year": (0, 10_000, 0),
+            "bill_budget": (0, 100_000, 0),
             # Solar array size in kW of panels: the forecast's starting point before it calibrates.
             "pv_kw": (0.1, 100, config.pv_kw),
             # Battery capacity in kWh. 0 = use what the inverter reports.

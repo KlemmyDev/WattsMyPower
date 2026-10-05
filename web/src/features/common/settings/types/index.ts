@@ -6,6 +6,15 @@ export type Settings = {
   bill_months: number;
   bill_day: number;
   bill_anchor: number;
+  /**
+   * What comes off each bill (Settings → Bills): the retailer's discount (%) off usage, or off usage and the supply
+   * charge; credits a year in dollars (concessions, government rebates), spread over the days; and a budget a bill in
+   * dollars, for the Bills page and its alert. 0 = none.
+   */
+  bill_discount_pct: number;
+  bill_discount_on: "usage" | "usage_supply";
+  bill_credits_year: number;
+  bill_budget: number;
   location_name: string | null;
   /**
    * What the inverter can't report (Settings → System): the array size in kW, the battery's capacity in kWh
@@ -45,6 +54,17 @@ export type Settings = {
   battery_warranty_years: number;
   battery_warranty_mwh: number;
 };
+
+/** Settings a bill's dates and total depend on. */
+export const BILL_SETTINGS: (keyof Settings)[] = [
+  "bill_months",
+  "bill_day",
+  "bill_anchor",
+  "bill_discount_pct",
+  "bill_discount_on",
+  "bill_credits_year",
+  "bill_budget",
+];
 
 export type OwnershipKey =
   "system_cost" | "system_installed" | "battery_installed" | "battery_warranty_years" | "battery_warranty_mwh";

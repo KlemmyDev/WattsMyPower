@@ -7,15 +7,14 @@ import { cn } from "~/features/common/ui/utils";
 
 const TABS = [
   { to: "/settings/system", label: "System", icon: "home" },
-  { to: "/settings/tariffs", label: "Tariffs", icon: "tag" },
-  { to: "/settings/billing", label: "Billing", icon: "calendar" },
+  { to: "/settings/bills", label: "Bills", icon: "dollar" },
   { to: "/settings/integrations", label: "Integrations", icon: "plug" },
   { to: "/settings/alerts", label: "Alerts", icon: "bell" },
   { to: "/settings/database", label: "Database", icon: "database" },
   { to: "/settings/account", label: "Account", icon: "user" },
 ] as const satisfies readonly { to: string; label: string; icon: IconName }[];
 
-/** Settings: a row of tabs over the System, Tariffs, Billing, Integrations, Alerts, Database and Account pages. */
+/** Settings: a row of tabs over the System, Bills, Integrations, Alerts, Database and Account pages. */
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsLayout,
 });
@@ -30,7 +29,7 @@ function SettingsLayout() {
 
   return (
     <>
-      <PageHeader title="Settings" sub="System details, rates, billing, connected services, alerts and your data" />
+      <PageHeader title="Settings" sub="System details, bills and rates, connected services, alerts and your data" />
       {/* On a phone the tabs don't all fit: the row scrolls sideways on its own, not the page. */}
       <nav
         ref={row}

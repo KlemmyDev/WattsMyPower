@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { alertsQuery, saveRule } from "~/features/alerts/api";
 import { BrowserNotifications } from "~/features/alerts/components/BrowserNotifications";
@@ -88,9 +89,9 @@ function RuleRow({ rule }: { rule: AlertRule }) {
                 Since {when(rule.active_since)}
               </Pill>
             )}
-            {rule.needs === "amber" && (
+            {rule.needs && (
               <Pill tone="neutral" size="sm">
-                Needs Amber
+                {rule.needs === "amber" ? "Needs Amber" : "Needs a budget"}
               </Pill>
             )}
           </div>
@@ -127,8 +128,16 @@ function RuleRow({ rule }: { rule: AlertRule }) {
           )}
           {rule.needs === "amber" && (
             <HelpText>
-              This watches Amber&apos;s prices, so it stays quiet until your rates are set to Amber in Settings →
-              Tariffs.
+              This watches Amber&apos;s prices, so it stays quiet until your rates are set to Amber in Settings → Bills.
+            </HelpText>
+          )}
+          {rule.needs === "budget" && (
+            <HelpText>
+              This stays quiet until you set a budget a bill in{" "}
+              <Link to="/settings/bills" hash="discounts">
+                Settings → Bills
+              </Link>
+              .
             </HelpText>
           )}
         </div>

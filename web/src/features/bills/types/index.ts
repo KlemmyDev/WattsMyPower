@@ -1,4 +1,7 @@
-/** The Bills page (GET /api/bills). Dates are local YYYY-MM-DD; money is AUD; a negative net cost is a credit. */
+/**
+ * The Bills page (GET /api/bills). Dates are local YYYY-MM-DD; money is AUD; a negative net cost is a credit. A bill's
+ * net cost is after its discount and credits; each day's is at the rates alone.
+ */
 
 export type BillTotals = {
   import_kwh: number;
@@ -8,7 +11,10 @@ export type BillTotals = {
   feed_in_credit: number;
   supply: number;
   net_cost: number;
-  /** What the home's use would have cost from the grid alone, supply included. */
+  /** What comes off the bill (Settings → Bills): the retailer's discount, and credits such as concessions. */
+  discount: number;
+  credits: number;
+  /** What the home's use would have cost from the grid alone, supply included, less the same discount and credits. */
   without_solar: number;
 };
 
@@ -95,6 +101,8 @@ export type Bills = {
   /** null where there isn't enough history to estimate that bill. */
   upcoming: ((BillSpan & BillTotals & { basis: Basis }) | null)[];
   next_year: { net_cost: number; without_solar: number } | null;
+  /** The budget a bill set in Settings → Bills ($), or null with none. */
+  budget: number | null;
 };
 
 /** Grid use by hour of the day (GET /api/bills/grid-hours): per day on average, each month. */

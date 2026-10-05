@@ -3,8 +3,10 @@ The Bills page: the current billing period so far and its expected total, each o
 what the days still to come are expected to cost), ways to lower it (see tips), the next few
 bills, and past bills.
 
-Billing periods follow Settings > Billing: every 1, 2 or 3 months from a day of the month (1-28),
-in step with a month a bill starts in. Days are priced like /api/costs, at today's rates (on Amber,
+Billing periods follow Settings > Bills: every 1, 2 or 3 months from a day of the month (1-28),
+in step with a month a bill starts in. A bill's total takes off the retailer's discount (a share of
+usage, or of usage and supply) and credits (a yearly amount, such as a concession, by the day); each
+day is at the rates alone. Days are priced like /api/costs, at today's rates (on Amber,
 at the prices of the time). Days
 still to come are estimated from the same week last year where there are complete days to go on,
 otherwise from the average complete day over the last 30 days.
@@ -124,11 +126,23 @@ class BillsService:
                 return _average(seen), "last_year"
             return (recent_avg, "recent") if recent_avg else (None, None)
 
+        share = self.settings.get("bill_discount_pct") / 100
+        on_supply = self.settings.get_choice("bill_discount_on") == "usage_supply"
+        credit_a_day = self.settings.get("bill_credits_year") / 365
+
         def totals(parts: list[Day]) -> dict[str, float]:
-            out = {f: round(sum(p[f] for p in parts), 2) for f in FIELDS}
-            out["supply"] = round(supply * len(parts), 2)
-            out["net_cost"] = round(out["import_cost"] + out["supply"] - out["feed_in_credit"], 2)
-            return out
+            out = {f: sum(p[f] for p in parts) for f in FIELDS}
+            out["supply"] = supply * len(parts)
+            off = out["supply"] if on_supply else 0.0
+            # Without solar, the same discount and credits would have come off too.
+            usage_without = out["without_solar"] - out["supply"]
+            out["discount"] = share * (max(out["import_cost"], 0.0) + off)
+            out["credits"] = credit_a_day * len(parts)
+            out["net_cost"] = (
+                out["import_cost"] + out["supply"] - out["feed_in_credit"] - out["discount"] - out["credits"]
+            )
+            out["without_solar"] -= share * (max(usage_without, 0.0) + off) + out["credits"]
+            return {k: round(v, 2) for k, v in out.items()}
 
         def meter_days(parts: list[Day]) -> int:
             return sum(1 for p in parts if p.get("source") == "meter")
@@ -238,6 +252,7 @@ class BillsService:
             "past": past,
             "upcoming": upcoming,
             "next_year": next_year,
+            "budget": self.settings.get("bill_budget") or None,
         }
 
     # ------------------------------------------------------------------ grid use by hour

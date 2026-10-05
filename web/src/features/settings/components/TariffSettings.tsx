@@ -8,7 +8,7 @@ import { TariffEditor } from "~/features/settings/components/TariffEditor";
 import { EDITOR_START, editorReducer } from "~/features/settings/utils";
 
 /**
- * Settings → Tariffs: Amber Electric (switching the rates to its prices), the plan finder (which loads a
+ * Settings → Bills, its rates: Amber Electric (switching the rates to its prices), the plan finder (which loads a
  * published plan into the rates editor below it), and the rates editor.
  */
 export function TariffSettings() {

@@ -46,6 +46,8 @@ export function PaidFor({ bills }: { bills: Bills }) {
           label="Feed-in credit"
           value={money(s.feed_in_credit ? -s.feed_in_credit : 0)} // on Amber, a negative feed-in price costs money
         />
+        {s.discount > 0 && <ShareRow color={COLOR.good} label="Discount" value={money(-s.discount)} />}
+        {s.credits > 0 && <ShareRow color={COLOR.good} label="Credits" value={money(-s.credits)} />}
       </div>
     </Card>
   );
@@ -128,8 +130,12 @@ function CostOnAmber({ bills }: { bills: Bills }) {
 export function BillPace({ bills }: { bills: Bills }) {
   const exp = bills.current.expected;
   const whole = bills.days.filter((d) => !d.partial);
+  // Days are at the rates alone; the bill has its discount and credits off. Take the same off the run rate.
+  const off = exp ? exp.discount + exp.credits : 0;
   const run =
-    whole.length >= PACE_DAYS ? (whole.reduce((a, d) => a + d.net_cost, 0) / whole.length) * bills.period.days : null;
+    whole.length >= PACE_DAYS
+      ? (whole.reduce((a, d) => a + d.net_cost, 0) / whole.length) * bills.period.days - off
+      : null;
   const diff = exp && run != null ? run - exp.net_cost : null;
   const tol = exp ? Math.max(5, Math.abs(exp.net_cost) * 0.05) : 0;
   const [status, color, note] =

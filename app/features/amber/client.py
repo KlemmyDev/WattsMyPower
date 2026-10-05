@@ -2,7 +2,7 @@
 The Amber Electric public API (https://api.amber.com.au/v1; documented at app.amber.com.au/developers,
 with the OpenAPI spec at github.com/amberelectric/public-api).
 
-The household creates a personal API key in Amber's app and pastes it in Settings → Tariffs; it's
+The household creates a personal API key in Amber's app and pastes it in Settings → Bills; it's
 sent as a Bearer token. Amber allows 50 requests per 5 minutes per account (shared with anything else
 using the account, such as Home Assistant) and reports what's left in RateLimit-* headers, which are
 kept here so the sync can stop early. Prices are fetched a day or more per request and kept in the

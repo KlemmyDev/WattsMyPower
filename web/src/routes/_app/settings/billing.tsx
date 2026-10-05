@@ -1,20 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MeterComparison } from "~/features/meter/components/MeterComparison";
-import { MeterDataSettings } from "~/features/meter/components/MeterDataSettings";
-import { BillingSettings } from "~/features/settings/components/BillingSettings";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** The billing period and smart meter data moved into Settings → Bills; old links land there. */
 export const Route = createFileRoute("/_app/settings/billing")({
-  head: () => ({ meta: [{ title: "Settings · WattsMyPower" }] }),
-  component: BillingPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/bills", hash: "period", replace: true });
+  },
 });
-
-/** Settings → Billing: the billing period, then the smart meter's data and how it compares with the dashboard. */
-function BillingPage() {
-  return (
-    <>
-      <BillingSettings />
-      <MeterDataSettings />
-      <MeterComparison />
-    </>
-  );
-}

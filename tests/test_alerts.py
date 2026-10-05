@@ -32,6 +32,7 @@ from app.main import create_app
 
 T0 = time.mktime((2026, 10, 2, 11, 0, 0, 0, 0, -1))  # late morning, local time
 MIN = 60
+DAY = 86400
 HOUR = 3600
 NTFY = {"url": "https://ntfy.sh/klemm-solar", "token": "tk_abcdefghijklmnop1234"}
 
@@ -515,7 +516,7 @@ def test_the_new_rules_are_off_until_turned_on(on: AlertsService, send: FakeSend
     rules = {r["id"]: r for r in on.overview()["rules"]}
     assert rules["solar_output"]["category"] == "solar" and rules["solar_output"]["resolves"] is False
     assert rules["price_high"]["needs"] == "amber"  # not on an Amber tariff
-    assert [c["id"] for c in on.overview()["categories"]] == ["system", "solar", "grid", "prices", "summary"]
+    assert [c["id"] for c in on.overview()["categories"]] == ["system", "solar", "grid", "prices", "bills", "summary"]
 
 
 def test_spare_solar_after_its_minutes_once_per_cooldown(on: AlertsService, send: FakeSend) -> None:
@@ -633,3 +634,48 @@ def test_price_alerts_stay_quiet_off_amber(on: AlertsService, send: FakeSend) ->
     on.save_rule("price_negative", {"enabled": True, "settings": {"cents": 20}})
     on.evaluate(sunny(T0))
     assert send.sent == []
+
+
+# -- bills ---------------------------------------------------------------------------------
+def test_a_bill_heading_over_budget(on: AlertsService, send: FakeSend) -> None:
+    rule = next(r for r in on.overview()["rules"] if r["id"] == "bill_budget")
+    assert rule["enabled"] and rule["category"] == "bills" and rule["needs"] == "budget"  # no budget set yet
+    bill = {"start": "2026-10-01", "end": "2026-12-31", "day": 3, "expected": 450.0, "budget": 400.0}
+
+    def at(day: int, expected: float | None) -> Facts:
+        return facts(T0 + day * DAY, bill=lambda: {**bill, "day": day, "expected": expected})
+
+    on.evaluate(at(3, 450.0))  # too early in the period to go on
+    assert send.sent == []
+    on.evaluate(at(5, 450.0))
+    assert send.titles() == ["Your bill is heading over budget"]
+    assert send.sent[0]["body"]["message"].startswith(
+        "This bill (1 October to 31 December) is on course for about $450, $50 over your $400 budget."
+    )
+    on.evaluate(at(6, 395.0))  # just under: not yet back within it
+    assert len(send.sent) == 1
+    on.evaluate(at(7, 380.0))
+    assert send.titles()[-1] == "Your bill is back within budget"
+    on.evaluate(facts(T0 + 8 * DAY, bill=lambda: None))  # the budget taken away: nothing more to say
+    assert len(send.sent) == 2
+
+
+def test_the_bill_against_its_budget_is_worked_out_hourly(alerts: AlertsService) -> None:
+    builds = []
+
+    class Bills:
+        def build(self, now: int) -> dict[str, Any]:
+            builds.append(now)
+            p = {"start": "2026-10-01", "end": "2026-10-31", "day": 15, "days": 31}
+            return {"period": p, "current": {"expected": {"net_cost": 210.0}}}
+
+    alerts.bills = Bills()  # type: ignore[assignment]
+    assert alerts._current_bill(T0) is None  # no budget
+    alerts.settings.save({"bill_budget": 200})
+    assert alerts._current_bill(T0) == {
+        "start": "2026-10-01", "end": "2026-10-31", "day": 15, "expected": 210.0, "budget": 200.0
+    }  # fmt: skip
+    alerts._current_bill(T0 + 60)
+    assert len(builds) == 1
+    rule = next(r for r in alerts.overview()["rules"] if r["id"] == "bill_budget")
+    assert rule["needs"] is None

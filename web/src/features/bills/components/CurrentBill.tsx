@@ -25,12 +25,12 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
                 ? "Bills could not be loaded. Try again shortly."
                 : "Loading"
               : exp
-                ? `Expected total. Without solar and battery this bill would be about ${dollars(exp.without_solar)}.`
+                ? `Expected total${budgetNote(exp.net_cost, bills.budget)}. Without solar and battery this bill would be about ${dollars(exp.without_solar)}.`
                 : "The bill so far. An expected total needs at least one full day of readings."
           }
         />
-        <ButtonLink to="/settings/billing" variant="chip" className="flex-none px-3.5 py-1.5">
-          Billing period
+        <ButtonLink to="/settings/bills" hash="period" variant="chip" className="flex-none px-3.5 py-1.5">
+          Bill settings
         </ButtonLink>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -55,6 +55,8 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
             {/* On Amber, a negative feed-in price makes exporting cost money. */}
             {money(use.feed_in_credit ? -use.feed_in_credit : 0)}
           </DataRow>
+          {use.discount > 0 && <DataRow label="Discount">{money(-use.discount)}</DataRow>}
+          {use.credits > 0 && <DataRow label="Credits">{money(-use.credits)}</DataRow>}
           <DataRow label={exp ? "Expected total" : "Total so far"} total>
             {exp ? billAmount(use.net_cost) : billCents(use.net_cost)}
           </DataRow>
@@ -69,4 +71,13 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
       )}
     </Card>
   );
+}
+
+/** ", $32 over your $380 budget", or under it; nothing without a budget. */
+function budgetNote(total: number, budget: number | null): string {
+  if (!budget) return "";
+  const by = total - budget;
+  return by > 0
+    ? `, ${dollars(by)} over your ${dollars(budget)} budget`
+    : `, ${dollars(-by)} under your ${dollars(budget)} budget`;
 }

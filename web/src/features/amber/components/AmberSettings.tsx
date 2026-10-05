@@ -216,7 +216,7 @@ function AmberAccount() {
               {tariff && tariff.type !== "amber" && (
                 <Notice tone="info" className="flex flex-wrap items-center justify-between gap-3">
                   <span>Your rates don't use Amber's prices yet.</span>
-                  <ButtonLink to="/settings/tariffs" size="sm" variant="outline">
+                  <ButtonLink to="/settings/bills" hash="rates" size="sm" variant="outline">
                     Use them in Tariffs
                   </ButtonLink>
                 </Notice>

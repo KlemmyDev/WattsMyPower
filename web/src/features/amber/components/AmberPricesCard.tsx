@@ -43,7 +43,7 @@ export function AmberPricesCard({ prices, now }: { prices: AmberPrices; now: num
         title="Electricity prices"
         id="h-prices"
         action={
-          <ButtonLink to="/settings/tariffs" variant="chip">
+          <ButtonLink to="/settings/bills" hash="rates" variant="chip">
             Amber
           </ButtonLink>
         }
