@@ -122,6 +122,39 @@ def test_the_live_snapshot_has_todays_counters_as_history_counts_them(readings: 
     assert (snap["daily_charge"], snap["daily_discharge"], snap["pv_power"]) == (3.0, 1.0, 0.0)
 
 
+def _imported(readings: ReadingsRepository, ts: int, replaces: bool, **values: float) -> None:
+    with readings.db.writing() as conn:
+        import_id = conn.execute(
+            "INSERT INTO imports (label, files, created_at, replaces) VALUES ('Daily report', 1, 0, ?)",
+            (int(replaces),),
+        ).lastrowid
+        cols = ", ".join(values)
+        conn.execute(
+            f"INSERT INTO samples_5m (ts, import_id, {cols}) VALUES (?, ?{', ?' * len(values)})",
+            (ts, import_id, *values.values()),
+        )
+
+
+def test_a_gap_filled_from_a_file_doesnt_outdo_the_inverters_own_counters(readings: ReadingsRepository) -> None:
+    """The inverter counted 42.3 kWh of solar through the day, gap included. A file filling the gap adds its power
+    readings up to 43.65 by then (they read high): the day is still the inverter's. A day with nothing recorded takes
+    the file's, and an import that replaces what was recorded wins."""
+    _fill(readings, MIDNIGHT + 8 * 3600, 10, daily_pv=20.0, daily_charge=5.0)
+    _fill(readings, MIDNIGHT + 18 * 3600, 10, daily_pv=42.3, daily_charge=12.6)
+    _imported(readings, MIDNIGHT + 17 * 3600, False, daily_pv=43.65, daily_charge=12.25, daily_discharge=8.5)
+    (day,) = readings.daily(MIDNIGHT, MIDNIGHT + 86400)
+    assert (day["daily_pv"], day["daily_charge"]) == (42.3, 12.6)
+    assert day["daily_discharge"] == 8.5  # not recorded at all that day: the file's is all there is
+
+    later = MIDNIGHT + 86400
+    _imported(readings, later + 12 * 3600, False, daily_pv=30.0)
+    _fill(readings, later + 2 * 86400, 1, daily_pv=1.0)  # another day, recorded
+    _fill(readings, later + 86400 + 9 * 3600, 5, daily_pv=12.0)
+    _imported(readings, later + 86400 + 10 * 3600, True, daily_pv=25.0)
+    days = {d["date"]: d["daily_pv"] for d in readings.daily(later, later + 2 * 86400)}
+    assert list(days.values()) == [30.0, 25.0]
+
+
 def test_a_day_first_read_part_way_through_counts_the_grid_from_midnight(readings: ReadingsRepository) -> None:
     """Connected at 2 pm: the inverter's daily counters already hold the morning's import and export,
     as daily_pv holds its solar. Without them, the morning's export would come out as home use."""
