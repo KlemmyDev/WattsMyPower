@@ -1,5 +1,5 @@
 """Outbound HTTP for the services the app calls (Open-Meteo, Energy Made Easy, OpenStreetMap, Amber,
-alert channels)."""
+alert channels, smart-home clouds)."""
 
 from __future__ import annotations
 
@@ -24,6 +24,20 @@ def fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float =
 def get_json(url: str, headers: dict[str, str] | None = None, timeout: float = 15) -> Any:
     """GET a URL and decode its JSON body. Raises on network errors and non-2xx responses."""
     return fetch_json(url, headers, timeout)[0]
+
+
+def request_json(
+    method: str, url: str, body: bytes | None = None, headers: dict[str, str] | None = None, timeout: float = 30
+) -> Any:
+    """Send a request (any method, any body) and decode its JSON answer. Raises as fetch_json does."""
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method=method,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json", **(headers or {})},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.load(resp)
 
 
 def post(url: str, body: bytes, content_type: str, headers: dict[str, str] | None = None, timeout: float = 10) -> int:

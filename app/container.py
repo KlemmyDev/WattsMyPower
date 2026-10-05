@@ -18,6 +18,7 @@ from app.features.bills.service import BillsService
 from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
+from app.features.home.service import HomeService
 from app.features.imports.service import ImportService
 from app.features.insights.service import InsightsService
 from app.features.integrations.service import IntegrationsService
@@ -51,6 +52,7 @@ class Services:
     insights: InsightsService
     car: CarService
     charge_planner: ChargePlanner
+    home: HomeService
     meter: MeterService
     bills: BillsService
     imports: ImportService
@@ -98,6 +100,7 @@ def build_services(config: Config) -> Services:
         insights=insights,
         car=car,
         charge_planner=ChargePlanner(car, forecast, settings, tariffs, amber.repo),
+        home=HomeService(config, db),
         meter=meter,
         bills=bills,
         imports=ImportService(db),

@@ -31,6 +31,11 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     cars         the electric cars connected: name, the model chosen, and their details (JSON)
     push_subscriptions  browsers that turned on notifications: where their push service takes them, and
                  the keys to encrypt for them (app.features.alerts.webpush)
+    home_accounts    smart-home integrations connected (a Hisense account, smart plugs…): what each keeps to
+                     sign in, and how its polling is going (app.features.home)
+    home_devices     the devices they brought: washer, dryer, fridge, plug…, what each is set as, and its meter
+    home_energy      each device's energy, kWh per 5 minutes
+    home_runs        each run of an appliance that runs in cycles (a wash, a dry): when, how long, how much
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -313,6 +318,35 @@ def _push_subscriptions(conn: sqlite3.Connection) -> None:
     )
 
 
+def _home(conn: sqlite3.Connection) -> None:
+    """Smart-home devices and their energy (app.features.home). New tables only.
+
+    `home_accounts.saved` is what the integration keeps to sign in (JSON, secrets included, never sent to the
+    browser); `state` how its polling is going. A device is unique on its account by `key`, the integration's own
+    id for it; `kind` is what it's set as (washer, dryer, plug…), `hidden` leaves it out of the breakdown, and
+    `meter` (JSON) is where its readings had got to (app.features.home.energy). `home_energy.ts` is the start of a
+    5-minute bucket; `home_runs.end` is null while a run is under way."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS home_accounts (id INTEGER PRIMARY KEY, integration TEXT NOT NULL,"
+        " saved TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS home_devices (id INTEGER PRIMARY KEY, account INTEGER NOT NULL, key TEXT NOT NULL,"
+        " name TEXT NOT NULL, kind TEXT NOT NULL, model TEXT, hidden INTEGER NOT NULL DEFAULT 0,"
+        " position INTEGER NOT NULL, meter TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL,"
+        " UNIQUE (account, key))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS home_energy (ts INTEGER NOT NULL, device INTEGER NOT NULL, kwh REAL NOT NULL,"
+        " PRIMARY KEY (ts, device)) WITHOUT ROWID"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS home_runs (id INTEGER PRIMARY KEY, device INTEGER NOT NULL, start INTEGER NOT NULL,"
+        " end INTEGER, kwh REAL NOT NULL, program TEXT, peak_w REAL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS home_runs_by_device ON home_runs (device, start)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -329,6 +363,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _car_charge_plans,
     _cars,
     _push_subscriptions,
+    _home,
 ]
 
 
