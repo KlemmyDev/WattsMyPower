@@ -7,11 +7,13 @@ import asyncio
 import time
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from app.container import Services
 from app.dependencies import JsonBody, ServicesDep, time_range
 from app.features.home import usage
 from app.features.home.service import HomeSetupError
+from app.features.home.types import Hints
 
 router = APIRouter(prefix="/api/home")
 
@@ -32,18 +34,32 @@ async def overview(svc: ServicesDep):
     return await asyncio.to_thread(svc.home.overview)
 
 
+async def _hints(svc: Services, request: Request) -> Hints:
+    """Where to look for devices on the network: where the inverters are, or the dashboard was opened from."""
+    client = request.client.host if request.client else None
+    return Hints(network=await asyncio.to_thread(svc.integrations.home_network, client, request.url.hostname))
+
+
+@router.get("/hints")
+async def hints(svc: ServicesDep, request: Request):
+    """What a connect form left blank falls back to: the home network devices are looked for on."""
+    return {"network": (await _hints(svc, request)).network}
+
+
 @router.post("/integrations/{integration}")
-async def connect(svc: ServicesDep, integration: str, body: JsonBody):
-    """Connect an integration with what its form asks for (signing in, for an account)."""
-    result = await _run(svc.home.connect, integration, body)
+async def connect(svc: ServicesDep, integration: str, body: JsonBody, request: Request):
+    """Connect an integration with what its form asks for (signing in, for an account; finding its devices, for
+    devices on the network)."""
+    result = await _run(svc.home.connect, integration, body, await _hints(svc, request))
     svc.home.wake()
     return result
 
 
 @router.put("/integrations/{integration}")
-async def sign_in_again(svc: ServicesDep, integration: str, body: JsonBody):
-    """Sign in to a connected integration afresh, keeping its devices and their history."""
-    result = await _run(svc.home.sign_in_again, integration, body)
+async def sign_in_again(svc: ServicesDep, integration: str, body: JsonBody, request: Request):
+    """Sign in to a connected integration afresh (or look for its devices again), keeping its devices and their
+    history."""
+    result = await _run(svc.home.sign_in_again, integration, body, await _hints(svc, request))
     svc.home.wake()
     return result
 

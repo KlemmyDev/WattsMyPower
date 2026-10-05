@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from app.features.home.integrations.connectlife import ConnectLife
 from app.features.home.integrations.demo import Demo
+from app.features.home.integrations.tapo import Tapo
 from app.features.home.types import Integration
 
-INTEGRATIONS: dict[str, type[Integration]] = {i.id: i for i in (ConnectLife, Demo)}
+INTEGRATIONS: dict[str, type[Integration]] = {i.id: i for i in (Tapo, ConnectLife, Demo)}

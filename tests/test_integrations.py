@@ -158,6 +158,12 @@ def test_the_network_to_scan_behind_docker_desktop(
     assert service.suggest_network([{"host": "192.168.0.244"}], None, "10.0.5.9") == "192.168.0.0/24"
 
 
+def test_smart_home_devices_are_looked_for_where_the_inverters_are() -> None:
+    service = IntegrationsService(Config(), None, None)  # type: ignore[arg-type]
+    assert service.home_network("10.0.5.23") == "10.0.5.0/24"  # no collector: the browser's network, as for inverters
+    assert service.home_network("127.0.0.1", "localhost") == "192.168.1.0/24"
+
+
 def test_no_collector_to_reach(service: IntegrationsService, collector: FakeCollector) -> None:
     def down() -> dict[str, Any]:
         raise CollectorError(502, "The collector couldn't be reached (URLError).")
