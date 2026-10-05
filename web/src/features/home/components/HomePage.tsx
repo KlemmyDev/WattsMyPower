@@ -9,12 +9,15 @@ import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
-import { homePatternsQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
+import { homeInsightsQuery, homePatternsQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
 import { DeviceCard, GroupCard } from "~/features/home/components/DeviceCard";
+import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
 import { deviceColors, groupPattern, groupUsage, homeItems } from "~/features/home/utils";
 
 const RANGE_WORDS: Record<Range, string> = { today: "today", week: "in 7 days", month: "in 30 days" };
+/** The period before the one shown, of the same length, in words (today isn't compared: it isn't over). */
+const BEFORE_WORDS: Record<Range, string> = { today: "", week: "the 7 days before", month: "the 30 days before" };
 
 /** The period a range covers: today by the hour, or the last 7 or 30 days (today included) by the day. */
 function period(range: Range, now: number): [start: number, end: number, bucket: "hour" | "day"] {
@@ -54,7 +57,10 @@ export function HomePage({ range }: { range: Range }) {
   const [start, end, bucket] = period(range, now);
   const overview = useQuery(homeQuery);
   const usage = useQuery(homeUsageQuery(start, end, bucket));
+  // The period before, to compare each device with (by the day, for 7 or 30 days).
+  const before = useQuery({ ...homeUsageQuery(2 * start - end, start, "day"), enabled: range !== "today" });
   const patterns = useQuery(homePatternsQuery);
+  const found = useQuery(homeInsightsQuery);
   const devices = overview.data?.devices ?? [];
   const colors = deviceColors(devices);
   const visible = devices.filter((d) => !d.hidden);
@@ -64,6 +70,8 @@ export function HomePage({ range }: { range: Range }) {
   // Grouped devices (the plugs in a room) are shown as one, in the breakdown and as a card.
   const items = homeItems(devices);
   const used = usage.data && groupUsage(usage.data, items);
+  const earlier = before.data && range !== "today" ? groupUsage(before.data, items) : undefined;
+  const beforeOf = (id: number) => (earlier ? (earlier.devices.find((u) => u.id === id)?.total ?? 0) : undefined);
   const running = visible.filter((d) => d.now?.running && !d.now.stale);
   const problems = (overview.data?.integrations ?? []).filter((i) => i.account?.error);
 
@@ -98,12 +106,19 @@ export function HomePage({ range }: { range: Range }) {
           usage={used}
           colors={colors}
           range={range}
+          rangeWords={RANGE_WORDS[range]}
           onRange={(r) => {
             store.set(STORE_HOME_RANGE, r); // opened again (or refreshed) later, it shows this period
             void navigate({ to: "/home", search: { range: r }, replace: true });
           }}
         />
         {overview.data && !devices.length && <ConnectPrompt />}
+        {devices.length > 0 && (
+          <>
+            <StandbyCard standby={found.data?.standby} devices={devices} colors={colors} />
+            <HabitsCard unexplained={found.data?.unexplained} />
+          </>
+        )}
         {items.map((item) =>
           item.group ? (
             <GroupCard
@@ -111,24 +126,29 @@ export function HomePage({ range }: { range: Range }) {
               name={item.group}
               members={item.members}
               used={used?.devices.find((u) => u.id === item.id)}
+              before={beforeOf(item.id)}
               pattern={patterns.data && groupPattern(patterns.data, item)}
               cycles={item.members.every((d) => kinds.get(d.kind)?.cycles)}
               kindLabels={kindLabels}
               color={colors.get(item.id)!}
               home={usage.data?.total.home ?? null}
               rangeLabel={RANGE_WORDS[range]}
+              beforeLabel={BEFORE_WORDS[range]}
             />
           ) : (
             <DeviceCard
               key={item.id}
               device={item.members[0]}
               used={used?.devices.find((u) => u.id === item.id)}
+              before={beforeOf(item.id)}
               pattern={patterns.data?.find((p) => p.id === item.id)}
               cycles={!!kinds.get(item.members[0].kind)?.cycles}
               kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
               color={colors.get(item.id)!}
               home={usage.data?.total.home ?? null}
               rangeLabel={RANGE_WORDS[range]}
+              beforeLabel={BEFORE_WORDS[range]}
+              best={found.data?.best_times.find((b) => b.id === item.id)}
             />
           ),
         )}

@@ -11,9 +11,11 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.container import Services
 from app.dependencies import JsonBody, ServicesDep, time_range
-from app.features.home import usage
+from app.features.home import insights, usage
 from app.features.home.service import HomeSetupError
 from app.features.home.types import Hints
+from app.features.readings.repository import KWH_PER_W_ROLLUP
+from app.features.tariffs.costs import daily_costs
 
 router = APIRouter(prefix="/api/home")
 
@@ -104,13 +106,64 @@ async def get_usage(
     start, end = time_range(start, end, 7 * DAY)
     if end <= start or end - start > (2 * DAY if bucket == "hour" else 400 * DAY):
         raise HTTPException(status_code=422, detail="Choose up to 2 days by the hour, or 400 by the day.")
-    return await asyncio.to_thread(usage.breakdown, svc.home.repo, svc.readings, start, end, bucket)
+
+    def priced() -> dict[str, Any]:
+        out = usage.breakdown(svc.home.repo, svc.readings, start, end, bucket)
+        pricing, days = _pricing(svc, start, end)
+        return insights.priced(out, svc.home.repo, svc.readings, pricing, days)
+
+    return await asyncio.to_thread(priced)
+
+
+def _pricing(svc: Services, start: int, end: int) -> tuple[insights.Pricing, list[dict[str, Any]]]:
+    """The tariff's rates over [start, end) (Amber's prices, on Amber), and each day's costs as Bills works them out."""
+    t, tables = svc.tariffs.current()
+    general = svc.amber.repo.lookup("general", start - DAY, end + 2 * DAY) if t["type"] == "amber" else None
+    days = daily_costs(svc.readings, t, tables, start, end, svc.meter, svc.amber.repo)["days"]
+    return insights.Pricing(t, tables, general), days
+
+
+@router.get("/insights")
+async def get_insights(svc: ServicesDep):
+    """What's always on (and what it costs a year), habits in what no device measures, and the best time today or
+    tomorrow to run each appliance that runs in cycles."""
+
+    def build() -> dict[str, Any]:
+        now = int(time.time())
+        pricing, _ = _pricing(svc, now - 14 * DAY, now)
+        patterns = usage.patterns(svc.home.repo, now)
+        return {
+            "standby": insights.standby(svc.home.repo, svc.readings, pricing, now),
+            "unexplained": insights.unexplained(svc.home.repo, svc.readings, now),
+            "best_times": insights.best_times(
+                svc.home.repo.devices(), patterns, svc.forecast.steps(now, days=2), pricing, now
+            ),
+        }
+
+    return await asyncio.to_thread(build)
 
 
 @router.get("/patterns")
 async def get_patterns(svc: ServicesDep):
     """Each device's habits over the last eight weeks: when it runs, and what it uses through the day and week."""
     return await asyncio.to_thread(usage.patterns, svc.home.repo, int(time.time()))
+
+
+@router.get("/runs/{run_id}/curve")
+async def get_run_curve(svc: ServicesDep, run_id: int):
+    """A run with what the appliance drew through it: average W in each 5 minutes, from a little before to a little
+    after."""
+
+    def curve() -> dict[str, Any]:
+        run = svc.home.repo.run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="There's no such run.")
+        start, end = run["start"] - 600, (run["end"] or int(time.time())) + 900
+        used = {ts: kwh for ts, _, kwh in svc.home.repo.energy(start, end, run["device"])}
+        t = list(range(start // 300 * 300, end, 300))
+        return {"run": run, "t": t, "w": [round(used.get(ts, 0.0) / KWH_PER_W_ROLLUP) for ts in t]}
+
+    return await asyncio.to_thread(curve)
 
 
 @router.get("/runs")

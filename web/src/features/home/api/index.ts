@@ -1,6 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type { DevicePattern, DeviceRaw, HomeOverview, HomeRun, HomeUsage } from "~/features/home/types";
+import type {
+  DevicePattern,
+  DeviceRaw,
+  HomeInsights,
+  HomeOverview,
+  HomeRun,
+  HomeUsage,
+  RunCurve,
+} from "~/features/home/types";
 
 const MIN = 60_000;
 
@@ -34,6 +42,22 @@ export const homeRunsQuery = (start: number, end: number, device?: number) =>
   queryOptions({
     queryKey: ["home", "runs", start, end, device],
     queryFn: ({ signal }) => apiGet<HomeRun[]>("home/runs", { start, end, device }, { signal }),
+    staleTime: MIN,
+  });
+
+/** What's always on, habits in what no device measures, and the best time to run each appliance. */
+export const homeInsightsQuery = queryOptions({
+  queryKey: ["home", "insights"],
+  queryFn: ({ signal }) => apiGet<HomeInsights>("home/insights", undefined, { signal }),
+  staleTime: 10 * MIN,
+  refetchInterval: 15 * MIN,
+});
+
+/** A run with what the appliance drew through it. */
+export const runCurveQuery = (id: number) =>
+  queryOptions({
+    queryKey: ["home", "runs", "curve", id],
+    queryFn: ({ signal }) => apiGet<RunCurve>(`home/runs/${id}/curve`, undefined, { signal }),
     staleTime: MIN,
   });
 

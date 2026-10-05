@@ -447,7 +447,13 @@ def client(config: Config) -> Iterator[TestClient]:
 
 
 def test_home_through_the_api(client: TestClient) -> None:
-    assert [i["id"] for i in client.get("/api/home").json()["integrations"]] == ["tapo", "connectlife", "demo"]
+    assert [i["id"] for i in client.get("/api/home").json()["integrations"]] == [
+        "tapo",
+        "shelly",
+        "connectlife",
+        "homeassistant",
+        "demo",
+    ]
     assert client.post("/api/home/integrations/nothing", json={}).status_code == 404
     view = client.post("/api/home/integrations/demo", json={}).json()
     demo = next(i for i in view["integrations"] if i["id"] == "demo")
@@ -460,6 +466,14 @@ def test_home_through_the_api(client: TestClient) -> None:
     assert len(client.get("/api/home/patterns").json()) == 4
     runs = client.get("/api/home/runs", params={"device": washer_id}).json()
     assert runs and runs[0]["start"] > runs[-1]["start"]  # newest first
+    curve = client.get(f"/api/home/runs/{runs[0]['id']}/curve").json()
+    assert curve["run"]["id"] == runs[0]["id"] and len(curve["t"]) == len(curve["w"]) and max(curve["w"]) > 100
+    assert client.get("/api/home/runs/999999/curve").status_code == 404
+    assert set(usage_["total"]["cost"]) == {"import", "supply", "credit", "devices", "other"}
+    assert all("cost" in d and "solar_share" in d for d in usage_["devices"])
+    found = client.get("/api/home/insights").json()
+    assert set(found) == {"standby", "unexplained", "best_times"}
+    assert {b["id"] for b in found["best_times"]} <= {d["id"] for d in view["devices"][:2]}  # the washer and dryer
     assert client.patch(f"/api/home/devices/{washer_id}", json={"kind": "toaster"}).status_code == 422
     assert client.get("/api/home/devices/999/raw").status_code == 404
     assert client.delete("/api/home/integrations/demo").json()["devices"] == []

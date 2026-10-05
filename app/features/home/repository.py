@@ -156,12 +156,21 @@ class HomeRepository:
                 (*values, run["id"]),
             )
 
-    def energy(self, start: int, end: int) -> list[tuple[int, int, float]]:
-        """(bucket start, device, kWh) for every bucket in [start, end), oldest first."""
+    def energy(self, start: int, end: int, device: int | None = None) -> list[tuple[int, int, float]]:
+        """(bucket start, device, kWh) for every bucket in [start, end) (of one device's, if given), oldest first."""
+        where, args = (" AND device = ?", (start, end, device)) if device is not None else ("", (start, end))
         with self.db.reading() as conn:
             return conn.execute(
-                "SELECT ts, device, kwh FROM home_energy WHERE ts >= ? AND ts < ? ORDER BY ts", (start, end)
+                f"SELECT ts, device, kwh FROM home_energy WHERE ts >= ? AND ts < ?{where} ORDER BY ts", args
             ).fetchall()
+
+    def run(self, run_id: int) -> dict[str, Any] | None:
+        with self.db.reading() as conn:
+            row = conn.execute(
+                "SELECT id, device, start, end, kwh, program, peak_w FROM home_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+        keys = ("id", "device", "start", "end", "kwh", "program", "peak_w")
+        return dict(zip(keys, row, strict=True)) if row else None
 
     def runs(self, start: int, end: int, device: int | None = None) -> list[dict[str, Any]]:
         """Runs that started in [start, end), oldest first."""
