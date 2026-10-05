@@ -9,12 +9,13 @@ import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
 
 type NavItem = {
-  to: "/" | "/history" | "/plan" | "/health" | "/bills" | "/tesla";
+  to: "/" | "/home" | "/history" | "/plan" | "/health" | "/bills" | "/tesla";
   label: string;
   icon: IconName;
 };
 const NAV: NavItem[] = [
   { to: "/", label: "Overview", icon: "layout" },
+  { to: "/home", label: "Home", icon: "home" },
   { to: "/history", label: "History", icon: "chart" },
   { to: "/plan", label: "Plan", icon: "cloudSun" },
   { to: "/health", label: "Health", icon: "pulse" },

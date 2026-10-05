@@ -45,6 +45,9 @@ export const COLOR = {
   heatBase: v("heat-base"),
 } as const;
 
+/** Each device's colour on the Home page, by its slot (see features/home/utils). Past these, devices share "bar". */
+export const DEVICE_COLORS = [1, 2, 3, 4, 5].map((n) => v(`device-${n}`));
+
 /** A colour at an opacity, e.g. alpha(COLOR.good, 0.6). */
 export const alpha = (color: string, opacity: number) =>
   `color-mix(in srgb, ${color} ${+(opacity * 100).toFixed(1)}%, transparent)`;

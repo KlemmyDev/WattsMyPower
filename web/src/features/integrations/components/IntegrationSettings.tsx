@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { amberQuery } from "~/features/amber/api";
 import { carsQuery } from "~/features/car/api";
 import { carName } from "~/features/car/utils";
@@ -7,6 +8,9 @@ import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useForecast } from "~/features/common/weather/hooks";
+import { homeQuery } from "~/features/home/api";
+import type { HomeIntegration } from "~/features/home/types";
+import { integrationIcon } from "~/features/home/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { useInverters } from "~/features/integrations/hooks";
 import type { InverterState } from "~/features/integrations/utils";
@@ -144,17 +148,82 @@ function CarLink() {
   );
 }
 
+/** A smart-home integration (Hisense through ConnectLife…): whether it's connected and reading, and its devices. */
+function HomeLink({ integration: i }: { integration: HomeIntegration }) {
+  const a = i.account;
+  const [label, detail] = !a
+    ? ["Not connected", i.about]
+    : a.signed_out
+      ? ["Sign in again", a.error ?? "Its sign-in no longer works"]
+      : [
+          a.error ? "Not updating" : a.last_poll ? "Connected" : "Connecting",
+          [
+            a.label,
+            `${a.devices} ${a.devices === 1 ? "device" : "devices"}`,
+            a.last_poll && `read ${hhmm(a.last_poll)}`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ];
+  return (
+    <IntegrationLink
+      card
+      to="/settings/integrations/home/$integration"
+      params={{ integration: i.id }}
+      icon={integrationIcon(i)}
+      name={i.name}
+      status={label}
+      on={!!a && !a.error && !!a.last_poll}
+      detail={<span className="line-clamp-2">{detail}</span>}
+    />
+  );
+}
+
+function SmartHomeLinks() {
+  const { data, isPending, error } = useQuery(homeQuery);
+  if (isPending) return null;
+  if (error || !data) return <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>;
+  return data.integrations.map((i) => <HomeLink key={i.id} integration={i} />);
+}
+
+/** A group of integration cards under a heading, two across where there's room. */
+function Group({ id, title, sub, children }: { id: string; title: string; sub: string; children: ReactNode }) {
+  return (
+    <section id={id} aria-labelledby={`h-${id}`} className="flex scroll-mt-28 flex-col gap-3">
+      <div className="flex flex-col gap-0.5">
+        <h2 id={`h-${id}`}>{title}</h2>
+        <span className="text-sm text-ink-muted">{sub}</span>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,480px),1fr))] gap-4">{children}</div>
+    </section>
+  );
+}
+
 /**
- * Settings → Integrations: each integration as a card with how it's doing, opening to its own page. Your
- * inverters first, then the services and the car; two across where there's room.
+ * Settings → Integrations: each integration as a card with how it's doing, opening to its own page, grouped by what
+ * it's for. Your solar and battery first, then smart appliances, the car, and the services rates and the forecast
+ * come from.
  */
 export function IntegrationSettings() {
   return (
-    <section aria-label="Integrations" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,480px),1fr))] gap-4">
-      <SungrowLink />
-      <WeatherLink />
-      <AmberLink />
-      <CarLink />
-    </section>
+    <div className="flex flex-col gap-8">
+      <Group id="solar-battery" title="Solar and battery" sub="Your inverters, and the battery they run">
+        <SungrowLink />
+      </Group>
+      <Group
+        id="smart-home"
+        title="Smart home"
+        sub="Appliances and plugs that measure what they use, for the breakdown on the Home page"
+      >
+        <SmartHomeLinks />
+      </Group>
+      <Group id="vehicles" title="Electric vehicles" sub="Cars to plan charging for">
+        <CarLink />
+      </Group>
+      <Group id="prices-weather" title="Prices and weather" sub="Where your prices and the solar forecast come from">
+        <AmberLink />
+        <WeatherLink />
+      </Group>
+    </div>
   );
 }

@@ -1,0 +1,376 @@
+"""
+Smart-home devices (the Home page, and Settings → Integrations → Smart home): connecting accounts, polling them, and
+recording what their devices use.
+
+Each connected account is polled on its integration's interval (Integration.poll_seconds) by a background loop. A
+poll's readings go through each device's meter (app.features.home.energy), which adds its energy and runs to the
+database, and are kept in memory as what each device is doing now. Devices are added the first time their account
+reports them, as their integration says they are; the household can rename one, say what it is (a smart plug
+powering the washer), or hide it from the breakdown.
+
+There's one account per integration: a second sign-in to the same one would count its devices twice. A poll that
+fails tries again later, backing off to BACKOFF_MAX; one whose sign-in no longer works stops until it's signed in
+again. What an account keeps to sign in is never sent to the browser.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import logging
+import sqlite3
+import threading
+import time
+from collections.abc import Callable, Iterable
+from typing import Any
+
+from app.core.config import Config
+from app.core.database import Database
+from app.features.home.energy import Meter, step
+from app.features.home.registry import INTEGRATIONS
+from app.features.home.repository import Account, Device, HomeRepository
+from app.features.home.types import KINDS, Integration, IntegrationError, Reading
+
+log = logging.getLogger(__name__)
+
+BACKFILL_DAYS = 28  # how far back to ask an integration that can look back, when it's connected
+BACKOFF_MAX = 15 * 60  # the longest wait between tries after failed polls
+NAME_MAX = 60
+
+
+class HomeSetupError(ValueError):
+    """A change that can't be made; `status` is the HTTP status to answer with."""
+
+    def __init__(self, detail: str, status: int = 422):
+        super().__init__(detail)
+        self.status = status
+
+
+def _same(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+class HomeService:
+    def __init__(
+        self,
+        config: Config,
+        db: Database,
+        integrations: dict[str, type[Integration]] = INTEGRATIONS,
+        clock: Callable[[], float] = time.time,
+    ):
+        self.config = config
+        self.db = db
+        self.repo = HomeRepository(db)
+        self.integrations = integrations
+        self.clock = clock
+        self._lock = threading.Lock()  # one change to the home tables at a time
+        self._now: dict[int, dict[str, Any]] = {}  # device id -> what it's doing, as last read
+        self._raw: dict[int, dict[str, Any]] = {}  # device id -> its properties as last read, for diagnosis
+        self._due: dict[int, float] = {}  # account id -> when it's next polled (not there: now)
+        self._failures: dict[int, int] = {}  # account id -> polls failed in a row
+        self._task: asyncio.Task[None] | None = None
+        self._wake: asyncio.Event | None = None
+
+    def available(self) -> dict[str, type[Integration]]:
+        """The integrations that can be connected here: the demo only in mock mode."""
+        return {k: v for k, v in self.integrations.items() if self.config.mock or not v.demo}
+
+    def _integration(self, integration_id: str) -> type[Integration]:
+        cls = self.available().get(integration_id)
+        if cls is None:
+            raise HomeSetupError("There's no such integration.", 404)
+        return cls
+
+    # -- what's connected ---------------------------------------------------------
+    def overview(self) -> dict[str, Any]:
+        """Every integration that can be connected (with its account, if it is), the kinds a device can be set as,
+        and every device with what it's doing now."""
+        accounts = {a.integration: a for a in self.repo.accounts()}
+        devices = self.repo.devices()
+        last = self.repo.last_runs()
+        return {
+            "integrations": [
+                self._integration_view(cls, accounts.get(cls.id), devices) for cls in self.available().values()
+            ],
+            "kinds": [{"id": k, "label": v.label, "cycles": v.cycles} for k, v in KINDS.items()],
+            "devices": [self._device_view(d, accounts, last.get(d.id)) for d in devices],
+        }
+
+    def _integration_view(
+        self, cls: type[Integration], account: Account | None, devices: list[Device]
+    ) -> dict[str, Any]:
+        return {
+            "id": cls.id,
+            "name": cls.name,
+            "via": cls.via,
+            "about": cls.about,
+            "icon": cls.icon,
+            "kinds": list(cls.kinds),
+            "fields": [
+                {
+                    "key": f.key,
+                    "label": f.label,
+                    "type": f.type,
+                    "help": f.help,
+                    "secret": f.secret,
+                    "placeholder": f.placeholder,
+                }
+                for f in cls.fields
+            ],
+            "poll_seconds": cls.poll_seconds,
+            "demo": cls.demo,
+            "account": self._account_view(cls, account, devices) if account else None,
+        }
+
+    def _account_view(self, cls: type[Integration], a: Account, devices: list[Device]) -> dict[str, Any]:
+        try:
+            label = cls(dict(a.saved)).label()
+        except Exception:  # what it keeps may be from an older version: the page still opens
+            label = ""
+        return {
+            "id": a.id,
+            "label": label,
+            "connected_at": a.created_at,
+            "last_poll": a.state.get("last_poll"),
+            "error": a.state.get("error"),
+            "signed_out": bool(a.state.get("signed_out")),
+            "devices": sum(d.account == a.id for d in devices),
+        }
+
+    def _device_view(self, d: Device, accounts: dict[str, Account], last_run: dict[str, Any] | None) -> dict[str, Any]:
+        integration = next((a.integration for a in accounts.values() if a.id == d.account), None)
+        cls = self.integrations.get(integration or "")
+        now = self._now.get(d.id)
+        # What it was doing is only what it's doing for a few polls; after that it's unknown (not being read).
+        if now and cls and self.clock() - now["at"] > 3 * cls.poll_seconds + 60:
+            now = {**now, "stale": True}
+        return {
+            "id": d.id,
+            "account": d.account,
+            "integration": integration,
+            "name": d.name,
+            "kind": d.kind,
+            "model": d.model,
+            "hidden": d.hidden,
+            "now": now,
+            "last_run": last_run,
+        }
+
+    # -- connecting ---------------------------------------------------------------
+    def _form(self, cls: type[Integration], form: dict[str, Any]) -> dict[str, str]:
+        values = {f.key: str(form.get(f.key) or "").strip() for f in cls.fields}
+        missing = next((f for f in cls.fields if not values[f.key]), None)
+        if missing:
+            raise HomeSetupError(f"Enter your {missing.label.lower()}.")
+        return values
+
+    def _sign_in(self, cls: type[Integration], form: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return cls.sign_in(self._form(cls, form))
+        except IntegrationError as e:
+            raise HomeSetupError(str(e), 422 if e.signed_out else 502) from e
+
+    def connect(self, integration_id: str, form: dict[str, Any]) -> dict[str, Any]:
+        """Sign in to an integration and keep the account. Its devices arrive with the first poll (asked for at once:
+        call wake()), and from before it was connected if the integration can look back."""
+        cls = self._integration(integration_id)
+        if any(a.integration == cls.id for a in self.repo.accounts()):
+            raise HomeSetupError(f"{cls.name} is already connected. Sign in again from its page to change it.", 409)
+        saved = self._sign_in(cls, form)
+        ts = int(self.clock())
+        with self._lock, self.db.writing() as conn:
+            account_id = self.repo.add_account(conn, cls.id, saved, ts)
+        try:
+            past = cls(dict(saved)).past(ts - BACKFILL_DAYS * 86400, ts)
+        except Exception:  # it's connected either way; only the history before is missing
+            log.exception("Couldn't read %s's history", cls.name)
+            past = []
+        if past:
+            with self._lock, self.db.writing() as conn:
+                if self.repo.account(conn, account_id):
+                    self._apply(conn, account_id, past, live=False)
+        self._due.pop(account_id, None)
+        return self.overview()
+
+    def sign_in_again(self, integration_id: str, form: dict[str, Any]) -> dict[str, Any]:
+        """Sign in to a connected integration afresh (a changed password), keeping its devices and what they've used."""
+        cls = self._integration(integration_id)
+        account = next((a for a in self.repo.accounts() if a.integration == cls.id), None)
+        if account is None:
+            raise HomeSetupError(f"{cls.name} isn't connected.", 404)
+        saved = self._sign_in(cls, form)
+        with self._lock, self.db.writing() as conn:
+            self.repo.save_account(conn, account.id, saved=saved, state={})
+        self._due.pop(account.id, None)
+        self._failures.pop(account.id, None)
+        return self.overview()
+
+    def disconnect(self, integration_id: str) -> dict[str, Any]:
+        """Forget an account: its devices, and everything they've used."""
+        cls = self._integration(integration_id)
+        account = next((a for a in self.repo.accounts() if a.integration == cls.id), None)
+        if account is None:
+            raise HomeSetupError(f"{cls.name} isn't connected.", 404)
+        with self._lock, self.db.writing() as conn:
+            gone = [d.id for d in self.repo.devices(conn, account.id)]
+            self.repo.delete_account(conn, account.id)
+        for d in gone:
+            self._now.pop(d, None)
+            self._raw.pop(d, None)
+        self._due.pop(account.id, None)
+        self._failures.pop(account.id, None)
+        return self.overview()
+
+    # -- devices --------------------------------------------------------------------
+    def update_device(self, device_id: int, body: dict[str, Any]) -> dict[str, Any]:
+        """Rename a device, say what it is, or hide it from the breakdown."""
+        changes: dict[str, Any] = {}
+        if "name" in body:
+            name = str(body["name"] or "").strip()
+            if not 0 < len(name) <= NAME_MAX:
+                raise HomeSetupError(f"Give it a name of up to {NAME_MAX} characters.")
+            changes["name"] = name
+        if "kind" in body:
+            if body["kind"] not in KINDS:
+                raise HomeSetupError("Choose what kind of device it is.")
+            changes["kind"] = body["kind"]
+        if "hidden" in body:
+            if not isinstance(body["hidden"], bool):
+                raise HomeSetupError("Say whether to leave it out of the breakdown.")
+            changes["hidden"] = int(body["hidden"])
+        with self._lock, self.db.writing() as conn:
+            if self.repo.device(conn, device_id) is None:
+                raise HomeSetupError("There's no such device.", 404)
+            self.repo.update_device(conn, device_id, **changes)
+        return self.overview()
+
+    def raw(self, device_id: int) -> dict[str, Any]:
+        """A device's properties as its integration last sent them, to check how they're read."""
+        with self.db.reading() as conn:
+            d = self.repo.device(conn, device_id)
+        if d is None:
+            raise HomeSetupError("There's no such device.", 404)
+        return {"id": d.id, "name": d.name, **self._raw.get(d.id, {"ts": None, "properties": {}})}
+
+    def now(self) -> dict[int, dict[str, Any]]:
+        return dict(self._now)
+
+    # -- polling --------------------------------------------------------------------
+    def poll(self, account_id: int) -> None:
+        """Read one account and record what its devices used. Blocking: run it in a thread."""
+        ts = int(self.clock())
+        with self.db.reading() as conn:
+            account = self.repo.account(conn, account_id)
+        cls = self.available().get(account.integration) if account else None
+        if account is None or cls is None:
+            return
+        integration = cls(dict(account.saved))
+        readings: list[Reading] = []
+        state = dict(account.state)
+        try:
+            readings = integration.poll()
+            state.update(last_poll=ts, error=None, signed_out=False, retry_at=None)
+        except IntegrationError as e:
+            state.update(error=str(e), signed_out=e.signed_out, retry_at=ts + e.retry_after if e.retry_after else None)
+        except Exception as e:  # keep the loop going; the settings page shows the problem
+            log.exception("Polling %s failed", cls.name)
+            state.update(error=f"{cls.name} couldn't be read ({type(e).__name__}). Trying again shortly.")
+
+        failures = 0 if state.get("error") is None else self._failures.get(account_id, 0) + 1
+        self._failures[account_id] = failures
+        self._due[account_id] = ts + min(BACKOFF_MAX, cls.poll_seconds * 2 ** min(failures, 6))
+        with self._lock, self.db.writing() as conn:
+            current = self.repo.account(conn, account_id)
+            if current is None:  # disconnected while it was being read
+                return
+            self._apply(conn, account_id, [(ts, readings)], live=True)
+            # Keep what it refreshed (a new token), unless it was signed in again while it was being read.
+            keep = (
+                integration.saved
+                if _same(current.saved, account.saved) and not _same(integration.saved, account.saved)
+                else None
+            )
+            self.repo.save_account(conn, account_id, saved=keep, state=state)
+
+    def _apply(
+        self, conn: sqlite3.Connection, account_id: int, batches: Iterable[tuple[int, list[Reading]]], live: bool
+    ) -> None:
+        """Put readings through their devices' meters, oldest first, adding devices seen for the first time."""
+        devices = {d.key: d for d in self.repo.devices(conn, account_id)}
+        meters: dict[int, Meter] = {d.id: d.meter for d in devices.values()}
+        for ts, readings in batches:
+            for r in readings:
+                d = devices.get(r.key)
+                if d is None:
+                    kind = r.kind if r.kind in KINDS else "other"
+                    d = devices[r.key] = self.repo.add_device(conn, account_id, r.key, r.name, kind, r.model, ts)
+                    meters[d.id] = {}
+                elif r.model and r.model != d.model:
+                    self.repo.update_device(conn, d.id, model=r.model)
+                s = step(meters[d.id], r, ts, d.kind)
+                if s.energy:
+                    self.repo.add_energy(conn, d.id, s.energy)
+                for run in s.runs:  # before the meter's saved: a new run's id is set on it here
+                    self.repo.save_run(conn, d.id, run)
+                meters[d.id] = s.meter
+                if live:
+                    current = s.meter.get("run")
+                    self._now[d.id] = {
+                        "at": ts,
+                        "online": r.online,
+                        "power_w": r.power_w,
+                        "running": bool(current),
+                        "program": r.program if current else None,
+                        "phase": r.phase if current else None,
+                        "remaining_min": r.remaining_min if current else None,
+                        "run": {"start": current["start"], "kwh": current["kwh"]} if current else None,
+                        "details": dict(r.details),
+                    }
+                    self._raw[d.id] = {"ts": ts, "properties": dict(r.raw)}
+        for device_id, meter in meters.items():
+            self.repo.save_meter(conn, device_id, meter)
+
+    def _next_wait(self, now: float) -> float:
+        """Seconds until an account is next due (a minute when nothing's connected, to notice one being added)."""
+        accounts = [
+            a for a in self.repo.accounts() if a.integration in self.available() and not a.state.get("signed_out")
+        ]
+        dues = [max(self._due.get(a.id, 0), a.state.get("retry_at") or 0) for a in accounts]
+        return min(60.0, max(1.0, min(dues, default=now + 60) - now))
+
+    def poll_due(self, now: float | None = None) -> None:
+        """Poll every account whose time has come. Blocking: run it in a thread."""
+        now = now if now is not None else self.clock()
+        for a in self.repo.accounts():
+            if a.integration not in self.available() or a.state.get("signed_out"):
+                continue
+            if now >= max(self._due.get(a.id, 0), a.state.get("retry_at") or 0):
+                self.poll(a.id)
+
+    async def start(self) -> None:
+        self._wake = asyncio.Event()
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+
+    def wake(self) -> None:
+        """Poll what's due now (after connecting or signing in) rather than at the next check. Call from the event
+        loop."""
+        if self._wake:
+            self._wake.set()
+
+    async def _run(self) -> None:
+        while True:
+            try:
+                await asyncio.to_thread(self.poll_due)
+                wait = await asyncio.to_thread(self._next_wait, self.clock())
+            except Exception:
+                log.exception("Polling home devices failed")
+                wait = 60
+            assert self._wake is not None
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._wake.wait(), timeout=wait)
+            self._wake.clear()

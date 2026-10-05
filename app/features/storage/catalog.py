@@ -23,6 +23,11 @@ GROUPS: dict[str, tuple[str, str]] = {
     "meter": ("Smart meter", "Interval readings from smart-meter (NEM12) files imported in Settings → Billing."),
     "imports": ("Imported history", "History imported from files, and the recorded readings an import replaced."),
     "cars": ("Electric cars", "The cars connected, their planned charges, and battery levels given."),
+    "home": (
+        "Smart home",
+        "Appliances and smart plugs connected in Settings → Integrations: what each used, and each run of a washer "
+        "or dryer.",
+    ),
     "alerts": ("Alerts", "Where alerts go, the rules, their progress, and the alerts sent."),
     "settings": ("Settings and account", "Your settings, rates, the dashboard's account and signed-in browsers."),
     "devices": ("Connected inverters", "The inverters the collector reads, connected in Settings → Integrations."),
@@ -48,6 +53,10 @@ class Table:
     cap: int | None = None
 
 
+_DEVICE = (
+    "SELECT COALESCE(d.name, 'Device ' || x.device), COUNT(*), COUNT(*) FROM {} x"
+    " LEFT JOIN home_devices d ON d.id = x.device GROUP BY x.device ORDER BY COUNT(*) DESC"
+)
 _CAR = "SELECT COALESCE(c.name, c.model, 'Car ' || x.car), COUNT(*), COUNT(*) FROM {} x LEFT JOIN cars c ON c.id = x.car GROUP BY x.car"
 
 DASHBOARD: dict[str, Table] = {
@@ -162,6 +171,36 @@ DASHBOARD: dict[str, Table] = {
         Spec("ts", _CAR.format("car_levels")),
         grows=True,
         retention=90,
+    ),
+    "home_accounts": Table(
+        "home",
+        "Connected accounts",
+        "Each smart-home integration connected: what it keeps to sign in (never shown), and how its polling is going.",
+        "Kept until disconnected",
+        Spec("created_at"),
+    ),
+    "home_devices": Table(
+        "home",
+        "Devices",
+        "Each appliance or plug an account brought: its name, what it's set as, and where its readings had got to.",
+        "Kept until its account is disconnected",
+        Spec("created_at"),
+    ),
+    "home_energy": Table(
+        "home",
+        "Device energy",
+        "What each device used in every 5 minutes, for the Home page's breakdown.",
+        "Kept for good",
+        Spec("ts", _DEVICE.format("home_energy")),
+        grows=True,
+    ),
+    "home_runs": Table(
+        "home",
+        "Appliance runs",
+        "Each run of an appliance that runs in cycles (a wash, a dry): when, how long, and what it used.",
+        "Kept for good",
+        Spec("start", _DEVICE.format("home_runs")),
+        grows=True,
     ),
     "alert_history": Table(
         "alerts",
