@@ -32,6 +32,9 @@ export function deviceColors(devices: Pick<HomeDevice, "id">[]): Map<number, str
   return new Map(devices.map((d, i) => [d.id, DEVICE_COLORS[i] ?? COLOR.gridSoft]));
 }
 export const OTHER_COLOR = COLOR.bar;
+/** The car's charging, in the breakdown: its own colour, and an id no device has. */
+export const CAR_COLOR = COLOR.lilac;
+export const CAR_ID = -1;
 
 /** What a device is doing now, in a few words. */
 export function nowLine(d: HomeDevice): { text: string; running: boolean } {
@@ -122,16 +125,17 @@ export function habitLine(p: DevicePattern | undefined, cycles: boolean): string
 
 /**
  * What the Home page shows, in the devices' order: each visible device on its own, and each group (the plugs in a
- * room) as one, at its first visible member's place. A group stands in for its members by its first visible member's
+ * room) as one, at its first visible member's place (or, not `byRoom`, every device on its own). A group stands in for its members by its first visible member's
  * id (so it keeps that member's colour); its hidden members are left out, as they are of the breakdown.
  */
 export type HomeItem = { id: number; group: string | null; members: HomeDevice[] };
 
-export function homeItems(devices: HomeDevice[]): HomeItem[] {
+export function homeItems(devices: HomeDevice[], byRoom = true): HomeItem[] {
   const items: HomeItem[] = [];
   const groups = new Map<string, HomeItem>();
-  for (const d of devices) {
-    if (d.hidden) continue;
+  for (const device of devices) {
+    if (device.hidden) continue;
+    const d = byRoom ? device : { ...device, group: null }; // by device: each on its own, its group aside
     const item = d.group ? groups.get(d.group) : undefined;
     if (item) item.members.push(d);
     else {

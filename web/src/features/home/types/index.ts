@@ -83,7 +83,27 @@ export type HomeDevice = {
   last_run: HomeRun | null;
   /** It can be switched on and off from here. */
   can_switch: boolean;
+  /** Its rule for running on spare solar, if it has one. */
+  rule: HomeRule | null;
 };
+
+/** Running a device on spare solar: on once the home sends start_w to the grid, off once it draws stop_w from it. */
+export type HomeRule = {
+  enabled: boolean;
+  start_w: number;
+  stop_w: number;
+  /** Only between these times (HH:MM), or any time (null). */
+  from: string | null;
+  until: string | null;
+  /** Off while power costs more than this ($/kWh), or no limit (null). */
+  max_price: number | null;
+  /** Switched by hand: the rule waits until then. */
+  paused_until: number | null;
+  /** What it last did. */
+  last: { at: number; on: boolean; why: string } | null;
+};
+
+export type HomeRuleSettings = Pick<HomeRule, "enabled" | "start_w" | "stop_w" | "from" | "until" | "max_price">;
 
 export type HomeOverview = {
   integrations: HomeIntegration[];
@@ -113,13 +133,16 @@ export type HomeUsage = {
     /** The share of its energy that came from the panels or the battery (null: it used nothing). */
     solar_share: number | null;
   }[];
+  /** What the car drew from the home's power (found in what no device measured), with what it cost; null without a
+   * car connected. */
+  car: { kwh: number[]; total: number; cost: number; solar_share: number | null } | null;
   total: {
     home: number | null;
     measured: number;
     other: number | null;
     /** What the period cost, as Bills prices it ($): the import, split between the devices and everything else, the
      * daily supply charges, and the feed-in credit. */
-    cost: { import: number; supply: number; credit: number; devices: number; other: number };
+    cost: { import: number; supply: number; credit: number; devices: number; car: number; other: number };
   };
 };
 
@@ -181,7 +204,34 @@ export type BestTime = {
   run_kwh: number;
 };
 
-export type HomeInsights = { standby: Standby; unexplained: { days: number; habits: Habit[] }; best_times: BestTime[] };
+/** Something that changed in the last 7 days against the 7 before. */
+export type Change =
+  | { type: "use"; name: string; id: number; group: boolean; now: number; before: number }
+  | { type: "new"; name: string; id: number; group: boolean; now: number }
+  | { type: "runs"; name: string; id: number; now: number; before: number }
+  | { type: "car"; now: number; before: number }
+  | { type: "standby"; now: number; before: number }
+  | { type: "quiet"; name: string; id: number; since: number };
+
+/** What an appliance's runs cost, and would have at each day's best time. */
+export type Saving = {
+  id: number;
+  runs: number;
+  cost: number;
+  best_cost: number;
+  saved: number;
+  usual_hour: number;
+  best_hour: number;
+  days: number;
+};
+
+export type HomeInsights = {
+  standby: Standby;
+  unexplained: { days: number; habits: Habit[] };
+  best_times: BestTime[];
+  changes: { since: number; items: Change[] };
+  savings: Saving[];
+};
 
 /** A run with what the appliance drew through it (W per 5 minutes). */
 export type RunCurve = { run: HomeRun; t: number[]; w: number[] };

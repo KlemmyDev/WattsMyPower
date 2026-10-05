@@ -6,7 +6,9 @@ import pytest
 
 from app.core.database import Database
 from app.core.schema import ROLLUP
+from app.features.car.service import CarSpec, Charge
 from app.features.home import insights, usage
+from app.features.home.car import car_use
 from app.features.home.repository import HomeRepository
 from app.features.readings.repository import ReadingsRepository
 from app.features.tariffs.model import default_bands, rate_tables
@@ -122,3 +124,99 @@ def test_the_best_time_to_run_is_the_first_covered_by_spare_solar_else_the_cheap
     assert (cheap["start"], cheap["why"], cheap["cost"]) == (DAY + 21 * 3600, "cheapest", pytest.approx(0.21))
     # An appliance that hasn't run yet has no typical run to go by.
     assert insights.best_times(repo.devices(), [{**pattern, "run_kwh": None}], steps, pricing(TOU), now) == []
+
+
+class Cars:
+    """A car on a three-phase charger (6 to 16 A: 4.1 to 11 kW), with the charges planned for it."""
+
+    def __init__(self, charges: list[tuple[int, int, float]]):
+        self._charges = charges
+
+    def ids(self) -> list[int]:
+        return [1]
+
+    def spec(self, car_id: int) -> CarSpec:
+        return CarSpec(75, 90, 230, 3, 6, 16, True, 170)
+
+    def charges(self, start: int, end: int) -> list[Charge]:
+        return [Charge(s, e, w, False) for s, e, w in self._charges if e > start and s < end]
+
+
+def test_the_cars_charging_is_found_planned_or_not(db: Database, readings: ReadingsRepository) -> None:
+    """The house draws 400 W. A planned 7.4 kW charge runs 1–3 am; one that wasn't planned, 5.5 kW from 9 pm for an
+    hour; a 2 kW kettle-and-oven block at 6 pm isn't the car; and a planned charge the car wasn't plugged in for adds
+    nothing."""
+    repo = HomeRepository(db)
+    rows = []
+    for i in range(288):
+        ts = DAY + i * ROLLUP
+        h = (ts - DAY) / 3600
+        w = 400.0 + (7400 if 1 <= h < 3 else 5500 if 21 <= h < 22 else 2000 if 18 <= h < 18.5 else 0)
+        rows.append((ts, 0.0, w))
+    rollups(db, rows)
+    plan = [(DAY + 3600, DAY + 3 * 3600, 7400.0), (DAY + 13 * 3600, DAY + 14 * 3600, 7400.0)]
+    car = car_use(repo, readings, Cars(plan), DAY, DAY + 86400)  # type: ignore[arg-type]
+    kwh = sum(car.values()) * insights.KWH_PER_W_ROLLUP
+    assert kwh == pytest.approx(7.4 * 2 + 5.5, abs=0.01)
+    assert not any(DAY + 18 * 3600 <= ts < DAY + 19 * 3600 for ts in car)
+    out = usage.breakdown(repo, readings, DAY, DAY + 86400, "day", car)
+    assert out["car"]["total"] == pytest.approx(20.3, abs=0.01)
+    assert out["total"]["other"] == pytest.approx(out["total"]["home"] - 20.3, abs=0.01)
+    assert car_use(repo, readings, None, DAY, DAY + 86400) == {}
+
+
+def test_whats_changed_this_week(db: Database, readings: ReadingsRepository) -> None:
+    """The fridge used half as much again each day this week; the dryer ran three more times; the TV went quiet four days ago;
+    and what's always on dropped from 400 W to 300."""
+    repo = HomeRepository(db)
+    fridge, tv = devices(db, "Fridge", "TV")
+    (dryer,) = devices(db, "Dryer", kind="dryer")
+    now = DAY + 21 * 86400 + 12 * 3600
+    rows = []
+    with db.writing() as conn:
+        for n in range(21):
+            day = DAY + n * 86400
+            this_week = day >= now - 7 * 86400
+            repo.add_energy(conn, fridge, [(day + 3600, 1.5 if this_week else 1.0)])
+            if day < now - 4 * 86400:
+                repo.add_energy(conn, tv, [(day + 20 * 3600, 0.3)])
+            rows += [(day + 3600 + i * ROLLUP, 0.0, 300.0 if this_week else 400.0) for i in range(48)]
+        for k in range(4):
+            repo.save_run(
+                conn, dryer, {"start": now - 86400 * (k + 1), "end": now - 86400 * (k + 1) + 3600, "kwh": 1.0}
+            )
+        repo.save_run(conn, dryer, {"start": now - 10 * 86400, "end": now - 10 * 86400 + 3600, "kwh": 1.0})
+    rollups(db, rows)
+    found = insights.changes(repo, readings, now)
+    kinds = {i["type"]: i for i in found["items"]}
+    use = {i["name"]: i for i in found["items"] if i["type"] == "use"}
+    assert use["Fridge"]["now"] == pytest.approx(9.0) and use["Fridge"]["before"] == pytest.approx(7.0)
+    assert use["TV"]["now"] < use["TV"]["before"]  # it went quiet part-way through the week
+    assert (kinds["runs"]["now"], kinds["runs"]["before"]) == (4, 1)
+    assert (kinds["standby"]["now"], kinds["standby"]["before"]) == (300, 400)
+    assert kinds["quiet"]["name"] == "TV"
+
+
+def test_running_at_the_days_best_time_would_have_cost_less(db: Database, readings: ReadingsRepository) -> None:
+    """A 1 kWh run at 6 pm, from the grid at peak (42c); at midday the home was sending 3 kW to the grid."""
+    repo = HomeRepository(db)
+    (washer,) = devices(db, "Washer", kind="washer")
+    rows = []
+    for i in range(288):
+        ts = DAY + i * ROLLUP
+        h = (ts - DAY) / 3600
+        rows.append(
+            (ts, 3500.0 if 10 <= h < 15 else 0.0, -3000.0 if 10 <= h < 15 else 1500.0 if 18 <= h < 19 else 500.0)
+        )
+    rollups(db, rows)
+    six = DAY + 18 * 3600
+    with db.writing() as conn:
+        repo.add_energy(conn, washer, [(six + i * ROLLUP, 1 / 12) for i in range(12)])
+        repo.save_run(conn, washer, {"start": six, "end": six + 3600, "kwh": 1.0})
+    (s,) = insights.savings(repo, readings, pricing(TOU), DAY + 86400 + 3600)
+    assert s["runs"] == 1 and s["usual_hour"] == 18 and 10 <= s["best_hour"] < 15
+    assert (
+        s["cost"] == pytest.approx(0.42, abs=0.01)
+        and s["best_cost"] == 0
+        and s["saved"] == pytest.approx(0.42, abs=0.01)
+    )

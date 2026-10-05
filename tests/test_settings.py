@@ -19,6 +19,7 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "bill_discount_pct": 0,
         "bill_credits_year": 0,
         "bill_budget": 0,
+        "home_standby_goal": 0,
         "pv_kw": config.pv_kw,
         "battery_kwh_override": config.battery_kwh,
         "battery_reserve_fallback": config.battery_reserve,

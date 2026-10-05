@@ -354,6 +354,12 @@ def _home_groups(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE home_devices ADD COLUMN group_name TEXT")
 
 
+def _home_rules(conn: sqlite3.Connection) -> None:
+    """A switchable device can run on spare solar by a rule (app.features.home.rules): `rule` is its settings and what
+    it last did (JSON). '{}': none."""
+    conn.execute("ALTER TABLE home_devices ADD COLUMN rule TEXT NOT NULL DEFAULT '{}'")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -372,6 +378,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _push_subscriptions,
     _home,
     _home_groups,
+    _home_rules,
 ]
 
 

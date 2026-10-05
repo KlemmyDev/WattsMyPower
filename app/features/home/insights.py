@@ -28,11 +28,14 @@ from statistics import median
 from typing import Any
 
 from app.features.amber.prices import PriceLookup
+from app.features.amber.repository import PriceRepository
 from app.features.home.repository import Device, HomeRepository
+from app.features.home.rules import Conditions
 from app.features.home.types import KINDS
 from app.features.home.usage import bucket_start
 from app.features.readings.repository import KWH_PER_W_ROLLUP, ReadingsRepository
 from app.features.tariffs.model import RateTables, Tariff
+from app.features.tariffs.store import TariffStore
 
 ROLLUP = 300
 STANDBY_DAYS = 14
@@ -69,6 +72,22 @@ class Pricing:
         return sum(self.rate(t) for t in times) / len(times) if times else float(self.tariff.get("flat_rate", 0))
 
 
+def pricing_now(tariffs: TariffStore, prices: PriceRepository | None, start: int, end: int) -> Pricing:
+    """The tariff in force, with Amber's prices over [start, end) on an Amber tariff."""
+    t, tables = tariffs.current()
+    general = prices.lookup("general", start, end) if prices is not None and t["type"] == "amber" else None
+    return Pricing(t, tables, general)
+
+
+def conditions(readings: ReadingsRepository, tariffs: TariffStore, prices: PriceRepository | None) -> Conditions:
+    """What rules decide on (app.features.home.rules): what the home has sent to the grid on average over the last 10
+    minutes (the 5-minute rollups touching them), and the price of power now."""
+    now = int(time.time())
+    grid = [g for _, g in readings.rollups(now - 600, now + 1, ["grid_power"]) if g is not None]
+    price = pricing_now(tariffs, prices, now - 3600, now + 3600).rate(now)
+    return Conditions(export_w=-sum(grid) / len(grid) if grid else None, price=price)
+
+
 def _date(ts: int) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(ts))
 
@@ -83,11 +102,13 @@ def priced(
     readings: ReadingsRepository,
     pricing: Pricing,
     days: list[dict[str, Any]],
+    car: dict[int, float] | None = None,
 ) -> dict[str, Any]:
     """The breakdown `out` (usage.breakdown) with what each device cost (`cost`, $) and the share of its energy that
-    came from the panels or the battery (`solar_share`), and what the period cost (`total.cost`): what was imported
-    (as Bills prices it, from `days`, daily_costs' days), the daily supply charges, the feed-in credit, and the import
-    split between the devices and everything else."""
+    came from the panels or the battery (`solar_share`), the same for the car (`car`, the W it drew in each rollup, as
+    the breakdown was given), and what the period cost (`total.cost`): what was imported (as Bills prices it, from
+    `days`, daily_costs' days), the daily supply charges, the feed-in credit, and the import split between the
+    devices, the car and everything else."""
     start, end = out["start"], out["end"]
     share: dict[int, float] = {}  # rollup -> the share of the home's use the grid supplied
     imported: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # date -> [import $, import, home]
@@ -117,6 +138,17 @@ def priced(
         grid_kwh[device] += kwh * s
         cost[device] += kwh * s * pricing.rate(ts) * scale.get(date, 1.0)
 
+    car_cost = car_grid = 0.0
+    for ts, w in (car or {}).items():
+        date = _date(ts)
+        s = share.get(ts, 1.0)
+        car_grid += w * KWH_PER_W_ROLLUP * s
+        car_cost += w * KWH_PER_W_ROLLUP * s * pricing.rate(ts) * scale.get(date, 1.0)
+    if out.get("car") is not None:
+        charged = sum(w for w in (car or {}).values()) * KWH_PER_W_ROLLUP
+        out["car"]["cost"] = round(car_cost, 4)
+        out["car"]["solar_share"] = round(max(0.0, 1 - car_grid / charged), 3) if charged > 0 else None
+
     for d in out["devices"]:
         d["cost"] = round(cost[d["id"]], 4)
         d["solar_share"] = round(1 - grid_kwh[d["id"]] / d["total"], 3) if d["total"] > 0 else None
@@ -127,7 +159,8 @@ def priced(
         "supply": round(sum(b["supply"] for b in bills.values()), 2),
         "credit": round(sum(b["feed_in_credit"] for b in bills.values()), 2),
         "devices": round(devices, 2),
-        "other": round(max(0.0, import_cost - devices), 2),
+        "car": round(car_cost, 2),
+        "other": round(max(0.0, import_cost - devices - car_cost), 2),
     }
     return out
 
@@ -138,15 +171,22 @@ def _night(ts: int) -> int | None:
     return bucket_start(ts, "day") if NIGHT[0] <= lt.tm_hour < NIGHT[1] else None
 
 
-def standby(repo: HomeRepository, readings: ReadingsRepository, pricing: Pricing, now: int) -> dict[str, Any]:
+def standby(
+    repo: HomeRepository,
+    readings: ReadingsRepository,
+    pricing: Pricing,
+    now: int,
+    car: dict[int, float] | None = None,
+) -> dict[str, Any]:
     """What the home draws all the time (W): the least it drew through each night of the last STANDBY_DAYS (the
-    lowest 5-minute average), on a typical night. And each visible device's the same way (a device not using
-    anything for 5 minutes has drawn 0 then), with what each comes to over a year at the average rate."""
+    lowest 5-minute average, less what the car drew then: `car`, app.features.home.car), on a typical night. And each
+    visible device's the same way (a device not using anything for 5 minutes has drawn 0 then), with what each comes
+    to over a year at the average rate."""
     start = bucket_start(now - STANDBY_DAYS * 86400, "day")
     homes: dict[int, list[float]] = defaultdict(list)
     for ts, pv, grid, bat in readings.rollups(start, now, ["pv_power", "grid_power", "battery_power"]):
         if (night := _night(ts)) is not None:
-            homes[night].append(_home_w(pv, grid, bat))
+            homes[night].append(max(0.0, _home_w(pv, grid, bat) - (car or {}).get(ts, 0.0)))
     full = (NIGHT[1] - NIGHT[0]) * 3600 // ROLLUP
     nights = {n: v for n, v in homes.items() if len(v) >= full // 2}  # read for at least half of it
     rate = pricing.average(start, now)
@@ -239,17 +279,22 @@ def _blocks(rows: list[tuple[int, float]]) -> list[tuple[int, int, float]]:
     return out
 
 
-def unexplained(repo: HomeRepository, readings: ReadingsRepository, now: int) -> dict[str, Any]:
+def unexplained(
+    repo: HomeRepository, readings: ReadingsRepository, now: int, car: dict[int, float] | None = None
+) -> dict[str, Any]:
     """Habits in what no device measured: blocks of use (above the day's floor, the lowest fifth of its 5-minute
     rollups) that start within NEAR_MIN of each other, at about the same power, on at least a third of the days read
     (and three). Each with when it usually starts, how long and how much it draws, how many days it was seen on, what
-    it uses a day on average over the days read, and a guess at what it is. The biggest first."""
+    it uses a day on average over the days read, and a guess at what it is. The biggest first. What the car drew
+    (`car`, app.features.home.car) counts as measured."""
     start = bucket_start(now - UNEXPLAINED_DAYS * 86400, "day")
     visible = {d.id for d in repo.devices() if not d.hidden}
     measured: dict[int, float] = defaultdict(float)
     for ts, device, kwh in repo.energy(start, now):
         if device in visible:
             measured[ts] += kwh / KWH_PER_W_ROLLUP
+    for ts, w in (car or {}).items():
+        measured[ts] += w
     by_day: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for ts, pv, grid, bat in readings.rollups(start, now, ["pv_power", "grid_power", "battery_power"]):
         by_day[bucket_start(ts, "day")].append((ts, max(0.0, _home_w(pv, grid, bat) - measured.get(ts, 0.0))))
@@ -360,4 +405,170 @@ def best_times(
                 "run_kwh": p["run_kwh"],
             }
         )
+    return out
+
+
+WEEK = 7 * 86400
+
+
+def _night_floor(readings: ReadingsRepository, start: int, end: int, car: dict[int, float] | None) -> float | None:
+    """What the home drew at least through a typical night of [start, end) (as `standby`), W."""
+    homes: dict[int, list[float]] = defaultdict(list)
+    for ts, pv, grid, bat in readings.rollups(start, end, ["pv_power", "grid_power", "battery_power"]):
+        if (night := _night(ts)) is not None:
+            homes[night].append(max(0.0, _home_w(pv, grid, bat) - (car or {}).get(ts, 0.0)))
+    full = (NIGHT[1] - NIGHT[0]) * 3600 // ROLLUP
+    lows = [min(v) for v in homes.values() if len(v) >= full // 2]
+    return median(lows) if lows else None
+
+
+def changes(
+    repo: HomeRepository, readings: ReadingsRepository, now: int, car: dict[int, float] | None = None
+) -> dict[str, Any]:
+    """What changed in the last 7 days against the 7 before, worth a line: each room (a group, as one) or device that
+    used at least 20% (and 0.3 kWh) more or less, or used something for the first time; appliances that ran at least
+    two more or fewer times; the car's charging (`car`, the W it drew in each rollup over the last 14 days); what's
+    always on, if it's moved by 30 W (and 10%) against the two weeks before; and a device that used something before
+    but nothing in the last three days. The biggest first."""
+    start = now - 2 * WEEK
+    devices = [d for d in repo.devices() if not d.hidden]
+    name = {d.id: d.group or d.name for d in devices}
+    first: dict[str, int] = {}  # room or device -> the first device in it, to link to
+    for d in devices:
+        first.setdefault(name[d.id], d.id)
+    used: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])  # room or device -> [this week, the week before]
+    last: dict[int, int] = {}  # device -> when it last used anything
+    for ts, device, kwh in repo.energy(start, now):
+        if device in name:
+            used[name[device]][int(ts >= now - WEEK) ^ 1] += kwh
+            if kwh > 0.001:
+                last[device] = ts
+    items: list[dict[str, Any]] = []
+    for room, (this, before) in used.items():
+        grouped = any(d.group == room for d in devices)
+        change = this - before
+        if before < 0.05 and this >= 0.5:
+            items.append({"type": "new", "name": room, "id": first[room], "group": grouped, "now": round(this, 2)})
+        elif before >= 0.3 and abs(change) >= 0.3 and abs(change) / before >= 0.2:
+            items.append(
+                {
+                    "type": "use",
+                    "name": room,
+                    "id": first[room],
+                    "group": grouped,
+                    "now": round(this, 2),
+                    "before": round(before, 2),
+                    "size": abs(change),
+                }
+            )
+    runs: dict[int, list[int]] = defaultdict(lambda: [0, 0])
+    for r in repo.runs(start, now):
+        if r["end"] is not None and r["device"] in name:
+            runs[r["device"]][int(r["start"] >= now - WEEK) ^ 1] += 1
+    for d in devices:
+        this_runs, before_runs = runs[d.id]
+        if KINDS.get(d.kind, KINDS["other"]).cycles and abs(this_runs - before_runs) >= 2:
+            items.append(
+                {
+                    "type": "runs",
+                    "name": d.name,
+                    "id": d.id,
+                    "now": this_runs,
+                    "before": before_runs,
+                    "size": abs(this_runs - before_runs) * 0.5,
+                }
+            )
+    if car:
+        this = sum(w for ts, w in car.items() if ts >= now - WEEK) * KWH_PER_W_ROLLUP
+        before = sum(w for ts, w in car.items() if start <= ts < now - WEEK) * KWH_PER_W_ROLLUP
+        if abs(this - before) >= 3:
+            items.append({"type": "car", "now": round(this, 1), "before": round(before, 1), "size": abs(this - before)})
+    floor_now = _night_floor(readings, now - WEEK, now, car)
+    floor_before = _night_floor(readings, now - 3 * WEEK, now - WEEK, car)
+    if floor_now is not None and floor_before:
+        moved = floor_now - floor_before
+        if abs(moved) >= 30 and abs(moved) / floor_before >= 0.1:
+            items.append(
+                {
+                    "type": "standby",
+                    "now": round(floor_now),
+                    "before": round(floor_before),
+                    "size": abs(moved) / 1000 * 24 * 7,
+                }
+            )
+    for d in devices:
+        if (t := last.get(d.id)) is not None and t < now - 3 * 86400:
+            items.append({"type": "quiet", "name": d.name, "id": d.id, "since": t, "size": 0.1})
+    items.sort(key=lambda x: -x.get("size", x.get("now", 0)))
+    for x in items:
+        x.pop("size", None)
+    return {"since": now - WEEK, "items": items[:6]}
+
+
+def savings(
+    repo: HomeRepository, readings: ReadingsRepository, pricing: Pricing, now: int, days: int = 28
+) -> list[dict[str, Any]]:
+    """For each visible appliance that runs in cycles: what its runs over the last `days` cost from the grid, and what
+    they would have, each started at its day's best time between RUN_FROM and RUN_UNTIL (and before now). Each run
+    keeps its shape, 5 minutes at a time; at another time, what the home was sending to the grid then is taken as
+    spare solar to cover it (with what the run itself drew added back, where they overlap), and the rest priced at
+    that time's rate. With when the runs usually started and when the best times usually were (hours of the day)."""
+    start = bucket_start(now - days * 86400, "day")
+    rows = readings.rollups(start, now, ["pv_power", "grid_power", "battery_power"])
+    grid = {ts: g or 0.0 for ts, _, g, _ in rows}
+    share = {ts: min(1.0, max(g or 0.0, 0.0) / h) if (h := _home_w(pv, g, b)) > 0 else 0.0 for ts, pv, g, b in rows}
+    by_id = {d.id: d for d in repo.devices() if not d.hidden and KINDS.get(d.kind, KINDS["other"]).cycles}
+    runs: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for r in repo.runs(start, now):
+        if r["end"] is not None and r["device"] in by_id:
+            runs[r["device"]].append(r)
+    out = []
+    for device, done in runs.items():
+        energy = {ts: kwh for ts, _, kwh in repo.energy(start, now, device)}
+        cost = best_cost = 0.0
+        counted, usual, best_hours = 0, [], []
+        for r in done:
+            first = r["start"] // ROLLUP * ROLLUP
+            shape = [energy.get(t, 0.0) for t in range(first, r["end"] + ROLLUP, ROLLUP)]
+            if sum(shape) < 0.05 or not all(t in grid for t in range(first, first + len(shape) * ROLLUP, ROLLUP)):
+                continue
+            actual = sum(
+                k * share.get(first + i * ROLLUP, 1.0) * pricing.rate(first + i * ROLLUP) for i, k in enumerate(shape)
+            )
+            day = bucket_start(first, "day")
+            options = [actual]
+            hours = [time.localtime(first).tm_hour]
+            for at in range(day + RUN_FROM * 3600, min(day + RUN_UNTIL * 3600, now) - len(shape) * ROLLUP, SLOT):
+                total, known = 0.0, True
+                for i, k in enumerate(shape):
+                    ts = at + i * ROLLUP
+                    if ts not in grid:
+                        known = False
+                        break
+                    spare = max(0.0, -grid[ts]) + (
+                        energy.get(ts, 0.0) / KWH_PER_W_ROLLUP if first <= ts < r["end"] else 0.0
+                    )
+                    total += max(0.0, k - spare * KWH_PER_W_ROLLUP) * pricing.rate(ts)
+                if known:
+                    options.append(total)
+                    hours.append(time.localtime(at).tm_hour)
+            i = min(range(len(options)), key=options.__getitem__)
+            cost += actual
+            best_cost += options[i]
+            counted += 1
+            usual.append(time.localtime(first).tm_hour)
+            best_hours.append(hours[i])
+        if counted:
+            out.append(
+                {
+                    "id": device,
+                    "runs": counted,
+                    "cost": round(cost, 2),
+                    "best_cost": round(best_cost, 2),
+                    "saved": round(cost - best_cost, 2),
+                    "usual_hour": round(median(usual)),
+                    "best_hour": round(median(best_hours)),
+                    "days": days,
+                }
+            )
     return out

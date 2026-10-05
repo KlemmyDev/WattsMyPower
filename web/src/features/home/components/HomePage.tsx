@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
-import { STORE_HOME_RANGE, store } from "~/features/common/storage/utils";
+import { STORE_HOME_RANGE, STORE_HOME_VIEW, store } from "~/features/common/storage/utils";
+import { Segmented } from "~/features/common/ui/components/Segmented";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -12,6 +14,7 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { homeInsightsQuery, homePatternsQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
 import { DeviceCard, GroupCard } from "~/features/home/components/DeviceCard";
 import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
+import { ChangesCard, GoalsCard, RoomsCard } from "~/features/home/components/SummaryCards";
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
 import { deviceColors, groupPattern, groupUsage, homeItems } from "~/features/home/utils";
 
@@ -67,11 +70,19 @@ export function HomePage({ range }: { range: Range }) {
   for (const d of devices) if (d.hidden) colors.delete(d.id);
   const kinds = new Map((overview.data?.kinds ?? []).map((k) => [k.id, k]));
   const kindLabels = new Map([...kinds].map(([id, k]) => [id, k.label]));
-  // Grouped devices (the plugs in a room) are shown as one, in the breakdown and as a card.
-  const items = homeItems(devices);
+  // By room, grouped devices (the plugs in a room) are shown as one, in the breakdown and as a card; by device, each
+  // on its own.
+  const [view, setView] = useState<"rooms" | "devices">(() =>
+    store.get(STORE_HOME_VIEW) === "devices" ? "devices" : "rooms",
+  );
+  const hasRooms = devices.some((d) => d.group && !d.hidden);
+  const items = homeItems(devices, view === "rooms" || !hasRooms);
   const used = usage.data && groupUsage(usage.data, items);
   const earlier = before.data && range !== "today" ? groupUsage(before.data, items) : undefined;
   const beforeOf = (id: number) => (earlier ? (earlier.devices.find((u) => u.id === id)?.total ?? 0) : undefined);
+  const rooms = homeItems(devices);
+  const roomUse = usage.data && groupUsage(usage.data, rooms);
+  const roomsBefore = before.data && range !== "today" ? groupUsage(before.data, rooms) : undefined;
   const running = visible.filter((d) => d.now?.running && !d.now.stale);
   const problems = (overview.data?.integrations ?? []).filter((i) => i.account?.error);
 
@@ -115,8 +126,34 @@ export function HomePage({ range }: { range: Range }) {
         {overview.data && !devices.length && <ConnectPrompt />}
         {devices.length > 0 && (
           <>
+            <ChangesCard changes={found.data?.changes} />
+            <RoomsCard
+              items={rooms}
+              usage={roomUse}
+              before={(id) => (roomsBefore ? (roomsBefore.devices.find((u) => u.id === id)?.total ?? 0) : undefined)}
+              colors={colors}
+              rangeLabel={RANGE_WORDS[range]}
+            />
+            <GoalsCard standbyW={found.data?.standby.home_w} />
             <StandbyCard standby={found.data?.standby} devices={devices} colors={colors} />
             <HabitsCard unexplained={found.data?.unexplained} />
+            <div className="col-span-12 flex flex-wrap items-center justify-between gap-3 pt-2">
+              <h2>{view === "rooms" && hasRooms ? "Rooms and devices" : "Devices"}</h2>
+              {hasRooms && (
+                <Segmented
+                  label="Show"
+                  options={[
+                    { value: "rooms", label: "By room" },
+                    { value: "devices", label: "By device" },
+                  ]}
+                  value={view}
+                  onChange={(v) => {
+                    setView(v);
+                    store.set(STORE_HOME_VIEW, v);
+                  }}
+                />
+              )}
+            </div>
           </>
         )}
         {items.map((item) =>
@@ -149,6 +186,7 @@ export function HomePage({ range }: { range: Range }) {
               rangeLabel={RANGE_WORDS[range]}
               beforeLabel={BEFORE_WORDS[range]}
               best={found.data?.best_times.find((b) => b.id === item.id)}
+              saving={found.data?.savings.find((x) => x.id === item.id)}
             />
           ),
         )}

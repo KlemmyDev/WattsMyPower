@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  clearDeviceRule,
   connectHome,
   disconnectHome,
   findHomeDevices,
   homeQuery,
+  setDeviceRule,
   signInHomeAgain,
   switchDevice,
   updateDevice,
@@ -25,5 +27,7 @@ export function useHomeChange() {
     find: useMutation({ mutationFn: findHomeDevices, onSuccess: done }),
     update: useMutation({ mutationFn: updateDevice, onSuccess: done }),
     switch: useMutation({ mutationFn: switchDevice, onSuccess: done }),
+    setRule: useMutation({ mutationFn: setDeviceRule, onSuccess: done }),
+    clearRule: useMutation({ mutationFn: clearDeviceRule, onSuccess: done }),
   };
 }

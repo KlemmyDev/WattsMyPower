@@ -8,7 +8,7 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { Swatch } from "~/features/common/ui/components/Swatch";
 import { cn } from "~/features/common/ui/utils";
 import type { HomeUsage } from "~/features/home/types";
-import { OTHER_COLOR, WEEKDAY_SHORT } from "~/features/home/utils";
+import { CAR_COLOR, CAR_ID, OTHER_COLOR, WEEKDAY_SHORT } from "~/features/home/utils";
 
 export type Range = "today" | "week" | "month";
 export const RANGES: { value: Range; label: string }[] = [
@@ -50,7 +50,8 @@ function costLine(usage: HomeUsage, devices: HomeUsage["devices"], rangeWords: s
   const c = usage.total.cost;
   if (c.import < 0.01)
     return `Your home cost ${money(c.supply)} ${rangeWords}, all of it supply charges: everything it used came from your panels and battery.`;
-  const top = [...devices].filter((d) => d.cost >= 0.01).sort((a, b) => b.cost - a.cost);
+  const charged = usage.car && usage.car.cost >= 0.01 ? [{ name: "the car", cost: usage.car.cost }] : [];
+  const top = [...devices, ...charged].filter((d) => d.cost >= 0.01).sort((a, b) => b.cost - a.cost);
   const named = top.slice(0, 3).map((d) => `${d.name} ${money(d.cost)}`);
   if (top.length > 3) named.push(`your other devices ${money(top.slice(3).reduce((a, d) => a + d.cost, 0))}`);
   const parts = [...named, `everything else ${money(c.other)}`];
@@ -83,6 +84,9 @@ export function UsageCard({
   const total = usage?.total;
   const parts = [
     ...devices.map((d) => ({ id: d.id, label: d.name, kwh: d.total, cost: d.cost, color: colors.get(d.id)! })),
+    ...(usage?.car && usage.car.total > 0
+      ? [{ id: CAR_ID, label: "Car charging", kwh: usage.car.total, cost: usage.car.cost, color: CAR_COLOR }]
+      : []),
     ...(total?.other != null
       ? [{ id: 0, label: "Everything else", kwh: total.other, cost: total.cost.other, color: OTHER_COLOR }]
       : []),
@@ -197,6 +201,7 @@ export function UsageCard({
           <Bars
             usage={usage}
             devices={devices.filter((d) => !off.has(d.id))}
+            car={off.has(CAR_ID) ? null : usage.car}
             other={!off.has(0)}
             filtered={off.size > 0}
             colors={colors}
@@ -212,6 +217,7 @@ export function UsageCard({
 function Bars({
   usage,
   devices,
+  car,
   other,
   filtered,
   colors,
@@ -221,6 +227,8 @@ function Bars({
   usage: HomeUsage;
   /** The devices shown. */
   devices: HomeUsage["devices"];
+  /** The car's charging, if shown. */
+  car: HomeUsage["car"];
   /** Everything else is shown. */
   other: boolean;
   /** Some parts are hidden: the chart is scaled to what's shown, rather than the home's whole use. */
@@ -231,7 +239,8 @@ function Bars({
 }) {
   const [width, setWidth] = useState(0);
   const n = usage.t.length;
-  const shown = (i: number) => devices.reduce((a, d) => a + d.kwh[i], 0) + (other ? (usage.other[i] ?? 0) : 0);
+  const shown = (i: number) =>
+    devices.reduce((a, d) => a + d.kwh[i], 0) + (car?.kwh[i] ?? 0) + (other ? (usage.other[i] ?? 0) : 0);
   const height = (i: number) => (filtered ? shown(i) : Math.max(usage.home[i] ?? 0, shown(i)));
   const top = niceMax(Math.max(0, ...usage.t.map((_, i) => height(i))));
   const pc = (v: number) => `${Math.max(0, (v / top) * 100)}%`;
@@ -281,6 +290,12 @@ function Bars({
                   />
                 ) : null,
               )}
+              {car && car.kwh[i] > 0 && (
+                <span
+                  className="w-full flex-none last:rounded-t-[4px]"
+                  style={{ height: pc(car.kwh[i]), background: CAR_COLOR }}
+                />
+              )}
               {other && (usage.other[i] ?? 0) > 0 && (
                 <span
                   className="w-full flex-none rounded-t-[4px]"
@@ -298,6 +313,7 @@ function Bars({
               .map((d) => (
                 <TooltipRow key={d.id} label={d.name} value={kWh(d.kwh[h])} color={colors.get(d.id)} />
               ))}
+            {car && car.kwh[h] > 0 && <TooltipRow label="Car charging" value={kWh(car.kwh[h])} color={CAR_COLOR} />}
             {other && usage.other[h] != null && (
               <TooltipRow label="Everything else" value={kWh(usage.other[h])} color={OTHER_COLOR} />
             )}
