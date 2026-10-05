@@ -2,7 +2,7 @@ import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { COLOR, DEVICE_COLORS } from "~/features/common/theme/utils/colors";
 import type { IconName } from "~/features/common/ui/components/Icon";
-import type { DeviceKind, DevicePattern, HomeDevice, HomeIntegration } from "~/features/home/types";
+import type { DeviceKind, DevicePattern, HomeDevice, HomeIntegration, HomeUsage } from "~/features/home/types";
 
 const KIND_ICONS: Record<DeviceKind, IconName> = {
   washer: "washer",
@@ -118,4 +118,102 @@ export function habitLine(p: DevicePattern | undefined, cycles: boolean): string
     }
   }
   return [`Mostly ${hourLabel(best[0])}–${hourLabel(best[1] % 24)}`, daily].filter(Boolean).join(" · ");
+}
+
+/**
+ * What the Home page shows, in the devices' order: each visible device on its own, and each group (the plugs in a
+ * room) as one, at its first visible member's place. A group stands in for its members by its first visible member's
+ * id (so it keeps that member's colour); its hidden members are left out, as they are of the breakdown.
+ */
+export type HomeItem = { id: number; group: string | null; members: HomeDevice[] };
+
+export function homeItems(devices: HomeDevice[]): HomeItem[] {
+  const items: HomeItem[] = [];
+  const groups = new Map<string, HomeItem>();
+  for (const d of devices) {
+    if (d.hidden) continue;
+    const item = d.group ? groups.get(d.group) : undefined;
+    if (item) item.members.push(d);
+    else {
+      const added = { id: d.id, group: d.group, members: [d] };
+      items.push(added);
+      if (d.group) groups.set(d.group, added);
+    }
+  }
+  return items;
+}
+
+type Used = HomeUsage["devices"][number];
+
+const weighted = (parts: Used[], value: (u: Used) => number | null) => {
+  const counted = parts.filter((u) => u.runs && value(u) != null);
+  const runs = counted.reduce((a, u) => a + u.runs, 0);
+  return runs ? counted.reduce((a, u) => a + value(u)! * u.runs, 0) / runs : null;
+};
+
+/** The breakdown with each group's members added up into one, standing in by the group's id and named for it. */
+export function groupUsage(usage: HomeUsage, items: HomeItem[]): HomeUsage {
+  const byId = new Map(usage.devices.map((u) => [u.id, u]));
+  const devices = items.flatMap((item): Used[] => {
+    const parts = item.members.map((m) => byId.get(m.id)).filter((u) => u != null);
+    if (!item.group) return parts;
+    if (!parts.length) return [];
+    return [
+      {
+        id: item.id,
+        name: item.group,
+        kind: parts[0].kind,
+        kwh: usage.t.map((_, i) => parts.reduce((a, u) => a + u.kwh[i], 0)),
+        total: parts.reduce((a, u) => a + u.total, 0),
+        runs: parts.reduce((a, u) => a + u.runs, 0),
+        run_kwh: weighted(parts, (u) => u.run_kwh),
+        run_minutes: weighted(parts, (u) => u.run_minutes),
+      },
+    ];
+  });
+  return { ...usage, devices };
+}
+
+const sumOrNull = (values: (number | null)[]) =>
+  values.some((v) => v != null) ? values.reduce<number>((a, v) => a + (v ?? 0), 0) : null;
+
+/**
+ * A group's habits: its members' added up (what each uses on an average day, together), judged over the longest any
+ * of them has been read.
+ */
+export function groupPattern(patterns: DevicePattern[], item: HomeItem): DevicePattern | undefined {
+  const parts = item.members.map((m) => patterns.find((p) => p.id === m.id)).filter((p) => p != null);
+  if (parts.length < 2) return parts[0] && { ...parts[0], id: item.id };
+  const col = <K extends keyof DevicePattern>(key: K) => parts.map((p) => p[key] as (number | null)[]);
+  const zip = (cols: (number | null)[][], f: (vs: (number | null)[]) => number | null) =>
+    cols[0].map((_, i) => f(cols.map((c) => c[i])));
+  const runs = parts.reduce((a, p) => a + p.runs, 0);
+  const avg = (key: "run_kwh" | "run_minutes") =>
+    runs ? parts.reduce((a, p) => a + (p[key] ?? 0) * p.runs, 0) / runs : null;
+  return {
+    id: item.id,
+    days: Math.max(...parts.map((p) => p.days)),
+    daily_kwh: sumOrNull(parts.map((p) => p.daily_kwh)),
+    by_weekday: zip(col("by_weekday"), sumOrNull),
+    by_hour: zip(col("by_hour"), sumOrNull),
+    weekdays_seen: zip(col("weekdays_seen"), (vs) => Math.max(...vs.map((v) => v ?? 0))) as number[],
+    runs,
+    run_days: zip(col("run_days"), (vs) => vs.reduce<number>((a, v) => a + (v ?? 0), 0)) as number[],
+    run_hours: zip(col("run_hours"), (vs) => vs.reduce<number>((a, v) => a + (v ?? 0), 0)) as number[],
+    run_kwh: avg("run_kwh"),
+    run_minutes: avg("run_minutes"),
+  };
+}
+
+/** The groups devices are in, by name, with how many are in each. */
+export function groupNames(devices: HomeDevice[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const d of devices) if (d.group) out.set(d.group, (out.get(d.group) ?? 0) + 1);
+  return out;
+}
+
+/** The group a device's name suggests: "Study" for "Study (Left)" or "Study - Right". */
+export function suggestedGroup(name: string): string | null {
+  const m = /^(.+?)(?:\s*\(.+\)|\s+[-–]\s+.+)$/.exec(name.trim());
+  return m ? m[1].trim() : null;
 }

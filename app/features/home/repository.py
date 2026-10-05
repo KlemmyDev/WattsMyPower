@@ -40,14 +40,15 @@ class Device:
     hidden: bool
     position: int
     meter: Meter
+    group: str | None = None  # shown with the others in it as one on the Home page ("Study")
 
 
-_DEVICE = "SELECT id, account, key, name, kind, model, hidden, position, meter FROM home_devices"
+_DEVICE = "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name FROM home_devices"
 
 
 def _device(row: tuple[Any, ...]) -> Device:
-    id, account, key, name, kind, model, hidden, position, meter = row
-    return Device(id, account, key, name, kind, model, bool(hidden), position, _json(meter))
+    id, account, key, name, kind, model, hidden, position, meter, group = row
+    return Device(id, account, key, name, kind, model, bool(hidden), position, _json(meter), group)
 
 
 class HomeRepository:
@@ -122,7 +123,8 @@ class HomeRepository:
         return Device(cur.lastrowid, account, key, name, kind, model, False, position, {})
 
     def update_device(self, conn: sqlite3.Connection, device_id: int, **changes: Any) -> None:
-        allowed = {k: v for k, v in changes.items() if k in ("name", "kind", "hidden", "model")}
+        columns = {"name": "name", "kind": "kind", "hidden": "hidden", "model": "model", "group": "group_name"}
+        allowed = {columns[k]: v for k, v in changes.items() if k in columns}
         if allowed:
             sets = ", ".join(f"{k} = ?" for k in allowed)
             conn.execute(f"UPDATE home_devices SET {sets} WHERE id = ?", (*allowed.values(), device_id))
