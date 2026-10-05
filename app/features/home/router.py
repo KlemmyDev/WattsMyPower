@@ -64,6 +64,12 @@ async def sign_in_again(svc: ServicesDep, integration: str, body: JsonBody, requ
     return result
 
 
+@router.post("/integrations/{integration}/find")
+async def find(svc: ServicesDep, integration: str):
+    """Look for devices added to a connected integration since (Look for new plugs), and read them at once."""
+    return await _run(svc.home.find, integration)
+
+
 @router.delete("/integrations/{integration}")
 async def disconnect(svc: ServicesDep, integration: str):
     """Forget an integration's account, its devices and what they used."""

@@ -88,7 +88,7 @@ function accountStatus(i: HomeIntegration): [label: string, on: boolean] {
 
 /** The connected account: how it's doing, signing in again, and disconnecting. */
 function Account({ integration }: { integration: HomeIntegration }) {
-  const { disconnect } = useHomeChange();
+  const { disconnect, find } = useHomeChange();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -114,7 +114,17 @@ function Account({ integration }: { integration: HomeIntegration }) {
           </>
         }
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {integration.find_label && !a.signed_out && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={find.isPending}
+                onClick={() => find.mutate(integration.id, { onSuccess: (r) => toast(r.found.message) })}
+              >
+                {find.isPending ? "Looking…" : integration.find_label}
+              </Button>
+            )}
             {integration.fields.length > 0 && !signing && (
               <Button variant={a.signed_out ? "primary" : "outline"} size="sm" onClick={() => setSigning(true)}>
                 Sign in again
@@ -146,6 +156,11 @@ function Account({ integration }: { integration: HomeIntegration }) {
           </div>
         }
       >
+        {find.isError && (
+          <div className="basis-full pl-[60px] max-sm:pl-0">
+            <HelpText tone="bad">{errorMessage(find.error)}</HelpText>
+          </div>
+        )}
         {(confirming || disconnect.isError) && (
           <div className="basis-full pl-[60px] max-sm:pl-0">
             <HelpText tone={disconnect.isError ? "bad" : undefined}>

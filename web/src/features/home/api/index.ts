@@ -57,6 +57,13 @@ export const connectHome = ({ id, form }: { id: string; form: Record<string, str
 export const signInHomeAgain = ({ id, form }: { id: string; form: Record<string, string> }) =>
   apiSend<HomeOverview>("PUT", `home/integrations/${id}`, form);
 
+/** Look for devices added since (Look for new plugs): everything connected, and what was found, in words. */
+export const findHomeDevices = (id: string) =>
+  apiSend<HomeOverview & { found: { new: number; answered: number; message: string } }>(
+    "POST",
+    `home/integrations/${id}/find`,
+  );
+
 export const disconnectHome = (id: string) => apiSend<HomeOverview>("DELETE", `home/integrations/${id}`);
 
 export const updateDevice = ({ id, ...changes }: { id: number; name?: string; kind?: string; hidden?: boolean }) =>

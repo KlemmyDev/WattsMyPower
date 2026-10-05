@@ -6,8 +6,8 @@ Connecting finds them (discovery.py, plus any addresses given) and keeps those t
 and measure energy, with where each was and how it's spoken to. The email and password are kept on the server (never
 sent anywhere but the plugs): TPAP needs the password itself each time it makes a session, and a plug's firmware can
 move it from KLAP to TPAP at any time. A plug that stops answering is looked for again (at most every REFIND), in case
-the router gave it a new address or an update changed how it's spoken to; plugs added to the account since are picked
-up then too.
+the router gave it a new address or an update changed how it's spoken to; plugs added since are picked up then too.
+While every plug answers, new ones are only looked for when asked (Look for new plugs, `find`).
 
 Each poll reads a plug's details (name, whether it's switched on) and its energy: get_energy_usage gives its power
 now (current_power, in mW) and what it's used today (today_energy, Wh, from the plug's midnight), read as a counter
@@ -107,6 +107,7 @@ class Tapo(Integration):
         ),
     )
     poll_seconds = 15
+    find_label = "Look for new plugs"
     # How plugs are spoken to and found: replaced in tests.
     post: ClassVar[Post] = staticmethod(_post)
     finder: ClassVar[Finder] = staticmethod(discover)
@@ -227,6 +228,25 @@ class Tapo(Integration):
             "plugs": plugs,
             "found_at": int(time.time()),
         }
+
+    def find(self) -> tuple[int, int]:
+        account = self._account()
+        found, why = self._find(account, str(self.saved.get("where") or ""))
+        if not found and why == "blocked":
+            raise IntegrationError(
+                "The Tapo plugs have stopped accepting sign-ins for a while after too many tries. Try again later."
+            )
+        if not found and why == "refused":
+            raise IntegrationError(
+                f"The Tapo plugs no longer accept the saved TP-Link ID (a changed password?). Sign in again, {THIRD_PARTY}.",
+                signed_out=True,
+            )
+        plugs: dict[str, dict[str, Any]] = {k: dict(v) for k, v in (self.saved.get("plugs") or {}).items()}
+        new = sum(device_id not in plugs for device_id in found)
+        for device_id, plug in found.items():  # new ones added; known ones with where they are now
+            plugs[device_id] = {**plugs.get(device_id, {}), **plug}
+        self.saved = {**self.saved, "plugs": plugs, "found_at": int(time.time())}
+        return new, len(found)
 
     def label(self) -> str:
         n = len(self.saved.get("plugs") or {})

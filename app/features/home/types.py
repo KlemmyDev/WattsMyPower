@@ -115,6 +115,9 @@ class Integration(ABC):
     fields: ClassVar[tuple[Field, ...]]  # what the connect form asks for
     poll_seconds: ClassVar[int] = 60
     demo: ClassVar[bool] = False  # only offered in mock mode (MOCK=1)
+    # The settings page's button to look for devices added since it was connected ("Look for new plugs"), for an
+    # integration that can (see `find`). None: it can't, or doesn't need to (its account lists them every poll).
+    find_label: ClassVar[str | None] = None
 
     def __init__(self, saved: dict[str, Any]):
         self.saved = saved
@@ -132,6 +135,12 @@ class Integration(ABC):
     def label(self) -> str:
         """What the account is, for the settings page ("matt@example.com"). Never a secret."""
         return ""
+
+    def find(self) -> tuple[int, int]:
+        """Look for devices added since it was connected, with what's saved (no sign-in), and keep any new ones in
+        `self.saved` so the next poll reads them. Returns how many are new, and how many answered in all. Only for an
+        integration with a find_label."""
+        raise NotImplementedError
 
     def past(self, start: int, end: int) -> list[tuple[int, list[Reading]]]:
         """Readings from before the account was connected, oldest first, for integrations that can look back (most
