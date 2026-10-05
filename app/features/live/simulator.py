@@ -32,7 +32,8 @@ class Simulator:
         if await asyncio.to_thread(self.readings.is_empty, conn):
             await asyncio.to_thread(self._backfill, conn, 14)
         self.live.info = dict(self.inverter.info)
-        self.live.latest = await asyncio.to_thread(self.readings.latest)
+        latest = await asyncio.to_thread(self.readings.latest)
+        self.live.latest = latest and await asyncio.to_thread(self.readings.with_metered_today, latest)
         self._task = asyncio.create_task(self._run(conn))
 
     async def stop(self) -> None:
@@ -55,7 +56,8 @@ class Simulator:
             snap = self.inverter.read_snapshot()
             ts = int(time.time())
             await asyncio.to_thread(self.readings.insert, conn, ts, snap)
-            self.live.latest = {"ts": ts, **snap}
+            # Today's counters as History counts them, as the real feed has them (app.features.live.ingest).
+            self.live.latest = await asyncio.to_thread(self.readings.with_metered_today, {"ts": ts, **snap})
             self.live.last_success, self.live.last_error = time.time(), None
             wait = max(0.0, self.config.poll_interval - (time.monotonic() - started))
             self.live.next_poll = time.time() + wait
