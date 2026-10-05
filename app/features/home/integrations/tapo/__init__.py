@@ -11,7 +11,8 @@ While every plug answers, new ones are only looked for when asked (Look for new 
 
 Each poll reads a plug's details (name, whether it's switched on) and its energy: get_energy_usage gives its power
 now (current_power, in mW) and what it's used today (today_energy, Wh, from the plug's midnight), read as a counter
-that starts over each day. Firmware without current_power there has get_current_power, in W.
+that starts over each day. Firmware without current_power there has get_current_power, in W. A plug is switched on or
+off with set_device_info {"device_on": …}, over the same connection.
 """
 
 from __future__ import annotations
@@ -108,6 +109,7 @@ class Tapo(Integration):
     )
     poll_seconds = 15
     find_label = "Look for new plugs"
+    can_switch = True
     # How plugs are spoken to and found: replaced in tests.
     post: ClassVar[Post] = staticmethod(_post)
     finder: ClassVar[Finder] = staticmethod(discover)
@@ -248,6 +250,20 @@ class Tapo(Integration):
         self.saved = {**self.saved, "plugs": plugs, "found_at": int(time.time())}
         return new, len(found)
 
+    def switch(self, key: str, on: bool) -> None:
+        plug = (self.saved.get("plugs") or {}).get(key)
+        if not isinstance(plug, dict):
+            raise IntegrationError("That plug isn't on this account any more. Look for new plugs.")
+        client = self._client(plug["host"], int(plug.get("port") or 80), str(plug.get("protocol") or "klap"),
+                              self._account())  # fmt: skip
+        try:
+            client.request("set_device_info", {"device_on": on})
+        except TapoError as e:
+            raise IntegrationError(
+                f"{plug.get('name') or 'The plug'} couldn't be switched {'on' if on else 'off'} ({str(e).rstrip('.')}).",
+                signed_out=e.refused,
+            ) from e
+
     def label(self) -> str:
         n = len(self.saved.get("plugs") or {})
         return f"{self.saved.get('email', '')} · {n} {'plug' if n == 1 else 'plugs'}"
@@ -278,7 +294,7 @@ class Tapo(Integration):
             power_w=_power_w(client, energy) if on is not False else 0.0,
             energy_kwh=float(today) / 1000 if today is not None else None,
             counter="cycle",  # today's energy: starts over at the plug's midnight
-            details={"Switched": "Off"} if on is False else {},
+            switched_on=on if isinstance(on, bool) else None,
             raw={"device_info": {k: info.get(k) for k in ("model", "fw_ver", "hw_ver", "device_on", "type", "ip",
                                                           "rssi", "on_time", "overheated")}, "energy": energy},
         )  # fmt: skip

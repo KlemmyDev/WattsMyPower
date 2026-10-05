@@ -38,6 +38,7 @@ export type HomeIntegration = {
   demo: boolean;
   /** The button to look for devices added since it was connected ("Look for new plugs"), if it has one. */
   find_label: string | null;
+  can_switch: boolean;
   account: HomeAccount | null;
 };
 
@@ -54,6 +55,8 @@ export type DeviceNow = {
   remaining_min: number | null;
   run: { start: number; kwh: number } | null;
   details: Record<string, string>;
+  /** For a device that can be switched: whether it's on (null: it doesn't say). */
+  switched_on: boolean | null;
 };
 
 export type HomeRun = {
@@ -76,6 +79,8 @@ export type HomeDevice = {
   hidden: boolean;
   now: DeviceNow | null;
   last_run: HomeRun | null;
+  /** It can be switched on and off from here. */
+  can_switch: boolean;
 };
 
 export type HomeOverview = {

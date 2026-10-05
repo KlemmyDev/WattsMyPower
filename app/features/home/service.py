@@ -37,6 +37,7 @@ log = logging.getLogger(__name__)
 BACKFILL_DAYS = 28  # how far back to ask an integration that can look back, when it's connected
 BACKOFF_MAX = 15 * 60  # the longest wait between tries after failed polls
 NAME_MAX = 60
+PROTECTED = {"fridge", "freezer"}  # only switched off when that's confirmed
 
 
 class HomeSetupError(ValueError):
@@ -122,6 +123,7 @@ class HomeService:
             "poll_seconds": cls.poll_seconds,
             "demo": cls.demo,
             "find_label": cls.find_label,
+            "can_switch": cls.can_switch,
             "account": self._account_view(cls, account, devices) if account else None,
         }
 
@@ -157,6 +159,7 @@ class HomeService:
             "hidden": d.hidden,
             "now": now,
             "last_run": last_run,
+            "can_switch": bool(cls and cls.can_switch),
         }
 
     # -- connecting ---------------------------------------------------------------
@@ -251,6 +254,39 @@ class HomeService:
         return self.overview()
 
     # -- devices --------------------------------------------------------------------
+    def switch(self, device_id: int, on: Any, confirm: Any = False) -> dict[str, Any]:
+        """Switch a device on or off, then read its account so the change shows. A fridge or freezer is only switched
+        off when that's confirmed: off, it stops keeping food cold."""
+        if not isinstance(on, bool):
+            raise HomeSetupError("Say whether to switch it on or off.")
+        with self.db.reading() as conn:
+            d = self.repo.device(conn, device_id)
+            account = self.repo.account(conn, d.account) if d else None
+        if d is None or account is None:
+            raise HomeSetupError("There's no such device.", 404)
+        cls = self.available().get(account.integration)
+        if cls is None or not cls.can_switch:
+            raise HomeSetupError(f"{d.name} can't be switched from here.", 409)
+        if not on and d.kind in PROTECTED and confirm is not True:
+            raise HomeSetupError(
+                f"{d.name} is set as a {KINDS[d.kind].label.lower()}: switched off, it stops keeping food cold. "
+                "Confirm to switch it off anyway.",
+                409,
+            )
+        integration = cls(dict(account.saved))
+        try:
+            integration.switch(d.key, on)
+        except IntegrationError as e:
+            raise HomeSetupError(str(e), 422 if e.signed_out else 502) from e
+        log.info("Switched %s (%s) %s", d.name, cls.name, "on" if on else "off")
+        if not _same(integration.saved, account.saved):
+            with self._lock, self.db.writing() as conn:
+                current = self.repo.account(conn, account.id)
+                if current is not None and _same(current.saved, account.saved):
+                    self.repo.save_account(conn, account.id, saved=integration.saved)
+        self.poll(account.id)  # read it again, so it shows as it now is
+        return self.overview()
+
     def update_device(self, device_id: int, body: dict[str, Any]) -> dict[str, Any]:
         """Rename a device, say what it is, or hide it from the breakdown."""
         changes: dict[str, Any] = {}
@@ -354,6 +390,7 @@ class HomeService:
                         "remaining_min": r.remaining_min if current else None,
                         "run": {"start": current["start"], "kwh": current["kwh"]} if current else None,
                         "details": dict(r.details),
+                        "switched_on": r.switched_on,
                     }
                     self._raw[d.id] = {"ts": ts, "properties": dict(r.raw)}
         for device_id, meter in meters.items():

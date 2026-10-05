@@ -416,3 +416,16 @@ def test_home_through_the_api(client: TestClient) -> None:
     assert client.patch(f"/api/home/devices/{washer_id}", json={"kind": "toaster"}).status_code == 422
     assert client.get("/api/home/devices/999/raw").status_code == 404
     assert client.delete("/api/home/integrations/demo").json()["devices"] == []
+
+
+def test_devices_that_cant_be_switched_say_so_and_the_demo_tv_can(client: TestClient) -> None:
+    view = client.post("/api/home/integrations/demo", json={}).json()
+    by_name = {d["name"]: d for d in view["devices"]}
+    assert by_name["TV"]["can_switch"]
+    switched = client.post(f"/api/home/devices/{by_name['TV']['id']}/switch", json={"on": False}).json()
+    tv = next(d for d in switched["devices"] if d["name"] == "TV")
+    assert tv["now"]["switched_on"] is False and tv["now"]["power_w"] == 0
+    washer = client.post(f"/api/home/devices/{by_name['Laundry washer']['id']}/switch", json={"on": False})
+    assert washer.status_code == 502 and "Only the demo TV" in washer.json()["detail"]
+    fridge = client.post(f"/api/home/devices/{by_name['Kitchen fridge']['id']}/switch", json={"on": False})
+    assert fridge.status_code == 409 and "food cold" in fridge.json()["detail"]

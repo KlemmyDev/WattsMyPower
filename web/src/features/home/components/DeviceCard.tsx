@@ -1,10 +1,16 @@
+import { useState } from "react";
+import { errorMessage } from "~/features/common/api/utils";
 import { duration, hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
+import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
+import { HelpText } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Pill } from "~/features/common/ui/components/Pill";
+import { Switch } from "~/features/common/ui/components/Switch";
 import { cn } from "~/features/common/ui/utils";
+import { useHomeChange } from "~/features/home/hooks";
 import type { DevicePattern, HomeDevice, HomeUsage } from "~/features/home/types";
 import { habitLine, kindIcon, nowLine, WEEKDAY_SHORT } from "~/features/home/utils";
 
@@ -53,6 +59,51 @@ function Week({ pattern, cycles, color }: { pattern: DevicePattern; cycles: bool
   );
 }
 
+const PROTECTED = new Set(["fridge", "freezer"]);
+
+/**
+ * Switching a device on and off. On is at once; off asks first (a fridge or freezer more firmly, as off it stops keeping
+ * food cold). Shown only while the device can be reached and says whether it's on.
+ */
+function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: string }) {
+  const { switch: change } = useHomeChange();
+  const [asking, setAsking] = useState(false);
+  const now = device.now;
+  if (!device.can_switch || !now || now.stale || !now.online || now.switched_on == null) return null;
+  const on = now.switched_on;
+  const guarded = PROTECTED.has(device.kind);
+  const send = (next: boolean) =>
+    change.mutate({ id: device.id, on: next, confirm: !next && guarded }, { onSuccess: () => setAsking(false) });
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <Switch
+        on={on}
+        label={on ? `Switch ${device.name} off` : `Switch ${device.name} on`}
+        disabled={change.isPending}
+        onChange={(next) => (next ? send(true) : setAsking(true))}
+      />
+      {asking && (
+        <div className="flex max-w-[260px] flex-col items-end gap-2 text-right">
+          <span className="text-[13px] text-pretty text-ink-muted">
+            {guarded
+              ? `It's set as a ${kindLabel.toLowerCase()}: switched off, it stops keeping food cold.`
+              : `Switch ${device.name} off?`}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="muted-link" size="sm" onClick={() => setAsking(false)}>
+              Cancel
+            </Button>
+            <Button variant="outline" size="sm" disabled={change.isPending} onClick={() => send(false)}>
+              {change.isPending ? "Switching off…" : guarded ? "Switch off anyway" : "Switch off"}
+            </Button>
+          </div>
+        </div>
+      )}
+      {change.isError && <HelpText tone="bad">{errorMessage(change.error)}</HelpText>}
+    </div>
+  );
+}
+
 /** One device: what it's doing now, what it used in the period shown, its habits, and its last run. */
 export function DeviceCard({
   device,
@@ -90,13 +141,20 @@ export function DeviceCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="m-0 truncate text-[17px] font-semibold">{device.name}</h3>
             <Pill tone={now.running ? "good" : "neutral"} size="sm">
-              {now.running ? "Running" : device.now?.online === false ? "Offline" : "Idle"}
+              {now.running
+                ? "Running"
+                : device.now?.online === false
+                  ? "Offline"
+                  : device.now?.switched_on === false
+                    ? "Off"
+                    : "Idle"}
             </Pill>
           </div>
           <span className="truncate text-[13px] text-ink-muted">
             {[kindLabel, device.model].filter(Boolean).join(" · ")}
           </span>
         </div>
+        <Power device={device} kindLabel={kindLabel} />
       </div>
 
       {/* What it's doing, unless the pill has said it all ("Idle", "Offline"). */}

@@ -7,7 +7,7 @@ same, and it can look back (four weeks of history when it's connected).
   It counts each cycle's energy from 0, as many appliances do.
 - The dryer starts a quarter of an hour after each wash and runs a heat-pump cycle for an hour and a half.
 - The fridge's compressor runs 15 minutes in every 40, on a lifetime counter.
-- The TV only reports its power, through its plug: on most evenings.
+- The TV only reports its power, through its plug: on most evenings. Its plug can be switched off and on.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from app.features.home.types import Hints, Integration, Reading
+from app.features.home.types import Hints, Integration, IntegrationError, Reading
 
 MIN = 60
 WASH = 75 * MIN
@@ -80,6 +80,7 @@ class Demo(Integration):
     fields = ()
     poll_seconds = 60
     demo = True
+    can_switch = True
 
     @classmethod
     def sign_in(cls, form: dict[str, str], hints: Hints) -> dict[str, Any]:
@@ -87,6 +88,11 @@ class Demo(Integration):
 
     def label(self) -> str:
         return "Four simulated appliances"
+
+    def switch(self, key: str, on: bool) -> None:
+        if key != "tv":
+            raise IntegrationError("Only the demo TV's plug can be switched.")
+        self.saved = {**self.saved, "tv_off": not on}
 
     def poll(self) -> list[Reading]:
         return self.at(time.time())
@@ -112,6 +118,7 @@ class Demo(Integration):
         evening = 18 <= lt.tm_hour < 22 or (lt.tm_hour == 22 and lt.tm_min < 30)
         tv_on = evening and lt.tm_wday != 1  # not Tuesdays
         weekend = lt.tm_wday >= 5
+        switched_off = bool(self.saved.get("tv_off"))
         return [
             Reading(
                 key="washer",
@@ -155,5 +162,12 @@ class Demo(Integration):
                 details={"Fridge": "3 °C", "Freezer": "−18 °C"},
                 raw={"simulated": True},
             ),
-            Reading(key="tv", name="TV", kind="plug", power_w=110.0 if tv_on else 0.8, raw={"simulated": True}),
+            Reading(
+                key="tv",
+                name="TV",
+                kind="plug",
+                power_w=0.0 if switched_off else 110.0 if tv_on else 0.8,
+                switched_on=not switched_off,
+                raw={"simulated": True},
+            ),
         ]

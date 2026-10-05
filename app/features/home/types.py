@@ -60,6 +60,7 @@ class Reading:
     program: str | None = None  # the program or mode, in words ("Cotton 40°", "Eco")
     phase: str | None = None  # where the cycle is ("Washing", "Spinning", "Drying")
     remaining_min: float | None = None
+    switched_on: bool | None = None  # for a device that can be switched (a smart plug): whether it's on
     # Anything else worth showing, in words: {"Door": "Closed", "Temperature": "4 °C"}.
     details: Mapping[str, str] = field(default_factory=dict)
     # The device's own properties as its integration sent them, for diagnosing a mapping (never shown to others).
@@ -118,6 +119,8 @@ class Integration(ABC):
     # The settings page's button to look for devices added since it was connected ("Look for new plugs"), for an
     # integration that can (see `find`). None: it can't, or doesn't need to (its account lists them every poll).
     find_label: ClassVar[str | None] = None
+    # Its devices can be switched on and off (see `switch`).
+    can_switch: ClassVar[bool] = False
 
     def __init__(self, saved: dict[str, Any]):
         self.saved = saved
@@ -140,6 +143,11 @@ class Integration(ABC):
         """Look for devices added since it was connected, with what's saved (no sign-in), and keep any new ones in
         `self.saved` so the next poll reads them. Returns how many are new, and how many answered in all. Only for an
         integration with a find_label."""
+        raise NotImplementedError
+
+    def switch(self, key: str, on: bool) -> None:
+        """Switch the device `key` on or off. Raises IntegrationError, in words, when it can't. It may update
+        `self.saved` (kept by the service). Only for an integration with can_switch."""
         raise NotImplementedError
 
     def past(self, start: int, end: int) -> list[tuple[int, list[Reading]]]:
