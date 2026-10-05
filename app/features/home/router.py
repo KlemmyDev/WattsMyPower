@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.container import Services
 from app.dependencies import JsonBody, ServicesDep, time_range
+from app.features.home import car as home_car
 from app.features.home import insights, usage
 from app.features.home.service import HomeSetupError
 from app.features.home.types import Hints
@@ -91,6 +92,18 @@ async def switch_device(svc: ServicesDep, device_id: int, body: JsonBody):
     return await _run(svc.home.switch, device_id, body.get("on"), body.get("confirm", False))
 
 
+@router.put("/devices/{device_id}/rule")
+async def set_rule(svc: ServicesDep, device_id: int, body: JsonBody):
+    """Run a switchable device on spare solar: {"start_w", "stop_w", "from"?, "until"?, "max_price"?, "enabled"?}."""
+    return await _run(svc.home.set_rule, device_id, body)
+
+
+@router.delete("/devices/{device_id}/rule")
+async def clear_rule(svc: ServicesDep, device_id: int):
+    """Stop running a device on spare solar."""
+    return await _run(svc.home.clear_rule, device_id)
+
+
 @router.get("/devices/{device_id}/raw")
 async def raw(svc: ServicesDep, device_id: int):
     """A device's properties as its integration last sent them, to check how they're read."""
@@ -108,45 +121,54 @@ async def get_usage(
         raise HTTPException(status_code=422, detail="Choose up to 2 days by the hour, or 400 by the day.")
 
     def priced() -> dict[str, Any]:
-        out = usage.breakdown(svc.home.repo, svc.readings, start, end, bucket)
+        car = _car(svc, start, end)
+        out = usage.breakdown(svc.home.repo, svc.readings, start, end, bucket, car)
         pricing, days = _pricing(svc, start, end)
-        return insights.priced(out, svc.home.repo, svc.readings, pricing, days)
+        return insights.priced(out, svc.home.repo, svc.readings, pricing, days, car)
 
     return await asyncio.to_thread(priced)
+
+
+def _car(svc: Services, start: int, end: int) -> dict[int, float] | None:
+    """What the car drew in each rollup of [start, end) (app.features.home.car); None without a car connected."""
+    return home_car.car_use(svc.home.repo, svc.readings, svc.car, start, end) if svc.car.ids() else None
 
 
 def _pricing(svc: Services, start: int, end: int) -> tuple[insights.Pricing, list[dict[str, Any]]]:
     """The tariff's rates over [start, end) (Amber's prices, on Amber), and each day's costs as Bills works them out."""
     t, tables = svc.tariffs.current()
-    general = svc.amber.repo.lookup("general", start - DAY, end + 2 * DAY) if t["type"] == "amber" else None
     days = daily_costs(svc.readings, t, tables, start, end, svc.meter, svc.amber.repo)["days"]
-    return insights.Pricing(t, tables, general), days
-
-
-@router.get("/insights")
-async def get_insights(svc: ServicesDep):
-    """What's always on (and what it costs a year), habits in what no device measures, and the best time today or
-    tomorrow to run each appliance that runs in cycles."""
-
-    def build() -> dict[str, Any]:
-        now = int(time.time())
-        pricing, _ = _pricing(svc, now - 14 * DAY, now)
-        patterns = usage.patterns(svc.home.repo, now)
-        return {
-            "standby": insights.standby(svc.home.repo, svc.readings, pricing, now),
-            "unexplained": insights.unexplained(svc.home.repo, svc.readings, now),
-            "best_times": insights.best_times(
-                svc.home.repo.devices(), patterns, svc.forecast.steps(now, days=2), pricing, now
-            ),
-        }
-
-    return await asyncio.to_thread(build)
+    return insights.pricing_now(svc.tariffs, svc.amber.repo, start - DAY, end + 2 * DAY), days
 
 
 @router.get("/patterns")
 async def get_patterns(svc: ServicesDep):
     """Each device's habits over the last eight weeks: when it runs, and what it uses through the day and week."""
     return await asyncio.to_thread(usage.patterns, svc.home.repo, int(time.time()))
+
+
+@router.get("/insights")
+async def get_insights(svc: ServicesDep):
+    """What's always on (and what it costs a year), habits in what no device measures, the best time today or tomorrow
+    to run each appliance that runs in cycles, what changed this week, and what running at the best times would have
+    saved."""
+
+    def build() -> dict[str, Any]:
+        now = int(time.time())
+        pricing = insights.pricing_now(svc.tariffs, svc.amber.repo, now - 29 * DAY, now + 2 * DAY)
+        car = _car(svc, now - 21 * DAY, now)
+        patterns = usage.patterns(svc.home.repo, now)
+        return {
+            "standby": insights.standby(svc.home.repo, svc.readings, pricing, now, car),
+            "unexplained": insights.unexplained(svc.home.repo, svc.readings, now, car),
+            "best_times": insights.best_times(
+                svc.home.repo.devices(), patterns, svc.forecast.steps(now, days=2), pricing, now
+            ),
+            "changes": insights.changes(svc.home.repo, svc.readings, now, car),
+            "savings": insights.savings(svc.home.repo, svc.readings, pricing, now),
+        }
+
+    return await asyncio.to_thread(build)
 
 
 @router.get("/runs/{run_id}/curve")

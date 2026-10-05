@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.database import Database
@@ -41,14 +41,15 @@ class Device:
     position: int
     meter: Meter
     group: str | None = None  # shown with the others in it as one on the Home page ("Study")
+    rule: dict[str, Any] = field(default_factory=dict)  # running it on spare solar (app.features.home.rules)
 
 
-_DEVICE = "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name FROM home_devices"
+_DEVICE = "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name, rule FROM home_devices"
 
 
 def _device(row: tuple[Any, ...]) -> Device:
-    id, account, key, name, kind, model, hidden, position, meter, group = row
-    return Device(id, account, key, name, kind, model, bool(hidden), position, _json(meter), group)
+    id, account, key, name, kind, model, hidden, position, meter, group, rule = row
+    return Device(id, account, key, name, kind, model, bool(hidden), position, _json(meter), group, _json(rule))
 
 
 class HomeRepository:
@@ -128,6 +129,9 @@ class HomeRepository:
         if allowed:
             sets = ", ".join(f"{k} = ?" for k in allowed)
             conn.execute(f"UPDATE home_devices SET {sets} WHERE id = ?", (*allowed.values(), device_id))
+
+    def save_rule(self, conn: sqlite3.Connection, device_id: int, rule: dict[str, Any]) -> None:
+        conn.execute("UPDATE home_devices SET rule = ? WHERE id = ?", (json.dumps(rule), device_id))
 
     def save_meter(self, conn: sqlite3.Connection, device_id: int, meter: Meter) -> None:
         conn.execute("UPDATE home_devices SET meter = ? WHERE id = ?", (json.dumps(meter), device_id))

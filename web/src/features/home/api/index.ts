@@ -5,6 +5,7 @@ import type {
   DeviceRaw,
   HomeInsights,
   HomeOverview,
+  HomeRuleSettings,
   HomeRun,
   HomeUsage,
   RunCurve,
@@ -105,3 +106,9 @@ export const updateDevice = ({
 /** Switch a device on or off. A fridge or freezer is only switched off with `confirm`. */
 export const switchDevice = ({ id, on, confirm }: { id: number; on: boolean; confirm?: boolean }) =>
   apiSend<HomeOverview>("POST", `home/devices/${id}/switch`, { on, confirm: !!confirm });
+
+/** Run a device on spare solar, or change how. */
+export const setDeviceRule = ({ id, rule }: { id: number; rule: HomeRuleSettings }) =>
+  apiSend<HomeOverview>("PUT", `home/devices/${id}/rule`, rule);
+
+export const clearDeviceRule = (id: number) => apiSend<HomeOverview>("DELETE", `home/devices/${id}/rule`);

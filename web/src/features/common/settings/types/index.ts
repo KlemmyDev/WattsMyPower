@@ -15,6 +15,8 @@ export type Settings = {
   bill_discount_on: "usage" | "usage_supply";
   bill_credits_year: number;
   bill_budget: number;
+  /** What's always on should come down to, W (a goal on the Home page). 0 = none. */
+  home_standby_goal: number;
   location_name: string | null;
   /**
    * What the inverter can't report (Settings → System): the array size in kW, the battery's capacity in kWh

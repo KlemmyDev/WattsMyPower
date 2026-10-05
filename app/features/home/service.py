@@ -28,6 +28,7 @@ from typing import Any
 
 from app.core.config import Config
 from app.core.database import Database
+from app.features.home import rules
 from app.features.home.energy import Meter, step
 from app.features.home.registry import INTEGRATIONS
 from app.features.home.repository import Account, Device, HomeRepository
@@ -60,12 +61,15 @@ class HomeService:
         db: Database,
         integrations: dict[str, type[Integration]] = INTEGRATIONS,
         clock: Callable[[], float] = time.time,
+        conditions: Callable[[], rules.Conditions] | None = None,
     ):
         self.config = config
         self.db = db
         self.repo = HomeRepository(db)
         self.integrations = integrations
         self.clock = clock
+        # What's happening for rules to decide on (what's going to the grid, the price now). None: rules don't run.
+        self.conditions = conditions
         self._lock = threading.Lock()  # one change to the home tables at a time
         self._now: dict[int, dict[str, Any]] = {}  # device id -> what it's doing, as last read
         self._raw: dict[int, dict[str, Any]] = {}  # device id -> its properties as last read, for diagnosis
@@ -162,6 +166,16 @@ class HomeService:
             "now": now,
             "last_run": last_run,
             "can_switch": bool(cls and cls.can_switch),
+            "rule": self._rule_view(d) if d.rule.get("settings") else None,
+        }
+
+    @staticmethod
+    def _rule_view(d: Device) -> dict[str, Any]:
+        state = d.rule.get("state") or {}
+        return {
+            **d.rule["settings"],
+            "paused_until": state.get("paused_until"),
+            "last": state.get("last"),  # what it last did: {"at", "on", "why"}
         }
 
     # -- connecting ---------------------------------------------------------------
@@ -281,6 +295,10 @@ class HomeService:
         except IntegrationError as e:
             raise HomeSetupError(str(e), 422 if e.signed_out else 502) from e
         log.info("Switched %s (%s) %s", d.name, cls.name, "on" if on else "off")
+        if d.rule.get("settings", {}).get("enabled"):  # by hand: its rule waits until tomorrow
+            with self._lock, self.db.writing() as conn:
+                state = {**(d.rule.get("state") or {}), "paused_until": rules.end_of_day(self.clock())}
+                self.repo.save_rule(conn, d.id, {**d.rule, "state": state})
         if not _same(integration.saved, account.saved):
             with self._lock, self.db.writing() as conn:
                 current = self.repo.account(conn, account.id)
@@ -321,6 +339,84 @@ class HomeService:
                 changes["group"] = there.get(changes["group"].casefold(), changes["group"])
             self.repo.update_device(conn, device_id, **changes)
         return self.overview()
+
+    def set_rule(self, device_id: int, body: dict[str, Any]) -> dict[str, Any]:
+        """Run a switchable device on spare solar (rules.validate says how), or change how. Saving it resumes a rule
+        paused by switching the device by hand."""
+        with self.db.reading() as conn:
+            d = self.repo.device(conn, device_id)
+            account = self.repo.account(conn, d.account) if d else None
+        if d is None or account is None:
+            raise HomeSetupError("There's no such device.", 404)
+        cls = self.available().get(account.integration)
+        if cls is None or not cls.can_switch:
+            raise HomeSetupError(f"{d.name} can't be switched from here, so it can't run on spare solar.", 409)
+        try:
+            settings = rules.validate(body, d.kind)
+        except rules.RuleError as e:
+            raise HomeSetupError(str(e)) from e
+        if (self._now.get(d.id) or {}).get("switched_on") is None:
+            raise HomeSetupError(
+                f"{d.name} doesn't say whether it's on (or hasn't been read since the dashboard started), so a rule "
+                "couldn't switch it.",
+                409,
+            )
+        state = {k: v for k, v in (d.rule.get("state") or {}).items() if k != "paused_until"}
+        with self._lock, self.db.writing() as conn:
+            self.repo.save_rule(conn, device_id, {"settings": settings, "state": state})
+        self.wake()
+        return self.overview()
+
+    def clear_rule(self, device_id: int) -> dict[str, Any]:
+        """Stop running a device on spare solar (it's left as it is)."""
+        with self._lock, self.db.writing() as conn:
+            if self.repo.device(conn, device_id) is None:
+                raise HomeSetupError("There's no such device.", 404)
+            self.repo.save_rule(conn, device_id, {})
+        return self.overview()
+
+    def automate(self) -> None:
+        """Follow each device's rule: switch it if its rule says to (rules.decide), with what's happening now.
+        Blocking: run it in a thread."""
+        if self.conditions is None:
+            return
+        devices = [d for d in self.repo.devices() if d.rule.get("settings", {}).get("enabled")]
+        if not devices:
+            return
+        c = self.conditions()
+        now = self.clock()
+        accounts = {a.id: a for a in self.repo.accounts()}
+        for d in devices:
+            reading = self._now.get(d.id)
+            account = accounts.get(d.account)
+            cls = self.available().get(account.integration) if account else None
+            if not reading or not account or not cls or not cls.can_switch or d.kind in rules.PROTECTED:
+                continue
+            if (
+                not reading["online"]
+                or reading.get("switched_on") is None
+                or now - reading["at"] > 3 * cls.poll_seconds
+            ):
+                continue
+            state = dict(d.rule.get("state") or {})
+            decision = rules.decide(d.rule["settings"], state, reading["switched_on"], c, now)
+            if decision is None:
+                continue
+            on, why = decision
+            integration = cls(dict(account.saved))
+            try:
+                integration.switch(d.key, on)
+            except IntegrationError as e:
+                log.warning("A rule couldn't switch %s %s: %s", d.name, "on" if on else "off", e)
+                state["at"] = now  # try again after the usual wait, not every pass
+            else:
+                log.info("A rule switched %s (%s) %s: %s", d.name, cls.name, "on" if on else "off", why)
+                state.update(at=now, on_by_rule=on, last={"at": int(now), "on": on, "why": why})
+                self._now[d.id] = {**reading, "switched_on": on}
+            with self._lock, self.db.writing() as conn:
+                current = self.repo.device(conn, d.id)
+                if current is not None and current.rule.get("settings") == d.rule["settings"]:
+                    self.repo.save_rule(conn, d.id, {**current.rule, "state": state})
 
     def raw(self, device_id: int) -> dict[str, Any]:
         """A device's properties as its integration last sent them, to check how they're read."""
@@ -444,6 +540,7 @@ class HomeService:
         while True:
             try:
                 await asyncio.to_thread(self.poll_due)
+                await asyncio.to_thread(self.automate)
                 wait = await asyncio.to_thread(self._next_wait, self.clock())
             except Exception:
                 log.exception("Polling home devices failed")

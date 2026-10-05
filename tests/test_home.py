@@ -469,10 +469,12 @@ def test_home_through_the_api(client: TestClient) -> None:
     curve = client.get(f"/api/home/runs/{runs[0]['id']}/curve").json()
     assert curve["run"]["id"] == runs[0]["id"] and len(curve["t"]) == len(curve["w"]) and max(curve["w"]) > 100
     assert client.get("/api/home/runs/999999/curve").status_code == 404
-    assert set(usage_["total"]["cost"]) == {"import", "supply", "credit", "devices", "other"}
+    assert set(usage_["total"]["cost"]) == {"import", "supply", "credit", "devices", "car", "other"}
+    assert usage_["car"] is None  # no car connected
     assert all("cost" in d and "solar_share" in d for d in usage_["devices"])
     found = client.get("/api/home/insights").json()
-    assert set(found) == {"standby", "unexplained", "best_times"}
+    assert set(found) == {"standby", "unexplained", "best_times", "changes", "savings"}
+    assert {s["id"] for s in found["savings"]} <= {d["id"] for d in view["devices"][:2]}
     assert {b["id"] for b in found["best_times"]} <= {d["id"] for d in view["devices"][:2]}  # the washer and dryer
     assert client.patch(f"/api/home/devices/{washer_id}", json={"kind": "toaster"}).status_code == 422
     assert client.get("/api/home/devices/999/raw").status_code == 404
@@ -490,3 +492,16 @@ def test_devices_that_cant_be_switched_say_so_and_the_demo_tv_can(client: TestCl
     assert washer.status_code == 502 and "Only the demo TV" in washer.json()["detail"]
     fridge = client.post(f"/api/home/devices/{by_name['Kitchen fridge']['id']}/switch", json={"on": False})
     assert fridge.status_code == 409 and "food cold" in fridge.json()["detail"]
+    # The TV, read now, can run on spare solar; the fridge can't, and the washer doesn't say whether it's on.
+    tv_id = by_name["TV"]["id"]
+    ruled = client.put(f"/api/home/devices/{tv_id}/rule", json={"start_w": 1200, "from": "09:00", "until": "15:00"})
+    rule = next(d for d in ruled.json()["devices"] if d["id"] == tv_id)["rule"]
+    assert (rule["start_w"], rule["stop_w"], rule["until"], rule["enabled"]) == (1200, 300, "15:00", True)
+    fridge_rule = client.put(f"/api/home/devices/{by_name['Kitchen fridge']['id']}/rule", json={})
+    assert fridge_rule.status_code == 422 and "food cold" in fridge_rule.json()["detail"]
+    assert client.put(f"/api/home/devices/{by_name['Laundry washer']['id']}/rule", json={}).status_code == 409
+    # Switched by hand, its rule waits until tomorrow.
+    paused = client.post(f"/api/home/devices/{tv_id}/switch", json={"on": True}).json()
+    assert next(d for d in paused["devices"] if d["id"] == tv_id)["rule"]["paused_until"] > time.time()
+    cleared = client.delete(f"/api/home/devices/{tv_id}/rule").json()
+    assert next(d for d in cleared["devices"] if d["id"] == tv_id)["rule"] is None

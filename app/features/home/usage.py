@@ -82,8 +82,16 @@ def home_use(readings: ReadingsRepository, start: int, end: int, by: Bucket) -> 
     return out
 
 
-def breakdown(repo: HomeRepository, readings: ReadingsRepository, start: int, end: int, by: Bucket) -> dict[str, Any]:
-    """The home's use in each hour or day of [start, end), each visible device's share of it, and the rest."""
+def breakdown(
+    repo: HomeRepository,
+    readings: ReadingsRepository,
+    start: int,
+    end: int,
+    by: Bucket,
+    car: dict[int, float] | None = None,
+) -> dict[str, Any]:
+    """The home's use in each hour or day of [start, end), each visible device's share of it, the car's (`car`: W it
+    drew in each 5-minute rollup, app.features.home.car; None without a car), and the rest."""
     t = buckets(start, end, by)
     index = {b: i for i, b in enumerate(t)}
     home = home_use(readings, start, end, by)
@@ -100,7 +108,19 @@ def breakdown(repo: HomeRepository, readings: ReadingsRepository, start: int, en
 
     measured = [sum(p[i] for p in per.values()) for i in range(len(t))]
     home_kwh = [round(home[b], 3) if b in home else None for b in t]
-    other = [None if h is None else round(max(0.0, h - m), 3) for h, m in zip(home_kwh, measured, strict=True)]
+    charged = [0.0] * len(t)
+    for ts, w in (car or {}).items():
+        if (i := index.get(bucket_start(ts, by))) is not None:
+            charged[i] += w * KWH_PER_W_ROLLUP
+    # The car's is what's left of the home's after the devices, at most: never more than the home used.
+    charged = [
+        min(c, max(0.0, (h or 0.0) - m)) if h is not None else c
+        for c, h, m in zip(charged, home_kwh, measured, strict=True)
+    ]
+    other = [
+        None if h is None else round(max(0.0, h - m - c), 3)
+        for h, m, c in zip(home_kwh, measured, charged, strict=True)
+    ]
     devices = []
     for d in visible.values():
         done = runs.get(d.id, [])
@@ -125,6 +145,7 @@ def breakdown(repo: HomeRepository, readings: ReadingsRepository, start: int, en
         "home": home_kwh,
         "other": other,
         "devices": devices,
+        "car": {"kwh": [round(c, 3) for c in charged], "total": round(sum(charged), 3)} if car is not None else None,
         "total": {
             "home": round(sum(known), 3) if known else None,
             "measured": round(sum(measured), 3),

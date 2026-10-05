@@ -12,6 +12,7 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { cn } from "~/features/common/ui/utils";
 import { homeQuery, homeRunsQuery, homeUsageQuery, runCurveQuery } from "~/features/home/api";
+import { RuleCard } from "~/features/home/components/RuleCard";
 import type { HomeRun } from "~/features/home/types";
 import { deviceColors } from "~/features/home/utils";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
@@ -134,6 +135,7 @@ export function DevicePage({ id }: { id: number }) {
       />
       {overview.data && !device && <Notice>There's no such device. It may have been disconnected.</Notice>}
       <div className="grid grid-cols-12 gap-5">
+        {device && <RuleCard key={device.id} device={device} />}
         <Card aria-labelledby="h-weeks" className="col-span-6 gap-4 max-lg:col-span-12">
           <div className="flex flex-col gap-0.5">
             <h2 id="h-weeks">Week by week</h2>

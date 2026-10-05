@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
-import { duration, hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { duration, hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kW, kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
@@ -11,8 +11,9 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { cn } from "~/features/common/ui/utils";
+import { useNow } from "~/features/common/time/hooks";
 import { useHomeChange } from "~/features/home/hooks";
-import type { BestTime, DevicePattern, HomeDevice, HomeUsage } from "~/features/home/types";
+import type { BestTime, DevicePattern, HomeDevice, HomeUsage, Saving } from "~/features/home/types";
 import { habitLine, kindIcon, nowLine, WEEKDAY_SHORT } from "~/features/home/utils";
 
 type Used = HomeUsage["devices"][number];
@@ -116,6 +117,7 @@ function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: string })
 
 /** What it used in the period shown, its share of the home's, and its habits (and last run, if it runs in cycles). */
 function Use({
+  saving,
   used,
   before,
   pattern,
@@ -139,6 +141,7 @@ function Use({
   beforeLabel: string;
   lastRun: HomeDevice["last_run"];
   best: BestTime | undefined;
+  saving?: Saving;
 }) {
   const habit = habitLine(pattern, cycles);
   const total = used?.total ?? 0;
@@ -188,6 +191,13 @@ function Use({
         {habit && <span>{habit}</span>}
         {cycles && lastRun && <span>Last run {runLine(lastRun)}</span>}
         {best && <BestTimeLine best={best} />}
+        {saving && saving.saved >= 0.5 && (
+          <span>
+            At each day's best time, its last {saving.runs} runs would have cost{" "}
+            <b className="font-medium text-ink">{money(saving.saved)} less</b> (around {hourLabel(saving.best_hour)}{" "}
+            rather than {hourLabel(saving.usual_hour)}).
+          </span>
+        )}
       </div>
     </>
   );
@@ -232,6 +242,26 @@ function BestTimeLine({ best }: { best: BestTime }) {
   );
 }
 
+/** What its spare-solar rule is doing: "Runs on spare solar · switched on at 10:42 (spare solar)". */
+function RuleLine({ device }: { device: HomeDevice }) {
+  const r = device.rule!;
+  const now = useNow(60_000);
+  const paused = r.paused_until != null && r.paused_until > now;
+  const last = r.last && `switched ${r.last.on ? "on" : "off"} at ${hhmm(r.last.at)} (${r.last.why})`;
+  return (
+    <div className="-mt-1 flex items-center gap-1.5 text-[13px] text-ink-muted">
+      <Icon name="sun" size={14} className="flex-none text-solar" />
+      <span>
+        {!r.enabled
+          ? "Its spare-solar rule is off"
+          : paused
+            ? "Runs on spare solar, but switched by hand: it waits until tomorrow"
+            : ["Runs on spare solar", last].filter(Boolean).join(" · ")}
+      </span>
+    </div>
+  );
+}
+
 /** One word for how devices are: running if any is; else offline, or off, if they all are; else idle. */
 function state(devices: HomeDevice[]) {
   if (devices.some((d) => d.now?.running && !d.now.stale)) return "Running";
@@ -253,6 +283,7 @@ export function DeviceCard({
   rangeLabel,
   beforeLabel,
   best,
+  saving,
 }: {
   device: HomeDevice;
   used: Used | undefined;
@@ -265,6 +296,7 @@ export function DeviceCard({
   rangeLabel: string;
   beforeLabel: string;
   best: BestTime | undefined;
+  saving?: Saving;
 }) {
   const now = nowLine(device);
   const details = Object.entries(device.now?.details ?? {});
@@ -301,6 +333,7 @@ export function DeviceCard({
           {device.now?.running && device.now.program && <span className="text-ink-muted">· {device.now.program}</span>}
         </div>
       )}
+      {device.rule && <RuleLine device={device} />}
       {details.length > 0 && (
         <div className="-mt-1 flex flex-wrap gap-1.5">
           {details.map(([k, v]) => (
@@ -322,6 +355,7 @@ export function DeviceCard({
         beforeLabel={beforeLabel}
         lastRun={device.last_run}
         best={best}
+        saving={saving}
       />
     </Card>
   );

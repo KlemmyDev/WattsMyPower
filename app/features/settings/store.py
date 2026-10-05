@@ -42,7 +42,7 @@ LISTS: dict[str, tuple[tuple[str, ...], int]] = {
 # Settings that only take whole numbers.
 WHOLE = {
     "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
-    "house_storeys", "garage_spaces", "system_installed", "battery_installed",
+    "house_storeys", "garage_spaces", "system_installed", "battery_installed", "home_standby_goal",
 }  # fmt: skip
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
@@ -67,7 +67,9 @@ BILLS: dict[str, tuple[str, str]] = {
     "bill_credits_year": ("Credits a year", ""),
     "bill_budget": ("The budget", ""),
 }
-NAMED = SYSTEM | OWNERSHIP | BILLS
+# Goals on the Home page: what's always on (W) should come down to. 0 = none.
+HOME: dict[str, tuple[str, str]] = {"home_standby_goal": ("The always-on target", " W")}
+NAMED = SYSTEM | OWNERSHIP | BILLS | HOME
 # kv marker: the system details have been copied from the environment (see seed_system).
 SYSTEM_SEEDED = "system_seeded"
 
@@ -90,6 +92,8 @@ class SettingsStore:
             "bill_discount_pct": (0, 50, 0),
             "bill_credits_year": (0, 10_000, 0),
             "bill_budget": (0, 100_000, 0),
+            # What's always on should come down to, W (the Home page's goals). 0 = none.
+            "home_standby_goal": (0, 20_000, 0),
             # Solar array size in kW of panels: the forecast's starting point before it calibrates.
             "pv_kw": (0.1, 100, config.pv_kw),
             # Battery capacity in kWh. 0 = use what the inverter reports.

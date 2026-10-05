@@ -18,6 +18,7 @@ from app.features.bills.service import BillsService
 from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
+from app.features.home import insights as home_insights
 from app.features.home.service import HomeService
 from app.features.imports.service import ImportService
 from app.features.insights.service import InsightsService
@@ -100,7 +101,7 @@ def build_services(config: Config) -> Services:
         insights=insights,
         car=car,
         charge_planner=ChargePlanner(car, forecast, settings, tariffs, amber.repo),
-        home=HomeService(config, db),
+        home=HomeService(config, db, conditions=lambda: home_insights.conditions(readings, tariffs, amber.repo)),
         meter=meter,
         bills=bills,
         imports=ImportService(db),
