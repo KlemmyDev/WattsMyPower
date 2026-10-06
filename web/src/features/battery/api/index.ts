@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type { BatteryPlan, BatteryView, ControlRecord, ControlRequest } from "~/features/battery/types";
+import type { BatteryEvent, BatteryPlan, BatteryView, ControlRecord, ControlRequest } from "~/features/battery/types";
 import type { Insights } from "~/features/battery/types/insights";
 
 /** The battery's settings, who has it and the control in effect. Reading them asks the inverter (at most every 20
@@ -28,6 +28,15 @@ export const controlHistoryQuery = (start: number, end: number) =>
     queryFn: ({ signal }) => apiGet<{ controls: ControlRecord[] }>("battery/history", { start, end }, { signal }),
     staleTime: 60_000,
     refetchInterval: 60_000,
+  });
+
+/** What the controls did lately, newest first, at most `limit`. */
+export const batteryLogQuery = (limit: number) =>
+  queryOptions({
+    queryKey: ["battery", "log", limit],
+    queryFn: ({ signal }) => apiGet<{ events: BatteryEvent[] }>("battery/log", { limit }, { signal }),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 
 export const startControl = (body: ControlRequest) => apiSend<BatteryView>("POST", "battery/control", body);

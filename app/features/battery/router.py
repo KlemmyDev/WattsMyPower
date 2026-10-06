@@ -34,6 +34,13 @@ async def preview_control(svc: ServicesDep, body: JsonBody):
     return await _run(svc.battery.preview, body)
 
 
+@router.get("/log")
+async def control_log(svc: ServicesDep, limit: int = 50):
+    """What the battery controls did lately (and what was seen of iSolarCloud and other controllers), newest
+    first, at most `limit` (up to 200)."""
+    return {"events": await _run(svc.battery.log, limit)}
+
+
 @router.get("/history")
 async def control_history(svc: ServicesDep, start: int | None = None, end: int | None = None):
     """The controls in effect over [start, end) (default: the last day), oldest first."""

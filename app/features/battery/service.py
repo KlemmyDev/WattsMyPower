@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 CONTROL_KEY = "battery_control"  # kv: the control in effect (JSON), if any
 LOG_KEY = "battery_control_log"  # kv: what the controls did lately (JSON list, newest last)
-LOG_KEPT = 30
+LOG_KEPT = 200
 TICK = 30  # seconds between the loop's checks while a control is in effect
 FRESH = 20  # how long a read of the settings is shown before reading again
 IDLE_READ = 55  # with no control in effect, how often the loop reads the settings (so the mode shown stays current)
@@ -275,6 +275,11 @@ class BatteryService:
         keys = ("kind", "started_at", "ended_at", "until", "floor", "target", "power_w", "ended_by", "command")
         return [dict(zip(keys, r, strict=True)) for r in rows]
 
+    def log(self, limit: int = 50) -> list[dict[str, Any]]:
+        """What the controls did (and what was seen of other controllers), newest first: at most `limit`."""
+        events: list[dict[str, Any]] = self._kv(LOG_KEY) or []
+        return list(reversed(events))[: max(1, min(limit, LOG_KEPT))]
+
     def _recorded(self) -> None:
         """Make sure the control in effect has its row: one started before controls were recorded (or whose row
         couldn't be written) gets one from when it started."""
@@ -309,9 +314,9 @@ class BatteryService:
                     (kind, now, settings.get("power_w"), command),
                 )
         if kind:
-            self._note(f"{_outside(kind, command, settings.get('power_w'))} (seen on the inverter)")
+            self._note(f"{_outside(kind, command, settings.get('power_w'))} (seen on the inverter)", kind)
         elif row:
-            self._note(f"{_outside(row[1], row[2], None)} ended; the battery is back to normal")
+            self._note(f"{_outside(row[1], row[2], None)} ended; the battery is back to normal", row[1])
 
     # -- the inverter --------------------------------------------------------------------------
     def _driver(self) -> ControlDriver | None:
@@ -349,6 +354,11 @@ class BatteryService:
             raise BatteryError(e.detail, 502 if e.status >= 500 else e.status) from e
         return self._took(back, driver)
 
+    def known(self) -> BatterySettings | None:
+        """The settings as last read, without asking the inverter (the loop keeps them current); read now only if
+        they never have been. For the page and previews, which mustn't wait on the inverter."""
+        return self._settings if self._settings is not None else self.settings()
+
     def settings(self, fresh: bool = False) -> BatterySettings | None:
         """The settings: as last read if that's recent, else read now (None if that fails)."""
         driver = self._driver()
@@ -370,7 +380,7 @@ class BatteryService:
                 else "This inverter's battery can't be controlled from the dashboard yet."
             )
             return {"supported": False, "reason": reason, "log": events}
-        settings = self.settings()
+        settings = self.known()
         control = self.control()
         who = owner(settings, control)
         return {
@@ -434,7 +444,7 @@ class BatteryService:
         driver = self._driver()
         if driver is None:
             raise BatteryError("This inverter's battery can't be controlled from the dashboard.", 409)
-        settings = self.settings()
+        settings = self.known()
         if settings is None:
             raise BatteryError("The inverter's battery settings couldn't be read.", 502)
         control = self.control()

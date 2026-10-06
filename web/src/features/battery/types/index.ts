@@ -79,7 +79,8 @@ export type ControlRecord = {
   ended_by: string | null;
 };
 
-export type BatteryEvent = { ts: number; text: string; kind: ControlKind | null; until: number | null };
+/** Something the controls did, or something seen of another controller (its kind), for Recently. */
+export type BatteryEvent = { ts: number; text: string; kind: ControlKind | OutsideKind | null; until: number | null };
 
 export type BatteryView =
   | {
