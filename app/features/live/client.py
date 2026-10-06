@@ -77,7 +77,11 @@ class CollectorClient:
                 detail = None
             # A collector from before an endpoint existed answers its framework's plain "Not Found".
             if e.code == 404 and detail in (None, "Not Found"):
-                missing = "report its database" if path == "/v1/storage" else "connect inverters"
+                missing = (
+                    "report its database" if path == "/v1/storage"
+                    else "change the battery's settings" if path.endswith("/holding")
+                    else "connect inverters"
+                )  # fmt: skip
                 detail = f"The collector is out of date and can't {missing} yet. Update it with: bash install.sh"
             elif e.code == 401:
                 detail = "The collector refused the dashboard's COLLECTOR_TOKEN. Check both use the same one."
@@ -120,3 +124,14 @@ class CollectorClient:
     def start_scan(self, network: str) -> dict[str, Any]:
         result: dict[str, Any] = self._call("POST", "/v1/scan", {"network": network})
         return result
+
+    # -- settings: the hybrid's battery settings ------------------------------
+    def holding(self, role: str) -> dict[int, int]:
+        """The device's settings registers, read now."""
+        body = self._call("GET", f"/v1/devices/{urllib.parse.quote(role)}/holding")
+        return {int(a): int(w) for a, w in body["holding"].items()}
+
+    def write_holding(self, role: str, words: list[tuple[int, int]]) -> dict[int, int]:
+        """Write settings registers in order; what they read back as afterwards (empty if that read failed)."""
+        body = self._call("PUT", f"/v1/devices/{urllib.parse.quote(role)}/holding", {"words": [list(w) for w in words]})
+        return {int(a): int(w) for a, w in body["holding"].items()}

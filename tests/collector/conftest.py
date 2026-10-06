@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from collector.config import Config
-from collector.devices import RawReading, Words
+from collector.devices import RawReading, Words, WriteRefused
 from collector.store import Store
 
 
@@ -45,6 +45,33 @@ class FakeDevice:
             info_input=dict(self.info),
             info_holding=dict(self.info_holding),
         )
+
+
+class FakeSettable(FakeDevice):
+    """A hybrid whose battery settings can be read and written. `refuse`: addresses it refuses to write."""
+
+    readable = ((13050, 10),)
+    writable = frozenset({13050, 13051, 13052, 13058, 13059})
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.holding: Words = {13050: 0, 13051: 0xCC, 13052: 0, 13058: 1000, 13059: 50}
+        self.writes: list[tuple[int, int]] = []
+        self.refuse: set[int] = set()
+
+    def read_holding(self) -> Words:
+        if self.fail:
+            raise ConnectionError("hybrid down")
+        return dict(self.holding)
+
+    def write_holding(self, words: list[tuple[int, int]]) -> None:
+        if self.fail:
+            raise ConnectionError("hybrid down")
+        for a, w in words:
+            if a in self.refuse:
+                raise WriteRefused(f"The inverter refused to set register {a} to {w}.")
+            self.writes.append((a, w))
+            self.holding[a] = w
 
 
 class Clock:

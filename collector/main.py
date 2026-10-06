@@ -13,15 +13,15 @@ import logging
 import re
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Depends, FastAPI, Header, HTTPException, Request, Response
 
 from collector.config import Config
-from collector.devices import ROLES, Device, DeviceConfig, Words
+from collector.devices import ROLES, Device, DeviceConfig, Settable, Words, WriteRefused
 from collector.devices.drivers import READERS, build_device, env_devices
 from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_probe
-from collector.poller import Poller
+from collector.poller import DeviceStatus, Poller
 from collector.scan import Scanner
 from collector.storage import SPECS, measure
 from collector.store import Row, Store
@@ -32,6 +32,7 @@ PROTOCOL_VERSION = 1
 DEFAULT_LIMIT, MAX_LIMIT = 1000, 5000
 MAX_WAIT = 30.0
 MOCK_BACKFILL_DAYS = 7
+MAX_WRITES = 10  # registers one request may write
 
 
 async def _mock_open(host: str, port: int) -> bool:
@@ -179,6 +180,76 @@ async def delete_device(request: Request, role: str) -> dict[str, bool]:
         await asyncio.to_thread(request.app.state.reload)
         log.info("Removed %s", role)
     return {"removed": removed}
+
+
+# -- settings: the hybrid's battery settings, read and changed for the dashboard's battery controls -----
+
+
+def _settable(request: Request, role: str) -> tuple[Settable, DeviceStatus]:
+    poller: Poller = request.app.state.poller
+    device = next((d for d in poller.devices if d.name == role), None)
+    if device is None:
+        raise HTTPException(404, f"No {role} inverter is connected.")
+    if not hasattr(device, "write_holding"):
+        raise HTTPException(409, "This inverter's settings can't be changed from the dashboard.")
+    return cast(Settable, device), poller.status[role]
+
+
+def _holding_json(st: DeviceStatus, words: Words) -> dict[str, Any]:
+    """The words as the response's `holding`, after noting any info register among them (the reserve), so
+    /v1/status reports a change straight away rather than at the next info read."""
+    st.info_holding.update({a: w for a, w in words.items() if a in st.info_holding})
+    return {"holding": {str(a): w for a, w in sorted(words.items())}}
+
+
+def _writes(device: Settable, body: dict[str, Any]) -> list[tuple[int, int]]:
+    """The (address, word) pairs to write, from a body {"words": [[address, word], ...]}. Raises HTTPException(422)."""
+    raw = body.get("words")
+    if not isinstance(raw, list) or not 1 <= len(raw) <= MAX_WRITES:
+        raise HTTPException(422, f"words must be a list of 1 to {MAX_WRITES} [address, word] pairs")
+    out = []
+    for pair in raw:
+        if not (isinstance(pair, list) and len(pair) == 2 and all(type(x) is int for x in pair)):
+            raise HTTPException(422, "Each write must be [address, word], both whole numbers.")
+        address, word = pair
+        if address not in device.writable:
+            raise HTTPException(422, f"Register {address} isn't one the dashboard may change.")
+        if not 0 <= word <= 0xFFFF:
+            raise HTTPException(422, f"{word} doesn't fit in a register (0 to 65535).")
+        out.append((address, word))
+    return out
+
+
+@router.get("/devices/{role}/holding")
+async def get_holding(request: Request, role: str) -> dict[str, Any]:
+    """The device's settings registers (its driver's readable holding ranges), read now."""
+    device, st = _settable(request, role)
+    try:
+        words = await asyncio.to_thread(device.read_holding)
+    except ConnectionError as e:
+        raise HTTPException(502, f"The inverter didn't answer: {e}") from e
+    return _holding_json(st, words)
+
+
+@router.put("/devices/{role}/holding")
+async def put_holding(request: Request, role: str, body: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
+    """Write settings registers in the order given (body {"words": [[13050, 2], [13051, 204]]}), then read them all
+    back: what comes back is what the inverter now reports, which a gateway may take a while to catch up on."""
+    device, st = _settable(request, role)
+    words = _writes(device, body)
+    try:
+        await asyncio.to_thread(device.write_holding, words)
+    except WriteRefused as e:
+        log.warning("%s refused a write %s: %s", role, words, e)
+        raise HTTPException(422, str(e)) from e
+    except ConnectionError as e:
+        raise HTTPException(502, f"The inverter didn't answer: {e}") from e
+    log.info("Wrote %s registers: %s", role, ", ".join(f"{a}={w}" for a, w in words))
+    try:
+        after = await asyncio.to_thread(device.read_holding)
+    except ConnectionError:
+        after = {}  # written; what it reads now shows on the next read
+    return _holding_json(st, after)
 
 
 @router.get("/scan")

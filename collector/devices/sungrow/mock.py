@@ -18,9 +18,9 @@ import random
 import time
 from contextlib import suppress
 
-from collector.devices import Device, RawReading, Words
+from collector.devices import Device, RawReading, Words, WriteRefused
 from collector.devices.sungrow.sg_d import RANGES
-from collector.devices.sungrow.sh_rs import BLOCKS
+from collector.devices.sungrow.sh_rs import BLOCKS, CONTROL_HOLDING, WRITABLE
 from collector.store import PollRow, Store
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 FLOW_PV, FLOW_CHARGING, FLOW_DISCHARGING, FLOW_LOAD, FLOW_EXPORT, FLOW_IMPORT = 1, 2, 4, 8, 16, 32
 FLOW_NEGATIVE_LOAD = 1 << 7  # seen on real hardware alongside negative load readings
 CAPACITY_WH = 16_000
+EMS_FORCED, FORCE_CHARGE, FORCE_DISCHARGE, FORCE_STOP = 2, 0xAA, 0xBB, 0xCC
 
 
 def _u32(v: float) -> list[int]:
@@ -54,6 +55,9 @@ class MockSite:
 
     def __init__(self) -> None:
         self.soc = 55.0
+        # The battery's settings, as the real one reads them (CONTROL_HOLDING): self-consumption, 100 % / 5 %.
+        self.holding: Words = {a: 0xFFFF for start, count in CONTROL_HOLDING for a in range(start, start + count)}
+        self.holding.update({13050: 0, 13051: FORCE_STOP, 13052: 0, 13058: 1000, 13059: 50, 33047: 500, 33048: 500})
         self.cloud = 1.0
         self.day: int | None = None
         self.last_ts: float | None = None
@@ -63,7 +67,7 @@ class MockSite:
                        "charge": 2_000.0, "discharge": 1_800.0, "pv2": 51_000.0}  # fmt: skip
         self.daily = dict.fromkeys(self.totals, 0.0)
         self.pv2_hours = 52_500.0
-        self.hybrid = MockDevice(self, "hybrid", "sungrow.sh_rs")
+        self.hybrid = MockHybrid(self, "hybrid", "sungrow.sh_rs")
         self.pv2 = MockDevice(self, "pv2", "sungrow.sg_d")
 
     def readings(self, ts: int) -> dict[str, RawReading | None]:
@@ -91,9 +95,16 @@ class MockSite:
 
         surplus = pv + pv2 - house
         batt = 0.0  # + discharging
-        if surplus > 0 and self.soc < 100:
+        top, floor = self.holding[13058] / 10, self.holding[13059] / 10
+        if self.holding[13050] == EMS_FORCED:  # the battery controls: standby, or charge/discharge at a set power
+            cmd, power = self.holding[13051], min(self.holding[13052], 5000)
+            if cmd == FORCE_CHARGE and self.soc < top:
+                batt = -power
+            elif cmd == FORCE_DISCHARGE and self.soc > floor:
+                batt = power
+        elif surplus > 0 and self.soc < top:
             batt = -min(surplus, 5000)
-        elif surplus < 0 and self.soc > 5:
+        elif surplus < 0 and self.soc > floor:
             batt = min(-surplus, 5000)
         self.soc = min(100.0, max(0.0, self.soc - batt * dt_h / CAPACITY_WH * 100))
         grid = house - pv - pv2 - batt  # + importing
@@ -141,7 +152,8 @@ class MockSite:
         serial = b"MOCK0000001".ljust(20, b"\x00")
         info.update({4990 + i: int.from_bytes(serial[2 * i : 2 * i + 2], "big") for i in range(10)})
         info.update({5000: 0x0D0F, 5001: 50, 5002: 0, 5639: 1600})  # SH5.0RS, 5.0 kW, single phase, 16 kWh
-        hybrid = RawReading(input=h, info_input=info, info_holding={13059: 50})  # reserve 5.0 %
+        h[13000] = 0x0800 if self.holding[13050] == EMS_FORCED else 0  # running state: forced mode
+        hybrid = RawReading(input=h, info_input=info, info_holding={13059: self.holding[13059]})  # reserve
 
         if not pv2:
             return {"hybrid": hybrid, "pv2": None}
@@ -168,6 +180,22 @@ class MockDevice:
         if not include_info:
             return RawReading(input=r.input)
         return RawReading({**r.info_input, **r.input}, dict(r.info_holding), r.info_input, r.info_holding)
+
+
+class MockHybrid(MockDevice):
+    """The fake hybrid, whose battery settings can be read and changed like the real one's."""
+
+    readable = CONTROL_HOLDING
+    writable = WRITABLE
+
+    def read_holding(self) -> Words:
+        return dict(self.site.holding)
+
+    def write_holding(self, words: list[tuple[int, int]]) -> None:
+        for address, word in words:
+            if address not in WRITABLE:
+                raise WriteRefused(f"Register {address} isn't one the dashboard may change.")
+            self.site.holding[address] = word
 
 
 # Where a scan in mock mode "finds" the fake inverters.

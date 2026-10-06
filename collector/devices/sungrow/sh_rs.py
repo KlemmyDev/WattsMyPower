@@ -12,12 +12,13 @@ SH5.0RS + WiNet-S2. What each word means is decoded by the API, not here.
 from __future__ import annotations
 
 import inspect
+import threading
 from typing import Any
 
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
-from collector.devices import RawReading, Words
+from collector.devices import RawReading, Words, WriteRefused
 from collector.devices.modbus import Range, read_ranges
 
 # Per Sungrow's doc: communication address = protocol address - 1.
@@ -34,10 +35,19 @@ INFO_INPUT: tuple[Range, ...] = ((4990, 10), (5000, 3), (5639, 1))
 # Min SOC, i.e. the backup reserve. A holding register (function 0x03); only ever read.
 INFO_HOLDING: tuple[Range, ...] = ((13059, 1),)
 
+# The battery's settings, read on demand for the dashboard's battery controls (holding, function 0x03): EMS mode,
+# forced charge/discharge command and power (13050-13052), max and min SOC (13058-13059), the most the battery may
+# charge and discharge at (33047-33048). 13053-13057 sit in between and come back as 0xFFFF.
+CONTROL_HOLDING: tuple[Range, ...] = ((13050, 10), (33047, 2))
+# What may be written (function 0x06): EMS mode, the forced command and its power, max and min SOC.
+WRITABLE = frozenset({13050, 13051, 13052, 13058, 13059})
+
 
 class ShRsDevice:
     name = "hybrid"
     driver = "sungrow.sh_rs"
+    readable = CONTROL_HOLDING
+    writable = WRITABLE
 
     def __init__(self, host: str, port: int = 502, unit: int = 1, client_cls: Any = None):
         self.host, self.port, self.unit = host, port, unit
@@ -48,6 +58,8 @@ class ShRsDevice:
         # pymodbus renamed the unit-id kwarg across 3.x versions.
         params = inspect.signature(self._client_cls.read_input_registers).parameters
         self._unit_kw = next((k for k in ("device_id", "slave", "unit") if k in params), "slave")
+        # One conversation with the dongle at a time: the poll, and the battery controls' reads and writes.
+        self._lock = threading.Lock()
 
     def _read(self, client: Any, address: int, count: int, holding: bool = False) -> list[int] | None:
         fn = client.read_holding_registers if holding else client.read_input_registers
@@ -76,13 +88,55 @@ class ShRsDevice:
             words.update(zip(range(4990, 5000), serial, strict=True))
         return words
 
-    def read(self, include_info: bool) -> RawReading:
-        """One connect -> read -> disconnect cycle. Raises ConnectionError if unreachable."""
+    def _connect(self) -> Any:
         if not self.host:
             raise ConnectionError("No inverter address set. Connect it in Settings → Integrations.")
         client = self._client_cls(self.host, port=self.port, timeout=5, retries=1)
         if not client.connect():
             raise ConnectionError(f"Could not connect to {self.host}:{self.port}")
+        return client
+
+    def read(self, include_info: bool) -> RawReading:
+        """One connect -> read -> disconnect cycle. Raises ConnectionError if unreachable."""
+        with self._lock:
+            return self._read_all(include_info)
+
+    def read_holding(self) -> Words:
+        """The battery's settings (CONTROL_HOLDING), now. Raises ConnectionError if unreachable."""
+        with self._lock:
+            client = self._connect()
+            try:
+                words = read_ranges(
+                    lambda a, c: self._read(client, a, c, holding=True), CONTROL_HOLDING, self._bad_holding, self.name
+                )
+            except ModbusException as e:
+                raise ConnectionError(f"{self.host}: {e}") from e
+            finally:
+                client.close()
+        if not words:
+            raise ConnectionError("Inverter connected but returned none of its battery settings")
+        return words
+
+    def write_holding(self, words: list[tuple[int, int]]) -> None:
+        """Write each (address, word) in turn, one register per request (function 0x06, which every WiNet-S
+        firmware that takes writes accepts). Raises WriteRefused or ConnectionError."""
+        for address, _ in words:
+            if address not in WRITABLE:
+                raise WriteRefused(f"Register {address} isn't one the dashboard may change.")
+        with self._lock:
+            client = self._connect()
+            try:
+                for address, word in words:
+                    rr = client.write_register(address + ADDRESS_OFFSET, word, **{self._unit_kw: self.unit})
+                    if rr.isError():
+                        raise WriteRefused(f"The inverter refused to set register {address} to {word}.")
+            except ModbusException as e:
+                raise ConnectionError(f"{self.host}: {e}") from e
+            finally:
+                client.close()
+
+    def _read_all(self, include_info: bool) -> RawReading:
+        client = self._connect()
         info_input: Words = {}
         info_holding: Words = {}
         try:

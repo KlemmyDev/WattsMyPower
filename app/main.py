@@ -17,6 +17,7 @@ from app.features.alerts.router import router as alerts_router
 from app.features.amber.router import router as amber_router
 from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
+from app.features.battery.router import router as battery_router
 from app.features.bills.router import router as bills_router
 from app.features.car.router import router as car_router
 from app.features.forecast.router import router as forecast_router
@@ -57,6 +58,7 @@ ROUTERS = [
     imports_router,
     plans_router,
     car_router,
+    battery_router,
     home_router,
     health_router,
 ]
@@ -90,11 +92,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.amber.start()  # does nothing until an Amber account is connected
             await services.weather.start()  # the forecast, filling in past weather, and the forecast's learning
             await services.home.start()  # polls the smart-home accounts connected, if any
+            await services.battery.start_loop()  # ends battery controls when they're done
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
+            await services.battery.stop_loop()
             await services.home.stop()
             await services.weather.stop()
             await services.amber.stop()

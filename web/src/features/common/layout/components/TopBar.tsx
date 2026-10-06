@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useRef } from "react";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
+import { useHasBattery } from "~/features/battery/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
 import { usePillIndicator, useScrolled } from "~/features/common/layout/hooks";
@@ -9,7 +10,7 @@ import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
 
 type NavItem = {
-  to: "/" | "/home" | "/history" | "/plan" | "/health" | "/bills" | "/tesla";
+  to: "/" | "/home" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
   label: string;
   icon: IconName;
 };
@@ -18,7 +19,7 @@ const NAV: NavItem[] = [
   { to: "/home", label: "Home", icon: "home" },
   { to: "/history", label: "History", icon: "chart" },
   { to: "/plan", label: "Plan", icon: "cloudSun" },
-  { to: "/health", label: "Health", icon: "pulse" },
+  { to: "/battery", label: "Battery", icon: "battery" },
   { to: "/bills", label: "Bills", icon: "dollar" },
   { to: "/tesla", label: "Tesla", icon: "car" },
 ];
@@ -73,7 +74,8 @@ export function TopBar() {
 function Nav() {
   const teslaConnected = !!useLive()?.system.tesla_connected;
   // Tesla only gets a tab once it's connected; until then it's reached from its Overview card and Settings.
-  const items = NAV.filter((i) => i.to !== "/tesla" || teslaConnected);
+  const hasBattery = useHasBattery();
+  const items = NAV.filter((i) => (i.to !== "/tesla" || teslaConnected) && (i.to !== "/battery" || hasBattery));
   const six = items.length > 5;
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = sectionOf(path);

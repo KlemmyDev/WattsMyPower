@@ -41,7 +41,7 @@ class Facts:
     daylight_since: float | None  # since when the sun has been up (sun.DAYLIGHT); None after dark
     # While the inverter keeps answering with the same readings: when the repeated one was taken.
     frozen_since: float | None = None
-    # Looked up only when a rule asks: the Health page's solar performance, and yesterday's totals.
+    # Looked up only when a rule asks: solar performance (app.features.insights), and yesterday's totals.
     performance: Callable[[], dict[str, Any] | None] = lambda: None
     yesterday: Callable[[], dict[str, Any] | None] = lambda: None
     # On an Amber tariff, the price now: {"import": $/kWh, "feed_in": $/kWh (what exporting earns), "until": the
@@ -303,7 +303,7 @@ def solar_underperforming(f: Facts, v: Values, s: RuleState) -> Check:
             f"{days}, your solar made about {avg:.0%} of what it usually does in that weather "
             f"({day_name(last['date'])}: {_kwh(last['actual_kwh'])} of an expected "
             f"{_kwh(last['expected_kwh'])}). Dirty or shaded panels, a tripped isolator or a fault in one of "
-            "the inverters can do this. The Health page shows each day.",
+            "the inverters can do this.",
         )
     if last["ratio"] >= limit:
         return Check(
@@ -596,8 +596,7 @@ RULES: tuple[Rule, ...] = (
     Rule(
         "solar_underperforming",
         "Solar underperforming",
-        "On clear days, solar made well under what this system usually makes in that weather, judged the same way "
-        "as Solar performance on the Health page. Checked once a day.",
+        "On clear days, solar made well under what this system usually makes in that weather. Checked once a day.",
         solar_underperforming,
         (
             Setting("percent", "Below", "% of expected", 30, 95, 75),

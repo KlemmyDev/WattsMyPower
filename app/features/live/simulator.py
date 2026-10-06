@@ -32,6 +32,7 @@ class Simulator:
         if await asyncio.to_thread(self.readings.is_empty, conn):
             await asyncio.to_thread(self._backfill, conn, 14)
         self.live.info = dict(self.inverter.info)
+        self.live.driver = "sungrow.sh_rs"  # what the mock inverter stands in for
         latest = await asyncio.to_thread(self.readings.latest)
         self.live.latest = latest and await asyncio.to_thread(self.readings.with_metered_today, latest)
         self._task = asyncio.create_task(self._run(conn))

@@ -72,6 +72,15 @@ transaction, with the same `ts`, so readers never see half a poll.
   must answer its driver's probe first (422 if not). Returns `{"device": {...}, "input": {address: word}}`,
   the words the probe read (the identity registers: type code, nominal power, serial).
 - `DELETE /v1/devices/<role>`: `{"removed": true|false}`.
+- `GET /v1/devices/<role>/holding`: the device's settings registers, read now: `{"holding": {"13050": 0, ...}}`.
+  Only a device whose reader can change settings has them (`sungrow.sh_rs`: the battery settings, holding
+  (13050, 10) and (33047, 2)); others answer 409, a role with no device 404, a device that doesn't answer 502.
+- `PUT /v1/devices/<role>/holding` with `{"words": [[13051, 204], [13050, 2]]}` (1 to 10 pairs): write each
+  register in order, one request each (function 0x06), then read them all back: `{"holding": {...}}` (empty if
+  that read failed). Only the addresses the reader allows (`sungrow.sh_rs`: 13050-13052, 13058, 13059) are
+  written; anything else is 422 before a word is sent. A write the device refuses is 422 (those before it stay
+  written). The collector doesn't interpret what it writes: the API's driver decides that
+  (app/features/inverters/sungrow/sh_control.py). A WiNet-S2 may take a while to show the change on reads.
 - `POST /v1/scan` with `{"network": "192.168.1.0/24"}` (private, /22 or smaller): start looking for inverters.
   422 for a network that can't be scanned, 409 while a scan runs. `GET /v1/scan` reports progress:
   `{"running", "network", "started_at", "finished_at", "checked", "total", "error", "found": [{"host", "port",

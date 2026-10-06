@@ -29,6 +29,7 @@ class LiveService:
         self.frozen_since: int | None = None
         self.next_poll: float | None = None  # when the collector next reads the inverters (unix seconds)
         self.info: dict[str, Any] = {}  # the hybrid's details: model, serial, battery capacity, reserve
+        self.driver: str | None = None  # the hybrid's driver id (e.g. "sungrow.sh_rs"), None until one is connected
         # The second inverter, when the collector has one configured.
         self.pv2: dict[str, Any] | None = None
         self._subscribers: set[asyncio.Queue[Status]] = set()

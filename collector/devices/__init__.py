@@ -65,6 +65,10 @@ class RawReading:
     info_holding: Words = field(default_factory=dict)
 
 
+class WriteRefused(Exception):
+    """The device answered, but refused a write (e.g. a value outside what it accepts). Readable as it is."""
+
+
 class Device(Protocol):
     """An inverter the poller reads."""
 
@@ -74,4 +78,22 @@ class Device(Protocol):
 
     def read(self, include_info: bool) -> RawReading:
         """One connect -> read -> disconnect cycle. Raises ConnectionError if the device can't be read."""
+        ...
+
+
+class Settable(Protocol):
+    """A device some of whose settings (holding registers) can be read on demand and changed: the hybrid, for the
+    dashboard's battery controls. The collector only checks an address is one the driver allows to be written;
+    what to write is the API's business (its driver's control module)."""
+
+    readable: tuple[tuple[int, int], ...]  # holding ranges (start, count) read on demand
+    writable: frozenset[int]  # holding addresses that may be written
+
+    def read_holding(self) -> Words:
+        """The `readable` ranges, now. Raises ConnectionError if the device can't be read."""
+        ...
+
+    def write_holding(self, words: list[tuple[int, int]]) -> None:
+        """Write each (address, word) in turn, one register per request. Raises WriteRefused when the device refuses
+        one (those before it stay written), ConnectionError when it can't be reached."""
         ...

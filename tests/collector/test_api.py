@@ -15,7 +15,7 @@ from collector.config import Config
 from collector.main import create_app
 from collector.poller import Poller
 from collector.store import Store
-from tests.collector.conftest import FakeDevice
+from tests.collector.conftest import FakeDevice, FakeSettable
 
 AUTH = {"Authorization": "Bearer secret"}
 
@@ -187,3 +187,71 @@ def test_storage_measures_the_database(client: TestClient) -> None:
     ]
     assert {c["name"] for c in readings["columns"]} == {"ts", "device", "driver", "input", "holding"}
     assert {"devices", "kv", "sqlite_schema"} <= tables.keys()
+
+
+# -- battery settings ---------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def settable(cfg: Config) -> Iterator[tuple[TestClient, FakeSettable]]:
+    device = FakeSettable()
+    with TestClient(create_app(cfg, hybrid=device, poll=False)) as c:
+        yield c, device
+
+
+def test_battery_settings_are_read_on_demand(settable: tuple[TestClient, FakeSettable]) -> None:
+    c, _ = settable
+    r = c.get("/v1/devices/hybrid/holding", headers=AUTH)
+    assert r.status_code == 200 and r.json()["holding"]["13059"] == 50
+
+
+def test_writes_are_made_in_order_and_read_back(settable: tuple[TestClient, FakeSettable]) -> None:
+    c, device = settable
+    poll(c)  # the reserve (13059) is among the info registers the status reports
+    r = c.put("/v1/devices/hybrid/holding", headers=AUTH, json={"words": [[13051, 0xCC], [13050, 2], [13059, 300]]})
+    assert r.status_code == 200
+    assert device.writes == [(13051, 0xCC), (13050, 2), (13059, 300)]
+    assert r.json()["holding"]["13050"] == 2
+    status = c.get("/v1/status", headers=AUTH).json()
+    assert status["devices"]["hybrid"]["info"]["holding"]["13059"] == 300  # the new reserve, at once
+
+
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        ({"words": [[5000, 1]]}, "isn't one"),
+        ({"words": [[13050, 70000]]}, "doesn't fit"),
+        ({"words": [[13050, "2"]]}, "whole numbers"),
+        ({"words": []}, "list of 1 to"),
+        ({}, "list of 1 to"),
+    ],
+)
+def test_bad_writes_are_turned_away(settable: tuple[TestClient, FakeSettable], body: dict, match: str) -> None:
+    c, device = settable
+    r = c.put("/v1/devices/hybrid/holding", headers=AUTH, json=body)
+    assert r.status_code == 422 and match in r.json()["detail"] and device.writes == []
+
+
+def test_a_refused_write_is_a_422(settable: tuple[TestClient, FakeSettable]) -> None:
+    c, device = settable
+    device.refuse = {13059}
+    r = c.put("/v1/devices/hybrid/holding", headers=AUTH, json={"words": [[13059, 900]]})
+    assert r.status_code == 422 and "refused" in r.json()["detail"]
+
+
+def test_an_unreachable_inverter_is_a_502(settable: tuple[TestClient, FakeSettable]) -> None:
+    c, device = settable
+    device.fail = True
+    assert c.get("/v1/devices/hybrid/holding", headers=AUTH).status_code == 502
+    assert c.put("/v1/devices/hybrid/holding", headers=AUTH, json={"words": [[13050, 0]]}).status_code == 502
+
+
+def test_a_device_without_settings_is_a_409(client: TestClient) -> None:
+    assert client.get("/v1/devices/hybrid/holding", headers=AUTH).status_code == 409
+    assert client.get("/v1/devices/pv2/holding", headers=AUTH).status_code == 404
+
+
+def test_the_mock_hybrid_takes_battery_settings(cfg: Config) -> None:
+    with TestClient(create_app(replace(cfg, mock=True), poll=False)) as c:
+        r = c.put("/v1/devices/hybrid/holding", headers=AUTH, json={"words": [[13051, 0xCC], [13050, 2]]})
+        assert r.status_code == 200 and r.json()["holding"]["13050"] == 2

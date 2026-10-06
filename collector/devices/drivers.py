@@ -44,9 +44,10 @@ def reader(driver: str) -> Reader:
 def build_device(device: DeviceConfig, site: MockSite | None = None) -> Device:
     """The reader for a connected device; with a mock site (COLLECTOR_MOCK=1), its fake for that role."""
     if site is not None:
-        from collector.devices.sungrow.mock import MockDevice
+        from collector.devices.sungrow.mock import MockDevice, MockHybrid
 
-        return MockDevice(site, device.role, device.driver, device.host)
+        cls = MockHybrid if device.role == "hybrid" else MockDevice
+        return cls(site, device.role, device.driver, device.host)
     built = reader(device.driver).build(device.host, device.port, device.unit)
     built.name = device.role
     return built

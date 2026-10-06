@@ -9,8 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.features.inverters.sungrow import sg_d, sh_rs
-from app.features.inverters.types import HybridDriver, SolarDriver
+from app.features.inverters.sungrow import sg_d, sh_control, sh_rs
+from app.features.inverters.types import ControlDriver, HybridDriver, SolarDriver
 
 HYBRIDS: dict[str, HybridDriver] = {
     "sungrow.sh_rs": sh_rs,
@@ -18,6 +18,11 @@ HYBRIDS: dict[str, HybridDriver] = {
 
 SOLAR: dict[str, SolarDriver] = {
     "sungrow.sg_d": sg_d,
+}
+
+# Hybrids whose battery can be controlled from the dashboard (app.features.battery), by driver id.
+CONTROLS: dict[str, ControlDriver] = {
+    "sungrow.sh_rs": sh_control,
 }
 
 # Readings stored before the collector tagged them with a driver were all from these.
@@ -44,6 +49,10 @@ KINDS: dict[str, Kind] = {
 
 def hybrid(driver: str | None) -> HybridDriver | None:
     return HYBRIDS.get(driver or DEFAULT_HYBRID)
+
+
+def control(driver: str | None) -> ControlDriver | None:
+    return CONTROLS.get(driver or "")
 
 
 def solar(driver: str | None) -> SolarDriver | None:
