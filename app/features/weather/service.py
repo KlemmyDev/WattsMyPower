@@ -191,6 +191,20 @@ class WeatherService:
         self._fetched = (what, now)
         self.error = None
 
+    def timing(self) -> dict[str, Any]:
+        """When the forecast was last fetched and when it's next due: REFRESH after that, or RETRY after a failure
+        since (asking for the forecast once it's due fetches it, if the loop hasn't yet)."""
+        fetched = self._fetched[1] if self._fetched else None
+        due = fetched + REFRESH if fetched is not None else None
+        if self._failed_at and (fetched is None or self._failed_at > fetched):
+            due = self._failed_at + RETRY
+        return {
+            "fetched_at": int(fetched) if fetched is not None else None,
+            "next_at": int(due) if due is not None else None,
+            "every": REFRESH,
+            "error": self.error,
+        }
+
     def hours(self, start: int, end: int) -> list[dict[str, Any]]:
         return self.repo.hours(start, end)
 

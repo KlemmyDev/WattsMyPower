@@ -125,7 +125,7 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
         sub="How the Overview draws your home. Choose what's closest: it's only the picture, nothing's worked out from it."
       />
       <div className="relative aspect-[2/1] w-full overflow-hidden rounded-2xl bg-[#dcebff] max-sm:aspect-[4/3]">
-        <HouseScene flows={previewFlows(snapshot, system)} sky="sunny" house={house} leaders={false} />
+        <HouseScene flows={previewFlows(snapshot, system)} sky="sunny" house={house} />
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold">Style</span>
@@ -144,7 +144,7 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
                 )}
               >
                 <span className="relative aspect-[2/1] w-full overflow-hidden bg-[#dcebff] max-sm:aspect-[5/2]">
-                  <HouseScene flows={THUMB_FLOWS} sky="sunny" house={{ ...house, style: st.value }} leaders={false} />
+                  <HouseScene flows={THUMB_FLOWS} sky="sunny" house={{ ...house, style: st.value }} />
                 </span>
                 <span className="flex flex-col gap-0.5 px-3.5 py-2.5">
                   <span className="text-sm font-semibold text-ink">{st.name}</span>

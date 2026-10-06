@@ -9,7 +9,8 @@ export const isWet = (c: number) => isRain(c) || c >= 95;
 
 export type SkyMode = "sunny" | "cloudy" | "rain" | "storm" | "night";
 export type Cover = "clear" | "cloudy" | "rain" | "storm";
-export type LiveWeather = { mode: SkyMode; cover?: Cover; label: string };
+/** The weather now: the sky to draw, and in words: `label` is the two together ("Showers · 27°"). */
+export type LiveWeather = { mode: SkyMode; cover?: Cover; label: string; name: string; temp: string | null };
 
 /** A temperature from °C, rounded, in the unit chosen in Settings: "22°". */
 export const degrees = (celsius: number, fahrenheit: boolean) =>
@@ -51,13 +52,16 @@ export const hourAt = (f: Forecast, at: number) => f.hours.find((x) => x.ts <= a
 /** Sky and label from the forecast hour we're in now: sunny, cloudy, rain, storm, or night after dark. */
 export function liveWeather(p: Snapshot, f: Forecast | null | undefined, now: number, fahrenheit = false): LiveWeather {
   const h = f && (hourAt(f, now) || f.hours[0]);
-  if (!h) return (p.pv_power || 0) > 100 ? { mode: "sunny", label: "Sunny" } : { mode: "night", label: "Night" };
+  if (!h)
+    return (p.pv_power || 0) > 100
+      ? { mode: "sunny", label: "Sunny", name: "Sunny", temp: null }
+      : { mode: "night", label: "Night", name: "Night", temp: null };
   const c = h.code;
-  const t = h.temp != null ? ` · ${degrees(h.temp, fahrenheit)}` : "";
-  const name = codeName(c);
+  const temp = h.temp != null ? degrees(h.temp, fahrenheit) : null;
   const cover: Cover = c >= 95 ? "storm" : isRain(c) ? "rain" : c >= 2 ? "cloudy" : "clear";
-  if (!h.is_day) return { mode: "night", cover, label: (c <= 1 ? "Clear night" : c <= 3 ? "Cloudy night" : name) + t };
-  return { mode: cover === "clear" ? "sunny" : cover, cover, label: name + t };
+  const name = h.is_day ? codeName(c) : c <= 1 ? "Clear night" : c <= 3 ? "Cloudy night" : codeName(c);
+  const label = temp ? `${name} · ${temp}` : name;
+  return { mode: h.is_day ? (cover === "clear" ? "sunny" : cover) : "night", cover, label, name, temp };
 }
 
 /** Icon for the live weather chip. */

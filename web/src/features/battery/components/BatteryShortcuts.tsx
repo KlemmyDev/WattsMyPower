@@ -116,7 +116,7 @@ export function BatteryShortcuts() {
   const free = mode.owner === "normal" || mode.owner === "dashboard";
   if (!free)
     return (
-      <Link to="/battery" className="flex-none text-[13px] font-semibold text-link">
+      <Link to="/battery" className="flex-none pr-1.5 text-[13px] font-semibold text-link">
         Details
       </Link>
     );
@@ -166,7 +166,7 @@ export function BatteryShortcuts() {
           measure();
           setOpen((o) => !o);
         }}
-        className="flex flex-none items-center gap-1 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:border-line-strong disabled:opacity-60"
+        className="flex flex-none items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-[13px] font-semibold text-ink transition-colors hover:border-line-strong disabled:opacity-60"
       >
         {pending ? "Sending…" : "Shortcuts"}
         <Icon name="chevD" size={14} className={cn("transition-transform", open && "rotate-180")} />

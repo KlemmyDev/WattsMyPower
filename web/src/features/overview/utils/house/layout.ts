@@ -68,8 +68,6 @@ export type Shape = {
   /** Where the power line from the pole meets the house. */
   gridAt: P3;
   /** Points on the house the solar and home labels point at. */
-  solarAt: P3;
-  homeAt: P3;
   /** How far towards the street the ground reaches (a verandah and its stairs need more). */
   groundY1: number;
 };
@@ -94,8 +92,6 @@ export type Layout = {
   spots: Spot[];
   /** The spot each car parks in (its index in `spots`), in the order of `options.cars`; -1 where there's no room. */
   parked: number[];
-  /** Points the label pills' leader lines end at, on the drawing. */
-  anchors: { solar: P3; grid: P3; home: P3; battery: P3; tesla: P3 };
   /** Scale and shift that fit the drawing in the frame a single-storey house without a garage fills. */
   fit: { scale: number; dx: number; dy: number };
 };
@@ -130,8 +126,6 @@ function estate(storeys: 1 | 2): Shape {
       [10.03, 7.7, eave + 0.17],
     ],
     gridAt: [0.9, 8.03, 3.4],
-    solarAt: [5, 6.2, ridge - 1.5],
-    homeAt: [2.4, 8, 2.7],
     groundY1: 10.4,
   };
 }
@@ -157,8 +151,6 @@ function modern(storeys: 1 | 2): Shape {
       ...(upper ? ([[10.03, 7.7, upper.z0]] as P3[]) : []),
     ],
     gridAt: [0.45, 8.03, 3.0],
-    solarAt: [5, 4.5, roofTop + 0.4],
-    homeAt: [2.0, 8, 1.8],
     groundY1: 10.4,
   };
 }
@@ -183,8 +175,6 @@ function queenslander(storeys: 1 | 2): Shape {
       [10.03, 6.9, q.wallTop - 0.15],
     ],
     gridAt: [0.6, q.front + 0.03, q.wallTop - 0.8],
-    solarAt: [5, 5.4, q.wallTop + 1.0],
-    homeAt: [2.0, q.front, q.floor + 1.6],
     groundY1: q.deck + q.steps * 0.28 + 0.6,
   };
 }
@@ -218,8 +208,6 @@ function federation(storeys: 1 | 2): Shape {
       [10.03, 7.7, f.wallTop - 0.15],
     ],
     gridAt: [0.7, 8.03, 3.0],
-    solarAt: [3.2, 6.6, f.wallTop + 0.9],
-    homeAt: [1.4, 8, 2.0],
     groundY1: 11.0,
   };
 }
@@ -244,8 +232,6 @@ function farmhouse(storeys: 1 | 2): Shape {
       [10.03, 7.7, f.eave + 0.15],
     ],
     gridAt: [0.4, 8.03, 2.6],
-    solarAt: [5, 6.0, f.ridge - 2.0],
-    homeAt: [2.0, 8, 1.8],
     groundY1: 10.4,
   };
 }
@@ -421,15 +407,6 @@ export function layout(o: HouseOptions): Layout {
     y0: -1,
     y1: Math.max(shape.groundY1, garage ? 11.4 : 10.4, ...spots.map((sp) => sp.y1 + 0.6)),
   };
-  const anchors = {
-    solar: shape.solarAt,
-    grid: POLE,
-    home: shape.homeAt,
-    battery: batteries[0] ? ([batteries[0].x, mid(batteries[0]), (batteries[0].z0 + batteries[0].z1) / 2] as P3) : POLE,
-    tesla: spots[0]
-      ? ([(spots[0].x0 + spots[0].x1) / 2, (spots[0].y0 + spots[0].y1) / 2, 1.0] as P3)
-      : ([13.95, 4.3, 1.0] as P3),
-  };
 
   return {
     options: o,
@@ -448,7 +425,6 @@ export function layout(o: HouseOptions): Layout {
     batteryPaths,
     spots,
     parked,
-    anchors,
     fit: fit(ground, shape.top),
   };
 }
@@ -478,12 +454,6 @@ function fit(ground: Layout["ground"], top: number): Layout["fit"] {
   const dy = BASE.y1 - e.y1 * scale;
   return { scale, dx, dy };
 }
-
-/** A point on the drawing, after the fit. */
-export const fitted = (l: Layout, p: P3): [number, number] => {
-  const q = I(...p);
-  return [q[0] * l.fit.scale + l.fit.dx, q[1] * l.fit.scale + l.fit.dy];
-};
 
 /** A stable key for caching what's drawn for a layout. */
 export const houseKey = (o: HouseOptions) =>

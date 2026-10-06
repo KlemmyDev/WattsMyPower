@@ -48,8 +48,12 @@ export type ForecastAccuracy = {
   range: { low: number; high: number; days: number } | null;
 };
 
+/** When the weather was last fetched from Open-Meteo and when it's next due (unix seconds), every `every` seconds. */
+export type WeatherTiming = { fetched_at: number | null; next_at: number | null; every: number; error: string | null };
+
 export type Forecast = {
   generated_at: number;
+  weather?: WeatherTiming;
   calibration: { kwh_per_kwh_m2: number; fitted_hours: number };
   /** Which solar model made it: the plain one, or the one learned from weather history (with how it back-tested). */
   model?: {
