@@ -37,6 +37,8 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                      meter
     home_energy      each device's energy, kWh per 5 minutes
     home_runs        each run of an appliance that runs in cycles (a wash, a dry): when, how long, how much
+    battery_controls each battery control from the dashboard (standby, a floor, a charge from the grid): when it
+                     started and ended, and how it was set, for the Battery page's chart (app.features.battery)
 
 `ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
 """
@@ -360,6 +362,17 @@ def _home_rules(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE home_devices ADD COLUMN rule TEXT NOT NULL DEFAULT '{}'")
 
 
+def _battery_controls(conn: sqlite3.Connection) -> None:
+    """Each battery control as it ran: `kind` standby, floor or charge; `until` the end it was set for (null: until
+    stopped); `ended_at` when it ended (null while it's in effect) and `ended_by` why (time, target, full, stopped,
+    replaced, elsewhere)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS battery_controls (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, started_at INTEGER"
+        " NOT NULL, ended_at INTEGER, until INTEGER, floor REAL, target REAL, power_w INTEGER, ended_by TEXT)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS battery_controls_by_start ON battery_controls (started_at)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -379,6 +392,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _home,
     _home_groups,
     _home_rules,
+    _battery_controls,
 ]
 
 

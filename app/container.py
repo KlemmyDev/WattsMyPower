@@ -14,7 +14,7 @@ from app.core.database import Database
 from app.features.alerts.service import AlertsService
 from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
-from app.features.battery.service import BatteryService, CollectorRegisters
+from app.features.battery.service import BatteryService, CollectorRegisters, ForecastPlanner
 from app.features.bills.service import BillsService
 from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
@@ -118,6 +118,7 @@ def build_services(config: Config) -> Services:
             db,
             live,
             CollectorRegisters(collector) if collector else MockRegisters(source.inverter),  # type: ignore[union-attr]
+            planner=ForecastPlanner(forecast, tariffs, amber.repo, settings),
         ),
         source=source,
     )
