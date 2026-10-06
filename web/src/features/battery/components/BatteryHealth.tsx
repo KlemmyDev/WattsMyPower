@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { BatteryMonth, Insights } from "~/features/health/types";
+import type { BatteryMonth, Insights } from "~/features/battery/types/insights";
 import type { SystemInfo } from "~/features/common/live/types";
 import { BigNumber, Card, Eyebrow, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
@@ -9,19 +9,35 @@ import { DASH, kWhInt, pct } from "~/features/common/formatting/utils/number";
 
 const WAIT = "Needs a full day of readings";
 
-export function BatteryHealth({ insights: I, system }: { insights: Insights; system: SystemInfo | undefined }) {
+export function BatteryHealth({
+  insights: I,
+  system,
+  className,
+}: {
+  insights: Insights;
+  system: SystemInfo | undefined;
+  className?: string;
+}) {
   const L = I.lifetime;
   const B = I.battery;
   const cap = L.battery_kwh || system?.battery_kwh;
   const soh = L.soh;
+  const n30 = I.last30.days;
+  const perDay = cap && n30 ? I.last30.dis / cap / n30 : null;
   const rows: [string, string | null][] = [
+    [
+      "Full cycles since install",
+      L.cycles == null
+        ? null
+        : `${L.cycles.toLocaleString("en-AU")}${perDay != null ? `, about ${perDay.toFixed(1)} a day lately` : ""}`,
+    ],
     ["Average daily depth of discharge", B.avg_swing != null ? pct(B.avg_swing) : null],
     ["Round-trip efficiency", L.round_trip_pct != null ? pct(L.round_trip_pct) : null],
     ["Time at full charge", B.avg_full_min != null ? `${duration(B.avg_full_min * 60)} a day` : null],
     ["Energy delivered since install", L.discharge_kwh != null ? kWhInt(L.discharge_kwh) : null],
   ];
   return (
-    <Card aria-labelledby="h-bhl">
+    <Card aria-labelledby="h-bhl" className={className}>
       <TitleBlock
         id="h-bhl"
         title="Battery health"

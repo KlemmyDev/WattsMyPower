@@ -14,11 +14,15 @@ export function BatteryCard({
   s,
   f,
   now,
+  title = "Battery",
+  className,
 }: {
   p: Snapshot | null;
   s: SystemInfo | undefined;
   f: Forecast | null | undefined;
   now: number;
+  title?: string;
+  className?: string;
 }) {
   const st = batteryState(p?.battery_power);
   const discharging = st === "discharge";
@@ -26,9 +30,12 @@ export function BatteryCard({
   return (
     <Card
       aria-labelledby="h-bat"
-      className="relative col-span-6 min-h-[400px] overflow-hidden px-7 pt-7 pb-0 max-lg:col-span-12 max-sm:px-5 max-sm:pt-5 max-sm:pb-0"
+      className={cn(
+        "relative col-span-6 min-h-[400px] overflow-hidden px-7 pt-7 pb-0 max-lg:col-span-12 max-sm:px-5 max-sm:pt-5 max-sm:pb-0",
+        className,
+      )}
     >
-      <CardHeader title="Battery" id="h-bat" action={<StatePill st={p ? st : null} w={p?.battery_power} />} />
+      <CardHeader title={title} id="h-bat" action={<StatePill st={p ? st : null} w={p?.battery_power} />} />
       <div className="relative z-1 flex flex-wrap items-center gap-7">
         {p ? (
           <Ring p={p} s={s} discharging={discharging} />

@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppBatteryRouteImport } from './routes/_app/battery'
 import { Route as AppBillsRouteImport } from './routes/_app/bills'
 import { Route as AppForecastRouteImport } from './routes/_app/forecast'
 import { Route as AppHealthRouteImport } from './routes/_app/health'
@@ -62,6 +63,11 @@ const WelcomeRoute = WelcomeRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBatteryRoute = AppBatteryRouteImport.update({
+  id: '/battery',
+  path: '/battery',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBillsRoute = AppBillsRouteImport.update({
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/settings': typeof AppSettingsRouteRouteWithChildren
+  '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
   '/health': typeof AppHealthRoute
@@ -269,6 +276,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
+  '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
   '/health': typeof AppHealthRoute
@@ -307,6 +315,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/_app/settings': typeof AppSettingsRouteRouteWithChildren
+  '/_app/battery': typeof AppBatteryRoute
   '/_app/bills': typeof AppBillsRoute
   '/_app/forecast': typeof AppForecastRoute
   '/_app/health': typeof AppHealthRoute
@@ -346,6 +355,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/settings'
+    | '/battery'
     | '/bills'
     | '/forecast'
     | '/health'
@@ -380,6 +390,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/welcome'
+    | '/battery'
     | '/bills'
     | '/forecast'
     | '/health'
@@ -417,6 +428,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/_app/settings'
+    | '/_app/battery'
     | '/_app/bills'
     | '/_app/forecast'
     | '/_app/health'
@@ -484,6 +496,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/battery': {
+      id: '/_app/battery'
+      path: '/battery'
+      fullPath: '/battery'
+      preLoaderRoute: typeof AppBatteryRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/bills': {
@@ -760,6 +779,7 @@ const AppSettingsRouteRouteWithChildren =
 
 interface AppRouteChildren {
   AppSettingsRouteRoute: typeof AppSettingsRouteRouteWithChildren
+  AppBatteryRoute: typeof AppBatteryRoute
   AppBillsRoute: typeof AppBillsRoute
   AppForecastRoute: typeof AppForecastRoute
   AppHealthRoute: typeof AppHealthRoute
@@ -776,6 +796,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppSettingsRouteRoute: AppSettingsRouteRouteWithChildren,
+  AppBatteryRoute: AppBatteryRoute,
   AppBillsRoute: AppBillsRoute,
   AppForecastRoute: AppForecastRoute,
   AppHealthRoute: AppHealthRoute,

@@ -11,6 +11,7 @@ import { HelpText, Input } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Pill, type PillTone } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
+import { cn } from "~/features/common/ui/utils";
 import { useNow } from "~/features/common/time/hooks";
 
 type Lasting = "1h" | "3h" | "at" | "open";
@@ -94,13 +95,13 @@ function describe(c: BatteryControl, now: number): string {
  * grid, each for a while or until stopped. While iSolarCloud or anything else has the battery, it only says what's
  * going on: nothing is changed.
  */
-export function BatteryControlCard() {
+export function BatteryControlCard({ className }: { className?: string }) {
   const { data: v } = useQuery(batteryQuery);
   if (!v?.supported) return null;
-  return <Controls v={v} />;
+  return <Controls v={v} className={className} />;
 }
 
-function Controls({ v }: { v: Extract<BatteryView, { supported: true }> }) {
+function Controls({ v, className }: { v: Extract<BatteryView, { supported: true }>; className?: string }) {
   const now = useNow(30_000);
   const { start, stop } = useBatteryChange();
   const c = v.control;
@@ -144,9 +145,9 @@ function Controls({ v }: { v: Extract<BatteryView, { supported: true }> }) {
   const failed = start.error ?? stop.error;
 
   return (
-    <Card aria-labelledby="h-batctl" className="col-span-12 gap-5">
+    <Card aria-labelledby="h-batctl" className={cn("gap-5", className)}>
       <CardHeader title="Battery control" id="h-batctl" action={<Pill tone={tone}>{label}</Pill>} />
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] grid-rows-[auto_1fr] gap-x-10 gap-y-5 max-lg:grid-cols-1 max-lg:grid-rows-none max-lg:gap-6">
+      <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
           {active ? (
             <div className="flex flex-col items-start gap-3">
@@ -172,7 +173,7 @@ function Controls({ v }: { v: Extract<BatteryView, { supported: true }> }) {
         </div>
 
         {!v.blocked && (
-          <form onSubmit={submit} className="flex flex-col gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          <form onSubmit={submit} className="flex flex-col gap-4">
             <Segmented
               label="Control"
               options={KINDS}
@@ -262,7 +263,7 @@ function Controls({ v }: { v: Extract<BatteryView, { supported: true }> }) {
           </form>
         )}
         {v.log.length > 0 && (
-          <div className="flex flex-col gap-1.5 lg:col-start-1">
+          <div className="flex flex-col gap-1.5">
             <span className="font-mono text-[11px] tracking-[1.5px] text-ink-faint uppercase">Recently</span>
             <ul className="flex flex-col gap-1 text-[13px] text-ink-muted">
               {v.log.slice(0, 5).map((e) => (

@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { HealthPage } from "~/features/health/components/HealthPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** The Health page's battery figures moved to Battery: keep old links and bookmarks working. */
 export const Route = createFileRoute("/_app/health")({
-  head: () => ({ meta: [{ title: "Health · WattsMyPower" }] }),
-  component: HealthPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/battery", replace: true });
+  },
 });

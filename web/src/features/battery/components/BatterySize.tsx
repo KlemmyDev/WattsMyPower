@@ -1,4 +1,4 @@
-import type { Insights } from "~/features/health/types";
+import type { Insights } from "~/features/battery/types/insights";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { dollars, kWh, money, plural } from "~/features/common/formatting/utils/number";
@@ -15,9 +15,9 @@ function verdict(s: NonNullable<Insights["sizing"]>): string {
 }
 
 /** Whether the battery's size suits the house, and what more storage would have saved over the last 90 days. */
-export function BatterySize({ sizing: s }: { sizing: Insights["sizing"] }) {
+export function BatterySize({ sizing: s, className }: { sizing: Insights["sizing"]; className?: string }) {
   return (
-    <Card aria-labelledby="h-bs">
+    <Card aria-labelledby="h-bs" className={className}>
       <TitleBlock
         id="h-bs"
         title="Is the battery the right size?"

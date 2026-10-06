@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-/** The Insights page became Health: keep old links and bookmarks working. */
+/** The Insights page became Health, whose battery figures moved to Battery: keep old links and bookmarks working. */
 export const Route = createFileRoute("/_app/insights")({
   beforeLoad: () => {
-    throw redirect({ to: "/health", replace: true });
+    throw redirect({ to: "/battery", replace: true });
   },
 });

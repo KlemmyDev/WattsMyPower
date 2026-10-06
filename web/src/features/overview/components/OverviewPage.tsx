@@ -1,4 +1,3 @@
-import { BatteryControlCard } from "~/features/battery/components/BatteryControlCard";
 import { AmberPricesCard } from "~/features/amber/components/AmberPricesCard";
 import { CarCards } from "~/features/car/components/CarCard";
 import { useAmberPrices } from "~/features/amber/hooks";
@@ -28,7 +27,6 @@ export function OverviewPage() {
         <BatteryCard p={p} s={s} f={f} now={now} />
         <RunningNowCard />
         <TodayCard tariff={s?.tariff} now={now} />
-        <BatteryControlCard />
         <TodayEnergyCard p={p} s={s} f={f} now={now} prices={prices} />
         <CarCards now={now} />
         {prices && <AmberPricesCard prices={prices} now={now} />}
