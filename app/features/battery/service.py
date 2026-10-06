@@ -26,6 +26,7 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 from app.core.database import Database
+from app.features.battery import plan
 from app.features.inverters import drivers
 from app.features.inverters.types import BatterySettings, ControlDriver, Writes
 from app.features.live.client import CollectorClient, CollectorError
@@ -46,7 +47,7 @@ FORCED_KINDS = ("standby", "charge")  # the ones that take the battery out of se
 DEFAULT_CHARGE_W = 5000
 MIN_CHARGE_W = 500
 
-LABELS = {"standby": "Standby", "floor": "Floor", "charge": "Grid charge"}
+LABELS = {"standby": "Standby", "floor": "Reserve", "charge": "Grid charge"}
 
 
 class BatteryError(ValueError):
@@ -79,6 +80,44 @@ class CollectorRegisters:
 
     def write(self, words: Writes) -> dict[int, int]:
         return self.client.write_holding("hybrid", words)
+
+
+class Planner(Protocol):
+    """What working a control out ahead needs (app.features.battery.plan): solar and home use to come, the price
+    of grid power, and the most the battery charges or discharges at."""
+
+    def conditions(self, now: int, latest: dict[str, Any] | None) -> plan.Conditions: ...
+
+    def buy(self, start: int, end: int) -> Callable[[int], float]: ...
+
+    def max_kw(self) -> float | None: ...
+
+
+class ForecastPlanner:
+    """The forecast's solar and home use, and the tariff's (or Amber's) price for each moment."""
+
+    def __init__(self, forecast: Any, tariffs: Any, prices: Any, settings: Any):
+        self.forecast, self.tariffs, self.prices, self.settings = forecast, tariffs, prices, settings
+
+    def conditions(self, now: int, latest: dict[str, Any] | None) -> plan.Conditions:
+        latest = latest or {}
+        now_kw = ((latest.get("pv_power") or 0) / 1000, max(0.0, (latest.get("load_power") or 0) / 1000))
+        try:
+            steps = self.forecast.steps(now, days=2)
+        except Exception:  # the forecast isn't ready (no location, no weather yet): carry on as things are now
+            log.debug("No forecast for the battery plan", exc_info=True)
+            steps = None
+        return plan.conditions_from(steps, now_kw)
+
+    def buy(self, start: int, end: int) -> Callable[[int], float]:
+        from app.features.tariffs.costs import Pricer
+
+        t, tables = self.tariffs.current()
+        return Pricer(t, tables, self.prices, start, end).buy
+
+    def max_kw(self) -> float | None:
+        v = self.settings.get("battery_max_kw")
+        return float(v) if v else None
 
 
 def owner(settings: BatterySettings | None, control: dict[str, Any] | None) -> str | None:
@@ -142,11 +181,13 @@ class BatteryService:
         live: LiveService,
         registers: Registers | None,
         clock: Callable[[], float] = time.time,
+        planner: Planner | None = None,
     ):
         self.db = db
         self.live = live
         self.registers = registers
         self.clock = clock
+        self.planner = planner
         self._lock = threading.Lock()  # one change at a time: requests and the loop
         self._settings: BatterySettings | None = None
         self._read_at = 0.0
@@ -180,6 +221,37 @@ class BatteryService:
         events = (self._kv(LOG_KEY) or [])[-(LOG_KEPT - 1) :]
         events.append({"ts": int(self.clock()), "text": text, "kind": kind, "until": until})
         self._put(LOG_KEY, events)
+
+    def _began(self, control: dict[str, Any]) -> None:
+        """Record a control starting (battery_controls), keeping its row's id with it."""
+        with self.db.writing() as conn:
+            cur = conn.execute(
+                "INSERT INTO battery_controls (kind, started_at, until, floor, target, power_w) VALUES (?, ?, ?, ?, ?, ?)",
+                (control["kind"], control["started_at"], control.get("until"), control.get("floor"),
+                 control.get("target"), control.get("power_w")),
+            )  # fmt: skip
+            control["history_id"] = cur.lastrowid
+
+    def _end(self, control: dict[str, Any], why: str) -> None:
+        """A control is over: forget it, and record when and why it ended."""
+        self._save(None)
+        if control.get("history_id") is not None:
+            with self.db.writing() as conn:
+                conn.execute(
+                    "UPDATE battery_controls SET ended_at = ?, ended_by = ? WHERE id = ? AND ended_at IS NULL",
+                    (int(self.clock()), why, control["history_id"]),
+                )
+
+    def history(self, start: int, end: int) -> list[dict[str, Any]]:
+        """The controls in effect at any time in [start, end), oldest first. `ended_at` null: still in effect."""
+        with self.db.reading() as conn:
+            rows = conn.execute(
+                "SELECT kind, started_at, ended_at, until, floor, target, power_w, ended_by FROM battery_controls"
+                " WHERE started_at < ? AND (ended_at IS NULL OR ended_at > ?) ORDER BY started_at",
+                (end, start),
+            ).fetchall()
+        keys = ("kind", "started_at", "ended_at", "until", "floor", "target", "power_w", "ended_by")
+        return [dict(zip(keys, r, strict=True)) for r in rows]
 
     # -- the inverter --------------------------------------------------------------------------
     def _driver(self) -> ControlDriver | None:
@@ -255,7 +327,53 @@ class BatteryService:
                 "max_hours": MAX_HOURS,
             },
             "log": events,
+            "plan": self._plan_of(control, settings) if control and not control.get("ending") else None,
         }
+
+    # -- working it out ahead -------------------------------------------------------------------
+    def _battery(self, settings: BatterySettings | None, usual_floor: float | None) -> plan.Battery | None:
+        """The battery now, for working a control out ahead (None without its level or size)."""
+        soc = (self.live.latest or {}).get("battery_soc")
+        cap = self.live.battery_kwh()
+        if soc is None or not cap or self.planner is None:
+            return None
+        s = settings or {}
+        most = self.planner.max_kw() or (s.get("max_charge_w") or DEFAULT_CHARGE_W) / 1000
+        reserve = usual_floor if usual_floor is not None else s.get("min_soc") or self.live.reserve()
+        return plan.Battery(soc=soc, capacity_kwh=cap, reserve=reserve, top=s.get("max_soc") or 100.0, max_kw=most)
+
+    def _project(self, b: plan.Battery, c: plan.Control) -> dict[str, Any]:
+        assert self.planner is not None
+        now = int(self.clock())
+        cond = self.planner.conditions(now, self.live.latest)
+        return plan.project(b, c, now, cond, self.planner.buy(now, now + plan.MAX_HOURS * 3600))
+
+    def _plan_of(self, control: dict[str, Any], settings: BatterySettings | None) -> dict[str, Any] | None:
+        """What the control in effect will do from now on."""
+        b = self._battery(settings, control.get("usual_floor"))
+        if b is None:
+            return None
+        c = plan.Control(control["kind"], control.get("until"), control.get("floor"), control.get("target"),
+                         control.get("power_w"))  # fmt: skip
+        return self._project(b, c)
+
+    def preview(self, body: dict[str, Any]) -> dict[str, Any]:
+        """What a control would do if started now (nothing is written): its level as it runs, when it ends, what
+        comes from the grid and what that costs, and the same stretch as normal."""
+        driver = self._driver()
+        if driver is None:
+            raise BatteryError("This inverter's battery can't be controlled from the dashboard.", 409)
+        settings = self.settings()
+        if settings is None:
+            raise BatteryError("The inverter's battery settings couldn't be read.", 502)
+        control = self.control()
+        usual = control["usual_floor"] if control and control["kind"] == "floor" else settings.get("min_soc")
+        spec = self._spec(body, driver, settings, self.clock())
+        b = self._battery(settings, usual)
+        if b is None:
+            raise BatteryError("The battery's level isn't known yet, so it can't be worked out.", 409)
+        return self._project(b, plan.Control(spec["kind"], spec["until"], spec.get("floor"), spec.get("target"),
+                                             spec.get("power_w")))  # fmt: skip
 
     # -- changes ---------------------------------------------------------------------------------
     def _until(self, body: dict[str, Any], now: float) -> int | None:
@@ -279,19 +397,44 @@ class BatteryService:
             raise BatteryError(f"The {name} must be between {low:g} and {high:g}.")
         return float(value)
 
+    def _spec(
+        self, body: dict[str, Any], driver: ControlDriver, settings: BatterySettings, now: float
+    ) -> dict[str, Any]:
+        """A control as asked for, checked: kind, until, and its floor, or its power and level. Raises BatteryError."""
+        kind = body.get("kind")
+        if kind not in KINDS:
+            raise BatteryError(f"Choose a control: {', '.join(KINDS)}.")
+        spec: dict[str, Any] = {"kind": kind, "until": self._until(body, now)}
+        if kind == "floor":
+            low, high = driver.FLOOR_RANGE
+            spec["floor"] = round(self._number(body, "floor", "reserve", low, high, None))
+        elif kind == "charge":
+            top = settings.get("max_soc") or 100.0
+            most = int(settings.get("max_charge_w") or DEFAULT_CHARGE_W)
+            power = round(
+                self._number(body, "power_w", "charging power", MIN_CHARGE_W, most, min(most, DEFAULT_CHARGE_W))
+            )
+            soc = (self.live.latest or {}).get("battery_soc")
+            target = round(self._number(body, "target", "level to charge to", 10, top, top))
+            if soc is not None and soc >= target:
+                raise BatteryError(f"The battery is already at {soc:.0f}%.")
+            spec.update(power_w=power, target=target)
+        return spec
+
     def start(self, body: dict[str, Any]) -> dict[str, Any]:
         """Start a control (replacing any in effect): body {"kind": "standby"|"floor"|"charge", "until": unix seconds
         or null, "floor": %, "power_w": W, "target": %}."""
         driver = self._driver()
         if driver is None:
             raise BatteryError("This inverter's battery can't be controlled from the dashboard.", 409)
-        kind = body.get("kind")
-        if kind not in KINDS:
+        if body.get("kind") not in KINDS:
             raise BatteryError(f"Choose a control: {', '.join(KINDS)}.")
         with self._lock:
             now = self.clock()
-            until = self._until(body, now)
+            self._until(body, now)  # a bad time is turned away before the inverter is asked anything
             settings = self._read(driver)
+            spec = self._spec(body, driver, settings, now)
+            kind, until = spec["kind"], spec["until"]
             current = self.control()
             who = owner(settings, current)
             if reason := blocked(settings, who):
@@ -301,34 +444,21 @@ class BatteryService:
             usual_floor = settings.get("min_soc")
             if current and current["kind"] == "floor":
                 usual_floor = current["usual_floor"]
-            control: dict[str, Any] = {"kind": kind, "started_at": int(now), "until": until, "usual_floor": usual_floor}
+            control: dict[str, Any] = {**spec, "started_at": int(now), "usual_floor": usual_floor}
             if kind == "standby":
                 writes = driver.standby()
                 restore = driver.normal()
                 text = "Battery on standby: the house runs on solar and the grid"
             elif kind == "floor":
-                low, high = driver.FLOOR_RANGE
-                pct = round(self._number(body, "floor", "floor", low, high, None))
                 if usual_floor is None:
-                    raise BatteryError("The inverter didn't report its usual floor, so it couldn't be put back.", 502)
-                control["floor"] = pct
-                writes = driver.floor(pct)
+                    raise BatteryError("The inverter didn't report its usual reserve, so it couldn't be put back.", 502)
+                writes = driver.floor(spec["floor"])
                 restore = driver.floor(usual_floor)
-                text = f"Floor set to {pct}%: below it the house runs on the grid"
+                text = f"Reserve raised to {spec['floor']}%: below it the house runs on the grid"
             else:
-                top = settings.get("max_soc") or 100.0
-                most = int(settings.get("max_charge_w") or DEFAULT_CHARGE_W)
-                power = round(
-                    self._number(body, "power_w", "charging power", MIN_CHARGE_W, most, min(most, DEFAULT_CHARGE_W))
-                )
-                soc = (self.live.latest or {}).get("battery_soc")
-                target = round(self._number(body, "target", "level to charge to", 10, top, top))
-                if soc is not None and soc >= target:
-                    raise BatteryError(f"The battery is already at {soc:.0f}%.")
-                control.update(power_w=power, target=target)
-                writes = driver.charge(power)
+                writes = driver.charge(spec["power_w"])
                 restore = driver.normal()
-                text = f"Charging from the grid at {_kw(power)} to {target}%"
+                text = f"Charging from the grid at {_kw(spec['power_w'])} to {spec['target']}%"
 
             # Undo the control in effect where the new one doesn't simply replace it: a floor's min SOC, or the
             # forced mode of standby or a charge when a floor follows.
@@ -336,12 +466,15 @@ class BatteryService:
             if current and current["kind"] != kind and not (kind in FORCED_KINDS and current["kind"] in FORCED_KINDS):
                 before = _pairs(current["restore"])
             back = self._write(driver, before + writes)
+            if current:
+                self._end(current, "replaced")
             control.update(
                 writes=writes,
                 restore=restore,
                 written_at=int(self.clock()),
                 confirmed=bool(back and driver.holds(back, writes)),
             )
+            self._began(control)
             self._save(control)
             self._note(text, kind, until)
         return self.view()
@@ -371,16 +504,18 @@ class BatteryService:
         }.get(control["ending"], control["ending"])
         if control["kind"] in FORCED_KINDS and who != "dashboard":
             # Something else took the battery over meanwhile: nothing of ours left to undo.
-            self._save(None)
+            self._end(control, control["ending"])
             self._note(f"{label} ended ({why}); the battery was already under other control", control["kind"])
             return
         if control["kind"] == "floor" and who != "normal":
             if not self._waiting_noted:
                 self._waiting_noted = True
-                self._note(f"{label} ended ({why}); the usual floor goes back once iSolarCloud's command ends", "floor")
+                self._note(
+                    f"{label} ended ({why}); the usual reserve goes back once iSolarCloud's command ends", "floor"
+                )
             return
         self._write(driver, _pairs(control["restore"]))
-        self._save(None)
+        self._end(control, control["ending"])
         self._waiting_noted = False
         self._note(f"{label} ended ({why}); the battery is back to normal", control["kind"])
 
@@ -419,7 +554,7 @@ class BatteryService:
                 if not driver.holds(settings, _pairs(control["writes"])):
                     if now - control["written_at"] < GRACE:
                         return  # the gateway may not show the change yet
-                    self._save(None)
+                    self._end(control, "elsewhere")
                     why = (
                         "iSolarCloud took over the battery"
                         if owner(settings, None) == "isolarcloud"

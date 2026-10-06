@@ -74,6 +74,25 @@ class FakeLive(SimpleNamespace):
     def publish(self) -> None:
         self.published += 1
 
+    def battery_kwh(self) -> float:
+        return 16.0
+
+    def reserve(self) -> float:
+        return 5.0
+
+
+class FlatPlanner:
+    """Sunless and steady: 1 kW of home use and grid power at 30c, always."""
+
+    def conditions(self, now: int, latest: Any) -> Any:
+        return lambda ts: (0.0, 1.0)
+
+    def buy(self, start: int, end: int) -> Any:
+        return lambda ts: 0.30
+
+    def max_kw(self) -> float | None:
+        return 5.0
+
 
 @pytest.fixture
 def live() -> Any:
@@ -82,7 +101,7 @@ def live() -> Any:
 
 @pytest.fixture
 def svc(db: Database, live: Any, regs: FakeRegisters, clock: Clock) -> BatteryService:
-    return BatteryService(db, cast(LiveService, live), regs, clock)
+    return BatteryService(db, cast(LiveService, live), regs, clock, planner=FlatPlanner())
 
 
 def test_the_view_shows_the_settings_and_who_has_the_battery(svc: BatteryService) -> None:
@@ -208,7 +227,7 @@ def test_switching_from_a_floor_to_standby_puts_the_floor_back_first(svc: Batter
         ({"kind": "standby", "until": NOW - 1}, "already passed"),
         ({"kind": "standby", "until": NOW + 49 * HOUR}, "up to 48 hours"),
         ({"kind": "floor", "floor": 80, "until": None}, "between 5 and 50"),
-        ({"kind": "floor", "until": None}, "Give the floor"),
+        ({"kind": "floor", "until": None}, "Give the reserve"),
         ({"kind": "charge", "power_w": 9000, "until": None}, "between 500 and 6600"),
         ({"kind": "charge", "target": 50, "until": None}, "already at 60%"),
     ],
@@ -286,6 +305,64 @@ def test_the_idle_loop_reads_the_settings_only_now_and_then(
     assert reads == 2
 
 
+# -- working it out ahead, and the history ----------------------------------------------------------
+
+
+def test_a_charge_is_worked_out_with_its_cost(svc: BatteryService) -> None:
+    p = svc.preview({"kind": "charge", "power_w": 4000, "target": 80, "until": None})
+    # 20% of 16 kWh at 4 kW (95% of it kept): about 50 minutes, 3.4 kWh for the battery, all from the grid.
+    assert p["reaches"] and 45 * 60 <= p["ends_at"] - NOW <= 55 * 60
+    assert p["points"][0] == (NOW, 60.0) and p["soc_end"] == pytest.approx(80, abs=0.1)
+    assert p["charge_grid_kwh"] == pytest.approx(3.37, abs=0.1) and p["charge_cost"] == pytest.approx(1.01, abs=0.05)
+    # The house's 1 kW comes from the grid too; run as normal the battery would have covered it.
+    assert p["grid_kwh"] == pytest.approx(p["charge_grid_kwh"] + (p["to"] - NOW) / 3600, abs=0.05)
+    assert p["normal_grid_kwh"] == 0
+
+
+def test_standby_is_worked_out_against_running_as_normal(svc: BatteryService) -> None:
+    p = svc.preview({"kind": "standby", "until": NOW + 2 * HOUR})
+    assert p["ends_at"] == NOW + 2 * HOUR and p["soc_end"] == 60.0
+    assert p["grid_kwh"] == pytest.approx(2.0) and p["cost"] == pytest.approx(0.6)
+    assert p["normal_cost"] == 0  # as normal, the battery would have run the house
+
+
+def test_a_floor_runs_down_to_it_then_holds(svc: BatteryService) -> None:
+    p = svc.preview({"kind": "floor", "floor": 50, "until": NOW + 4 * HOUR})
+    # 10% of 16 kWh at 1 kW: 1.6 hours down to the floor, then the grid for the rest.
+    assert p["soc_end"] == pytest.approx(50, abs=0.1) and p["grid_kwh"] == pytest.approx(2.4, abs=0.1)
+    assert svc.control() is None  # a preview changes nothing
+
+
+def test_the_control_in_effect_is_worked_out_on_the_page(svc: BatteryService) -> None:
+    v = svc.start({"kind": "charge", "power_w": 4000, "target": 80, "until": None})
+    assert v["plan"]["kind"] == "charge" and v["plan"]["reaches"]
+    assert svc.stop()["plan"] is None
+
+
+def test_controls_are_kept_for_the_chart(svc: BatteryService, clock: Clock) -> None:
+    svc.start({"kind": "standby", "until": NOW + HOUR})
+    clock.t += 600
+    svc.start({"kind": "floor", "floor": 40, "until": None})
+    clock.t += 600
+    svc.stop()
+    h = svc.history(int(NOW) - HOUR, int(NOW) + HOUR)
+    assert [(c["kind"], c["started_at"] - NOW, c["ended_at"] - NOW, c["ended_by"]) for c in h] == [
+        ("standby", 0, 600, "replaced"),
+        ("floor", 600, 1200, "stopped"),
+    ]
+    assert h[1]["floor"] == 40 and h[0]["until"] == NOW + HOUR
+    assert svc.history(int(NOW) + 1300, int(NOW) + HOUR) == []
+
+
+def test_a_control_still_in_effect_has_no_end(svc: BatteryService, regs: FakeRegisters, clock: Clock) -> None:
+    svc.start({"kind": "standby", "until": None})
+    assert svc.history(int(NOW), int(NOW) + 60)[0]["ended_at"] is None
+    regs.isolarcloud_charge()
+    clock.t += GRACE
+    svc.tick()
+    assert svc.history(int(NOW), int(NOW) + 60)[0]["ended_by"] == "elsewhere"
+
+
 @pytest.fixture
 def client(config: Config) -> Iterator[TestClient]:
     with TestClient(create_app(config, poll=False, serve_dashboard=False)) as c:
@@ -301,5 +378,6 @@ def test_the_api_in_mock_mode(client: TestClient) -> None:
     r = client.post("/api/battery/control", json={"kind": "floor", "floor": 90, "until": None})
     assert r.status_code == 422 and "between 5 and 50" in r.json()["detail"]
     assert client.app.state.services.live.status()["battery_mode"]["kind"] == "standby"  # type: ignore[attr-defined]
+    assert client.get("/api/battery/history").json()["controls"][0]["kind"] == "standby"
     assert client.delete("/api/battery/control").json()["owner"] == "normal"
     assert client.app.state.services.live.status()["battery_mode"]["owner"] == "normal"  # type: ignore[attr-defined]

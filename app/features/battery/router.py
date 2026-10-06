@@ -1,4 +1,4 @@
-"""The battery controls (the Overview's Battery control card): standby, a floor, a charge from the grid."""
+"""The battery controls (the Battery page, and the Overview's shortcuts): standby, a floor, a charge from the grid."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies import JsonBody, ServicesDep
+from app.dependencies import JsonBody, ServicesDep, time_range
 from app.features.battery.service import BatteryError
 
 router = APIRouter(prefix="/api/battery")
@@ -25,6 +25,20 @@ async def get_battery(svc: ServicesDep):
     """The battery's settings as the inverter reports them, who has the battery, the control in effect and what the
     controls did lately."""
     return await _run(svc.battery.view)
+
+
+@router.post("/preview")
+async def preview_control(svc: ServicesDep, body: JsonBody):
+    """What a control would do if started now, without starting it (same body as POST /control): the battery's
+    level as it runs, when it ends, grid energy and cost, and the same stretch as normal."""
+    return await _run(svc.battery.preview, body)
+
+
+@router.get("/history")
+async def control_history(svc: ServicesDep, start: int | None = None, end: int | None = None):
+    """The controls in effect over [start, end) (default: the last day), oldest first."""
+    s, e = time_range(start, end, 86400)
+    return {"controls": await _run(svc.battery.history, s, e)}
 
 
 @router.post("/control")

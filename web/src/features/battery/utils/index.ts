@@ -1,4 +1,6 @@
+import type { ControlKind, ControlRecord } from "~/features/battery/types";
 import type { BatteryMode } from "~/features/common/live/types";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 
 /** Unix seconds of the next `hh:mm` (local) after `now`: today, or tomorrow if that's already passed. */
@@ -29,7 +31,7 @@ export function describeMode(m: BatteryMode, now: number): ModeText {
   const until = (ts: number | null | undefined) => (ts ? `until ${when(ts, now)}` : "until you stop it");
   if (m.kind && !m.ending) {
     if (m.kind === "standby") return { label: "Standby", detail: until(m.until), special: true };
-    if (m.kind === "floor") return { label: `Floor ${m.floor}%`, detail: until(m.until), special: true };
+    if (m.kind === "floor") return { label: `Reserve ${m.floor}%`, detail: until(m.until), special: true };
     return {
       label: "Grid charge",
       detail: `to ${m.target}% at ${kw(m.power_w)}${m.until ? `, ${until(m.until)}` : ""}`,
@@ -61,4 +63,20 @@ export function describeMode(m: BatteryMode, now: number): ModeText {
     default:
       return { label: "Not read yet", detail: null, special: false };
   }
+}
+
+export const KIND_LABEL: Record<ControlKind, string> = { standby: "Standby", floor: "Reserve", charge: "Grid charge" };
+
+/** Each control's colour on the chart and its tile (theme tokens, so it follows light and dark). */
+export const KIND_COLOR: Record<ControlKind, string> = {
+  standby: COLOR.inkMuted,
+  floor: COLOR.lilac,
+  charge: COLOR.import,
+};
+
+/** A control as it ran, in a few words: "Standby", "Reserve 40%", "Grid charge to 80%". */
+export function recordLabel(c: Pick<ControlRecord, "kind" | "floor" | "target">): string {
+  if (c.kind === "floor" && c.floor != null) return `Reserve ${c.floor}%`;
+  if (c.kind === "charge" && c.target != null) return `Grid charge to ${c.target}%`;
+  return KIND_LABEL[c.kind];
 }

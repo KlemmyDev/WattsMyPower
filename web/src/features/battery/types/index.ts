@@ -31,6 +31,39 @@ export type BatteryControl = {
   ending?: string | null;
 };
 
+/** What a control will do (app/features/battery/plan.py): the battery's level as it runs ([unix seconds, %]), when it
+ * ends (null: until stopped, worked out to `to`), and the grid energy and cost; with the same stretch as normal. */
+export type BatteryPlan = {
+  kind: ControlKind;
+  floor: number | null;
+  target: number | null;
+  from: number;
+  to: number;
+  ends_at: number | null;
+  points: [number, number][];
+  soc_end: number;
+  grid_kwh: number;
+  cost: number;
+  normal_grid_kwh: number;
+  normal_cost: number;
+  /** A charge: the energy for the battery that solar didn't cover, what it costs, and whether it reaches its level. */
+  charge_grid_kwh?: number;
+  charge_cost?: number;
+  reaches?: boolean;
+};
+
+/** A control as it ran (or is running: `ended_at` null), for the chart. */
+export type ControlRecord = {
+  kind: ControlKind;
+  started_at: number;
+  ended_at: number | null;
+  until: number | null;
+  floor: number | null;
+  target: number | null;
+  power_w: number | null;
+  ended_by: string | null;
+};
+
 export type BatteryEvent = { ts: number; text: string; kind: ControlKind | null; until: number | null };
 
 export type BatteryView =
@@ -44,6 +77,8 @@ export type BatteryView =
       control: BatteryControl | null;
       limits: { floor: [number, number]; charge_w: [number, number]; max_hours: number };
       log: BatteryEvent[];
+      /** What the control in effect will do from now on. */
+      plan: BatteryPlan | null;
     }
   | { supported: false; reason: string; log: BatteryEvent[] };
 

@@ -28,6 +28,7 @@ GROUPS: dict[str, tuple[str, str]] = {
         "Appliances and smart plugs connected in Settings → Integrations: what each used, and each run of a washer "
         "or dryer.",
     ),
+    "battery": ("Battery controls", "Each standby, floor or charge from the grid started on the Battery page."),
     "alerts": ("Alerts", "Where alerts go, the rules, their progress, and the alerts sent."),
     "settings": ("Settings and account", "Your settings, rates, the dashboard's account and signed-in browsers."),
     "devices": ("Connected inverters", "The inverters the collector reads, connected in Settings → Integrations."),
@@ -200,6 +201,14 @@ DASHBOARD: dict[str, Table] = {
         "Each run of an appliance that runs in cycles (a wash, a dry): when, how long, and what it used.",
         "Kept for good",
         Spec("start", _DEVICE.format("home_runs")),
+        grows=True,
+    ),
+    "battery_controls": Table(
+        "battery",
+        "Battery controls",
+        "Each battery control as it ran: when it started and ended, and how it was set, for the Battery page's chart.",
+        "Kept for good",
+        Spec("started_at"),
         grows=True,
     ),
     "alert_history": Table(
