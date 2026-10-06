@@ -54,6 +54,7 @@ export function BatteryPage() {
             s={s}
             now={now}
             plan={v?.plan ?? null}
+            outlook={v?.outlook ?? null}
             preview={preview}
             className="border-r border-line-subtle pr-7 max-3xl:order-2 max-3xl:border-t max-3xl:border-r-0 max-3xl:pt-6 max-3xl:pr-0"
           />

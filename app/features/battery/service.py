@@ -98,16 +98,20 @@ class ForecastPlanner:
 
     def __init__(self, forecast: Any, tariffs: Any, prices: Any, settings: Any):
         self.forecast, self.tariffs, self.prices, self.settings = forecast, tariffs, prices, settings
+        self._steps: tuple[int, Any] | None = None  # (when, the forecast's steps then)
 
     def conditions(self, now: int, latest: dict[str, Any] | None) -> plan.Conditions:
         latest = latest or {}
         now_kw = ((latest.get("pv_power") or 0) / 1000, max(0.0, (latest.get("load_power") or 0) / 1000))
-        try:
-            steps = self.forecast.steps(now, days=2)
-        except Exception:  # the forecast isn't ready (no location, no weather yet): carry on as things are now
-            log.debug("No forecast for the battery plan", exc_info=True)
-            steps = None
-        return plan.conditions_from(steps, now_kw)
+        # The forecast only moves with the weather: the same steps serve for five minutes.
+        if self._steps is None or now - self._steps[0] >= 300:
+            try:
+                steps = self.forecast.steps(now, days=2)
+            except Exception:  # the forecast isn't ready (no location, no weather yet): carry on as things are now
+                log.debug("No forecast for the battery plan", exc_info=True)
+                steps = None
+            self._steps = (now, steps)
+        return plan.conditions_from(self._steps[1], now_kw)
 
     def buy(self, start: int, end: int) -> Callable[[int], float]:
         from app.features.tariffs.costs import Pricer
@@ -327,7 +331,9 @@ class BatteryService:
                 "max_hours": MAX_HOURS,
             },
             "log": events,
-            "plan": self._plan_of(control, settings) if control and not control.get("ending") else None,
+            "plan": (current := self._plan_of(control, settings) if control and not control.get("ending") else None),
+            # What's expected through tomorrow as things are set: the control in effect, then as normal.
+            "outlook": current["ahead"] if current else self._outlook(settings),
         }
 
     # -- working it out ahead -------------------------------------------------------------------
@@ -356,6 +362,15 @@ class BatteryService:
         c = plan.Control(control["kind"], control.get("until"), control.get("floor"), control.get("target"),
                          control.get("power_w"))  # fmt: skip
         return self._project(b, c)
+
+    def _outlook(self, settings: BatterySettings | None) -> dict[str, Any] | None:
+        """The battery from now to the end of tomorrow, running as normal."""
+        b = self._battery(settings, None)
+        if b is None or self.planner is None:
+            return None
+        now = int(self.clock())
+        cond = self.planner.conditions(now, self.live.latest)
+        return plan.outlook(b, None, now, cond, self.planner.buy(now, plan.end_of_tomorrow(now)), None)
 
     def preview(self, body: dict[str, Any]) -> dict[str, Any]:
         """What a control would do if started now (nothing is written): its level as it runs, when it ends, what

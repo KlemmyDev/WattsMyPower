@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Config
 from app.core.database import Database
+from app.features.battery import plan
 from app.features.battery.service import GRACE, BatteryError, BatteryService
 from app.features.inverters.sungrow import sh_control
 from app.features.live.client import CollectorError
@@ -343,6 +344,30 @@ def test_the_control_in_effect_is_worked_out_on_the_page(svc: BatteryService) ->
     v = svc.start({"kind": "charge", "power_w": 4000, "target": 80, "until": None})
     assert v["plan"]["kind"] == "charge" and v["plan"]["reaches"]
     assert svc.stop()["plan"] is None
+
+
+def test_the_outlook_runs_to_the_end_of_tomorrow(svc: BatteryService) -> None:
+    out = svc.view()["outlook"]
+    assert out["points"][0] == (NOW, 60.0) and out["points"][-1][0] == plan.end_of_tomorrow(int(NOW))
+    assert len(out["days"]) in (2, 3)  # today, tomorrow (and the next, should tomorrow end exactly at midnight)
+    # Sunless with 1 kW of home use: the battery runs down to its 5% reserve, then the grid takes over.
+    assert min(d["min_soc"] for d in out["days"].values()) == pytest.approx(5, abs=0.1)
+
+
+def test_a_control_is_worked_out_through_tomorrow_beside_running_as_normal(svc: BatteryService) -> None:
+    p = svc.preview({"kind": "standby", "until": NOW + 2 * HOUR})
+    at = lambda run, t: next(soc for ts, soc in run["points"] if ts >= t)  # noqa: E731
+    assert at(p["ahead"], NOW + HOUR) == 60.0  # held on standby
+    assert at(p["ahead_normal"], NOW + HOUR) < 60.0  # as normal it would be running the house
+    assert at(p["ahead"], NOW + 3 * HOUR) < 60.0  # and after its two hours it's back to normal
+    total = lambda run: sum(d["grid_kwh"] for d in run["days"].values())  # noqa: E731
+    assert total(p["ahead"]) == pytest.approx(total(p["ahead_normal"]), abs=0.1)  # the same, just later
+
+
+def test_the_outlook_follows_the_control_in_effect(svc: BatteryService) -> None:
+    v = svc.start({"kind": "floor", "floor": 40, "until": None})
+    assert min(d["min_soc"] for d in v["outlook"]["days"].values()) == pytest.approx(40, abs=0.1)
+    assert v["outlook"] == v["plan"]["ahead"]
 
 
 def test_controls_are_kept_for_the_chart(svc: BatteryService, clock: Clock) -> None:
