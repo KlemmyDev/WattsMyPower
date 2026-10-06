@@ -67,6 +67,7 @@ export type BatteryMode = {
    * energy manager; elsewhere: forced mode set outside the dashboard; unknown: a mode not known; null: not read yet. */
   owner: "normal" | "dashboard" | "isolarcloud" | "external" | "elsewhere" | "unknown" | null;
   min_soc: number | null;
+  max_soc?: number | null;
   kind?: "standby" | "floor" | "charge";
   until?: number | null;
   floor?: number | null;

@@ -43,7 +43,12 @@ IDLE_READ = 55  # with no control in effect, how often the loop reads the settin
 GRACE = 180  # how long a gateway may take to show what was written before it counts as changed elsewhere
 MAX_HOURS = 48
 KINDS = ("standby", "floor", "charge")
-FORCED_KINDS = ("standby", "charge")  # the ones that take the battery out of self-consumption
+FORCED_KINDS = ("standby", "charge")
+OUTSIDE = (
+    "isolarcloud",
+    "external",
+    "elsewhere",
+)  # who else may have the battery, recorded as they're seen  # the ones that take the battery out of self-consumption
 DEFAULT_CHARGE_W = 5000
 MIN_CHARGE_W = 500
 
@@ -98,16 +103,20 @@ class ForecastPlanner:
 
     def __init__(self, forecast: Any, tariffs: Any, prices: Any, settings: Any):
         self.forecast, self.tariffs, self.prices, self.settings = forecast, tariffs, prices, settings
+        self._steps: tuple[int, Any] | None = None  # (when, the forecast's steps then)
 
     def conditions(self, now: int, latest: dict[str, Any] | None) -> plan.Conditions:
         latest = latest or {}
         now_kw = ((latest.get("pv_power") or 0) / 1000, max(0.0, (latest.get("load_power") or 0) / 1000))
-        try:
-            steps = self.forecast.steps(now, days=2)
-        except Exception:  # the forecast isn't ready (no location, no weather yet): carry on as things are now
-            log.debug("No forecast for the battery plan", exc_info=True)
-            steps = None
-        return plan.conditions_from(steps, now_kw)
+        # The forecast only moves with the weather: the same steps serve for five minutes.
+        if self._steps is None or now - self._steps[0] >= 300:
+            try:
+                steps = self.forecast.steps(now, days=2)
+            except Exception:  # the forecast isn't ready (no location, no weather yet): carry on as things are now
+                log.debug("No forecast for the battery plan", exc_info=True)
+                steps = None
+            self._steps = (now, steps)
+        return plan.conditions_from(self._steps[1], now_kw)
 
     def buy(self, start: int, end: int) -> Callable[[int], float]:
         from app.features.tariffs.costs import Pricer
@@ -141,6 +150,17 @@ def owner(settings: BatterySettings | None, control: dict[str, Any] | None) -> s
 def _pairs(raw: list[list[int]]) -> Writes:
     """Writes as saved (JSON lists) back as (address, word) pairs."""
     return [(a, w) for a, w in raw]
+
+
+def _outside(kind: str, command: str | None, power_w: float | None) -> str:
+    """What something other than the dashboard had the battery doing, in words."""
+    who = {"isolarcloud": "iSolarCloud", "external": "An energy manager"}.get(kind, "Forced mode set elsewhere")
+    doing = {
+        "charge": f"force charging{f' at {_kw(power_w)}' if power_w else ''}",
+        "discharge": f"force discharging{f' at {_kw(power_w)}' if power_w else ''}",
+        "stop": "on standby",
+    }.get(command or "")
+    return f"{who}: {doing}" if doing else f"{who} in control"
 
 
 def _kw(w: float | None) -> str:
@@ -243,15 +263,55 @@ class BatteryService:
                 )
 
     def history(self, start: int, end: int) -> list[dict[str, Any]]:
-        """The controls in effect at any time in [start, end), oldest first. `ended_at` null: still in effect."""
+        """The controls in effect at any time in [start, end), and the stretches something else had the battery
+        (kind isolarcloud, external, elsewhere), oldest first. `ended_at` null: still in effect."""
+        self._recorded()
         with self.db.reading() as conn:
             rows = conn.execute(
-                "SELECT kind, started_at, ended_at, until, floor, target, power_w, ended_by FROM battery_controls"
-                " WHERE started_at < ? AND (ended_at IS NULL OR ended_at > ?) ORDER BY started_at",
+                "SELECT kind, started_at, ended_at, until, floor, target, power_w, ended_by, command"
+                " FROM battery_controls WHERE started_at < ? AND (ended_at IS NULL OR ended_at > ?) ORDER BY started_at",
                 (end, start),
             ).fetchall()
-        keys = ("kind", "started_at", "ended_at", "until", "floor", "target", "power_w", "ended_by")
+        keys = ("kind", "started_at", "ended_at", "until", "floor", "target", "power_w", "ended_by", "command")
         return [dict(zip(keys, r, strict=True)) for r in rows]
+
+    def _recorded(self) -> None:
+        """Make sure the control in effect has its row: one started before controls were recorded (or whose row
+        couldn't be written) gets one from when it started."""
+        control = self.control()
+        if control is None or control.get("ending") or control.get("history_id") is not None:
+            return
+        with self._lock:
+            control = self.control()
+            if control is not None and not control.get("ending") and control.get("history_id") is None:
+                self._began(control)
+                self._save(control)
+
+    def _seen(self, settings: BatterySettings | None) -> None:
+        """Record what something other than the dashboard has the battery doing, as it changes: a stretch opens when
+        iSolarCloud (or an energy manager, or forced mode set elsewhere) takes it, and closes when that ends."""
+        if settings is None:
+            return
+        who = owner(settings, self.control())
+        now = int(self.clock())
+        kind, command = (who, settings.get("command")) if who in OUTSIDE else (None, None)
+        with self.db.writing() as conn:
+            row = conn.execute(
+                "SELECT id, kind, command FROM battery_controls WHERE ended_at IS NULL AND kind IN (?, ?, ?)", OUTSIDE
+            ).fetchone()
+            if row and (row[1], row[2]) == (kind, command):
+                return
+            if row:
+                conn.execute("UPDATE battery_controls SET ended_at = ?, ended_by = 'ended' WHERE id = ?", (now, row[0]))
+            if kind:
+                conn.execute(
+                    "INSERT INTO battery_controls (kind, started_at, power_w, command) VALUES (?, ?, ?, ?)",
+                    (kind, now, settings.get("power_w"), command),
+                )
+        if kind:
+            self._note(f"{_outside(kind, command, settings.get('power_w'))} (seen on the inverter)")
+        elif row:
+            self._note(f"{_outside(row[1], row[2], None)} ended; the battery is back to normal")
 
     # -- the inverter --------------------------------------------------------------------------
     def _driver(self) -> ControlDriver | None:
@@ -327,7 +387,9 @@ class BatteryService:
                 "max_hours": MAX_HOURS,
             },
             "log": events,
-            "plan": self._plan_of(control, settings) if control and not control.get("ending") else None,
+            "plan": (current := self._plan_of(control, settings) if control and not control.get("ending") else None),
+            # What's expected through tomorrow as things are set: the control in effect, then as normal.
+            "outlook": current["ahead"] if current else self._outlook(settings),
         }
 
     # -- working it out ahead -------------------------------------------------------------------
@@ -356,6 +418,15 @@ class BatteryService:
         c = plan.Control(control["kind"], control.get("until"), control.get("floor"), control.get("target"),
                          control.get("power_w"))  # fmt: skip
         return self._project(b, c)
+
+    def _outlook(self, settings: BatterySettings | None) -> dict[str, Any] | None:
+        """The battery from now to the end of tomorrow, running as normal."""
+        b = self._battery(settings, None)
+        if b is None or self.planner is None:
+            return None
+        now = int(self.clock())
+        cond = self.planner.conditions(now, self.live.latest)
+        return plan.outlook(b, None, now, cond, self.planner.buy(now, plan.end_of_tomorrow(now)), None)
 
     def preview(self, body: dict[str, Any]) -> dict[str, Any]:
         """What a control would do if started now (nothing is written): its level as it runs, when it ends, what
@@ -587,7 +658,11 @@ class BatteryService:
             return None
         settings, control = self._settings, self.control()
         who = owner(settings, control)
-        out: dict[str, Any] = {"owner": who, "min_soc": (settings or {}).get("min_soc")}
+        out: dict[str, Any] = {
+            "owner": who,
+            "min_soc": (settings or {}).get("min_soc"),
+            "max_soc": (settings or {}).get("max_soc"),
+        }
         if control:
             out.update({k: control.get(k) for k in ("kind", "until", "floor", "target", "power_w", "ending")})
         elif settings and who not in ("normal", None):
@@ -598,9 +673,12 @@ class BatteryService:
         """One turn of the loop: check the control in effect, or read the settings now and then so another
         controller taking the battery shows. The summary after."""
         if self.control() is not None:
+            self._recorded()
             self.tick()
         elif self._driver() is not None and self.clock() - self._read_at >= IDLE_READ:
             self.settings(fresh=True)
+        if self._driver() is not None and self._read_error is None:
+            self._seen(self._settings)
         return self.summary()
 
     async def publish(self, summary: dict[str, Any] | None = None) -> None:

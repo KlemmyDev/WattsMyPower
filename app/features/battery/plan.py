@@ -19,6 +19,7 @@ difference is what the control costs, or saves.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -65,20 +66,30 @@ def conditions_from(steps: Sequence[dict[str, Any]] | None, fallback: tuple[floa
 
 
 def _run(
-    b: Battery, c: Control | None, now: int, end: int, cond: Conditions, buy: Callable[[int], float]
+    b: Battery,
+    c: Control | None,
+    now: int,
+    end: int,
+    cond: Conditions,
+    buy: Callable[[int], float],
+    control_end: int | None = None,
 ) -> dict[str, Any]:
-    """Step from now to `end` with the battery under control `c` (None: as normal). The level at each step, when
-    a charge reached its level (it's normal after), and the grid energy and cost, overall and the charge's share."""
+    """Step from now to `end` with the battery under control `c` (None: as normal) until `control_end` (None: to the
+    end), and as normal after. The level at each step, when a charge reached its level (it's normal after that too),
+    the grid energy and cost, overall and the charge's share, and each local day's: its lowest and highest level,
+    grid energy and cost (`days`, by "YYYY-MM-DD")."""
     soc, cap = b.soc, b.capacity_kwh
     points: list[tuple[int, float]] = [(now, round(soc, 1))]
     grid = cost = charge_grid = charge_cost = 0.0
+    days: dict[str, dict[str, float]] = {}
     reached: int | None = None
     t = now
     while t < end:
         dt = min(STEP, end - t) / 3600
         pv, load = cond(t)
         net = pv - load  # kW spare (+) or short (-)
-        kind = c.kind if c and reached is None else "normal"
+        on = c is not None and reached is None and (control_end is None or t < control_end)
+        kind = c.kind if on and c is not None else "normal"
         batt = 0.0  # kW into the battery (+) or out of it (-)
         if kind == "charge" and c is not None:
             goal = min(c.target or b.top, b.top)
@@ -95,8 +106,17 @@ def _run(
                 batt = -min(-net, b.max_kw, max(0.0, (soc - low) / 100 * cap) / dt) if dt else 0
         soc += (batt * CHARGE_EFFICIENCY if batt > 0 else batt) * dt / cap * 100
         imported = max(0.0, load - pv + batt) * dt
+        price = buy(t)
         grid += imported
-        cost += imported * buy(t)
+        cost += imported * price
+        day = days.setdefault(time.strftime("%Y-%m-%d", time.localtime(t)), {
+            "grid_kwh": 0.0, "cost": 0.0, "min_soc": soc, "max_soc": soc, "min_at": t,
+        })  # fmt: skip
+        day["grid_kwh"] += imported
+        day["cost"] += imported * price
+        if soc < day["min_soc"]:
+            day["min_soc"], day["min_at"] = soc, t
+        day["max_soc"] = max(day["max_soc"], soc)
         t += round(dt * 3600)
         points.append((t, round(soc, 1)))
         if kind == "charge" and c is not None and soc >= min(c.target or b.top, b.top) - 0.05:
@@ -108,7 +128,32 @@ def _run(
         "cost": cost,
         "charge_grid_kwh": charge_grid,
         "charge_cost": charge_cost,
+        "days": days,
     }
+
+
+def _outlook(run: dict[str, Any]) -> dict[str, Any]:
+    """A long run as the chart takes it: its level (thinned), and each day's figures, rounded."""
+    days = {
+        k: {"grid_kwh": round(d["grid_kwh"], 2), "cost": round(d["cost"], 2), "min_soc": round(d["min_soc"], 1),
+            "max_soc": round(d["max_soc"], 1), "min_at": int(d["min_at"])}
+        for k, d in run["days"].items()
+    }  # fmt: skip
+    return {"points": _thin(run["points"], 400), "days": days}
+
+
+def end_of_tomorrow(now: int) -> int:
+    """Local midnight at the end of tomorrow: how far ahead the outlook goes."""
+    lt = time.localtime(now)
+    return int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + 2, 0, 0, 0, 0, 0, -1)))
+
+
+def outlook(
+    b: Battery, c: Control | None, now: int, cond: Conditions, buy: Callable[[int], float], control_end: int | None
+) -> dict[str, Any]:
+    """The battery from now to the end of tomorrow: under `c` until `control_end` (or for good, or until a charge
+    reaches its level), as normal after; or as normal throughout."""
+    return _outlook(_run(b, c, now, end_of_tomorrow(now), cond, buy, control_end))
 
 
 def _thin(points: list[tuple[int, float]], most: int = 300) -> list[tuple[int, float]]:
@@ -146,4 +191,7 @@ def project(b: Battery, c: Control, now: int, cond: Conditions, buy: Callable[[i
     if c.kind == "charge":
         out.update(charge_grid_kwh=r2(run["charge_grid_kwh"]), charge_cost=r2(run["charge_cost"]))
         out["reaches"] = run["reached"] is not None
+    # On through tomorrow, for the chart: with this control (then as normal), and as normal throughout.
+    out["ahead"] = outlook(b, c, now, cond, buy, ends_at)
+    out["ahead_normal"] = outlook(b, None, now, cond, buy, None)
     return out

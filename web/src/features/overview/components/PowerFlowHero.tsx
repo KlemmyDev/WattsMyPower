@@ -9,8 +9,7 @@ import { clock, duration } from "~/features/common/formatting/utils/date";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { batteryState, gridVerb } from "~/features/common/energy/utils";
-import { useBatteryMode } from "~/features/battery/hooks";
-import { describeMode } from "~/features/battery/utils";
+import { ModeBadge } from "~/features/battery/components/ModeBadge";
 import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number";
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
@@ -57,7 +56,6 @@ function Scene({
 }) {
   const wx = liveWeather(p, f, now, !!s?.temp_unit_f);
   const { data: cars } = useQuery(carsQuery);
-  const batMode = useBatteryMode();
   const flows = {
     pv: (p.pv_power || 0) / 1000,
     grid: (p.grid_power || 0) / 1000,
@@ -76,8 +74,6 @@ function Scene({
   const parts = (w: number | null | undefined) => (w == null ? [DASH, "kW"] : powerParts(w));
   const [pv, grid, home] = [parts(tween.pv), parts(tween.g), parts(tween.l)];
   const st = batteryState(b);
-  // What it's set to do, when that's anything but normal (standby, a floor, a charge, iSolarCloud…).
-  const mode = batMode ? describeMode(batMode, now) : null;
   const batRate = st === "charge" ? `↑ ${kW(tween.b)}` : st === "discharge" ? `↓ ${kW(tween.b)}` : "0 W";
   const batColor = st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.6);
 
@@ -174,13 +170,16 @@ function Scene({
           pos={labels.battery}
           className="max-md:order-4"
           icon={
-            <div className="flex size-[30px] items-center justify-center rounded-full bg-pill text-pill-ink max-md:bg-popover max-2xs:size-[25px] light:max-md:bg-canvas">
-              <Icon name="battery" size={18} />
-            </div>
+            <>
+              <div className="flex size-[30px] items-center justify-center rounded-full bg-pill text-pill-ink max-md:bg-popover max-2xs:size-[25px] light:max-md:bg-canvas">
+                <Icon name="battery" size={18} />
+              </div>
+              <ModeBadge now={now} ring={COLOR.pill} />
+            </>
           }
-          iconClassName="soc-ring"
+          iconClassName="soc-ring relative"
           iconStyle={{ "--ring": COLOR.batteryRing, "--deg": `${(flows.soc * 360).toFixed(1)}deg` } as CSSProperties}
-          k={mode?.special ? `Battery · ${mode.label}` : "Battery"}
+          k="Battery"
           v={String(Math.round(p.battery_soc ?? 0))}
           unit="%"
         >

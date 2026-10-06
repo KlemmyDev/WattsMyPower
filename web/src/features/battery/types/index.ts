@@ -31,6 +31,12 @@ export type BatteryControl = {
   ending?: string | null;
 };
 
+/** A local day's figures in an outlook: its lowest level (and when) and highest, and the grid energy and cost. */
+export type OutlookDay = { grid_kwh: number; cost: number; min_soc: number; max_soc: number; min_at: number };
+
+/** The battery from now to the end of tomorrow ([unix seconds, %]), with each day's figures by "YYYY-MM-DD". */
+export type Outlook = { points: [number, number][]; days: Record<string, OutlookDay> };
+
 /** What a control will do (app/features/battery/plan.py): the battery's level as it runs ([unix seconds, %]), when it
  * ends (null: until stopped, worked out to `to`), and the grid energy and cost; with the same stretch as normal. */
 export type BatteryPlan = {
@@ -50,11 +56,20 @@ export type BatteryPlan = {
   charge_grid_kwh?: number;
   charge_cost?: number;
   reaches?: boolean;
+  /** On through tomorrow: with this control (then as normal), and as normal throughout. */
+  ahead: Outlook;
+  ahead_normal: Outlook;
 };
 
-/** A control as it ran (or is running: `ended_at` null), for the chart. */
+/** Who else had the battery, as the dashboard saw it: iSolarCloud's command, an energy manager, or forced mode set
+ * some other way. */
+export type OutsideKind = "isolarcloud" | "external" | "elsewhere";
+
+/** A control as it ran (or is running: `ended_at` null), or a stretch something else had the battery, for the chart. */
 export type ControlRecord = {
-  kind: ControlKind;
+  kind: ControlKind | OutsideKind;
+  /** What the other controller had it doing (charge, discharge, stop), when that's known. */
+  command?: "charge" | "discharge" | "stop" | null;
   started_at: number;
   ended_at: number | null;
   until: number | null;
@@ -79,6 +94,8 @@ export type BatteryView =
       log: BatteryEvent[];
       /** What the control in effect will do from now on. */
       plan: BatteryPlan | null;
+      /** What's expected through tomorrow as things are set: the control in effect, then as normal. */
+      outlook: Outlook | null;
     }
   | { supported: false; reason: string; log: BatteryEvent[] };
 

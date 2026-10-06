@@ -1,4 +1,4 @@
-import type { ControlKind, ControlRecord } from "~/features/battery/types";
+import type { ControlKind, ControlRecord, OutsideKind } from "~/features/battery/types";
 import type { BatteryMode } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
@@ -65,18 +65,47 @@ export function describeMode(m: BatteryMode, now: number): ModeText {
   }
 }
 
-export const KIND_LABEL: Record<ControlKind, string> = { standby: "Standby", floor: "Reserve", charge: "Grid charge" };
+export const KIND_LABEL: Record<ControlKind | OutsideKind, string> = {
+  standby: "Standby",
+  floor: "Reserve",
+  charge: "Grid charge",
+  isolarcloud: "iSolarCloud",
+  external: "Energy manager",
+  elsewhere: "Set elsewhere",
+};
 
 /** Each control's colour on the chart and its tile (theme tokens, so it follows light and dark). */
-export const KIND_COLOR: Record<ControlKind, string> = {
+export const KIND_COLOR: Record<ControlKind | OutsideKind, string> = {
   standby: COLOR.inkMuted,
   floor: COLOR.lilac,
   charge: COLOR.import,
+  // Anything not from the dashboard: one colour, as the controls here are off meanwhile.
+  isolarcloud: COLOR.warn,
+  external: COLOR.warn,
+  elsewhere: COLOR.warn,
 };
 
-/** A control as it ran, in a few words: "Standby", "Reserve 40%", "Grid charge to 80%". */
-export function recordLabel(c: Pick<ControlRecord, "kind" | "floor" | "target">): string {
+const OUTSIDE_DOING = { charge: "force charge", discharge: "force discharge", stop: "standby" } as const;
+
+/** A control as it ran, in a few words: "Standby", "Reserve 40%", "Grid charge to 80%", "iSolarCloud force charge". */
+export function recordLabel(c: Pick<ControlRecord, "kind" | "floor" | "target" | "command">): string {
+  if (c.kind === "isolarcloud" || c.kind === "external" || c.kind === "elsewhere")
+    return c.command ? `${KIND_LABEL[c.kind]} ${OUTSIDE_DOING[c.command]}` : KIND_LABEL[c.kind];
   if (c.kind === "floor" && c.floor != null) return `Reserve ${c.floor}%`;
   if (c.kind === "charge" && c.target != null) return `Grid charge to ${c.target}%`;
   return KIND_LABEL[c.kind];
 }
+
+/** The icon for what the battery is set to do, when that's anything but normal: pause (standby), shield (a raised
+ * reserve), bolt (a charge from the grid), cloud (iSolarCloud's command), lock (another controller). */
+export function modeIcon(m: BatteryMode | null): "pause" | "shield" | "bolt" | "cloud" | "lock" | null {
+  if (!m) return null;
+  if (m.kind && !m.ending) return m.kind === "standby" ? "pause" : m.kind === "floor" ? "shield" : "bolt";
+  if (m.owner === "isolarcloud") return "cloud";
+  if (m.owner === "external" || m.owner === "elsewhere" || m.owner === "unknown") return "lock";
+  return null;
+}
+
+/** Whether the battery is as full as it's allowed to get (its max SOC), so there's nothing to charge. */
+export const isFull = (soc: number | null | undefined, top: number | null | undefined) =>
+  soc != null && soc >= (top ?? 100) - 0.5;

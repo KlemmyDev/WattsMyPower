@@ -3,20 +3,21 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } f
 import { createPortal } from "react-dom";
 import { useBatteryChange, useBatteryMode } from "~/features/battery/hooks";
 import type { ControlRequest } from "~/features/battery/types";
-import { nextAt, when } from "~/features/battery/utils";
+import { isFull, nextAt, when } from "~/features/battery/utils";
+import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { errorMessage } from "~/features/common/api/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 
-type Shortcut = { label: string; hint: string; body: ControlRequest; said: string };
+type Shortcut = { label: string; hint: string; body: ControlRequest; said: string; off?: boolean };
 
 const MORNING = "06:00";
 const MENU_W = 272; // px
 
 /** The one-tap controls: standby for a while, a floor until morning, or a charge to full. */
-function shortcuts(now: number): Shortcut[] {
+function shortcuts(now: number, full: boolean): Shortcut[] {
   const morning = nextAt(MORNING, now) ?? now + 12 * 3600;
   const by = when(morning, now);
   return [
@@ -46,7 +47,8 @@ function shortcuts(now: number): Shortcut[] {
     },
     {
       label: "Charge to full",
-      hint: "From the grid when solar can't cover it",
+      hint: full ? "It's already full" : "From the grid when solar can't cover it",
+      off: full,
       body: { kind: "charge", until: null },
       said: "Charging the battery to full.",
     },
@@ -73,6 +75,7 @@ function placeBy(box: DOMRect): Place {
 export function BatteryShortcuts() {
   const id = useId();
   const mode = useBatteryMode();
+  const soc = useSnapshot()?.battery_soc;
   const now = useNow(30_000);
   const { start, stop } = useBatteryChange();
   const toast = useToast();
@@ -131,7 +134,7 @@ export function BatteryShortcuts() {
     });
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const items = [...(menu.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
+    const items = [...(menu.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not([disabled])") ?? [])];
     const at = items.indexOf(document.activeElement as HTMLElement);
     if (e.key === "Escape") {
       e.preventDefault();
@@ -189,8 +192,17 @@ export function BatteryShortcuts() {
                 <div role="separator" className="mx-2 my-1 h-px bg-line-subtle" />
               </>
             )}
-            {shortcuts(now).map((s) => (
-              <button key={s.label} type="button" role="menuitem" tabIndex={-1} onClick={() => run(s)} className={item}>
+            {shortcuts(now, isFull(soc, mode.max_soc)).map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                disabled={s.off}
+                aria-disabled={s.off}
+                onClick={() => run(s)}
+                className={cn(item, "disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent")}
+              >
                 <span className="font-medium">{s.label}</span>
                 <span className="text-xs text-ink-muted">{s.hint}</span>
               </button>

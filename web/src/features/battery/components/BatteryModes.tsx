@@ -3,13 +3,12 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { previewQuery } from "~/features/battery/api";
 import { useBatteryChange } from "~/features/battery/hooks";
 import type { BatteryPlan, BatteryView, ControlKind, ControlRequest } from "~/features/battery/types";
-import { KIND_COLOR, kw, nextAt, when } from "~/features/battery/utils";
+import { isFull, KIND_COLOR, kw, nextAt, when } from "~/features/battery/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Segmented } from "~/features/common/ui/components/Segmented";
@@ -59,17 +58,21 @@ export function BatteryModes({
   soc,
   now,
   onPreview,
+  className,
 }: {
   v: Supported;
   soc: number | null;
   now: number;
   onPreview: (plan: BatteryPlan | null) => void;
+  className?: string;
 }) {
   const active = v.control && !v.control.ending ? v.control : null;
-  const [kind, setKind] = useState<ControlKind | null>(null);
+  const [picked, setKind] = useState<ControlKind | null>(null);
   const [lasting, setLasting] = useState<Lasting>("3h");
   const [floor, setFloor] = useState(active?.floor ?? 30);
   const top = Math.round(v.settings?.max_soc ?? 100);
+  // A charge that can't run any more (the battery filled meanwhile) closes.
+  const kind = picked === "charge" && isFull(soc, top) ? null : picked;
   const [target, setTarget] = useState(top);
   const [lowW, highW] = v.limits.charge_w;
   const speeds = useMemo(() => {
@@ -136,7 +139,7 @@ export function BatteryModes({
   ];
 
   return (
-    <Card aria-labelledby="h-batmodes" className="gap-5">
+    <section aria-labelledby="h-batmodes" className={cn("flex min-w-0 flex-col gap-5", className)}>
       <div className="flex flex-col gap-0.5">
         <h2 id="h-batmodes">Control</h2>
         <span className="text-[13px] text-ink-muted">
@@ -146,7 +149,9 @@ export function BatteryModes({
 
       <div className="grid grid-cols-3 gap-3 max-sm:gap-2">
         {TILES.map((t) => {
-          const on = kind === t.kind;
+          // Why it can't be chosen now, if it can't: a charge with nothing to charge.
+          const why = t.kind === "charge" && isFull(soc, top) ? "Already full" : null;
+          const on = kind === t.kind && !why;
           const running = active?.kind === t.kind;
           const color = KIND_COLOR[t.kind];
           return (
@@ -154,7 +159,8 @@ export function BatteryModes({
               key={t.kind}
               type="button"
               aria-pressed={on}
-              disabled={!!v.blocked}
+              disabled={!!v.blocked || !!why}
+              title={why ?? undefined}
               onClick={() => choose(t.kind)}
               className={cn(
                 "relative flex flex-col items-start gap-3 rounded-2xl border p-4 text-left transition-[border-color,background-color,transform] duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 max-sm:gap-2 max-sm:p-3",
@@ -170,7 +176,9 @@ export function BatteryModes({
               </span>
               <span className="flex flex-col gap-0.5">
                 <span className="text-[15px] font-semibold max-sm:text-sm">{t.title}</span>
-                <span className="text-xs text-pretty text-ink-muted max-sm:hidden">{t.sub}</span>
+                <span className={cn("text-xs text-pretty text-ink-muted", !why && "max-sm:hidden")}>
+                  {why ?? t.sub}
+                </span>
               </span>
               {running && (
                 <span
@@ -248,7 +256,7 @@ export function BatteryModes({
           {start.isError && <HelpText tone="bad">{errorMessage(start.error)}</HelpText>}
         </div>
       )}
-    </Card>
+    </section>
   );
 }
 

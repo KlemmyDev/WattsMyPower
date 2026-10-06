@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { batteryQuery, insightsQuery } from "~/features/battery/api";
+import { BatteryActivity } from "~/features/battery/components/BatteryActivity";
 import { BatteryDayChart } from "~/features/battery/components/BatteryDayChart";
 import { BatteryHealth } from "~/features/battery/components/BatteryHealth";
 import { BatteryModes } from "~/features/battery/components/BatteryModes";
@@ -13,6 +14,7 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { useNow } from "~/features/common/time/hooks";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
+import { Card } from "~/features/common/ui/components/Card";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 
 /**
@@ -45,16 +47,30 @@ export function BatteryPage() {
       {header}
       <div className="flex flex-col gap-5">
         <BatteryPanel v={v} p={p} s={s} mode={mode} now={now} />
-        <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,7fr)] items-start gap-5 max-3xl:grid-cols-1">
-          {v ? (
-            <BatteryModes v={v} soc={p?.battery_soc ?? null} now={now} onPreview={setPreview} />
-          ) : (
-            view?.supported === false && (
-              <div className="rounded-3xl bg-surface p-7 text-sm text-ink-muted">{view.reason}</div>
-            )
-          )}
-          <BatteryDayChart s={s} now={now} plan={v?.plan ?? null} preview={preview} log={view?.log ?? []} />
-        </div>
+        {/* One card: the day on the left, the controls on the right, so the two always line up; stacked (the
+            controls first) where there isn't room. */}
+        <Card className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] gap-0 max-3xl:grid-cols-1">
+          <BatteryDayChart
+            s={s}
+            now={now}
+            plan={v?.plan ?? null}
+            outlook={v?.outlook ?? null}
+            preview={preview}
+            className="border-r border-line-subtle pr-7 max-3xl:order-2 max-3xl:border-t max-3xl:border-r-0 max-3xl:pt-6 max-3xl:pr-0"
+          />
+          <div className="flex min-w-0 flex-col gap-6 pl-7 max-3xl:order-1 max-3xl:pb-6 max-3xl:pl-0">
+            {v ? (
+              <BatteryModes v={v} soc={p?.battery_soc ?? null} now={now} onPreview={setPreview} />
+            ) : (
+              <div className="text-sm text-ink-muted">{view?.supported === false ? view.reason : " "}</div>
+            )}
+            <BatteryActivity
+              log={view?.log ?? []}
+              now={now}
+              className="mt-auto border-t border-line-subtle pt-5 max-3xl:mt-0"
+            />
+          </div>
+        </Card>
         <div className="grid grid-cols-2 items-start gap-5 max-lg:grid-cols-1">
           {data ? (
             <>

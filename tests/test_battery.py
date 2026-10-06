@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Config
 from app.core.database import Database
+from app.features.battery import plan
 from app.features.battery.service import GRACE, BatteryError, BatteryService
 from app.features.inverters.sungrow import sh_control
 from app.features.live.client import CollectorError
@@ -271,18 +272,24 @@ def test_decode_reads_the_sh5_0rs_as_found() -> None:
 
 def test_the_mode_every_page_shows(svc: BatteryService, regs: FakeRegisters, live: Any, clock: Clock) -> None:
     asyncio.run(svc.publish(svc._cycle()))
-    assert live.battery_mode == {"owner": "normal", "min_soc": 5.0} and live.published == 1
+    assert live.battery_mode == {"owner": "normal", "min_soc": 5.0, "max_soc": 100.0} and live.published == 1
     asyncio.run(svc.publish(svc._cycle()))
     assert live.published == 1  # sent only when it changes
     svc.start({"kind": "standby", "until": NOW + HOUR})
     asyncio.run(svc.publish())
-    assert live.battery_mode == {"owner": "dashboard", "min_soc": 5.0, "kind": "standby", "until": NOW + HOUR,
+    assert live.battery_mode == {"owner": "dashboard", "min_soc": 5.0, "max_soc": 100.0, "kind": "standby", "until": NOW + HOUR,
                                  "floor": None, "target": None, "power_w": None, "ending": None}  # fmt: skip
     svc.stop()
     regs.isolarcloud_charge()
     clock.t += 60  # the idle loop reads the settings again
     asyncio.run(svc.publish(svc._cycle()))
-    assert live.battery_mode == {"owner": "isolarcloud", "min_soc": 5.0, "command": "charge", "power_w": 6600}
+    assert live.battery_mode == {
+        "owner": "isolarcloud",
+        "min_soc": 5.0,
+        "max_soc": 100.0,
+        "command": "charge",
+        "power_w": 6600,
+    }
 
 
 def test_the_idle_loop_reads_the_settings_only_now_and_then(
@@ -339,6 +346,30 @@ def test_the_control_in_effect_is_worked_out_on_the_page(svc: BatteryService) ->
     assert svc.stop()["plan"] is None
 
 
+def test_the_outlook_runs_to_the_end_of_tomorrow(svc: BatteryService) -> None:
+    out = svc.view()["outlook"]
+    assert out["points"][0] == (NOW, 60.0) and out["points"][-1][0] == plan.end_of_tomorrow(int(NOW))
+    assert len(out["days"]) in (2, 3)  # today, tomorrow (and the next, should tomorrow end exactly at midnight)
+    # Sunless with 1 kW of home use: the battery runs down to its 5% reserve, then the grid takes over.
+    assert min(d["min_soc"] for d in out["days"].values()) == pytest.approx(5, abs=0.1)
+
+
+def test_a_control_is_worked_out_through_tomorrow_beside_running_as_normal(svc: BatteryService) -> None:
+    p = svc.preview({"kind": "standby", "until": NOW + 2 * HOUR})
+    at = lambda run, t: next(soc for ts, soc in run["points"] if ts >= t)  # noqa: E731
+    assert at(p["ahead"], NOW + HOUR) == 60.0  # held on standby
+    assert at(p["ahead_normal"], NOW + HOUR) < 60.0  # as normal it would be running the house
+    assert at(p["ahead"], NOW + 3 * HOUR) < 60.0  # and after its two hours it's back to normal
+    total = lambda run: sum(d["grid_kwh"] for d in run["days"].values())  # noqa: E731
+    assert total(p["ahead"]) == pytest.approx(total(p["ahead_normal"]), abs=0.1)  # the same, just later
+
+
+def test_the_outlook_follows_the_control_in_effect(svc: BatteryService) -> None:
+    v = svc.start({"kind": "floor", "floor": 40, "until": None})
+    assert min(d["min_soc"] for d in v["outlook"]["days"].values()) == pytest.approx(40, abs=0.1)
+    assert v["outlook"] == v["plan"]["ahead"]
+
+
 def test_controls_are_kept_for_the_chart(svc: BatteryService, clock: Clock) -> None:
     svc.start({"kind": "standby", "until": NOW + HOUR})
     clock.t += 600
@@ -352,6 +383,38 @@ def test_controls_are_kept_for_the_chart(svc: BatteryService, clock: Clock) -> N
     ]
     assert h[1]["floor"] == 40 and h[0]["until"] == NOW + HOUR
     assert svc.history(int(NOW) + 1300, int(NOW) + HOUR) == []
+
+
+def test_a_control_from_before_they_were_recorded_still_shows(svc: BatteryService, clock: Clock) -> None:
+    svc.start({"kind": "standby", "until": None})
+    with svc.db.writing() as conn:  # as if started before battery_controls existed
+        conn.execute("DELETE FROM battery_controls")
+    control = svc.control()
+    assert control is not None
+    del control["history_id"]
+    svc._save(control)
+    clock.t += 600
+    h = svc.history(int(NOW), int(NOW) + HOUR)
+    assert [(c["kind"], c["started_at"], c["ended_at"]) for c in h] == [("standby", NOW, None)]
+    svc.stop()
+    assert svc.history(int(NOW), int(NOW) + HOUR)[0]["ended_at"] == NOW + 600
+
+
+def test_what_isolarcloud_does_is_recorded_too(svc: BatteryService, regs: FakeRegisters, clock: Clock) -> None:
+    svc._cycle()
+    assert svc.history(int(NOW), int(NOW) + HOUR) == []  # normal: nothing to show
+    regs.isolarcloud_charge()
+    clock.t += 60
+    svc._cycle()
+    clock.t += 60
+    svc._cycle()  # still the same command: the same stretch
+    regs.words.update({13050: 0, 13051: 0xCC})
+    clock.t += 60
+    svc._cycle()
+    h = svc.history(int(NOW), int(NOW) + HOUR)
+    assert [(c["kind"], c["command"], c["power_w"], c["started_at"] - NOW, c["ended_at"] - NOW) for c in h] == [
+        ("isolarcloud", "charge", 6600, 60, 180)
+    ]
 
 
 def test_a_control_still_in_effect_has_no_end(svc: BatteryService, regs: FakeRegisters, clock: Clock) -> None:
