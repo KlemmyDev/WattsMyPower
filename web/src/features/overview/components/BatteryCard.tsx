@@ -6,6 +6,8 @@ import { batteryOutlook } from "~/features/overview/utils/batteryOutlook";
 import { batteryState, reserveOf, type BatteryState } from "~/features/common/energy/utils";
 import { kW, pct } from "~/features/common/formatting/utils/number";
 import { BatteryHistory } from "~/features/overview/components/BatteryHistory";
+import { BatteryModeLine } from "~/features/battery/components/BatteryModeLine";
+import { useBatteryMode } from "~/features/battery/hooks";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** State of charge ring, time to full (or to reserve), and the last six hours. */
@@ -15,6 +17,7 @@ export function BatteryCard({
   f,
   now,
   title = "Battery",
+  shortcuts = true,
   className,
 }: {
   p: Snapshot | null;
@@ -22,11 +25,14 @@ export function BatteryCard({
   f: Forecast | null | undefined;
   now: number;
   title?: string;
+  /** Whether to offer the battery shortcuts (the Battery page has the full controls beside it instead). */
+  shortcuts?: boolean;
   className?: string;
 }) {
   const st = batteryState(p?.battery_power);
   const discharging = st === "discharge";
-  const fi = p ? batteryOutlook(p, s, f, now) : null;
+  const mode = useBatteryMode();
+  const fi = p ? batteryOutlook(p, s, f, now, mode) : null;
   return (
     <Card
       aria-labelledby="h-bat"
@@ -62,6 +68,7 @@ export function BatteryCard({
           <div className="text-[13px] leading-5 text-pretty text-ink-muted">{fi?.detail ?? " "}</div>
         </div>
       </div>
+      <BatteryModeLine now={now} shortcuts={shortcuts} />
       <BatteryHistory end={p ? p.ts + 1 : null} s={s} />
     </Card>
   );

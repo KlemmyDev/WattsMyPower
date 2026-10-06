@@ -60,6 +60,24 @@ export type SystemInfo = {
   tesla_connected?: boolean;
 } & Settings;
 
+/** What the battery is set to do (app.features.battery): who has it, and the control in effect from the dashboard or
+ * what another controller is doing. Missing when the inverter's battery can't be controlled from here. */
+export type BatteryMode = {
+  /** normal: self-consumption; dashboard: a control here; isolarcloud: a command from its app (VPP mode); external: an
+   * energy manager; elsewhere: forced mode set outside the dashboard; unknown: a mode not known; null: not read yet. */
+  owner: "normal" | "dashboard" | "isolarcloud" | "external" | "elsewhere" | "unknown" | null;
+  min_soc: number | null;
+  kind?: "standby" | "floor" | "charge";
+  until?: number | null;
+  floor?: number | null;
+  target?: number | null;
+  power_w?: number | null;
+  /** Set once a control is done but not yet put back (a floor waits for iSolarCloud's command to end). */
+  ending?: string | null;
+  /** What another controller has the battery doing. */
+  command?: "charge" | "discharge" | "stop" | null;
+};
+
 export type LiveStatus = {
   snapshot: Snapshot | null;
   system: SystemInfo;
@@ -72,4 +90,5 @@ export type LiveStatus = {
   error: string | null;
   /** While the inverter's dongle keeps serving the same registers: when the reading it repeats was taken. The repeats aren't recorded, so `snapshot` stays at that reading. */
   frozen_since?: number | null;
+  battery_mode?: BatteryMode | null;
 };

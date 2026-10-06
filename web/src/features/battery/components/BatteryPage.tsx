@@ -40,7 +40,7 @@ export function BatteryPage() {
       {/* Two columns side by side on wide screens; on narrow ones the level, the controls, then the figures. */}
       <div className="grid grid-cols-12 items-start gap-5 lg:grid-cols-2">
         <div className="flex flex-col gap-5 max-lg:contents">
-          <BatteryCard p={p} s={s} f={f} now={now} title="Right now" className="max-lg:order-1" />
+          <BatteryCard p={p} s={s} f={f} now={now} title="Right now" shortcuts={false} className="max-lg:order-1" />
           {data ? (
             <BatteryHealth insights={data} system={s} className="max-lg:order-3 max-lg:col-span-12" />
           ) : (

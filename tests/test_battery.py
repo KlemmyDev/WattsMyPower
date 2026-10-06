@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any, cast
@@ -64,11 +65,19 @@ def clock() -> Clock:
     return Clock()
 
 
+class FakeLive(SimpleNamespace):
+    """What the service needs of the live status, counting what it sends to the pages."""
+
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(battery_mode=None, published=0, **kw)
+
+    def publish(self) -> None:
+        self.published += 1
+
+
 @pytest.fixture
 def live() -> Any:
-    return SimpleNamespace(
-        driver="sungrow.sh_rs", info={"reserve": 5.0}, latest={"battery_soc": 60.0, "battery_power": 800}
-    )
+    return FakeLive(driver="sungrow.sh_rs", info={"reserve": 5.0}, latest={"battery_soc": 60.0, "battery_power": 800})
 
 
 @pytest.fixture
@@ -230,7 +239,7 @@ def test_a_control_outlives_a_restart(db: Database, live: Any, regs: FakeRegiste
 
 def test_without_a_controllable_inverter_there_are_no_controls(db: Database, regs: FakeRegisters) -> None:
     for driver, reason in ((None, "Connect the inverter"), ("acme.x", "can't be controlled")):
-        live = SimpleNamespace(driver=driver, info={}, latest=None)
+        live = FakeLive(driver=driver, info={}, latest=None)
         v = BatteryService(db, cast(LiveService, live), regs).view()
         assert not v["supported"] and reason in v["reason"]
 
@@ -239,6 +248,42 @@ def test_decode_reads_the_sh5_0rs_as_found() -> None:
     s = sh_control.decode({13050: 4, 13051: 170, 13052: 6600, 13053: 65535, 13058: 1000, 13059: 50, 33047: 660})
     assert s == {"mode": "vpp", "mode_code": 4, "command": "charge", "power_w": 6600, "max_soc": 100.0,
                  "min_soc": 5.0, "max_charge_w": 6600}  # fmt: skip
+
+
+def test_the_mode_every_page_shows(svc: BatteryService, regs: FakeRegisters, live: Any, clock: Clock) -> None:
+    asyncio.run(svc.publish(svc._cycle()))
+    assert live.battery_mode == {"owner": "normal", "min_soc": 5.0} and live.published == 1
+    asyncio.run(svc.publish(svc._cycle()))
+    assert live.published == 1  # sent only when it changes
+    svc.start({"kind": "standby", "until": NOW + HOUR})
+    asyncio.run(svc.publish())
+    assert live.battery_mode == {"owner": "dashboard", "min_soc": 5.0, "kind": "standby", "until": NOW + HOUR,
+                                 "floor": None, "target": None, "power_w": None, "ending": None}  # fmt: skip
+    svc.stop()
+    regs.isolarcloud_charge()
+    clock.t += 60  # the idle loop reads the settings again
+    asyncio.run(svc.publish(svc._cycle()))
+    assert live.battery_mode == {"owner": "isolarcloud", "min_soc": 5.0, "command": "charge", "power_w": 6600}
+
+
+def test_the_idle_loop_reads_the_settings_only_now_and_then(
+    svc: BatteryService, regs: FakeRegisters, clock: Clock
+) -> None:
+    reads = 0
+    read = regs.read
+
+    def counting() -> dict[int, int]:
+        nonlocal reads
+        reads += 1
+        return read()
+
+    regs.read = counting  # type: ignore[method-assign]
+    svc._cycle()
+    clock.t += 30
+    svc._cycle()
+    clock.t += 30
+    svc._cycle()
+    assert reads == 2
 
 
 @pytest.fixture
@@ -255,4 +300,6 @@ def test_the_api_in_mock_mode(client: TestClient) -> None:
     assert client.app.state.services.source.inverter.holding[13050] == 2  # type: ignore[attr-defined]
     r = client.post("/api/battery/control", json={"kind": "floor", "floor": 90, "until": None})
     assert r.status_code == 422 and "between 5 and 50" in r.json()["detail"]
+    assert client.app.state.services.live.status()["battery_mode"]["kind"] == "standby"  # type: ignore[attr-defined]
     assert client.delete("/api/battery/control").json()["owner"] == "normal"
+    assert client.app.state.services.live.status()["battery_mode"]["owner"] == "normal"  # type: ignore[attr-defined]

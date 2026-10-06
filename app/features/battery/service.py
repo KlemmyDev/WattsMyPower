@@ -38,6 +38,7 @@ LOG_KEY = "battery_control_log"  # kv: what the controls did lately (JSON list, 
 LOG_KEPT = 30
 TICK = 30  # seconds between the loop's checks while a control is in effect
 FRESH = 20  # how long a read of the settings is shown before reading again
+IDLE_READ = 55  # with no control in effect, how often the loop reads the settings (so the mode shown stays current)
 GRACE = 180  # how long a gateway may take to show what was written before it counts as changed elsewhere
 MAX_HOURS = 48
 KINDS = ("standby", "floor", "charge")
@@ -443,10 +444,42 @@ class BatteryService:
         if self._task:
             self._task.cancel()
 
+    def summary(self) -> dict[str, Any] | None:
+        """The battery's mode for every page (the live status's `battery_mode`): who has it (see owner), the control
+        in effect here, or what another controller is doing; and the floor. From the last read; None when this
+        inverter's battery can't be controlled."""
+        if self._driver() is None:
+            return None
+        settings, control = self._settings, self.control()
+        who = owner(settings, control)
+        out: dict[str, Any] = {"owner": who, "min_soc": (settings or {}).get("min_soc")}
+        if control:
+            out.update({k: control.get(k) for k in ("kind", "until", "floor", "target", "power_w", "ending")})
+        elif settings and who not in ("normal", None):
+            out.update(command=settings.get("command"), power_w=settings.get("power_w"))
+        return out
+
+    def _cycle(self) -> dict[str, Any] | None:
+        """One turn of the loop: check the control in effect, or read the settings now and then so another
+        controller taking the battery shows. The summary after."""
+        if self.control() is not None:
+            self.tick()
+        elif self._driver() is not None and self.clock() - self._read_at >= IDLE_READ:
+            self.settings(fresh=True)
+        return self.summary()
+
+    async def publish(self, summary: dict[str, Any] | None = None) -> None:
+        """Put the battery's mode in the live status, and send it to every page if it changed. On the event loop."""
+        if summary is None:
+            summary = await asyncio.to_thread(self.summary)
+        if summary != self.live.battery_mode:
+            self.live.battery_mode = summary
+            self.live.publish()
+
     async def _run(self) -> None:
         while True:
             try:
-                await asyncio.to_thread(self.tick)
+                await self.publish(await asyncio.to_thread(self._cycle))
             except Exception:
                 log.exception("Checking the battery control failed")
             await asyncio.sleep(TICK)

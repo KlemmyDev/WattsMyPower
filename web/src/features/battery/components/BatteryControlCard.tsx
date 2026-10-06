@@ -4,7 +4,7 @@ import { batteryQuery } from "~/features/battery/api";
 import { useBatteryChange } from "~/features/battery/hooks";
 import type { BatteryControl, BatteryOwner, BatteryView, ControlKind, ControlRequest } from "~/features/battery/types";
 import { errorMessage } from "~/features/common/api/utils";
-import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { kw, nextAt, when } from "~/features/battery/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card, CardHeader } from "~/features/common/ui/components/Card";
 import { HelpText, Input } from "~/features/common/ui/components/Field";
@@ -47,26 +47,6 @@ const START: Record<ControlKind, [string, string, string]> = {
   floor: ["Set the floor", "Switch to a floor", "Change the floor"],
   charge: ["Start charging", "Switch to charging", "Change the charge"],
 };
-
-/** Unix seconds of the next `hh:mm` (local) after `now`: today, or tomorrow if that's already passed. */
-function nextAt(hm: string, now: number): number | null {
-  const [h, m] = hm.split(":").map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  const d = new Date(now * 1000);
-  d.setHours(h, m, 0, 0);
-  if (d.getTime() / 1000 <= now + 60) d.setDate(d.getDate() + 1);
-  return Math.floor(d.getTime() / 1000);
-}
-
-/** "14:05", "tomorrow 06:00", or "Thu 9 Oct 06:00". */
-function when(ts: number, now: number): string {
-  const day = (t: number) => new Date(t * 1000).toDateString();
-  if (day(ts) === day(now)) return hhmm(ts);
-  if (day(ts) === day(now + 86400)) return `tomorrow ${hhmm(ts)}`;
-  return `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
-}
-
-const kw = (w: number | null | undefined) => `${((w ?? 0) / 1000).toFixed(1)} kW`;
 
 function status(owner: BatteryOwner | null, c: BatteryControl | null): [string, PillTone] {
   if (c && !c.ending) {

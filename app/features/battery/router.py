@@ -31,10 +31,16 @@ async def get_battery(svc: ServicesDep):
 async def start_control(svc: ServicesDep, body: JsonBody):
     """Start a control, replacing any in effect: {"kind": "standby"|"floor"|"charge", "until": unix seconds or null,
     "floor": %, "power_w": W, "target": %}."""
-    return await _run(svc.battery.start, body)
+    try:
+        return await _run(svc.battery.start, body)
+    finally:
+        await svc.battery.publish()  # every page shows the new mode (or that something else has the battery)
 
 
 @router.delete("/control")
 async def stop_control(svc: ServicesDep):
     """End the control in effect and put the battery back to normal."""
-    return await _run(svc.battery.stop)
+    try:
+        return await _run(svc.battery.stop)
+    finally:
+        await svc.battery.publish()

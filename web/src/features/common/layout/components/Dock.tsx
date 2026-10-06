@@ -6,6 +6,9 @@ import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
 import { kW } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useTween } from "~/features/common/ui/hooks/useTween";
+import { useBatteryMode } from "~/features/battery/hooks";
+import { describeMode } from "~/features/battery/utils";
+import { useNow } from "~/features/common/time/hooks";
 
 /**
  * Mini power flow pinned to the bottom of every page except Overview, which it opens. It stays
@@ -13,6 +16,8 @@ import { useTween } from "~/features/common/ui/hooks/useTween";
  */
 export function Dock() {
   const p = useSnapshot();
+  const batMode = useBatteryMode();
+  const now = useNow(30_000);
   const onOverview = useRouterState({ select: (s) => s.location.pathname === "/" });
   // Start hidden and show on the next frame, so the first appearance slides in too.
   const [ready, setReady] = useState(false);
@@ -35,6 +40,9 @@ export function Dock() {
   const st = batteryState(b);
   const verb = gridVerb(g);
   const batVerb = st === "charge" ? "Charging" : st === "discharge" ? "Discharging" : "Idle";
+  // What it's set to do, when that's anything but normal (standby, a floor, a charge, iSolarCloud…).
+  const mode = batMode ? describeMode(batMode, now) : null;
+  const special = mode?.special ? mode : null;
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-8 z-15 flex justify-center px-4 max-sm:bottom-5">
       <Link
@@ -42,7 +50,7 @@ export function Dock() {
         data-shown={shown}
         inert={!shown}
         aria-hidden={!shown}
-        aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}. Open overview.`}
+        aria-label={`Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}${special ? `, ${special.label}${special.detail ? ` ${special.detail}` : ""}` : ""}. Open overview.`}
         className="dock group flex max-w-full items-center gap-3 rounded-full border border-fg/8 bg-dock/75 py-2 pr-4 pl-2 whitespace-nowrap text-fg no-underline shadow-dock backdrop-blur-xl backdrop-saturate-150 hover:border-fg/15 hover:bg-dock-hover/85 hover:text-fg max-sm:gap-1.5 max-sm:py-[5px] max-sm:pr-2.5 max-sm:pl-[5px] max-xs:gap-1 max-xs:py-1 max-xs:pr-2 max-xs:pl-1"
       >
         <DockItem icon="sun" color={COLOR.solar} k="Solar" v={kW(t.pv)} />
@@ -53,7 +61,7 @@ export function Dock() {
         <span aria-hidden className="h-5 w-px flex-none bg-fg/10 max-sm:h-4" />
         <span className="flex items-center gap-2 max-xs:gap-[5px]">
           <span
-            className="soc-ring flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
+            className="soc-ring relative flex size-8 flex-none items-center justify-center rounded-full max-sm:size-6 max-xs:size-[22px]"
             style={
               { "--deg": `${(Math.max(0, Math.min(100, t.soc ?? soc)) * 3.6).toFixed(1)}deg` } as React.CSSProperties
             }
@@ -61,10 +69,17 @@ export function Dock() {
             <span className="flex size-[27px] items-center justify-center rounded-full bg-dock-inset text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
               <Icon name="battery" size={14} className="max-sm:size-[13px] max-xs:size-3" />
             </span>
+            {/* Set to something other than normal: a dot on the ring, for phones, where the label is hidden. */}
+            {special && (
+              <span
+                aria-hidden
+                className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-dock bg-battery sm:hidden"
+              />
+            )}
           </span>
           <DockText
-            k={`Battery ${Math.round(soc)}%`}
-            v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(t.b) : "Idle"}`}
+            k={special ? `${special.label} · ${Math.round(soc)}%` : `Battery ${Math.round(soc)}%`}
+            v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(t.b) : special?.label === "Standby" ? "Standby" : "Idle"}`}
             color={st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.75)}
           />
         </span>
