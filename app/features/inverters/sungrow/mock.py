@@ -29,6 +29,8 @@ class MockInverter:
             "reserve": 5.0,
         }
         self.soc = 55.0
+        # The battery's settings (sh_control's registers): self-consumption, max/min SOC 100 % / 5 %, 5 kW.
+        self.holding: dict[int, int] = {13050: 0, 13051: 0xCC, 13052: 0, 13058: 1000, 13059: 50, 33047: 500}
         self.day: int | None = None
         self.totals = {"pv": 8_000.0, "import": 3_000.0, "export": 4_000.0, "charge": 2_000.0, "discharge": 1_800.0}
         self.daily = dict.fromkeys(self.totals, 0.0)
@@ -58,9 +60,13 @@ class MockInverter:
 
         surplus = pv - load
         batt = 0.0  # + discharge
-        if surplus > 0 and self.soc < 100:
+        top, bottom = self.holding[13058] / 10, self.holding[13059] / 10
+        if self.holding[13050] == 2:  # forced: standby, or charging at a set power
+            if self.holding[13051] == 0xAA and self.soc < top:
+                batt = -min(self.holding[13052], 5000)
+        elif surplus > 0 and self.soc < top:
             batt = -min(surplus, 5000)
-        elif surplus < 0 and self.soc > 10:
+        elif surplus < 0 and self.soc > bottom:
             batt = min(-surplus, 5000)
         self.soc = min(100.0, max(0.0, self.soc - batt * dt_h / self.CAPACITY_WH * 100))
         grid = load - pv - batt
@@ -103,7 +109,7 @@ class MockInverter:
             "mppt1_a": r(pv * 0.55 / 320 if pv else 0),
             "mppt2_v": r(310 * min(1, sun * 4)),
             "mppt2_a": r(pv * 0.45 / 310 if pv else 0),
-            "running_state": 0,
+            "running_state": 0x0800 if self.holding[13050] == 2 else 0,
             "power_flow": flow,
             "daily_pv": r(self.daily["pv"]),
             "daily_import": r(self.daily["import"]),
@@ -122,3 +128,19 @@ class MockInverter:
 
     def read_snapshot(self) -> Snapshot:
         return self.simulate(time.time())
+
+
+class MockRegisters:
+    """The mock inverter's battery settings, read and written as the collector would the real one's."""
+
+    def __init__(self, inverter: MockInverter):
+        self.inverter = inverter
+
+    def read(self) -> dict[int, int]:
+        return dict(self.inverter.holding)
+
+    def write(self, words: list[tuple[int, int]]) -> dict[int, int]:
+        for address, word in words:
+            self.inverter.holding[address] = word
+        self.inverter.info["reserve"] = self.inverter.holding[13059] / 10
+        return self.read()

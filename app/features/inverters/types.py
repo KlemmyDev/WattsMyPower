@@ -35,6 +35,14 @@ SolarValues = dict[str, float | None]
 # device can't report are left out.
 Info = dict[str, Any]
 
+# A hybrid's battery settings, for the battery controls: mode ("self" consumption, "forced", "external", "vpp",
+# "other"), mode_code (the raw mode), command ("charge", "discharge", "stop" while forced), power_w, max_soc and
+# min_soc (%), max_charge_w. Values the device didn't report are None.
+BatterySettings = dict[str, Any]
+
+# Settings registers to write, in order: (address, word).
+Writes = list[tuple[int, int]]
+
 
 class HybridDriver(Protocol):
     """The main inverter: the one with the battery and the grid meter."""
@@ -66,4 +74,32 @@ class SolarDriver(Protocol):
 
     def decode_info(self, raw: Raw) -> Info:
         """The device's details, from the same poll's reading."""
+        ...
+
+
+class ControlDriver(Protocol):
+    """How a hybrid's battery is controlled: reading its settings registers, and what to write for each control."""
+
+    FLOOR_RANGE: tuple[float, float]  # the floors (min SOC, %) it accepts
+
+    def decode(self, words: Mapping[int, int]) -> BatterySettings: ...
+
+    def normal(self) -> Writes:
+        """Self-consumption: the battery runs the house and soaks up spare solar."""
+        ...
+
+    def standby(self) -> Writes:
+        """The battery neither charges nor discharges."""
+        ...
+
+    def charge(self, power_w: int) -> Writes:
+        """Charge at this power, from the grid if need be."""
+        ...
+
+    def floor(self, pct: float) -> Writes:
+        """Discharge no lower than this (%)."""
+        ...
+
+    def holds(self, settings: BatterySettings, writes: Writes) -> bool:
+        """Whether the settings read show these writes in effect."""
         ...

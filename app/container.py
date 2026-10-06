@@ -14,6 +14,7 @@ from app.core.database import Database
 from app.features.alerts.service import AlertsService
 from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
+from app.features.battery.service import BatteryService, CollectorRegisters
 from app.features.bills.service import BillsService
 from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
@@ -23,6 +24,7 @@ from app.features.home.service import HomeService
 from app.features.imports.service import ImportService
 from app.features.insights.service import InsightsService
 from app.features.integrations.service import IntegrationsService
+from app.features.inverters.sungrow.mock import MockRegisters
 from app.features.live.client import CollectorClient
 from app.features.live.ingest import CollectorIngest
 from app.features.live.service import LiveService
@@ -63,6 +65,7 @@ class Services:
     onboarding: OnboardingService
     live: LiveService
     alerts: AlertsService
+    battery: BatteryService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -111,5 +114,10 @@ def build_services(config: Config) -> Services:
         onboarding=OnboardingService(config, db, integrations),
         live=live,
         alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo, bills=bills),
+        battery=BatteryService(
+            db,
+            live,
+            CollectorRegisters(collector) if collector else MockRegisters(source.inverter),  # type: ignore[union-attr]
+        ),
         source=source,
     )

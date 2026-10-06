@@ -7,7 +7,8 @@ from typing import Any
 import pytest
 from pymodbus.exceptions import ModbusIOException
 
-from collector.devices.sungrow.sh_rs import BLOCKS, ShRsDevice
+from collector.devices import WriteRefused
+from collector.devices.sungrow.sh_rs import BLOCKS, CONTROL_HOLDING, ShRsDevice
 
 
 class Result:
@@ -56,6 +57,12 @@ class FakeClient:
 
     def read_holding_registers(self, address: int, *, count: int = 1, slave: int = 1) -> Result:
         return self._answer("holding", address, count, slave)
+
+    def write_register(self, address: int, value: int, *, slave: int = 1) -> Result:
+        self.requests.append(("write", address, value, slave))
+        if address == self.raise_on:
+            raise ModbusIOException("no response")
+        return Result(None if address in self.missing else [value])
 
 
 def fake_client(**attrs: Any) -> type[FakeClient]:
@@ -129,3 +136,42 @@ def test_no_words_at_all_is_a_connection_error() -> None:
     client = fake_client(missing=set(range(4000, 14000)))
     with pytest.raises(ConnectionError, match="no data"):
         ShRsDevice("10.0.0.1", client_cls=client).read(include_info=False)
+
+
+# -- battery settings ---------------------------------------------------------------------------------
+
+
+def test_battery_settings_are_read_from_holding_registers_at_the_address_minus_one() -> None:
+    client = fake_client()
+    words = ShRsDevice("10.0.0.1", unit=2, client_cls=client).read_holding()
+    assert client.requests == [("holding", 13049, 10, 2), ("holding", 33046, 2, 2)]
+    assert set(words) == {a for start, count in CONTROL_HOLDING for a in range(start, start + count)}
+    assert words[13050] == 13050 and client.closed == 1
+
+
+def test_writes_go_one_register_at_a_time_in_order() -> None:
+    client = fake_client()
+    ShRsDevice("10.0.0.1", unit=2, client_cls=client).write_holding([(13052, 3000), (13051, 0xAA), (13050, 2)])
+    assert client.requests == [("write", 13051, 3000, 2), ("write", 13050, 0xAA, 2), ("write", 13049, 2, 2)]
+    assert client.closed == 1
+
+
+def test_a_refused_write_stops_there() -> None:
+    client = fake_client(missing={13058})  # communication address of 13059
+    with pytest.raises(WriteRefused, match="13059"):
+        ShRsDevice("10.0.0.1", client_cls=client).write_holding([(13059, 900), (13050, 0)])
+    assert [r[1] for r in client.requests] == [13058] and client.closed == 1
+
+
+def test_only_the_battery_settings_can_be_written() -> None:
+    client = fake_client()
+    with pytest.raises(WriteRefused, match="5000"):
+        ShRsDevice("10.0.0.1", client_cls=client).write_holding([(13050, 0), (5000, 1)])
+    assert client.requests == []  # checked before anything is sent
+
+
+def test_a_write_that_times_out_is_a_connection_error() -> None:
+    client = fake_client(raise_on=13049)
+    with pytest.raises(ConnectionError):
+        ShRsDevice("10.0.0.1", client_cls=client).write_holding([(13050, 0)])
+    assert client.closed == 1

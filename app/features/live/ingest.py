@@ -89,6 +89,7 @@ class CollectorIngest:
         h = devices.get("hybrid")
         if h is None:  # none connected yet (or it was removed): nothing to show about one
             self.live.last_success, self.live.last_error, self.live.info = None, NO_INVERTER, {}
+            self.live.driver = None
             self.freeze = Freeze()
             self.live.frozen_since = None
         else:
@@ -98,6 +99,7 @@ class CollectorIngest:
                 self.live.frozen_since = None
             self.live.last_success = h.get("last_success")
             self.live.last_error = h.get("error")
+            self.live.driver = h.get("driver") or drivers.DEFAULT_HYBRID
             main = drivers.hybrid(h.get("driver"))
             decoded = main.decode_info(h.get("info") or {}) if main else {}
             if decoded:
