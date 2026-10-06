@@ -37,8 +37,21 @@ function chartOf(series: HistoryResponse["series"], start: number, end: number) 
   return { X, have: segs.flat(), runs };
 }
 
-/** "Last 6 hours" strip along the bottom of the Battery card, with a hover readout. */
-export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo | undefined }) {
+/**
+ * "Last 6 hours" strip along the bottom of the Battery card, with a hover readout and a live point at its end. Given
+ * `className` (negative margins) it runs edge to edge, with its labels padded in by `inset`.
+ */
+export function BatteryHistory({
+  end,
+  s,
+  className,
+  inset,
+}: {
+  end: number | null;
+  s: SystemInfo | undefined;
+  className?: string;
+  inset?: string;
+}) {
   // `end` follows the latest reading, so the key (and the window) moves once per reading. That already
   // refetches, so the query isn't POLL-keyed: invalidating the outgoing key would only fetch it once more.
   const e = end ?? 0;
@@ -70,7 +83,7 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
       ref={plot}
       onMouseMove={onMove}
       onMouseLeave={() => setHoverAt(null)}
-      className="relative mt-auto mb-0 h-[150px] cursor-crosshair compact:h-[110px]"
+      className={cn("relative mt-auto mb-0 h-[150px] cursor-crosshair compact:h-[110px]", className)}
     >
       <svg
         viewBox={`0 0 ${B6W} ${B6H}`}
@@ -133,9 +146,14 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
           </>
         )}
       </svg>
-      <div className="pointer-events-none absolute inset-x-0 top-1.5 flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[10px] tracking-[1.2px] text-ink-label uppercase">Last 6 hours</span>
-        <span className="text-xs text-ink-muted tabular-nums">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-1.5 flex items-baseline justify-between gap-3",
+          inset,
+        )}
+      >
+        <span className="text-[13px] leading-5 font-medium text-ink-muted">Last 6 hours</span>
+        <span className="text-[13px] leading-5 font-medium text-ink-sub tabular-nums">
           {chart &&
             (last
               ? `${Math.round(first.soc)}% → ${Math.round(last.soc)}%` +
@@ -144,31 +162,44 @@ export function BatteryHistory({ end, s }: { end: number | null; s: SystemInfo |
         </span>
       </div>
       {/* Each time sits under its point on the chart; the end labels hang inward from the edges. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-3 h-3.5 font-mono text-[10px] text-ink-faint tabular-nums">
-        {chart &&
-          [6, 4, 2, 0].map((o) => (
-            <span
-              key={o}
-              className={cn(
-                "absolute whitespace-nowrap",
-                o === 6 ? "" : o === 0 ? "-translate-x-full" : "-translate-x-1/2",
-              )}
-              style={{ left: `${(((6 - o) / 6) * 100).toFixed(2)}%` }}
-            >
-              {o ? hhmm(e - o * 3600) : "Now"}
-            </span>
-          ))}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-3 h-3.5 text-[11px] leading-3.5 font-medium text-ink-faint tabular-nums",
+          inset,
+        )}
+      >
+        <div className="relative size-full">
+          {chart &&
+            [6, 4, 2, 0].map((o) => (
+              <span
+                key={o}
+                className={cn(
+                  "absolute whitespace-nowrap",
+                  o === 6 ? "" : o === 0 ? "-translate-x-full" : "-translate-x-1/2",
+                )}
+                style={{ left: `${(((6 - o) / 6) * 100).toFixed(2)}%` }}
+              >
+                {o ? hhmm(e - o * 3600) : "Now"}
+              </span>
+            ))}
+        </div>
       </div>
       {chart && hover && <HoverReadout p={hover} left={(chart.X(hover.t) / B6W) * 100} />}
       {chart && last && (
+        // the live point, with a ring spreading out from it now and then
         <span
-          className="pointer-events-none absolute -mt-1 -ml-1.5 size-2 rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
-          style={{
-            left: `${(chart.X(last.t) / B6W) * 100}%`,
-            top: `${(b6y(last.soc) / B6H) * 100}%`,
-            background: stateColor(last.w),
-          }}
-        />
+          className="pointer-events-none absolute -mt-1 -ml-1.5 size-2"
+          style={{ left: `${(chart.X(last.t) / B6W) * 100}%`, top: `${(b6y(last.soc) / B6H) * 100}%` }}
+        >
+          <span
+            className="absolute inset-0 animate-[wmpPing_2.4s_var(--ease-out-soft)_infinite] rounded-full"
+            style={{ background: stateColor(last.w) }}
+          />
+          <span
+            className="absolute inset-0 rounded-full shadow-[0_0_0_2px_var(--color-surface)] transition-colors duration-500"
+            style={{ background: stateColor(last.w) }}
+          />
+        </span>
       )}
     </div>
   );
@@ -184,7 +215,7 @@ function HoverReadout({ p, left }: { p: Point; left: number }) {
         style={{ left: `${left}%` }}
       />
       <div
-        className="pointer-events-none absolute top-[26px] z-2 rounded-lg bg-ink px-2 py-1 text-xs whitespace-nowrap text-ink-inverse tabular-nums"
+        className="pointer-events-none absolute top-[26px] z-2 animate-pop rounded-xl border border-line-subtle bg-canvas/92 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-ink tabular-nums shadow-[0_10px_28px_-12px_rgb(0_0_0/0.5)] backdrop-blur-xl light:bg-surface/95"
         style={flip ? { right: `calc(${100 - left}% + 8px)` } : { left: `calc(${left}% + 8px)` }}
       >
         <b className="mr-1 font-semibold">{hhmm(p.t)}</b> {pct(p.soc)} ·{" "}

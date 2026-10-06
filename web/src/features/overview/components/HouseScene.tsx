@@ -5,7 +5,6 @@ import { drawCar, spotOutline, spotTop, type CarBody } from "~/features/overview
 import { box, dPath, FLOW, group, h, I, ln, poly, sag, type Kid, type P3 } from "~/features/overview/utils/house/iso";
 import {
   DEFAULT_HOUSE,
-  fitted,
   layoutFor,
   type HouseOptions,
   type Layout,
@@ -24,7 +23,6 @@ import { sky as drawSky } from "~/features/overview/utils/house/sky";
  *   cover is the weather at night: "clear" | "cloudy" | "rain" | "storm"
  *   cars are the connected cars, in the order house.cars gives where each would rather park: each one's shape and
  *     paint, and for the Overview (with links), a label and where it links to
- * houseAnchors() gives {left, top} percentages for the HTML label pills.
  */
 
 /** A connected car, as the drawing needs it. */
@@ -142,44 +140,11 @@ function pvEach(f: HouseFlows, n: number): number[] {
   return [...known, ...Array(n - known.length).fill(rest / Math.max(n - known.length, 1))];
 }
 
-type LabelKey = "solar" | "grid" | "home" | "battery" | "tesla";
-const LEADER_COLOR: Record<LabelKey, string> = {
-  solar: FLOW.pv,
-  grid: "#3a3d44",
-  home: "#111111",
-  battery: FLOW.bat,
-  tesla: FLOW.car,
-};
-
-// Where each label pill's leader line starts (the pills sit at the card's left and right edges). The point
-// on the drawing it ends at comes from the house's layout. The scene spans x -200..1000.
-const LBL: Record<LabelKey, [number, number]> = {
-  solar: [760, 185],
-  grid: [-20, 380],
-  home: [-20, 485],
-  battery: [760, 320],
-  tesla: [760, 470],
-};
-
-export type Anchor = { left: string; top: string };
-const px = (p: [number, number]): Anchor => ({
-  left: (((p[0] + 200) / 1200) * 100).toFixed(2) + "%",
-  top: ((p[1] / 600) * 100).toFixed(2) + "%",
-});
-
-const ANCHORS = {
-  labels: Object.fromEntries(Object.entries(LBL).map(([k, lp]) => [k, px(lp)])) as Record<LabelKey, Anchor>,
-};
-
-/** Positions (percent of the scene) for the label pills. */
-export const houseAnchors = () => ANCHORS;
-
 export function HouseScene({
   flows,
   sky,
   cover = "clear",
   house = DEFAULT_HOUSE,
-  leaders = true,
   cars = [],
   links = false,
 }: {
@@ -187,8 +152,6 @@ export function HouseScene({
   sky: SkyMode;
   cover?: Cover;
   house?: HouseOptions;
-  /** Lines out to the label pills (the Overview has them; a preview doesn't). */
-  leaders?: boolean;
   cars?: SceneCar[];
   /** Each parking spot links to its car, or to connecting one (the Overview). */
   links?: boolean;
@@ -291,32 +254,6 @@ export function HouseScene({
           ))}
         </g>
         {sk.front}
-        <g className="leaders">
-          {(Object.keys(LBL) as LabelKey[])
-            .filter(() => leaders)
-            .filter((k) => k !== "tesla" || flows.conn)
-            .map((k) => {
-              const lp = LBL[k];
-              const an = fitted(l, l.anchors[k]);
-              const lc = LEADER_COLOR[k];
-              return (
-                <Fragment key={k}>
-                  {h("line", {
-                    className: "ld",
-                    x1: lp[0],
-                    y1: lp[1],
-                    x2: an[0],
-                    y2: an[1],
-                    stroke: night ? "#ffffff" : "#111111",
-                    strokeOpacity: 0.35,
-                    strokeWidth: 1,
-                  })}
-                  {h("circle", { cx: an[0], cy: an[1], r: 7, fill: lc, fillOpacity: 0.18 })}
-                  {h("circle", { cx: an[0], cy: an[1], r: 3.5, fill: lc, stroke: "#ffffff", strokeWidth: 1.5 })}
-                </Fragment>
-              );
-            })}
-        </g>
       </svg>
       {links && <SpotLinks l={l} cars={carIn} transform={fitG} night={night} />}
     </>

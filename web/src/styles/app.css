@@ -413,7 +413,10 @@
     box-shadow: 0 0 0 4px color-mix(in oklch, var(--fill) 45%, transparent);
   }
 
+  /* --deg is registered (below), so the ring eases to each new charge rather than jumping (a ring with a transition
+     of its own lists --deg in it). */
   .soc-ring {
+    transition: --deg 900ms var(--ease-out-soft);
     background: conic-gradient(
       var(--ring, var(--color-battery)) var(--deg, 0deg),
       color-mix(in srgb, var(--color-fg) 14%, transparent) 0
@@ -476,12 +479,6 @@
     animation-direction: reverse;
   }
 
-  /* Phones show the power flow as a 4:3 crop with the leader lines hidden. */
-  @media (width < 760px) {
-    .house-scene .leaders .ld {
-      display: none;
-    }
-  }
   /*
    * A page's sections rise into place one after another when it opens (AppShell keys the page by
    * section, so this runs on arriving, not on every update); anything that appears later, once its
@@ -685,6 +682,30 @@
   }
   to {
     stroke-dashoffset: 0;
+  }
+}
+/* A battery ring's fill: typed, so it can be animated. */
+@property --deg {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* A light passing across the power flow's figures when a fresh reading arrives. */
+@keyframes wmpSheen {
+  from {
+    transform: translateX(-100%);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+/* The power flow's countdown ring, from full to empty. */
+@keyframes wmpDrain {
+  to {
+    stroke-dashoffset: -1;
   }
 }
 @keyframes wmpSpin {

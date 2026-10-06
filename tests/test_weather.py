@@ -417,3 +417,27 @@ def test_hours_the_battery_was_full_and_output_held_back_are_left_out() -> None:
     held = [hour((100 + i) * 3600, 0.5, True) for i in range(40)]
     model = learning.fit(good + held, 6.6)
     assert model is not None and model.cells["3:0"] == pytest.approx(6.0, rel=0.05)
+
+
+def test_the_forecast_says_when_it_was_fetched_and_when_its_next_due(
+    db: Database, config: Config, settings: SettingsStore
+) -> None:
+    times = [NOW - 3600 + i * 3600 for i in range(30)]
+    clock = {"now": float(NOW)}
+    up = {"ok": True}
+
+    def get(url: str) -> dict[str, Any]:
+        if not up["ok"]:
+            raise TimeoutError
+        return open_meteo(times, shortwave_radiation=[500] * 30, temperature_2m=[22] * 30)
+
+    weather = WeatherService(config, db, settings, get=get, clock=lambda: clock["now"])
+    assert weather.timing()["fetched_at"] is None and weather.timing()["next_at"] is None
+    weather.ensure_fresh()
+    assert weather.timing() == {"fetched_at": NOW, "next_at": NOW + 1800, "every": 1800, "error": None}
+    # Due again, and Open-Meteo is down: the next try is five minutes on, and what was fetched still stands.
+    clock["now"] = NOW + 1800
+    up["ok"] = False
+    weather.ensure_fresh()
+    timing = weather.timing()
+    assert timing["fetched_at"] == NOW and timing["next_at"] == NOW + 1800 + 300 and timing["error"]

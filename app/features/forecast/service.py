@@ -596,4 +596,5 @@ class ForecastService:
             },
             "days": summarise_days(steps, now, soc0),
             "load_basis": self.load_basis(now),
+            "weather": self.weather.timing(),
         }
