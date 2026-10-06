@@ -1,7 +1,14 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { controlHistoryQuery } from "~/features/battery/api";
-import type { BatteryPlan, ControlKind, ControlRecord, Outlook, OutlookDay } from "~/features/battery/types";
+import type {
+  BatteryPlan,
+  ControlKind,
+  ControlRecord,
+  Outlook,
+  OutlookDay,
+  OutsideKind,
+} from "~/features/battery/types";
 import { KIND_COLOR, KIND_LABEL, recordLabel } from "~/features/battery/utils";
 import { batteryState, reserveOf } from "~/features/common/energy/utils";
 import { hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
@@ -22,7 +29,14 @@ const y = (soc: number) => TOP + (1 - Math.max(0, Math.min(100, soc)) / 100) * (
 
 type Point = { t: number; soc: number; w: number | null };
 type Line = [number, number][];
-type Band = { kind: ControlKind; from: number; to: number; label: string; floor: number | null; ahead: boolean };
+type Band = {
+  kind: ControlKind | OutsideKind;
+  from: number;
+  to: number;
+  label: string;
+  floor: number | null;
+  ahead: boolean;
+};
 
 /** The controls as shaded stretches of the day: a running one reaches to where it's set to end (or, set until it's
  * stopped, to the end of the outlook), the part still to come drawn fainter. */
@@ -36,7 +50,9 @@ function bandsOf(
 ) {
   const out: Band[] = [];
   for (const c of controls) {
-    const stop = c.ended_at ?? c.until ?? plan?.ends_at ?? horizon;
+    // What something else set runs on as far as now: when it'll end isn't known.
+    const outside = c.kind === "isolarcloud" || c.kind === "external" || c.kind === "elsewhere";
+    const stop = c.ended_at ?? (outside ? now : (c.until ?? plan?.ends_at ?? horizon));
     const from = Math.max(c.started_at, start);
     const past = Math.min(c.ended_at ?? now, stop, end);
     const label = recordLabel(c);
@@ -53,6 +69,15 @@ function bandsOf(
       });
   }
   return out;
+}
+
+/** The bands to name over the chart: the newest first, leaving out an older one whose name would run into it (its
+ * shading and the tooltip still say what ran). */
+function labelled(bands: Band[], X: (t: number) => number): Band[] {
+  const kept: Band[] = [];
+  for (const b of [...bands].filter((b) => b.label).sort((a, z) => z.from - a.from))
+    if (!kept.length || X(kept[kept.length - 1].from) - X(b.from) > 140) kept.push(b);
+  return kept;
 }
 
 /** The level a line has nearest a time (within half an hour), or null. */
@@ -342,25 +367,20 @@ export function BatteryDayChart({
           )}
         </svg>
         {/* The controls' names over their stretch, and the axis labels, in HTML so they don't stretch. */}
-        {bands
-          .filter((b) => b.label)
-          .sort((a, b) => a.from - b.from)
-          // A name too close to the one before would overlap it: the shading and the tooltip still say what ran.
-          .filter((b, i, all) => i === 0 || X(b.from) - X(all[i - 1].from) > 140)
-          .map((b, i) => {
-            // Each name starts at its stretch and may run past a short one; near the right edge it ends there instead.
-            const late = X(b.from) / W > 0.72;
-            return (
-              <span
-                key={i}
-                className="pointer-events-none absolute top-0 flex items-center gap-1.5 px-1 text-[11px] font-semibold whitespace-nowrap text-ink-muted"
-                style={late ? { right: `${100 - (X(b.to) / W) * 100}%` } : { left: `${(X(b.from) / W) * 100}%` }}
-              >
-                <span aria-hidden className="size-2 rounded-full" style={{ background: KIND_COLOR[b.kind] }} />
-                {b.label}
-              </span>
-            );
-          })}
+        {labelled(bands, X).map((b, i) => {
+          // Each name starts at its stretch and may run past a short one; near the right edge it ends there instead.
+          const late = X(b.from) / W > 0.72;
+          return (
+            <span
+              key={i}
+              className="pointer-events-none absolute top-0 flex items-center gap-1.5 px-1 text-[11px] font-semibold whitespace-nowrap text-ink-muted"
+              style={late ? { right: `${100 - (X(b.to) / W) * 100}%` } : { left: `${(X(b.from) / W) * 100}%` }}
+            >
+              <span aria-hidden className="size-2 rounded-full" style={{ background: KIND_COLOR[b.kind] }} />
+              {b.label}
+            </span>
+          );
+        })}
         {[100, 50, 0].map((v) => (
           <span
             key={v}

@@ -61,9 +61,15 @@ export type BatteryPlan = {
   ahead_normal: Outlook;
 };
 
-/** A control as it ran (or is running: `ended_at` null), for the chart. */
+/** Who else had the battery, as the dashboard saw it: iSolarCloud's command, an energy manager, or forced mode set
+ * some other way. */
+export type OutsideKind = "isolarcloud" | "external" | "elsewhere";
+
+/** A control as it ran (or is running: `ended_at` null), or a stretch something else had the battery, for the chart. */
 export type ControlRecord = {
-  kind: ControlKind;
+  kind: ControlKind | OutsideKind;
+  /** What the other controller had it doing (charge, discharge, stop), when that's known. */
+  command?: "charge" | "discharge" | "stop" | null;
   started_at: number;
   ended_at: number | null;
   until: number | null;

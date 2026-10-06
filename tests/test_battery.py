@@ -385,6 +385,38 @@ def test_controls_are_kept_for_the_chart(svc: BatteryService, clock: Clock) -> N
     assert svc.history(int(NOW) + 1300, int(NOW) + HOUR) == []
 
 
+def test_a_control_from_before_they_were_recorded_still_shows(svc: BatteryService, clock: Clock) -> None:
+    svc.start({"kind": "standby", "until": None})
+    with svc.db.writing() as conn:  # as if started before battery_controls existed
+        conn.execute("DELETE FROM battery_controls")
+    control = svc.control()
+    assert control is not None
+    del control["history_id"]
+    svc._save(control)
+    clock.t += 600
+    h = svc.history(int(NOW), int(NOW) + HOUR)
+    assert [(c["kind"], c["started_at"], c["ended_at"]) for c in h] == [("standby", NOW, None)]
+    svc.stop()
+    assert svc.history(int(NOW), int(NOW) + HOUR)[0]["ended_at"] == NOW + 600
+
+
+def test_what_isolarcloud_does_is_recorded_too(svc: BatteryService, regs: FakeRegisters, clock: Clock) -> None:
+    svc._cycle()
+    assert svc.history(int(NOW), int(NOW) + HOUR) == []  # normal: nothing to show
+    regs.isolarcloud_charge()
+    clock.t += 60
+    svc._cycle()
+    clock.t += 60
+    svc._cycle()  # still the same command: the same stretch
+    regs.words.update({13050: 0, 13051: 0xCC})
+    clock.t += 60
+    svc._cycle()
+    h = svc.history(int(NOW), int(NOW) + HOUR)
+    assert [(c["kind"], c["command"], c["power_w"], c["started_at"] - NOW, c["ended_at"] - NOW) for c in h] == [
+        ("isolarcloud", "charge", 6600, 60, 180)
+    ]
+
+
 def test_a_control_still_in_effect_has_no_end(svc: BatteryService, regs: FakeRegisters, clock: Clock) -> None:
     svc.start({"kind": "standby", "until": None})
     assert svc.history(int(NOW), int(NOW) + 60)[0]["ended_at"] is None
