@@ -292,6 +292,15 @@ def test_the_mode_every_page_shows(svc: BatteryService, regs: FakeRegisters, liv
     }
 
 
+def test_the_page_never_waits_on_the_inverter(svc: BatteryService, regs: FakeRegisters, clock: Clock) -> None:
+    svc.view()  # the first ever: read
+    regs.fail = True  # a slow or unreachable inverter would show here
+    clock.t += 10 * 60
+    v = svc.view()
+    assert v["settings"]["min_soc"] == 5.0 and v["owner"] == "normal"  # as last read, at once
+    assert svc.preview({"kind": "standby", "until": int(clock.t) + HOUR})["kind"] == "standby"
+
+
 def test_the_idle_loop_reads_the_settings_only_now_and_then(
     svc: BatteryService, regs: FakeRegisters, clock: Clock
 ) -> None:
@@ -411,6 +420,12 @@ def test_what_isolarcloud_does_is_recorded_too(svc: BatteryService, regs: FakeRe
     regs.words.update({13050: 0, 13051: 0xCC})
     clock.t += 60
     svc._cycle()
+    log = svc.log()
+    assert [(e["kind"], e["text"]) for e in log[:2]] == [
+        ("isolarcloud", "iSolarCloud: force charging ended; the battery is back to normal"),
+        ("isolarcloud", "iSolarCloud: force charging at 6.6 kW (seen on the inverter)"),
+    ]
+    assert len(svc.log(limit=1)) == 1
     h = svc.history(int(NOW), int(NOW) + HOUR)
     assert [(c["kind"], c["command"], c["power_w"], c["started_at"] - NOW, c["ended_at"] - NOW) for c in h] == [
         ("isolarcloud", "charge", 6600, 60, 180)
@@ -442,5 +457,6 @@ def test_the_api_in_mock_mode(client: TestClient) -> None:
     assert r.status_code == 422 and "between 5 and 50" in r.json()["detail"]
     assert client.app.state.services.live.status()["battery_mode"]["kind"] == "standby"  # type: ignore[attr-defined]
     assert client.get("/api/battery/history").json()["controls"][0]["kind"] == "standby"
+    assert client.get("/api/battery/log", params={"limit": 1}).json()["events"][0]["kind"] == "standby"
     assert client.delete("/api/battery/control").json()["owner"] == "normal"
     assert client.app.state.services.live.status()["battery_mode"]["owner"] == "normal"  # type: ignore[attr-defined]

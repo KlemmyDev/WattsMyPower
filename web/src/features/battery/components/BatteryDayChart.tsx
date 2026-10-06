@@ -5,6 +5,7 @@ import type {
   BatteryPlan,
   ControlKind,
   ControlRecord,
+  ControlRequest,
   Outlook,
   OutlookDay,
   OutsideKind,
@@ -18,6 +19,7 @@ import { historyQuery } from "~/features/common/readings/api";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
+import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 
@@ -100,6 +102,7 @@ export function BatteryDayChart({
   plan,
   outlook,
   preview,
+  draft,
   className,
 }: {
   s: SystemInfo | undefined;
@@ -108,6 +111,8 @@ export function BatteryDayChart({
   plan: BatteryPlan | null;
   outlook: Outlook | null;
   preview: BatteryPlan | null;
+  /** The control being set up, as its settings are this moment. */
+  draft: ControlRequest | null;
   className?: string;
 }) {
   const today = midnight(now);
@@ -154,18 +159,27 @@ export function BatteryDayChart({
   const within = (o: Outlook | null | undefined): Line =>
     o && day <= tomorrow ? o.points.filter(([t]) => t >= Math.max(now - 60, start) && t <= end) : [];
   const expected = within(outlook);
-  const previewLine = within(preview?.ahead);
+  const previewLine = within(draft ? preview?.ahead : null);
   const without = plan ? within(plan.ahead_normal) : [];
   const horizon = outlook?.points[outlook.points.length - 1]?.[0] ?? now;
 
   const bands = bandsOf(hist?.controls ?? [], plan, horizon, start, end, now);
-  if (preview) {
-    // The control being set up, over the stretch it would run.
+  if (draft) {
+    // The control being set up, over the stretch it would run: drawn from its settings as they are this moment (the
+    // worked-out end of a charge once it's in).
     const from = Math.max(now, start);
-    const to = Math.min(preview.ends_at ?? horizon, end);
-    if (to > from)
-      bands.push({ kind: preview.kind, from, to, label: recordLabel(preview), floor: preview.floor, ahead: true });
+    const charged = draft.kind === "charge" && preview?.kind === "charge" ? preview.ends_at : null;
+    const to = Math.min(draft.until ?? charged ?? horizon, end);
+    const shown = { kind: draft.kind, floor: draft.floor ?? null, target: draft.target ?? null };
+    if (to > from) bands.push({ ...shown, from, to, label: recordLabel(shown), ahead: true });
   }
+  // The worked-out line lags the sliders a moment: dimmed until it's for what they show.
+  const stale =
+    !!preview &&
+    !!draft &&
+    (preview.floor !== (draft.floor ?? null) ||
+      preview.target !== (draft.target ?? null) ||
+      preview.kind !== draft.kind);
   const reserve = reserveOf(s);
 
   const box = useRef<HTMLDivElement>(null);
@@ -183,7 +197,7 @@ export function BatteryDayChart({
   const title = isToday ? "Today" : day === tomorrow ? "Tomorrow" : shortDay.format(new Date(day * 1000));
 
   return (
-    <section aria-labelledby="h-bday" className={cn("flex min-w-0 flex-col gap-4", className)}>
+    <Card aria-labelledby="h-bday" className={cn("gap-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h2 id="h-bday">{title}</h2>
@@ -247,7 +261,7 @@ export function BatteryDayChart({
         ref={box}
         onMouseMove={onMove}
         onMouseLeave={() => setHoverAt(null)}
-        className="relative min-h-[260px] flex-1 cursor-crosshair max-sm:min-h-[200px]"
+        className="relative h-[260px] cursor-crosshair max-sm:h-[200px]"
       >
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -350,6 +364,7 @@ export function BatteryDayChart({
               fill="none"
               strokeWidth="2.5"
               strokeDasharray="1 5"
+              opacity={stale ? 0.4 : 1}
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
               style={{ stroke: COLOR.batterySoft }}
@@ -431,7 +446,7 @@ export function BatteryDayChart({
           without={plan?.ahead_normal.days[key] ?? null}
         />
       )}
-    </section>
+    </Card>
   );
 }
 

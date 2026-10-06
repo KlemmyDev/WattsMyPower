@@ -9,6 +9,7 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
+import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Segmented } from "~/features/common/ui/components/Segmented";
@@ -39,7 +40,7 @@ const ACTION: Record<ControlKind, string> = {
 };
 
 /** A value made only once its inputs have stopped changing for a moment (a slider being dragged). */
-function useSettled<T>(value: T, ms = 350): T {
+function useSettled<T>(value: T, ms = 200): T {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
     const id = setTimeout(() => setSettled(value), ms);
@@ -58,12 +59,14 @@ export function BatteryModes({
   soc,
   now,
   onPreview,
+  onDraft,
   className,
 }: {
   v: Supported;
   soc: number | null;
   now: number;
   onPreview: (plan: BatteryPlan | null) => void;
+  onDraft: (control: ControlRequest | null) => void;
   className?: string;
 }) {
   const active = v.control && !v.control.ending ? v.control : null;
@@ -106,13 +109,19 @@ export function BatteryModes({
           : { kind, until, target: Math.max(target, minTarget), power_w: power };
   // Worked out on the server once the settings stop moving; the times are left out of the key so a ticking clock
   // doesn't ask again (they're rounded to the minute).
-  const settledBody = useSettled(body && { ...body, until: body.until && Math.round(body.until / 60) * 60 });
+  const rounded = body && { ...body, until: body.until && Math.round(body.until / 60) * 60 };
+  const settled = useSettled(rounded);
+  // A control just chosen is worked out at once; only changes to it wait for the sliders to settle.
+  const asked = rounded && settled?.kind !== rounded.kind ? rounded : settled;
   const { data: plan, isFetching } = useQuery({
-    ...previewQuery(v.blocked ? null : settledBody),
+    ...previewQuery(v.blocked ? null : asked),
     placeholderData: keepPreviousData,
   });
-  const shown = kind ? plan : null;
-  useEffect(() => onPreview(shown && shown.kind === kind ? shown : null), [shown, kind, onPreview]);
+  const shown = kind && plan?.kind === kind ? plan : null;
+  useEffect(() => onPreview(shown), [shown, onPreview]);
+  // The settings as they are this moment, for the chart to draw the stretch and the reserve without waiting.
+  const draftKey = JSON.stringify(rounded);
+  useEffect(() => onDraft(JSON.parse(draftKey) as ControlRequest | null), [draftKey, onDraft]);
 
   const go = () => {
     if (!body) return;
@@ -139,7 +148,7 @@ export function BatteryModes({
   ];
 
   return (
-    <section aria-labelledby="h-batmodes" className={cn("flex min-w-0 flex-col gap-5", className)}>
+    <Card aria-labelledby="h-batmodes" className={cn("gap-5", className)}>
       <div className="flex flex-col gap-0.5">
         <h2 id="h-batmodes">Control</h2>
         <span className="text-[13px] text-ink-muted">
@@ -256,7 +265,7 @@ export function BatteryModes({
           {start.isError && <HelpText tone="bad">{errorMessage(start.error)}</HelpText>}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 

@@ -11,6 +11,7 @@ export function useBatteryChange() {
   const done = (view: BatteryView) => {
     qc.setQueryData(batteryQuery.queryKey, view);
     void qc.invalidateQueries({ queryKey: ["battery", "history"] }); // the chart's shaded controls
+    void qc.invalidateQueries({ queryKey: ["battery", "log"] }); // and what they did
     void qc.invalidateQueries({ queryKey: liveQuery.queryKey }); // a floor changes the reserve shown everywhere
   };
   return {
