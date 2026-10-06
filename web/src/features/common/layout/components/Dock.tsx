@@ -6,6 +6,7 @@ import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
 import { kW } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useTween } from "~/features/common/ui/hooks/useTween";
+import { ModeBadge } from "~/features/battery/components/ModeBadge";
 import { useBatteryMode } from "~/features/battery/hooks";
 import { describeMode } from "~/features/battery/utils";
 import { useNow } from "~/features/common/time/hooks";
@@ -69,16 +70,10 @@ export function Dock() {
             <span className="flex size-[27px] items-center justify-center rounded-full bg-dock-inset text-battery-soft max-sm:size-[19px] max-xs:size-[17px]">
               <Icon name="battery" size={14} className="max-sm:size-[13px] max-xs:size-3" />
             </span>
-            {/* Set to something other than normal: a dot on the ring, for phones, where the label is hidden. */}
-            {special && (
-              <span
-                aria-hidden
-                className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-dock bg-battery sm:hidden"
-              />
-            )}
+            <ModeBadge now={now} ring="var(--color-dock)" className="-right-1.5 -bottom-1.5 max-sm:size-4" />
           </span>
           <DockText
-            k={special ? `${special.label} · ${Math.round(soc)}%` : `Battery ${Math.round(soc)}%`}
+            k={`Battery ${Math.round(soc)}%`}
             v={`${st === "charge" ? "↑ " : st === "discharge" ? "↓ " : ""}${st === "charge" || st === "discharge" ? kW(t.b) : special?.label === "Standby" ? "Standby" : "Idle"}`}
             color={st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.75)}
           />

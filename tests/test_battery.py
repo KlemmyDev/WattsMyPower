@@ -271,18 +271,24 @@ def test_decode_reads_the_sh5_0rs_as_found() -> None:
 
 def test_the_mode_every_page_shows(svc: BatteryService, regs: FakeRegisters, live: Any, clock: Clock) -> None:
     asyncio.run(svc.publish(svc._cycle()))
-    assert live.battery_mode == {"owner": "normal", "min_soc": 5.0} and live.published == 1
+    assert live.battery_mode == {"owner": "normal", "min_soc": 5.0, "max_soc": 100.0} and live.published == 1
     asyncio.run(svc.publish(svc._cycle()))
     assert live.published == 1  # sent only when it changes
     svc.start({"kind": "standby", "until": NOW + HOUR})
     asyncio.run(svc.publish())
-    assert live.battery_mode == {"owner": "dashboard", "min_soc": 5.0, "kind": "standby", "until": NOW + HOUR,
+    assert live.battery_mode == {"owner": "dashboard", "min_soc": 5.0, "max_soc": 100.0, "kind": "standby", "until": NOW + HOUR,
                                  "floor": None, "target": None, "power_w": None, "ending": None}  # fmt: skip
     svc.stop()
     regs.isolarcloud_charge()
     clock.t += 60  # the idle loop reads the settings again
     asyncio.run(svc.publish(svc._cycle()))
-    assert live.battery_mode == {"owner": "isolarcloud", "min_soc": 5.0, "command": "charge", "power_w": 6600}
+    assert live.battery_mode == {
+        "owner": "isolarcloud",
+        "min_soc": 5.0,
+        "max_soc": 100.0,
+        "command": "charge",
+        "power_w": 6600,
+    }
 
 
 def test_the_idle_loop_reads_the_settings_only_now_and_then(

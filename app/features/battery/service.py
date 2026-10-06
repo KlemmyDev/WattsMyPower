@@ -587,7 +587,11 @@ class BatteryService:
             return None
         settings, control = self._settings, self.control()
         who = owner(settings, control)
-        out: dict[str, Any] = {"owner": who, "min_soc": (settings or {}).get("min_soc")}
+        out: dict[str, Any] = {
+            "owner": who,
+            "min_soc": (settings or {}).get("min_soc"),
+            "max_soc": (settings or {}).get("max_soc"),
+        }
         if control:
             out.update({k: control.get(k) for k in ("kind", "until", "floor", "target", "power_w", "ending")})
         elif settings and who not in ("normal", None):

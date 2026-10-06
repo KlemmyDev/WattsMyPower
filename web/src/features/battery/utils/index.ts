@@ -80,3 +80,17 @@ export function recordLabel(c: Pick<ControlRecord, "kind" | "floor" | "target">)
   if (c.kind === "charge" && c.target != null) return `Grid charge to ${c.target}%`;
   return KIND_LABEL[c.kind];
 }
+
+/** The icon for what the battery is set to do, when that's anything but normal: pause (standby), shield (a raised
+ * reserve), bolt (a charge from the grid), cloud (iSolarCloud's command), lock (another controller). */
+export function modeIcon(m: BatteryMode | null): "pause" | "shield" | "bolt" | "cloud" | "lock" | null {
+  if (!m) return null;
+  if (m.kind && !m.ending) return m.kind === "standby" ? "pause" : m.kind === "floor" ? "shield" : "bolt";
+  if (m.owner === "isolarcloud") return "cloud";
+  if (m.owner === "external" || m.owner === "elsewhere" || m.owner === "unknown") return "lock";
+  return null;
+}
+
+/** Whether the battery is as full as it's allowed to get (its max SOC), so there's nothing to charge. */
+export const isFull = (soc: number | null | undefined, top: number | null | undefined) =>
+  soc != null && soc >= (top ?? 100) - 0.5;

@@ -1,8 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type MouseEvent } from "react";
 import { controlHistoryQuery } from "~/features/battery/api";
-import type { BatteryEvent, BatteryPlan, ControlKind, ControlRecord } from "~/features/battery/types";
-import { KIND_COLOR, KIND_LABEL, recordLabel, when } from "~/features/battery/utils";
+import type { BatteryPlan, ControlKind, ControlRecord } from "~/features/battery/types";
+import { KIND_COLOR, KIND_LABEL, recordLabel } from "~/features/battery/utils";
 import { batteryState, reserveOf } from "~/features/common/energy/utils";
 import { hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kW, pct } from "~/features/common/formatting/utils/number";
@@ -11,7 +11,6 @@ import { historyQuery } from "~/features/common/readings/api";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 
@@ -57,14 +56,13 @@ export function BatteryDayChart({
   now,
   plan,
   preview,
-  log,
+  className,
 }: {
   s: SystemInfo | undefined;
   now: number;
   plan: BatteryPlan | null;
   preview: BatteryPlan | null;
-  /** What the controls did lately, listed under the chart. */
-  log: BatteryEvent[];
+  className?: string;
 }) {
   const today = midnight(now);
   const [day, setDay] = useState(today);
@@ -134,7 +132,7 @@ export function BatteryDayChart({
   const kinds = [...new Set(bands.map((b) => b.kind))];
 
   return (
-    <Card aria-labelledby="h-bday" className="gap-4">
+    <section aria-labelledby="h-bday" className={cn("flex min-w-0 flex-col gap-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h2 id="h-bday">{isToday ? "Today" : shortDay.format(new Date(day * 1000))}</h2>
@@ -180,7 +178,7 @@ export function BatteryDayChart({
         ref={box}
         onMouseMove={onMove}
         onMouseLeave={() => setHoverAt(null)}
-        className="relative h-[260px] cursor-crosshair max-sm:h-[200px]"
+        className="relative min-h-[260px] flex-1 cursor-crosshair max-sm:min-h-[200px]"
       >
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -338,34 +336,7 @@ export function BatteryDayChart({
           </span>
         ))}
       </div>
-      {log.length > 0 && (
-        <div className="mt-2 flex flex-col gap-2 border-t border-line-subtle pt-4">
-          <span className="font-mono text-[11px] tracking-[1.5px] text-ink-faint uppercase">Recently</span>
-          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[13px]">
-            {log.slice(0, 6).map((e) => (
-              <li key={`${e.ts}-${e.text}`} className="flex gap-3">
-                <span className="w-[104px] flex-none text-ink-faint tabular-nums max-sm:w-[64px]">
-                  {when(e.ts, now)}
-                </span>
-                <span className="flex min-w-0 items-start gap-2 text-pretty text-ink-muted">
-                  {e.kind && (
-                    <span
-                      aria-hidden
-                      className="mt-1.5 size-2 flex-none rounded-full"
-                      style={{ background: KIND_COLOR[e.kind] }}
-                    />
-                  )}
-                  <span>
-                    {e.text}
-                    {e.until ? ` until ${when(e.until, e.ts)}` : ""}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </Card>
+    </section>
   );
 }
 
