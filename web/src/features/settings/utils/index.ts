@@ -1,4 +1,5 @@
 import type { PlanTariff } from "~/features/settings/types";
+import type { IconName } from "~/features/common/ui/components/Icon";
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
 import { seedBands } from "~/features/common/tariffs/utils";
 
@@ -100,3 +101,15 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
       return { ...s, status: { text: a.message, bad: true } };
   }
 }
+
+/** Settings' pages: tabs over the page on narrower screens, the side nav's column on wider ones. */
+export const SETTINGS_TABS = [
+  { to: "/settings/system", label: "System", icon: "home" },
+  { to: "/settings/bills", label: "Bills", icon: "dollar" },
+  { to: "/settings/integrations", label: "Integrations", icon: "plug" },
+  { to: "/settings/alerts", label: "Alerts", icon: "bell" },
+  { to: "/settings/database", label: "Database", icon: "database" },
+  { to: "/settings/account", label: "Account", icon: "user" },
+] as const satisfies readonly { to: string; label: string; icon: IconName }[];
+
+export const SETTINGS_SUB = "System details, bills and rates, connected services, alerts and your data";

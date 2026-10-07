@@ -2,19 +2,11 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { useRef } from "react";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { usePillIndicator } from "~/features/common/layout/hooks";
-import { Icon, type IconName } from "~/features/common/ui/components/Icon";
+import { Icon } from "~/features/common/ui/components/Icon";
+import { SETTINGS_SUB, SETTINGS_TABS as TABS } from "~/features/settings/utils";
 import { cn } from "~/features/common/ui/utils";
 
-const TABS = [
-  { to: "/settings/system", label: "System", icon: "home" },
-  { to: "/settings/bills", label: "Bills", icon: "dollar" },
-  { to: "/settings/integrations", label: "Integrations", icon: "plug" },
-  { to: "/settings/alerts", label: "Alerts", icon: "bell" },
-  { to: "/settings/database", label: "Database", icon: "database" },
-  { to: "/settings/account", label: "Account", icon: "user" },
-] as const satisfies readonly { to: string; label: string; icon: IconName }[];
-
-/** Settings: a row of tabs over the System, Bills, Integrations, Alerts, Database and Account pages. */
+/** Settings: a row of tabs (or the side nav's column) over the System, Bills, Integrations, Alerts, Database and Account pages. */
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsLayout,
 });
@@ -29,12 +21,13 @@ function SettingsLayout() {
 
   return (
     <>
-      <PageHeader title="Settings" sub="System details, bills and rates, connected services, alerts and your data" />
-      {/* On a phone the tabs don't all fit: the row scrolls sideways on its own, not the page. */}
+      <PageHeader title="Settings" sub={SETTINGS_SUB} />
+      {/* On a phone the tabs don't all fit: the row scrolls sideways on its own, not the page. Where the side nav's
+          column is open, it lists these pages, so the row goes. */}
       <nav
         ref={row}
         aria-label="Settings"
-        className="relative -mt-1 flex max-w-full [scrollbar-width:none] items-center gap-0.5 self-start overflow-x-auto overscroll-x-contain rounded-full border border-chip-line bg-chip p-1 [&::-webkit-scrollbar]:hidden"
+        className="relative -mt-1 flex max-w-full [scrollbar-width:none] items-center gap-0.5 self-start overflow-x-auto overscroll-x-contain rounded-full border border-chip-line bg-chip p-1 2xl:in-data-[nav-column=open]:hidden [&::-webkit-scrollbar]:hidden"
       >
         <span
           aria-hidden

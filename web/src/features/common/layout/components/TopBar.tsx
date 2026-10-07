@@ -1,42 +1,22 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useRef } from "react";
-import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
-import { useHasBattery } from "~/features/battery/hooks";
-import { useLive } from "~/features/common/live/hooks/useLive";
-import { useNow } from "~/features/common/time/hooks";
-import { usePillIndicator, useScrolled } from "~/features/common/layout/hooks";
+import { BrandMark, Icon } from "~/features/common/ui/components/Icon";
+import { useLiveStatus, useNavItems, usePillIndicator, useScrolled } from "~/features/common/layout/hooks";
+import { sectionOf } from "~/features/common/layout/utils";
 import { cn } from "~/features/common/ui/utils";
-import { isFresh } from "~/features/common/energy/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
 
-type NavItem = {
-  to: "/" | "/home" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
-  label: string;
-  icon: IconName;
-};
-const NAV: NavItem[] = [
-  { to: "/", label: "Overview", icon: "layout" },
-  { to: "/home", label: "Home", icon: "home" },
-  { to: "/history", label: "History", icon: "chart" },
-  { to: "/plan", label: "Plan", icon: "cloudSun" },
-  { to: "/battery", label: "Battery", icon: "battery" },
-  { to: "/bills", label: "Bills", icon: "dollar" },
-  { to: "/tesla", label: "Tesla", icon: "car" },
-];
-
-/** Which top-level section a path belongs to. */
-const sectionOf = (path: string) => (path === "/" ? "/" : `/${path.split("/")[1]}`);
-
 /**
- * The header stays at the top while the page scrolls. At the top it's see-through, as in the design;
- * once content passes under it, it gets a translucent background and a hairline so the two don't clash.
+ * The header on a phone (from tablets up, the navigation is the side nav). It stays at the top while the page
+ * scrolls. At the top it's see-through, as in the design; once content passes under it, it gets a translucent
+ * background and a hairline so the two don't clash.
  */
 export function TopBar() {
   const scrolled = useScrolled();
   return (
     <div
       className={cn(
-        "sticky top-0 z-20 border-b pt-5 pb-3 transition-[background-color,border-color] duration-200 max-sm:pt-4 max-sm:pb-2",
+        "sticky top-0 z-20 border-b pt-5 pb-3 transition-[background-color,border-color] duration-200 max-sm:pt-4 max-sm:pb-2 md:hidden",
         scrolled ? "border-line-subtle bg-canvas/80 backdrop-blur-xl" : "border-transparent",
       )}
     >
@@ -72,10 +52,7 @@ export function TopBar() {
 }
 
 function Nav() {
-  const teslaConnected = !!useLive()?.system.tesla_connected;
-  // Tesla only gets a tab once it's connected; until then it's reached from its Overview card and Settings.
-  const hasBattery = useHasBattery();
-  const items = NAV.filter((i) => (i.to !== "/tesla" || teslaConnected) && (i.to !== "/battery" || hasBattery));
+  const items = useNavItems();
   const six = items.length > 5;
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = sectionOf(path);
@@ -118,19 +95,7 @@ function Nav() {
 }
 
 function HeaderClock() {
-  const st = useLive();
-  const now = useNow(30_000);
-  const last = st?.last_success;
-  let state: "live" | "stale" | "error" = "live";
-  let status = last ? `Live from your inverter, last reading ${hhmm(last)}` : "Connecting to your inverter";
-  if (!last) state = st?.error ? "error" : "stale";
-  else if (!isFresh(st, now)) {
-    state = st?.error ? "error" : "stale";
-    status = `No new readings since ${hhmm(last)}`;
-  } else if (st?.frozen_since) {
-    state = "stale";
-    status = `Readings frozen since ${hhmm(st.frozen_since)}`;
-  }
+  const { state, status, now } = useLiveStatus();
   const d = new Date(now * 1000);
   return (
     <div className="flex h-12 items-center gap-0.5 rounded-full border border-chip-line bg-chip px-2 py-1 max-sm:hidden">

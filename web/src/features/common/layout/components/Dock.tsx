@@ -45,7 +45,8 @@ export function Dock() {
   const mode = batMode ? describeMode(batMode, now) : null;
   const special = mode?.special ? mode : null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-8 z-15 flex justify-center px-4 max-sm:bottom-5">
+    // It centres in the page beside the side nav (--nav-w, from AppShell), and moves with it as a column opens.
+    <div className="pointer-events-none fixed right-0 bottom-8 left-(--nav-w) z-15 flex justify-center px-4 transition-[left] duration-[450ms] ease-out-soft max-sm:bottom-5">
       <Link
         to="/"
         data-shown={shown}
