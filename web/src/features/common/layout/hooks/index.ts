@@ -4,7 +4,7 @@ import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
-import { NAV, type SectionPages } from "~/features/common/layout/utils";
+import { NAV, SETTINGS_COLOR, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { STORE_NAV_COLLAPSED, store } from "~/features/common/storage/utils";
 import { useHomeNavPages } from "~/features/home/hooks";
@@ -143,6 +143,7 @@ export function useSectionPages(section: string): SectionPages | null {
         key: t.to,
         label: t.label,
         icon: t.icon,
+        color: SETTINGS_COLOR,
         link: { to: t.to },
         active: path === t.to || path.startsWith(`${t.to}/`),
       })),

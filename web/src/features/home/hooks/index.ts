@@ -14,7 +14,7 @@ import {
   updateDevice,
 } from "~/features/home/api";
 import type { HomeDevice, HomeOverview } from "~/features/home/types";
-import { drawing, homeItems, reading } from "~/features/home/utils";
+import { deviceColors, drawing, homeItems, reading } from "~/features/home/utils";
 
 /** Connect, sign in again, look for new devices, disconnect, change a device, or switch one; each answers with everything connected, as it now is. */
 export function useHomeChange() {
@@ -51,6 +51,8 @@ export function useHomeNavPages(enabled: boolean): NavPage[] {
     /* not encoded as expected: compare it as it is */
   }
   const items = homeItems(data?.devices ?? []);
+  // Each room in its first device's colour, as the Home page draws it.
+  const colors = deviceColors(data?.devices ?? []);
   const draws = (members: HomeDevice[]) => members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
   const top = Math.max(1, ...items.map((i) => draws(i.members)));
   return items.map((item): NavPage => {
@@ -62,6 +64,7 @@ export function useHomeNavPages(enabled: boolean): NavPage[] {
         link: { to: "/home/rooms/$room", params: { room: item.group } },
         value: w ? kW(w) : "Idle",
         share: w / top,
+        color: colors.get(item.id),
         active: here === `/home/rooms/${item.group}` || item.members.some((d) => here === `/home/${d.id}`),
       };
     const d = item.members[0];
@@ -71,6 +74,7 @@ export function useHomeNavPages(enabled: boolean): NavPage[] {
       link: { to: "/home/$device", params: { device: String(d.id) } },
       value: reading(d),
       share: w / top,
+      color: colors.get(d.id),
       active: here === `/home/${d.id}`,
     };
   });

@@ -554,16 +554,42 @@
   [data-lit] > .circuit-node {
     border-color: var(--color-solar);
   }
+  /*
+   * The current page's node takes the power: once the wire's pulse arrives (the delay), it lights in its own colour
+   * (--node-c: the section's, or a room's) with a short swell. Its row takes a wash of that colour and its icon the
+   * colour itself. Leaving, they go out at once.
+   */
   [aria-current="page"] > .circuit-node,
   [aria-current="page"] > .circuit-sub-node {
-    background: var(--color-solar);
-    border-color: var(--color-solar);
+    --glow: var(--node-c, var(--color-solar));
+    background: var(--glow);
+    border-color: var(--glow);
     box-shadow:
-      0 0 0 4px color-mix(in oklch, var(--color-solar) 22%, transparent),
-      0 0 14px var(--color-solar);
+      0 0 0 4px color-mix(in oklch, var(--glow) 24%, transparent),
+      0 0 14px var(--glow);
+    transition-delay: 380ms;
+    animation: circuitPowerUp 650ms 380ms var(--ease-out-soft) backwards;
   }
   [aria-current="page"] > .circuit-sub-node {
-    box-shadow: 0 0 10px var(--color-solar);
+    box-shadow:
+      0 0 0 3px color-mix(in oklch, var(--glow) 22%, transparent),
+      0 0 10px var(--glow);
+  }
+  .circuit-row {
+    transition:
+      color 200ms ease,
+      background-color 200ms ease;
+  }
+  .circuit-row[aria-current="page"] {
+    background: color-mix(in oklch, var(--node-c, var(--color-solar)) 10%, transparent);
+    transition-delay: 0ms, 300ms;
+  }
+  .circuit-icon {
+    transition: color 300ms ease;
+  }
+  .circuit-row[aria-current="page"] .circuit-icon {
+    color: var(--node-c, var(--color-solar));
+    transition-delay: 380ms;
   }
   .circuit-elbow {
     position: absolute;
@@ -577,12 +603,11 @@
     border-bottom-left-radius: 9px;
     transition: border-color 400ms ease;
   }
+  /* The power runs on into the current page's elbow, in the wire's colour, on its way to the page's node. */
   [aria-current="page"] > .circuit-elbow {
     border-color: var(--color-solar);
-  }
-  /* The column of a section's pages slides in beside the rail. */
-  .nav-column-in {
-    animation: navIn 360ms var(--ease-out-soft) backwards;
+    filter: drop-shadow(0 0 4px color-mix(in oklch, var(--color-solar) 60%, transparent));
+    transition-delay: 250ms;
   }
   /* A section's pages drop into place as it opens. */
   .circuit-branch-in {
@@ -741,6 +766,14 @@
   from {
     opacity: 0;
     transform: translateX(-8px);
+  }
+}
+@keyframes circuitPowerUp {
+  from {
+    transform: scale(0.7);
+  }
+  45% {
+    transform: scale(1.35);
   }
 }
 @keyframes circuitDrop {

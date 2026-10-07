@@ -53,7 +53,11 @@ export function SectionPagesStrip() {
           aria-current={p.active ? "page" : undefined}
           className={PILL}
         >
-          {p.icon && <Icon name={p.icon} size={16} />}
+          {p.icon ? (
+            <Icon name={p.icon} size={16} />
+          ) : (
+            p.color && <span aria-hidden className="size-2 flex-none rounded-full" style={{ background: p.color }} />
+          )}
           {p.label}
           {p.value && <span className="text-xs font-normal tabular-nums opacity-55">{p.value}</span>}
         </Link>
