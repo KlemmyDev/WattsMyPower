@@ -491,6 +491,115 @@
   }
 
   /*
+   * The side nav's conductor (SideNav): the rail's right edge, lit from the logo down to the current page's icon (or
+   * from the live dot up, for Settings), with a pulse running along it the way the power goes. A tile slides behind
+   * the icon, and a node on the edge joins the two.
+   */
+  .nav-current {
+    position: absolute;
+    right: -0.5px;
+    width: 2px;
+    border-radius: 2px;
+    overflow: hidden;
+    pointer-events: none;
+    background: linear-gradient(var(--color-solar), var(--color-solar-deep));
+    box-shadow: 0 0 10px color-mix(in oklch, var(--color-solar) 55%, transparent);
+    transition:
+      top 520ms var(--ease-out-soft),
+      height 520ms var(--ease-out-soft);
+  }
+  .nav-current[data-dir="up"] {
+    background: linear-gradient(var(--color-solar-deep), var(--color-solar));
+  }
+  .nav-current::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: linear-gradient(transparent, color-mix(in oklch, var(--color-solar) 30%, white), transparent);
+    animation: navPulse 2.4s cubic-bezier(0.5, 0, 0.6, 1) infinite;
+  }
+  .nav-current[data-dir="up"]::after {
+    animation-direction: reverse;
+  }
+  .nav-node {
+    position: absolute;
+    right: -5px;
+    z-index: 2;
+    width: 10px;
+    height: 10px;
+    margin-top: -5px;
+    border-radius: 999px;
+    pointer-events: none;
+    background: var(--color-solar);
+    box-shadow:
+      0 0 0 4px color-mix(in oklch, var(--color-solar) 22%, transparent),
+      0 0 14px var(--color-solar);
+    transition: top 520ms var(--ease-out-soft);
+  }
+  /* The short branch from the icon's tile out to the edge. */
+  .nav-node::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    width: 14px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--color-solar));
+  }
+  .nav-tile {
+    position: absolute;
+    left: 13px;
+    width: 46px;
+    height: 46px;
+    margin-top: -23px;
+    border-radius: 15px;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-fg) 7%, transparent);
+    transition: top 420ms var(--ease-spring);
+  }
+  /* Battery's state of charge, as a thin ring around its icon (with .soc-ring). */
+  .nav-ring {
+    position: absolute;
+    inset: 6px;
+    border-radius: 999px;
+    pointer-events: none;
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  }
+  /* Home drawing power: three small bars, gently moving. */
+  .nav-eq {
+    position: absolute;
+    top: 8px;
+    right: 7px;
+    display: flex;
+    gap: 1.5px;
+    align-items: flex-end;
+    height: 9px;
+    pointer-events: none;
+  }
+  .nav-eq i {
+    width: 2px;
+    height: 100%;
+    border-radius: 1px;
+    background: var(--color-device-1);
+    transform-origin: bottom;
+    animation: navEq 1.4s ease-in-out infinite alternate;
+  }
+  .nav-eq i:nth-child(1) {
+    animation-delay: -0.5s;
+  }
+  .nav-eq i:nth-child(3) {
+    animation-delay: -0.9s;
+  }
+  /* A section's column of pages slides in as it opens. */
+  .nav-column-in {
+    animation: navIn 360ms var(--ease-out-soft) backwards;
+  }
+
+  /*
    * A page's sections rise into place one after another when it opens (AppShell keys the page by
    * section, so this runs on arriving, not on every update); anything that appears later, once its
    * data loads, rises as it arrives.
@@ -630,6 +739,28 @@
   transition: none !important;
 }
 
+@keyframes navPulse {
+  from {
+    top: -28px;
+  }
+  to {
+    top: 100%;
+  }
+}
+@keyframes navEq {
+  from {
+    transform: scaleY(0.4);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes navIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
 @keyframes wmpRise {
   from {
     opacity: 0;
