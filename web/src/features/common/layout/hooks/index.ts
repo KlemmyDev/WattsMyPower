@@ -1,3 +1,4 @@
+import { useRouterState } from "@tanstack/react-router";
 import { useCallback, useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
@@ -122,23 +123,29 @@ export function useNavCollapsed(): [boolean, (v: boolean) => void] {
   return [value, set];
 }
 
-const SETTINGS_PAGES: SectionPages = {
-  title: "Settings",
-  sub: SETTINGS_SUB,
-  pages: SETTINGS_TABS.map((t) => ({ key: t.to, label: t.label, icon: t.icon, link: { to: t.to } })),
-};
-
 /** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills…). */
 export function useSectionPages(section: string): SectionPages | null {
   const home = useHomeNavPages(section === "/home");
   const load = useSnapshot()?.load_power;
+  const path = useRouterState({ select: (s) => s.location.pathname });
   if (section === "/home" && home.length)
     return {
       title: "Home",
       sub: load != null && load > 0 ? `Using ${kW(load)} now` : "Where your home's power goes",
-      root: { link: { to: "/home" }, label: "All devices" },
+      root: { link: { to: "/home" }, label: "Whole home", active: path === "/home" },
       pages: home,
     };
-  if (section === "/settings") return SETTINGS_PAGES;
+  if (section === "/settings")
+    return {
+      title: "Settings",
+      sub: SETTINGS_SUB,
+      pages: SETTINGS_TABS.map((t) => ({
+        key: t.to,
+        label: t.label,
+        icon: t.icon,
+        link: { to: t.to },
+        active: path === t.to || path.startsWith(`${t.to}/`),
+      })),
+    };
   return null;
 }

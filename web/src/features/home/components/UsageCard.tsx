@@ -8,9 +8,9 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { cn } from "~/features/common/ui/utils";
 import type { HomeUsage } from "~/features/home/types";
-import { CAR_COLOR, CAR_ID, OTHER_COLOR, WEEKDAY_SHORT } from "~/features/home/utils";
+import { CAR_COLOR, CAR_ID, OTHER_COLOR, WEEKDAY_SHORT, type Range } from "~/features/home/utils";
 
-export type Range = "today" | "week" | "month";
+export type { Range };
 export const RANGES: { value: Range; label: string }[] = [
   { value: "today", label: "Today" },
   { value: "week", label: "7 days" },

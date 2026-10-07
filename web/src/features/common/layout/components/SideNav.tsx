@@ -16,6 +16,10 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 
+// A section's pages say for themselves which is current (a room is, on its devices' pages). Their links only count
+// themselves current on their exact page, so a link up the path ("/home") doesn't light up as well.
+const EXACT = { exact: true, includeSearch: false } as const;
+
 /**
  * The navigation from tablets up, docked down the left. From xl it's the circuit: sections in groups with a reading
  * each, on a wire lit from the top down to the page you're on, and the current section's pages branching off its node.
@@ -281,7 +285,8 @@ function Branch({ pages }: { pages: SectionPages }) {
           <Link
             {...page.link}
             data-circuit-branch
-            activeProps={{ "aria-current": "page" }}
+            activeOptions={EXACT}
+            aria-current={page.active ? "page" : undefined}
             className="relative flex h-[31px] flex-none items-center gap-2 rounded-[9px] pr-2.5 pl-[52px] text-[13px] text-ink-faint no-underline transition-colors duration-150 hover:text-ink aria-[current=page]:text-ink"
           >
             <span aria-hidden className="circuit-elbow" />
@@ -350,7 +355,8 @@ function NavColumn({ pages }: { pages: SectionPages }) {
             )}
             <Link
               {...page.link}
-              activeProps={{ "aria-current": "page" }}
+              activeOptions={EXACT}
+              aria-current={page.active ? "page" : undefined}
               className="grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 rounded-[11px] px-2.5 py-1.5 text-[13.5px] text-ink-soft no-underline transition-colors duration-150 hover:bg-fg/4 hover:text-ink aria-[current=page]:bg-fg/7 aria-[current=page]:text-ink"
             >
               <ColumnRow page={page} />

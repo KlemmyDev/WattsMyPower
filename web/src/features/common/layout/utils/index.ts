@@ -28,12 +28,14 @@ export type NavPage = {
   key: string;
   label: string;
   link: LinkProps;
+  /** It's the page shown, or the page shown belongs to it (a room, on one of its devices' pages). */
+  active: boolean;
   icon?: IconName;
   /** A short reading beside it ("412 W"). */
   value?: string;
   /** Its part of the section's busiest, 0 to 1, drawn as a bar where there's room. */
   share?: number;
-  /** The heading it's listed under (a room), with that heading's reading. */
+  /** The heading it's listed under, with that heading's reading. */
   group?: string;
   groupValue?: string;
 };
@@ -42,6 +44,6 @@ export type NavPage = {
 export type SectionPages = {
   title: string;
   sub?: string;
-  root?: { link: LinkProps; label: string };
+  root?: { link: LinkProps; label: string; active: boolean };
   pages: NavPage[];
 };

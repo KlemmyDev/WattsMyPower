@@ -127,7 +127,14 @@ export function DevicePage({ id }: { id: number }) {
   return (
     <>
       <div className="pt-2">
-        <BackLink to="/home">Home</BackLink>
+        {/* Back to its room, when it's in one. */}
+        {device?.group ? (
+          <BackLink to="/home/rooms/$room" params={{ room: device.group }}>
+            {device.group}
+          </BackLink>
+        ) : (
+          <BackLink to="/home">Home</BackLink>
+        )}
       </div>
       <PageHeader
         title={device?.name ?? (overview.data ? "No such device" : "…")}

@@ -5,7 +5,6 @@ import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { STORE_HOME_RANGE, STORE_HOME_VIEW, store } from "~/features/common/storage/utils";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { addDays, midnight } from "~/features/common/time/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
@@ -16,18 +15,15 @@ import { DeviceCard, GroupCard } from "~/features/home/components/DeviceCard";
 import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
 import { ChangesCard, GoalsCard, RoomsCard } from "~/features/home/components/SummaryCards";
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
-import { deviceColors, groupPattern, groupUsage, homeItems } from "~/features/home/utils";
-
-const RANGE_WORDS: Record<Range, string> = { today: "today", week: "in 7 days", month: "in 30 days" };
-/** The period before the one shown, of the same length, in words (today isn't compared: it isn't over). */
-const BEFORE_WORDS: Record<Range, string> = { today: "", week: "the 7 days before", month: "the 30 days before" };
-
-/** The period a range covers: today by the hour, or the last 7 or 30 days (today included) by the day. */
-function period(range: Range, now: number): [start: number, end: number, bucket: "hour" | "day"] {
-  const today = midnight(now);
-  if (range === "today") return [today, addDays(today, 1), "hour"];
-  return [addDays(today, range === "week" ? -6 : -29), addDays(today, 1), "day"];
-}
+import {
+  BEFORE_WORDS,
+  deviceColors,
+  groupPattern,
+  groupUsage,
+  homeItems,
+  period,
+  RANGE_WORDS,
+} from "~/features/home/utils";
 
 /** Until something's connected: what the page will show, and where to connect it. */
 function ConnectPrompt() {

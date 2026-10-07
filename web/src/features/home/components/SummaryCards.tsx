@@ -280,7 +280,13 @@ export function RoomsCard({
               className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line-subtle py-2.5 text-sm tabular-nums first:border-t-0"
             >
               <Swatch color={colors.get(r.id) ?? "var(--color-bar)"} size={10} />
-              <span className="min-w-[120px] flex-1 font-medium">{r.group}</span>
+              <Link
+                to="/home/rooms/$room"
+                params={{ room: r.group! }}
+                className="min-w-[120px] flex-1 font-medium text-ink no-underline hover:underline"
+              >
+                {r.group}
+              </Link>
               <span className="w-20 text-right">{kWh(u?.total ?? 0)}</span>
               <span className="w-16 text-right text-ink-muted">{money(u?.cost ?? 0)}</span>
               <span className="w-12 text-right text-ink-faint">
