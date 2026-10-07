@@ -1,4 +1,4 @@
-import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import { hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { COLOR, DEVICE_COLORS } from "~/features/common/theme/utils/colors";
 import { addDays, midnight } from "~/features/common/time/utils";
@@ -270,11 +270,28 @@ export const BEFORE_WORDS: Record<Range, string> = {
   month: "the 30 days before",
 };
 
-/** The period a range covers: today by the hour, or the last 7 or 30 days (today included) by the day. */
-export function period(range: Range, now: number): [start: number, end: number, bucket: "hour" | "day"] {
+/**
+ * The period a range covers: a day by the hour (`day`, local midnight; today if left out), or the last 7 or 30 days
+ * (today included) by the day.
+ */
+export function period(range: Range, now: number, day?: number): [start: number, end: number, bucket: "hour" | "day"] {
   const today = midnight(now);
-  if (range === "today") return [today, addDays(today, 1), "hour"];
+  if (range === "today") return [day ?? today, addDays(day ?? today, 1), "hour"];
   return [addDays(today, range === "week" ? -6 : -29), addDays(today, 1), "day"];
+}
+
+/** A day in words, as the day view names it: "today", "yesterday", "on Mon 6 Oct". */
+export function dayWords(day: number, now: number): string {
+  const today = midnight(now);
+  if (day === today) return "today";
+  if (day === addDays(today, -1)) return "yesterday";
+  return `on ${shortDay.format(new Date(day * 1000))}`;
+}
+
+/** What a period is compared with, in words: "yesterday", "the day before", "the 7 days before". */
+export function beforeWords(range: Range, day: number, now: number): string {
+  if (range !== "today") return BEFORE_WORDS[range];
+  return day === midnight(now) ? "yesterday" : "the day before";
 }
 
 /** What a device draws now (W), if it has a fresh reading and is drawing anything to speak of (2 W). */

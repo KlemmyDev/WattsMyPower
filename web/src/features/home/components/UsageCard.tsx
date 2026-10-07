@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, type PointerEvent } from "react";
 import { hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
-import { alpha } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { addDays, nowS } from "~/features/common/time/utils";
+import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
-import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { Icon } from "~/features/common/ui/components/Icon";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { cn } from "~/features/common/ui/utils";
@@ -16,6 +19,16 @@ export const RANGES: { value: Range; label: string }[] = [
   { value: "week", label: "7 days" },
   { value: "month", label: "30 days" },
 ];
+
+/** The Home page's periods: a day (by the hour, any day), or the last 7 or 30 days. */
+const HOME_RANGES: { value: Range; label: string }[] = [
+  { value: "today", label: "Day" },
+  { value: "week", label: "7 days" },
+  { value: "month", label: "30 days" },
+];
+
+/** What's being compared with, drawn dashed: the day before's line, or the period before's bars. */
+const THEN = alpha(COLOR.fg, 0.5);
 
 const share = (part: number, whole: number | null) => (whole ? `${Math.round((part / whole) * 100)}%` : null);
 
@@ -70,13 +83,30 @@ export function UsageCard({
   range,
   rangeWords,
   onRange,
+  day,
+  today,
+  onDay,
+  compare,
+  onCompare,
+  previous,
+  previousWords,
 }: {
   usage: HomeUsage | undefined;
   colors: Map<number, string>;
   range: Range;
-  /** The period in words, for the cost line: "today", "in 7 days". */
+  /** The period in words, for the cost line: "today", "on Mon 6 Oct", "in 7 days". */
   rangeWords: string;
   onRange: (r: Range) => void;
+  /** The day shown by the hour (local midnight), today's, and moving to another. */
+  day: number;
+  today: number;
+  onDay: (day: number) => void;
+  /** The period before is drawn over this one, dashed (`previous`, once it's loaded). */
+  compare: boolean;
+  onCompare: (on: boolean) => void;
+  previous: HomeUsage | undefined;
+  /** What it's compared with, in words: "yesterday", "the 7 days before". */
+  previousWords: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [off, setOff] = useState<Set<number>>(new Set()); // parts hidden from the chart (0: everything else)
@@ -111,7 +141,32 @@ export function UsageCard({
             What your home used, from the inverter, and what each connected device used of it
           </span>
         </div>
-        <Segmented label="Period" options={RANGES} value={range} onChange={onRange} />
+        <div className="flex flex-wrap items-center gap-2">
+          {range === "today" && (
+            <div className="flex items-center gap-1">
+              <Button variant="icon" aria-label="The day before" onClick={() => onDay(addDays(day, -1))}>
+                <Icon name="chevL" size={16} />
+              </Button>
+              <span className="min-w-[92px] text-center text-sm font-medium tabular-nums">
+                {day === today
+                  ? "Today"
+                  : day === addDays(today, -1)
+                    ? "Yesterday"
+                    : shortDay.format(new Date(day * 1000))}
+              </span>
+              <Button
+                variant="icon"
+                aria-label="The day after"
+                disabled={day >= today}
+                onClick={() => onDay(addDays(day, 1))}
+                className="disabled:opacity-40"
+              >
+                <Icon name="chevR" size={16} />
+              </Button>
+            </div>
+          )}
+          <Segmented label="Period" options={HOME_RANGES} value={range} onChange={onRange} />
+        </div>
       </div>
 
       {!usage ? (
@@ -138,6 +193,7 @@ export function UsageCard({
               </span>
               {usage.total.cost.credit > 0 && <span>{money(usage.total.cost.credit)} earned from feed-in</span>}
               {whole == null && <span>No inverter readings in this period, so only what the devices measured</span>}
+              {compare && previous && <ComparedLine usage={usage} previous={previous} words={previousWords} />}
             </div>
           </div>
           {usage.total.cost.import + usage.total.cost.supply > 0 && (
@@ -214,16 +270,52 @@ export function UsageCard({
             </div>
           )}
 
-          <Bars
-            usage={usage}
-            devices={devices.filter((d) => !off.has(d.id))}
-            car={off.has(CAR_ID) ? null : usage.car}
-            other={!off.has(0)}
-            filtered={off.size > 0}
-            colors={colors}
-            hover={hover}
-            setHover={setHover}
-          />
+          <div className="-mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-ink-faint">
+              {usage.bucket === "hour" ? "Hour by hour" : "Day by day"}
+              {compare && previous ? `, with ${previousWords} dashed` : ""}
+            </span>
+            <button
+              type="button"
+              aria-pressed={compare}
+              onClick={() => onCompare(!compare)}
+              className={cn(
+                "flex h-8 cursor-pointer items-center gap-2 rounded-full border bg-transparent px-3 font-sans text-[13px] transition-colors duration-150",
+                compare ? "border-fg/25 bg-fg/7 text-ink" : "border-line text-ink-muted hover:text-ink",
+              )}
+            >
+              <span
+                aria-hidden
+                className="w-4 border-t-2 border-dashed"
+                style={{ borderColor: compare ? COLOR.ink : THEN }}
+              />
+              Compare with {previousWords}
+            </button>
+          </div>
+          {usage.bucket === "hour" ? (
+            <Lines
+              usage={usage}
+              devices={devices.filter((d) => !off.has(d.id))}
+              car={off.has(CAR_ID) ? null : usage.car}
+              other={!off.has(0)}
+              filtered={off.size > 0}
+              colors={colors}
+              previous={compare ? previous : undefined}
+              previousWords={previousWords}
+            />
+          ) : (
+            <Bars
+              usage={usage}
+              devices={devices.filter((d) => !off.has(d.id))}
+              car={off.has(CAR_ID) ? null : usage.car}
+              other={!off.has(0)}
+              filtered={off.size > 0}
+              colors={colors}
+              hover={hover}
+              setHover={setHover}
+              previous={compare ? previous : undefined}
+            />
+          )}
         </>
       )}
     </Card>
@@ -239,8 +331,11 @@ function Bars({
   colors,
   hover,
   setHover,
+  previous,
 }: {
   usage: HomeUsage;
+  /** The same period before, drawn as a dashed outline behind each day's bar (the day the same distance back). */
+  previous?: HomeUsage;
   /** The devices shown. */
   devices: HomeUsage["devices"];
   /** The car's charging, if shown. */
@@ -258,7 +353,9 @@ function Bars({
   const shown = (i: number) =>
     devices.reduce((a, d) => a + d.kwh[i], 0) + (car?.kwh[i] ?? 0) + (other ? (usage.other[i] ?? 0) : 0);
   const height = (i: number) => (filtered ? shown(i) : Math.max(usage.home[i] ?? 0, shown(i)));
-  const top = niceMax(Math.max(0, ...usage.t.map((_, i) => height(i))));
+  const then = (i: number) =>
+    previous && i < previous.t.length ? total(previous, i, devices, car, other, filtered) : null;
+  const top = niceMax(Math.max(0, ...usage.t.map((_, i) => Math.max(height(i), then(i) ?? 0))));
   const pc = (v: number) => `${Math.max(0, (v / top) * 100)}%`;
   const h = hover != null ? hover : null;
 
@@ -293,10 +390,17 @@ function Bars({
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
               className={cn(
-                "flex h-full min-w-0 flex-1 cursor-default flex-col-reverse gap-[2px] rounded-t-[4px] border-0 bg-transparent p-0",
+                "relative flex h-full min-w-0 flex-1 cursor-default flex-col-reverse gap-[2px] rounded-t-[4px] border-0 bg-transparent p-0",
                 h != null && h !== i && "opacity-60",
               )}
             >
+              {then(i) != null && then(i)! > 0 && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-1 rounded-t-[4px] border-[1.5px] border-b-0 border-dashed"
+                  style={{ height: pc(then(i)!), borderColor: THEN }}
+                />
+              )}
               {devices.map((d) =>
                 d.kwh[i] > 0 ? (
                   <span
@@ -335,6 +439,9 @@ function Bars({
             )}
             {filtered && <TooltipRow label="Shown" value={kWh(shown(h))} />}
             <TooltipRow label="Used at home" value={usage.home[h] != null ? kWh(usage.home[h]) : "—"} />
+            {previous && then(h) != null && (
+              <TooltipRow label={shortDay.format(new Date(previous.t[h] * 1000))} value={kWh(then(h)!)} color={THEN} />
+            )}
           </ChartTooltip>
         )}
       </div>
@@ -342,6 +449,265 @@ function Bars({
         {usage.t.map((t, i) => (
           <span key={t} className="min-w-0 flex-1 overflow-visible text-center whitespace-nowrap">
             {axisLabel(t, i, n, usage.bucket) ?? ""}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What a period shows at bucket `i`: the home's use, or, with parts hidden, the parts shown (found by id, as `u` may be
+ * another period's).
+ */
+function total(
+  u: HomeUsage,
+  i: number,
+  devices: HomeUsage["devices"],
+  car: HomeUsage["car"],
+  other: boolean,
+  filtered: boolean,
+): number | null {
+  if (!filtered) return u.home[i] ?? null;
+  return (
+    devices.reduce((a, d) => a + (u.devices.find((x) => x.id === d.id)?.kwh[i] ?? 0), 0) +
+    (car ? (u.car?.kwh[i] ?? 0) : 0) +
+    (other ? (u.other[i] ?? 0) : 0)
+  );
+}
+
+/** The home's use against the period before's, in a line. A day still going is compared up to the same hour. */
+function ComparedLine({ usage, previous, words }: { usage: HomeUsage; previous: HomeUsage; words: string }) {
+  const going = usage.bucket === "hour" && usage.end > nowS();
+  const n = going ? usage.home.findLastIndex((v) => v != null) + 1 : usage.t.length;
+  const sum = (u: HomeUsage) => u.home.slice(0, n).reduce<number>((a, v) => a + (v ?? 0), 0);
+  const now = sum(usage);
+  const then = sum(previous);
+  if (n <= 0 || then < 0.05) return null;
+  const change = (now - then) / then;
+  return (
+    <span>
+      {Math.abs(change) < 0.05
+        ? `About the same as ${words}`
+        : `${Math.round(Math.abs(change) * 100)}% ${change > 0 ? "more" : "less"} than ${words}`}
+      {going ? " by this time" : ""}
+    </span>
+  );
+}
+
+/** A line through the points, curved but never past a reading (monotone cubic, Fritsch–Carlson). */
+function smooth(pts: [number, number][]): string {
+  const n = pts.length;
+  if (n < 2) return n ? `M${pts[0][0]} ${pts[0][1]}` : "";
+  const dx: number[] = [];
+  const s: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1][0] - pts[i][0]);
+    s.push((pts[i + 1][1] - pts[i][1]) / dx[i]);
+  }
+  const m = pts.map((_, i) =>
+    i === 0 ? s[0] : i === n - 1 ? s[n - 2] : s[i - 1] * s[i] <= 0 ? 0 : (s[i - 1] + s[i]) / 2,
+  );
+  for (let i = 0; i < n - 1; i++) {
+    if (s[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / s[i];
+    const b = m[i + 1] / s[i];
+    const h = a * a + b * b;
+    if (h > 9) {
+      const k = 3 / Math.sqrt(h);
+      m[i] = k * a * s[i];
+      m[i + 1] = k * b * s[i];
+    }
+  }
+  const f = (v: number) => v.toFixed(1);
+  let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const c = dx[i] / 3;
+    d += ` C${f(x0 + c)} ${f(y0 + m[i] * c)} ${f(x1 - c)} ${f(y1 - m[i + 1] * c)} ${f(x1)} ${f(y1)}`;
+  }
+  return d;
+}
+
+const LW = 1000;
+const LH = 220;
+const LINE = {
+  fill: "none",
+  vectorEffect: "non-scaling-stroke",
+  strokeLinejoin: "round",
+  strokeLinecap: "round",
+} as const;
+
+/**
+ * A day hour by hour as lines: what the home used (or, with parts hidden, the parts shown together) over a soft area,
+ * each part shown as a thinner line in its colour, and the day before's dashed when compared. Each hour's point sits
+ * mid-hour; a day still going stops at its last hour with readings. The hour under the pointer is summed up in a
+ * tooltip.
+ */
+function Lines({
+  usage,
+  devices,
+  car,
+  other,
+  filtered,
+  colors,
+  previous,
+  previousWords,
+}: {
+  usage: HomeUsage;
+  devices: HomeUsage["devices"];
+  car: HomeUsage["car"];
+  other: boolean;
+  filtered: boolean;
+  colors: Map<number, string>;
+  previous?: HomeUsage;
+  previousWords: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState(0);
+  const n = usage.t.length;
+  // The last hour with readings (or with a device's, before the inverter's arrive).
+  const last = Math.max(
+    usage.home.findLastIndex((v) => v != null),
+    ...devices.map((d) => d.kwh.findLastIndex((v) => v > 0)),
+  );
+  const now = (i: number) => total(usage, i, devices, car, other, filtered);
+  const then = (i: number) =>
+    previous && i < previous.t.length ? total(previous, i, devices, car, other, filtered) : null;
+  const parts = [
+    ...devices.map((d) => ({ key: `d${d.id}`, label: d.name, color: colors.get(d.id)!, kwh: d.kwh })),
+    ...(car ? [{ key: "car", label: "Car charging", color: CAR_COLOR, kwh: car.kwh }] : []),
+    ...(other
+      ? [{ key: "other", label: "Everything else", color: OTHER_COLOR, kwh: usage.other.map((v) => v ?? 0) }]
+      : []),
+  ];
+  const upto = Array.from({ length: Math.max(0, last + 1) }, (_, i) => i);
+  const all = Array.from({ length: n }, (_, i) => i);
+  const top = niceMax(
+    Math.max(
+      0,
+      ...upto.map((i) => now(i) ?? 0),
+      ...parts.flatMap((p) => upto.map((i) => p.kwh[i])),
+      ...all.map((i) => then(i) ?? 0),
+    ),
+  );
+  const X = (i: number) => ((i + 0.5) / n) * LW;
+  const Y = (v: number) => LH - (Math.max(0, v) / top) * (LH - 6);
+  const pts = (idx: number[], v: (i: number) => number | null) =>
+    idx.filter((i) => v(i) != null).map((i): [number, number] => [X(i), Y(v(i)!)]);
+  const main = pts(upto, now);
+  const before = previous ? pts(all, then) : [];
+  const mainD = smooth(main);
+  const area =
+    main.length > 1 ? `${mainD} L${main[main.length - 1][0].toFixed(1)} ${LH} L${main[0][0].toFixed(1)} ${LH} Z` : "";
+  const pc = (v: number) => (Y(v) / LH) * 100;
+
+  const onPoint = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in
+    const i = Math.floor(Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * n);
+    setHover(i <= last || then(i) != null ? i : last >= 0 ? last : null);
+  };
+  const h = hover;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="relative h-[220px] pr-12 max-sm:h-[180px] max-sm:pr-10">
+        {[1, 0.5].map((q) => (
+          <div
+            key={q}
+            className="pointer-events-none absolute inset-x-0 border-t border-fg/5"
+            style={{ top: `${(1 - q) * 100}%` }}
+          >
+            <span className="absolute -top-[7px] right-0 font-mono text-[10px] leading-[14px] text-ink-faint">
+              {kWh(top * q)}
+            </span>
+          </div>
+        ))}
+        <div className="absolute inset-y-0 right-12 left-0 border-b border-fg/8 max-sm:right-10" />
+        <div
+          role="img"
+          aria-label={`What your home used hour by hour${previous ? `, with ${previousWords} dashed` : ""}`}
+          className="relative h-full cursor-crosshair touch-pan-y"
+          onPointerMove={onPoint}
+          onPointerDown={onPoint}
+          onPointerLeave={() => setHover(null)}
+        >
+          <svg
+            viewBox={`0 0 ${LW} ${LH}`}
+            preserveAspectRatio="none"
+            className="absolute inset-0 h-full w-full overflow-visible"
+          >
+            <defs>
+              <linearGradient id="usage-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="var(--color-ink)" stopOpacity="0.14" />
+                <stop offset="1" stopColor="var(--color-ink)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {area && <path d={area} style={{ fill: "url(#usage-area)" }} className="animate-fade" />}
+            {parts.map((p) => (
+              <path
+                key={p.key}
+                d={smooth(pts(upto, (i) => p.kwh[i]))}
+                {...LINE}
+                style={{ stroke: p.color }}
+                strokeWidth={1.6}
+                strokeOpacity={0.9}
+              />
+            ))}
+            {before.length > 1 && (
+              <path d={smooth(before)} {...LINE} style={{ stroke: THEN }} strokeWidth={1.6} strokeDasharray="5 5" />
+            )}
+            {main.length > 1 && <path d={mainD} {...LINE} style={{ stroke: COLOR.ink }} strokeWidth={2.4} />}
+          </svg>
+          {h != null && (
+            <>
+              <HoverLine left={((h + 0.5) / n) * 100} />
+              {[
+                ...(h <= last ? parts.map((p) => ({ key: p.key, v: p.kwh[h], color: p.color })) : []),
+                ...(then(h) != null ? [{ key: "then", v: then(h)!, color: THEN }] : []),
+                ...(h <= last && now(h) != null ? [{ key: "now", v: now(h)!, color: COLOR.ink }] : []),
+              ].map((dot) => (
+                <span
+                  key={dot.key}
+                  className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+                  style={{ left: `${((h + 0.5) / n) * 100}%`, top: `${pc(dot.v)}%`, background: dot.color }}
+                />
+              ))}
+              <ChartTooltip left={((h + 0.5) / n) * 100} flip={h > n / 2} width={width}>
+                <div className="font-semibold text-ink">{bucketLabel(usage.t[h], "hour")}</div>
+                {h <= last &&
+                  parts
+                    .filter((p) => p.kwh[h] > 0)
+                    .map((p) => <TooltipRow key={p.key} label={p.label} value={kWh(p.kwh[h])} color={p.color} />)}
+                {h <= last && (
+                  <TooltipRow
+                    label={filtered ? "Shown" : "Used at home"}
+                    value={now(h) != null ? kWh(now(h)) : "—"}
+                    color={COLOR.ink}
+                  />
+                )}
+                {then(h) != null && (
+                  <TooltipRow
+                    label={previousWords.charAt(0).toUpperCase() + previousWords.slice(1)}
+                    value={kWh(then(h))}
+                    color={THEN}
+                  />
+                )}
+              </ChartTooltip>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex pr-12 font-mono text-[10px] text-ink-faint max-sm:pr-10">
+        {usage.t.map((t, i) => (
+          <span key={t} className="min-w-0 flex-1 overflow-visible text-center whitespace-nowrap">
+            {axisLabel(t, i, n, "hour") ?? ""}
           </span>
         ))}
       </div>
