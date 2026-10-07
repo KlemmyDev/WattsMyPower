@@ -110,6 +110,13 @@
   --color-bar-faint: #3a3a3e;
   --color-bar-muted: #34343a;
   --color-heat-base: #1b1b1d;
+  /* The bill calendar's Cost: green for a day in credit, red for one owed, each from a quiet tint near
+     $0 to full strength. Same hue end to end, so the middle doesn't go brown. Checked for colour-vision
+     separation at matching strengths, on the dark surface and the light one. */
+  --color-heat-credit-lo: #005037;
+  --color-heat-credit-hi: #00d097;
+  --color-heat-owed-lo: #6e221c;
+  --color-heat-owed-hi: #f0503d;
   --color-grey-500: #8a8a90;
   --color-grey-400: #4a4a50;
 
@@ -232,6 +239,10 @@
     --color-bar-faint: #d6d6dc;
     --color-bar-muted: #d4d4d9;
     --color-heat-base: #ececef;
+    --color-heat-credit-lo: #b6f1d6;
+    --color-heat-credit-hi: #008b61;
+    --color-heat-owed-lo: #ffcdc7;
+    --color-heat-owed-hi: #c51f1c;
     --color-grey-500: #9b9ba3;
     --color-grey-400: #b4b4ba;
 
