@@ -7,7 +7,7 @@ import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
-import { COLOR, heatColor } from "~/features/common/theme/utils/colors";
+import { billHeatColor, COLOR, heatColor, rampColor } from "~/features/common/theme/utils/colors";
 import { bandColor, bandHours, usedBands } from "~/features/common/tariffs/utils";
 import { kWh, kWhInt, money } from "~/features/common/formatting/utils/number";
 import { dayMonth, fullDate, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
@@ -17,7 +17,10 @@ type Metric = {
   key: MetricKey;
   /** "Cost", "From the grid": the tab, and the summary line. */
   label: string;
+  /** The tab's dot, and the colour of the most. */
   color: string;
+  /** The colour of the least, for a scale that starts at grey rather than fading into the cell. */
+  from?: string;
   value: (d: BillDay) => number | null;
   format: (v: number) => string;
 };
@@ -26,6 +29,7 @@ type Metric = {
 const RING = "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_3.5px_var(--color-fg)]";
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const ymdTs = (s: string) => parseYmd(s).getTime() / 1000;
+const shade = (m: Metric, v: number) => (m.from ? rampColor(m.from, m.color, v) : heatColor(m.color, v));
 
 /** The dearest rate that's used, on time of use: its use gets a colour of its own. */
 function peakBand(tariff: Tariff | undefined): number | null {
@@ -39,8 +43,15 @@ function metricsFor(bills: Bills, peak: number | null): Metric[] {
   const out: Metric[] = [
     { key: "cost", label: "Cost", color: COLOR.bad, value: (d) => d.net_cost, format: billCents },
     { key: "imp", label: "From the grid", color: COLOR.import, value: (d) => d.import_kwh, format: kWh },
-    { key: "exp", label: "Sent to the grid", color: COLOR.export, value: (d) => d.export_kwh, format: kWh },
-    { key: "pv", label: "Solar", color: COLOR.solar, value: (d) => d.pv_kwh, format: kWh },
+    {
+      key: "exp",
+      label: "Sent to the grid",
+      color: COLOR.solar,
+      from: COLOR.bar,
+      value: (d) => d.export_kwh,
+      format: kWh,
+    },
+    { key: "pv", label: "Solar", color: COLOR.solar, from: COLOR.bar, value: (d) => d.pv_kwh, format: kWh },
   ];
   if (peak != null)
     out.splice(2, 0, {
@@ -95,15 +106,19 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
   }, [period, days, ahead, byDate]);
 
   // Colour by where each day sits between nothing and the period's most (whole days, so today's
-  // partial figures don't set the scale). Credits, on Cost, get a scale of their own.
+  // partial figures don't set the scale). Cost runs one scale from green, in credit, to red, owed,
+  // both sides measured against the bigger of the two so a small bill doesn't look like a big one.
   const vals = whole.map(metric.value).filter((v): v is number => v != null);
   const hi = Math.max(0, ...vals) || 1;
-  const lo = Math.min(0, ...vals) || -1;
+  const swing = Math.max(0, ...vals.map(Math.abs)) || 1;
   const fill = (v: number | null) => {
     if (v == null) return null;
-    if (v < 0) return { color: heatColor(COLOR.good, Math.min(1, v / lo)), strong: v / lo > 0.55 };
+    if (metric.key === "cost") {
+      const n = Math.max(-1, Math.min(1, v / swing));
+      return { color: billHeatColor(n), strong: Math.abs(n) > 0.55 };
+    }
     const n = Math.min(1, v / hi);
-    return { color: heatColor(metric.color, n), strong: n > 0.55 };
+    return { color: shade(metric, n), strong: n > 0.55 };
   };
 
   const recorded = days.map(metric.value).filter((v): v is number => v != null);
@@ -118,7 +133,7 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
   const standouts = whole.length
     ? [
         { title: "Costliest day", color: COLOR.bad, d: whole.reduce((a, b) => (b.net_cost > a.net_cost ? b : a)), v: (d: BillDay) => billCents(d.net_cost) },
-        { title: "Most sent to the grid", color: COLOR.export, d: whole.reduce((a, b) => (b.export_kwh > a.export_kwh ? b : a)), v: (d: BillDay) => kWhInt(d.export_kwh) },
+        { title: "Most sent to the grid", color: COLOR.solar, d: whole.reduce((a, b) => (b.export_kwh > a.export_kwh ? b : a)), v: (d: BillDay) => kWhInt(d.export_kwh) },
         { title: "Cheapest day", color: COLOR.good, d: whole.reduce((a, b) => (b.net_cost < a.net_cost ? b : a)), v: (d: BillDay) => billCents(d.net_cost) },
       ].filter((s, i) => i !== 1 || s.d.export_kwh >= 0.1) // prettier-ignore
     : [];
@@ -297,17 +312,21 @@ function DayCell({
 function Legend({ metric }: { metric: Metric }) {
   return (
     <div className="ml-[38px] flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-ink-dim max-sm:ml-0">
-      <span className="flex items-center gap-1.5">
-        Less
-        {[0, 0.25, 0.5, 0.75, 1].map((v) => (
-          <i key={v} className="size-3 rounded-[3px]" style={{ background: heatColor(metric.color, v) }} />
-        ))}
-        More
-      </span>
-      {metric.key === "cost" && (
+      {metric.key === "cost" ? (
         <span className="flex items-center gap-1.5">
-          <i className="size-3 rounded-[3px]" style={{ background: heatColor(COLOR.good, 0.7) }} />
-          Credit
+          In credit
+          {[-1, -0.6, -0.2, 0.2, 0.6, 1].map((v) => (
+            <i key={v} className="size-3 rounded-[3px]" style={{ background: billHeatColor(v) }} />
+          ))}
+          Owed
+        </span>
+      ) : (
+        <span className="flex items-center gap-1.5">
+          Less
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+            <i key={v} className="size-3 rounded-[3px]" style={{ background: shade(metric, v) }} />
+          ))}
+          More
         </span>
       )}
       <span className="flex items-center gap-1.5">

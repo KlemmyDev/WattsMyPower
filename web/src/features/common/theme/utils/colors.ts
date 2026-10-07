@@ -55,3 +55,13 @@ export const alpha = (color: string, opacity: number) =>
 /** A heatmap colour: `color` blended into the empty-cell grey; `v` from 0 (least) to 1 (most). */
 export const heatColor = (color: string, v: number) =>
   `color-mix(in oklch, ${color} ${Math.round(12 + v * 88)}%, ${COLOR.heatBase})`;
+
+/** A heatmap colour on a ramp of its own: `from` at 0 (least) to `to` at 1 (most). */
+export const rampColor = (from: string, to: string, v: number) =>
+  `color-mix(in oklch, ${to} ${Math.round(Math.max(0, Math.min(1, v)) * 100)}%, ${from})`;
+
+/** A bill heatmap colour: `v` from -1 (the most in credit, green) through 0 to 1 (the most owed, red). */
+export const billHeatColor = (v: number) => {
+  const side = v < 0 ? "credit" : "owed";
+  return rampColor(`var(--color-heat-${side}-lo)`, `var(--color-heat-${side}-hi)`, Math.abs(v));
+};
