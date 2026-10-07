@@ -35,6 +35,7 @@ import { Route as AppSettingsSystemRouteImport } from './routes/_app/settings/sy
 import { Route as AppSettingsTariffsRouteImport } from './routes/_app/settings/tariffs'
 import { Route as AppTeslaIndexRouteImport } from './routes/_app/tesla/index'
 import { Route as AppTeslaSetupRouteImport } from './routes/_app/tesla/setup'
+import { Route as AppHomeRoomsRoomRouteImport } from './routes/_app/home_.rooms.$room'
 import { Route as AppSettingsIntegrationsIndexRouteImport } from './routes/_app/settings/integrations/index'
 import { Route as AppSettingsIntegrationsAmberRouteImport } from './routes/_app/settings/integrations/amber'
 import { Route as AppSettingsIntegrationsWeatherRouteImport } from './routes/_app/settings/integrations/weather'
@@ -175,6 +176,11 @@ const AppTeslaSetupRoute = AppTeslaSetupRouteImport.update({
   path: '/tesla/setup',
   getParentRoute: () => AppRoute,
 } as any)
+const AppHomeRoomsRoomRoute = AppHomeRoomsRoomRouteImport.update({
+  id: '/home_/rooms/$room',
+  path: '/home/rooms/$room',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsIntegrationsIndexRoute =
   AppSettingsIntegrationsIndexRouteImport.update({
     id: '/integrations/',
@@ -262,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/tesla/': typeof AppTeslaIndexRoute
+  '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
   '/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
   '/settings/integrations/': typeof AppSettingsIntegrationsIndexRoute
@@ -298,6 +305,7 @@ export interface FileRoutesByTo {
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/settings': typeof AppSettingsIndexRoute
   '/tesla': typeof AppTeslaIndexRoute
+  '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
   '/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
   '/settings/integrations': typeof AppSettingsIntegrationsIndexRoute
@@ -337,6 +345,7 @@ export interface FileRoutesById {
   '/_app/tesla/setup': typeof AppTeslaSetupRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/tesla/': typeof AppTeslaIndexRoute
+  '/_app/home_/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/_app/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
   '/_app/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
   '/_app/settings/integrations/': typeof AppSettingsIntegrationsIndexRoute
@@ -376,6 +385,7 @@ export interface FileRouteTypes {
     | '/tesla/setup'
     | '/settings/'
     | '/tesla/'
+    | '/home/rooms/$room'
     | '/settings/integrations/amber'
     | '/settings/integrations/weather'
     | '/settings/integrations/'
@@ -412,6 +422,7 @@ export interface FileRouteTypes {
     | '/tesla/setup'
     | '/settings'
     | '/tesla'
+    | '/home/rooms/$room'
     | '/settings/integrations/amber'
     | '/settings/integrations/weather'
     | '/settings/integrations'
@@ -450,6 +461,7 @@ export interface FileRouteTypes {
     | '/_app/tesla/setup'
     | '/_app/settings/'
     | '/_app/tesla/'
+    | '/_app/home_/rooms/$room'
     | '/_app/settings/integrations/amber'
     | '/_app/settings/integrations/weather'
     | '/_app/settings/integrations/'
@@ -652,6 +664,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTeslaSetupRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/home_/rooms/$room': {
+      id: '/_app/home_/rooms/$room'
+      path: '/home/rooms/$room'
+      fullPath: '/home/rooms/$room'
+      preLoaderRoute: typeof AppHomeRoomsRoomRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/integrations/': {
       id: '/_app/settings/integrations/'
       path: '/integrations'
@@ -792,6 +811,7 @@ interface AppRouteChildren {
   AppHomeDeviceRoute: typeof AppHomeDeviceRoute
   AppTeslaSetupRoute: typeof AppTeslaSetupRoute
   AppTeslaIndexRoute: typeof AppTeslaIndexRoute
+  AppHomeRoomsRoomRoute: typeof AppHomeRoomsRoomRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -809,6 +829,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHomeDeviceRoute: AppHomeDeviceRoute,
   AppTeslaSetupRoute: AppTeslaSetupRoute,
   AppTeslaIndexRoute: AppTeslaIndexRoute,
+  AppHomeRoomsRoomRoute: AppHomeRoomsRoomRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

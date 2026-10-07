@@ -4,9 +4,12 @@ import { usePillIndicator, useSectionPages } from "~/features/common/layout/hook
 import { sectionOf } from "~/features/common/layout/utils";
 import { Icon } from "~/features/common/ui/components/Icon";
 
+// A section's pages say for themselves which is current (a room is, on its devices' pages). Their links only count
+// themselves current on their exact page, so a link up the path ("/home") doesn't light up as well.
+const EXACT = { exact: true, includeSearch: false } as const;
+
 const PILL =
   "relative z-1 flex h-9 flex-none items-center gap-2 rounded-full px-4 text-sm font-medium whitespace-nowrap text-ink-muted no-underline transition-[color,transform] duration-[260ms,160ms] hover:text-ink active:scale-95 aria-[current=page]:text-ink-inverse aria-[current=page]:hover:text-ink-inverse max-sm:px-3";
-const ACTIVE = { "aria-current": "page" } as const;
 
 /**
  * The current section's pages, with their readings, as a row of pills at the top of the page below xl: there, the side
@@ -33,13 +36,28 @@ export function SectionPagesStrip() {
         style={{ left: ind?.left ?? 4, width: ind?.width ?? 0, opacity: ind ? 1 : 0 }}
       />
       {pages.root && (
-        <Link {...pages.root.link} activeOptions={{ exact: true }} activeProps={ACTIVE} className={PILL}>
+        <Link
+          {...pages.root.link}
+          activeOptions={EXACT}
+          aria-current={pages.root.active ? "page" : undefined}
+          className={PILL}
+        >
           {pages.root.label}
         </Link>
       )}
       {pages.pages.map((p) => (
-        <Link key={p.key} {...p.link} activeProps={ACTIVE} className={PILL}>
-          {p.icon && <Icon name={p.icon} size={16} />}
+        <Link
+          key={p.key}
+          {...p.link}
+          activeOptions={EXACT}
+          aria-current={p.active ? "page" : undefined}
+          className={PILL}
+        >
+          {p.icon ? (
+            <Icon name={p.icon} size={16} />
+          ) : (
+            p.color && <span aria-hidden className="size-2 flex-none rounded-full" style={{ background: p.color }} />
+          )}
           {p.label}
           {p.value && <span className="text-xs font-normal tabular-nums opacity-55">{p.value}</span>}
         </Link>

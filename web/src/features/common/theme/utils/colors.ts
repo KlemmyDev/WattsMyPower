@@ -33,6 +33,7 @@ export const COLOR = {
   good: v("good"),
   warn: v("warn"),
   bad: v("bad"),
+  danger: v("danger"),
   lilac: v("lilac"),
   /** The collector's raw registers, in Settings → Database. */
   teal: v("teal"),

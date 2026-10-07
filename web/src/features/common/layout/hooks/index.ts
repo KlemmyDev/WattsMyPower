@@ -1,9 +1,10 @@
+import { useRouterState } from "@tanstack/react-router";
 import { useCallback, useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
-import { NAV, type SectionPages } from "~/features/common/layout/utils";
+import { NAV, SETTINGS_COLOR, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { STORE_NAV_COLLAPSED, store } from "~/features/common/storage/utils";
 import { useHomeNavPages } from "~/features/home/hooks";
@@ -122,23 +123,30 @@ export function useNavCollapsed(): [boolean, (v: boolean) => void] {
   return [value, set];
 }
 
-const SETTINGS_PAGES: SectionPages = {
-  title: "Settings",
-  sub: SETTINGS_SUB,
-  pages: SETTINGS_TABS.map((t) => ({ key: t.to, label: t.label, icon: t.icon, link: { to: t.to } })),
-};
-
 /** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills…). */
 export function useSectionPages(section: string): SectionPages | null {
   const home = useHomeNavPages(section === "/home");
   const load = useSnapshot()?.load_power;
+  const path = useRouterState({ select: (s) => s.location.pathname });
   if (section === "/home" && home.length)
     return {
       title: "Home",
       sub: load != null && load > 0 ? `Using ${kW(load)} now` : "Where your home's power goes",
-      root: { link: { to: "/home" }, label: "All devices" },
+      root: { link: { to: "/home" }, label: "Whole home", active: path === "/home" },
       pages: home,
     };
-  if (section === "/settings") return SETTINGS_PAGES;
+  if (section === "/settings")
+    return {
+      title: "Settings",
+      sub: SETTINGS_SUB,
+      pages: SETTINGS_TABS.map((t) => ({
+        key: t.to,
+        label: t.label,
+        icon: t.icon,
+        color: SETTINGS_COLOR,
+        link: { to: t.to },
+        active: path === t.to || path.startsWith(`${t.to}/`),
+      })),
+    };
   return null;
 }

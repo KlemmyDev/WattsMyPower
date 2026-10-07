@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouterState } from "@tanstack/react-router";
 import { kW } from "~/features/common/formatting/utils/number";
 import type { NavPage } from "~/features/common/layout/utils";
 import {
@@ -13,7 +14,7 @@ import {
   updateDevice,
 } from "~/features/home/api";
 import type { HomeDevice, HomeOverview } from "~/features/home/types";
-import { homeItems } from "~/features/home/utils";
+import { deviceColors, drawing, homeItems, reading } from "~/features/home/utils";
 
 /** Connect, sign in again, look for new devices, disconnect, change a device, or switch one; each answers with everything connected, as it now is. */
 export function useHomeChange() {
@@ -35,43 +36,46 @@ export function useHomeChange() {
   };
 }
 
-/** What a device draws now, if it has a fresh reading and is drawing anything to speak of (2 W, as Home counts it). */
-const drawing = (d: HomeDevice) => {
-  const w = d.now && d.now.online && !d.now.stale ? d.now.power_w : null;
-  return w != null && w >= 2 ? w : null;
-};
-
-/** A device's reading in a word or two. */
-function reading(d: HomeDevice) {
-  if (!d.now || d.now.stale) return "—";
-  if (!d.now.online) return "Offline";
-  const w = drawing(d);
-  return w != null ? kW(w) : "Idle";
-}
-
 /**
- * Home's pages for the navigation: each visible device, room by room (then the ones in no room), with what it's
- * drawing now. Only fetched while `enabled` (in the Home section).
+ * Home's pages for the navigation: each room (a group of plugs, as one) and each device in no room, with what it's
+ * drawing now. A room is the current page on its own page and on any of its devices'. Only fetched while `enabled`
+ * (in the Home section).
  */
 export function useHomeNavPages(enabled: boolean): NavPage[] {
   const { data } = useQuery({ ...homeQuery, enabled });
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  let here = path;
+  try {
+    here = decodeURIComponent(path);
+  } catch {
+    /* not encoded as expected: compare it as it is */
+  }
   const items = homeItems(data?.devices ?? []);
-  const rooms = items.filter((i) => i.group);
-  const top = Math.max(1, ...items.flatMap((i) => i.members.map((d) => drawing(d) ?? 0)));
-  const page = (d: HomeDevice, group?: string, groupValue?: string): NavPage => ({
-    key: String(d.id),
-    label: d.name,
-    link: { to: "/home/$device", params: { device: String(d.id) } },
-    value: reading(d),
-    share: (drawing(d) ?? 0) / top,
-    group,
-    groupValue,
+  // Each room in its first device's colour, as the Home page draws it.
+  const colors = deviceColors(data?.devices ?? []);
+  const draws = (members: HomeDevice[]) => members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
+  const top = Math.max(1, ...items.map((i) => draws(i.members)));
+  return items.map((item): NavPage => {
+    const w = draws(item.members);
+    if (item.group)
+      return {
+        key: `room:${item.group}`,
+        label: item.group,
+        link: { to: "/home/rooms/$room", params: { room: item.group } },
+        value: w ? kW(w) : "Idle",
+        share: w / top,
+        color: colors.get(item.id),
+        active: here === `/home/rooms/${item.group}` || item.members.some((d) => here === `/home/${d.id}`),
+      };
+    const d = item.members[0];
+    return {
+      key: String(d.id),
+      label: d.name,
+      link: { to: "/home/$device", params: { device: String(d.id) } },
+      value: reading(d),
+      share: w / top,
+      color: colors.get(d.id),
+      active: here === `/home/${d.id}`,
+    };
   });
-  return [
-    ...rooms.flatMap((room) => {
-      const w = room.members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
-      return room.members.map((d) => page(d, room.group!, w ? kW(w) : undefined));
-    }),
-    ...items.filter((i) => !i.group).map((i) => page(i.members[0], rooms.length ? "Other devices" : undefined)),
-  ];
 }

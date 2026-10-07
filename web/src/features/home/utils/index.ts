@@ -1,6 +1,7 @@
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { COLOR, DEVICE_COLORS } from "~/features/common/theme/utils/colors";
+import { addDays, midnight } from "~/features/common/time/utils";
 import type { IconName } from "~/features/common/ui/components/Icon";
 import type { DeviceKind, DevicePattern, HomeDevice, HomeIntegration, HomeUsage } from "~/features/home/types";
 
@@ -256,4 +257,36 @@ export function liveBreakdown(
   const measured = parts.reduce((a, p) => a + p.w, 0);
   // The plugs are read every 15 seconds and the inverter every minute, so they can add up to a little more than the home.
   return { parts, measured, other: Math.max(homeW - measured, 0) };
+}
+
+export type Range = "today" | "week" | "month";
+
+/** A period in words: "today", "in 7 days". */
+export const RANGE_WORDS: Record<Range, string> = { today: "today", week: "in 7 days", month: "in 30 days" };
+/** The period before the one shown, of the same length, in words (today isn't compared: it isn't over). */
+export const BEFORE_WORDS: Record<Range, string> = {
+  today: "",
+  week: "the 7 days before",
+  month: "the 30 days before",
+};
+
+/** The period a range covers: today by the hour, or the last 7 or 30 days (today included) by the day. */
+export function period(range: Range, now: number): [start: number, end: number, bucket: "hour" | "day"] {
+  const today = midnight(now);
+  if (range === "today") return [today, addDays(today, 1), "hour"];
+  return [addDays(today, range === "week" ? -6 : -29), addDays(today, 1), "day"];
+}
+
+/** What a device draws now (W), if it has a fresh reading and is drawing anything to speak of (2 W). */
+export function drawing(d: HomeDevice): number | null {
+  const w = d.now && d.now.online && !d.now.stale ? d.now.power_w : null;
+  return w != null && w >= 2 ? w : null;
+}
+
+/** A device's reading in a word or two: "412 W", "Idle", "Offline". */
+export function reading(d: HomeDevice): string {
+  if (!d.now || d.now.stale) return "—";
+  if (!d.now.online) return "Offline";
+  const w = drawing(d);
+  return w != null ? kW(w) : "Idle";
 }

@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import {
@@ -10,11 +10,15 @@ import {
   useNavItems,
   useSectionPages,
 } from "~/features/common/layout/hooks";
-import { NAV_GROUPS, sectionOf, type NavPage, type SectionPages } from "~/features/common/layout/utils";
+import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type NavPage, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
+
+// A section's pages say for themselves which is current (a room is, on its devices' pages). Their links only count
+// themselves current on their exact page, so a link up the path ("/home") doesn't light up as well.
+const EXACT = { exact: true, includeSearch: false } as const;
 
 /**
  * The navigation from tablets up, docked down the left. From xl it's the circuit: sections in groups with a reading
@@ -197,6 +201,7 @@ function Circuit({
                       icon={i.icon}
                       label={i.label}
                       value={value[i.to]}
+                      color={i.color}
                       full={full}
                       on={current === i.to}
                       lit={at >= 0 && items.indexOf(i) <= at}
@@ -207,7 +212,14 @@ function Circuit({
             </Fragment>
           ))}
           <div className="mt-auto flex flex-col pt-5">
-            <CircuitLink to="/settings" icon="settings" label="Settings" full={full} on={current === "/settings"} />
+            <CircuitLink
+              to="/settings"
+              icon="settings"
+              label="Settings"
+              color={SETTINGS_COLOR}
+              full={full}
+              on={current === "/settings"}
+            />
             {branches && current === "/settings" && pages && <Branch pages={pages} />}
           </div>
         </div>
@@ -222,6 +234,7 @@ function CircuitLink({
   icon,
   label,
   value,
+  color,
   full,
   on,
   lit,
@@ -230,6 +243,8 @@ function CircuitLink({
   icon: IconName;
   label: string;
   value?: string;
+  /** The section's colour: its node glows in it, and the row takes a wash of it, once it's the current page. */
+  color: string;
   full: boolean;
   on: boolean;
   lit?: boolean;
@@ -241,13 +256,14 @@ function CircuitLink({
       data-lit={lit || undefined}
       aria-label={full ? undefined : label}
       aria-current={on ? "page" : undefined}
+      style={{ "--node-c": color } as CSSProperties}
       className={cn(
-        "group relative flex h-[38px] w-full flex-none items-center gap-[11px] rounded-[11px] text-[13.5px] font-medium text-ink-muted no-underline transition-colors duration-200 hover:bg-fg/4 hover:text-ink aria-[current=page]:bg-fg/6 aria-[current=page]:text-ink",
+        "circuit-row group relative flex h-[38px] w-full flex-none items-center gap-[11px] rounded-[11px] text-[13.5px] font-medium text-ink-muted no-underline hover:bg-fg/4 hover:text-ink aria-[current=page]:text-ink",
         full ? "pr-2.5 pl-[38px]" : "pl-[26px]",
       )}
     >
       <span aria-hidden className="circuit-node" />
-      <Icon name={icon} size={16} />
+      <Icon name={icon} size={16} className="circuit-icon" />
       {full ? (
         <>
           <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -281,7 +297,9 @@ function Branch({ pages }: { pages: SectionPages }) {
           <Link
             {...page.link}
             data-circuit-branch
-            activeProps={{ "aria-current": "page" }}
+            activeOptions={EXACT}
+            aria-current={page.active ? "page" : undefined}
+            style={{ "--node-c": page.color } as CSSProperties}
             className="relative flex h-[31px] flex-none items-center gap-2 rounded-[9px] pr-2.5 pl-[52px] text-[13px] text-ink-faint no-underline transition-colors duration-150 hover:text-ink aria-[current=page]:text-ink"
           >
             <span aria-hidden className="circuit-elbow" />
@@ -350,7 +368,8 @@ function NavColumn({ pages }: { pages: SectionPages }) {
             )}
             <Link
               {...page.link}
-              activeProps={{ "aria-current": "page" }}
+              activeOptions={EXACT}
+              aria-current={page.active ? "page" : undefined}
               className="grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 rounded-[11px] px-2.5 py-1.5 text-[13.5px] text-ink-soft no-underline transition-colors duration-150 hover:bg-fg/4 hover:text-ink aria-[current=page]:bg-fg/7 aria-[current=page]:text-ink"
             >
               <ColumnRow page={page} />
@@ -377,15 +396,18 @@ function ColumnRow({ page }: { page: NavPage }) {
       {page.icon ? (
         <Icon name={page.icon} size={16} />
       ) : (
-        <span className="size-2 rounded-full" style={{ background: alpha(COLOR.fg, 0.22) }} />
+        <span className="size-2 rounded-full" style={{ background: page.color ?? alpha(COLOR.fg, 0.22) }} />
       )}
       <span className="truncate">{page.label}</span>
       <span className="text-[12.5px] text-ink-faint tabular-nums">{page.value}</span>
       {page.share != null && (
         <span className="col-span-full mt-1.5 h-0.5 overflow-hidden rounded-full bg-fg/7">
           <span
-            className="block h-full rounded-full bg-solar transition-[width] duration-700 ease-out-soft"
-            style={{ width: `${Math.max(0, Math.min(1, page.share)) * 100}%` }}
+            className="block h-full rounded-full transition-[width] duration-700 ease-out-soft"
+            style={{
+              width: `${Math.max(0, Math.min(1, page.share)) * 100}%`,
+              background: page.color ?? COLOR.solar,
+            }}
           />
         </span>
       )}
@@ -414,7 +436,9 @@ function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
       const branch = el.querySelector<HTMLElement>('[data-circuit-branch][aria-current="page"]');
       const row = el.querySelector<HTMLElement>('[data-circuit-row][aria-current="page"]');
       const from = row && row === rows[rows.length - 1] ? mid(row) - top : 0;
-      const to = (branch ?? row) ? mid((branch ?? row)!) - top : from;
+      // A page on a branch is reached through its elbow, which leaves the wire at the top of its row: the wire stops
+      // there, or it would carry on straight past the curve.
+      const to = branch ? branch.offsetTop - top : row ? mid(row) - top : from;
       setWire({ top, height, litTop: from, lit: Math.max(0, to - from) });
     };
     place();
