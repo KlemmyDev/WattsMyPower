@@ -9,8 +9,9 @@ const PILL =
 const ACTIVE = { "aria-current": "page" } as const;
 
 /**
- * The current section's pages as a row of pills over the page, below xl: there, the side nav is a rail or a menu, so
- * they're always in view here instead. Nothing for a section without pages.
+ * The current section's pages, with their readings, as a row of pills at the top of the page below xl: there, the side
+ * nav is a rail or a menu of the sections alone, so (as the column beside the collapsed rail does on a desktop) this
+ * keeps them in view. Nothing for a section without pages.
  */
 export function SectionPagesStrip() {
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -40,6 +41,7 @@ export function SectionPagesStrip() {
         <Link key={p.key} {...p.link} activeProps={ACTIVE} className={PILL}>
           {p.icon && <Icon name={p.icon} size={16} />}
           {p.label}
+          {p.value && <span className="text-xs font-normal tabular-nums opacity-55">{p.value}</span>}
         </Link>
       ))}
     </nav>

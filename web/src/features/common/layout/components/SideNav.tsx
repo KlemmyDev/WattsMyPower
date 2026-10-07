@@ -39,6 +39,7 @@ export function SideNav({ onMenu }: { onMenu: () => void }) {
           <div className="h-full w-[236px]">
             <Circuit
               variant="full"
+              branches
               toggle={{ icon: "panelClose", label: "Collapse", onClick: () => setCollapsed(true) }}
             />
           </div>
@@ -58,7 +59,10 @@ export function SideNav({ onMenu }: { onMenu: () => void }) {
   );
 }
 
-/** The full circuit as a menu sliding in from the left, on a phone (from its top bar) or a tablet (from the rail). */
+/**
+ * The full circuit as a menu sliding in from the left, on a phone (from its top bar) or a tablet (from the rail): the
+ * sections only, as the current section's pages are always in the row of pills at the top of the page.
+ */
 export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   // Going somewhere closes it, as does Escape; the page behind doesn't scroll while it's open.
@@ -100,8 +104,19 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
 
 type Toggle = { icon: IconName; label: string; onClick: () => void };
 
-/** The circuit itself: in full (labels, readings, the current section's pages) or as a rail of icons. */
-function Circuit({ variant, toggle }: { variant: "full" | "rail"; toggle: Toggle }) {
+/**
+ * The circuit itself: in full (labels and readings) or as a rail of icons. Docked open, the current section's pages
+ * branch off it (`branches`); in the menu they don't, as the page lists them in its row of pills.
+ */
+function Circuit({
+  variant,
+  toggle,
+  branches = false,
+}: {
+  variant: "full" | "rail";
+  toggle: Toggle;
+  branches?: boolean;
+}) {
   const full = variant === "full";
   const items = useNavItems();
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -186,14 +201,14 @@ function Circuit({ variant, toggle }: { variant: "full" | "rail"; toggle: Toggle
                       on={current === i.to}
                       lit={at >= 0 && items.indexOf(i) <= at}
                     />
-                    {full && current === i.to && pages && <Branch pages={pages} />}
+                    {branches && current === i.to && pages && <Branch pages={pages} />}
                   </Fragment>
                 ))}
             </Fragment>
           ))}
           <div className="mt-auto flex flex-col pt-5">
             <CircuitLink to="/settings" icon="settings" label="Settings" full={full} on={current === "/settings"} />
-            {full && current === "/settings" && pages && <Branch pages={pages} />}
+            {branches && current === "/settings" && pages && <Branch pages={pages} />}
           </div>
         </div>
       </div>
