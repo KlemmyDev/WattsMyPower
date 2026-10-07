@@ -92,4 +92,7 @@ export type LiveStatus = {
   /** While the inverter's dongle keeps serving the same registers: when the reading it repeats was taken. The repeats aren't recorded, so `snapshot` stays at that reading. */
   frozen_since?: number | null;
   battery_mode?: BatteryMode | null;
+  /** Which version this is: the date it was released ("2026.10.8"), and how far along it is ("alpha"; null once it's
+   * stable). */
+  app?: { version: string; release: string | null };
 };

@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from app.core.version import VERSION
 from app.dependencies import ServicesDep
 
 router = APIRouter(prefix="/api")
@@ -48,4 +49,4 @@ async def stream(request: Request, svc: ServicesDep) -> StreamingResponse:
 async def healthz(svc: ServicesDep):
     live = svc.live
     fresh = live.last_success and time.time() - live.last_success < max(120, svc.config.poll_interval * 6)
-    return {"ok": True, "inverter_fresh": bool(fresh), "error": live.last_error}
+    return {"ok": True, "inverter_fresh": bool(fresh), "error": live.last_error, "version": VERSION}

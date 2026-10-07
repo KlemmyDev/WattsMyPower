@@ -1,6 +1,7 @@
 [project]
 name = "wattsmypower"
-version = "1.0.0"
+# The date it was released (a second release that day adds .1, .2…).
+version = "2026.10.8"
 description = "Self-hosted dashboard for a Sungrow hybrid inverter and battery"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,6 +26,10 @@ dev = [
     "pytest>=8.4",
     "ruff>=0.13",
 ]
+
+[tool.wattsmypower]
+# How far along it is, shown beside the version in the dashboard. Left out once it's stable.
+release = "alpha"
 
 [tool.ruff]
 line-length = 120
