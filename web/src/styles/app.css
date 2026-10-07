@@ -645,6 +645,13 @@
     animation: none;
   }
 
+  /* A chart's line or area easing to its new shape (set as `d: path(...)` in its style) and fading in or out. */
+  .chart-ease {
+    transition:
+      d 500ms var(--ease-out-soft),
+      opacity 400ms ease;
+  }
+
   /* Bars in a row grow one after another: set --i to the bar's place in the row. */
   .bar-grow {
     transform-origin: bottom;

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage } from "~/features/common/api/utils";
@@ -61,7 +61,8 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
   const rangeWords = range === "today" ? dayWords(start, now) : RANGE_WORDS[range];
   const [compare, setCompare] = useState(() => store.get(STORE_HOME_COMPARE) === "1");
   const overview = useQuery(homeQuery);
-  const usage = useQuery(homeUsageQuery(start, end, bucket));
+  // While another day or period loads, the last one stays on screen (dimmed) rather than the card emptying.
+  const usage = useQuery({ ...homeUsageQuery(start, end, bucket), placeholderData: keepPreviousData });
   // The period before, to compare each device with (by the day, for 7 or 30 days).
   const before = useQuery({ ...homeUsageQuery(2 * start - end, start, "day"), enabled: range !== "today" });
   // What the chart overlays when comparing: the day before, by the hour, or that same period before.
@@ -147,6 +148,7 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
             store.set(STORE_HOME_COMPARE, on ? "1" : "");
           }}
           previous={previousUsed}
+          loading={usage.isPlaceholderData}
           previousWords={beforeWords(range, start, now)}
         />
         {overview.data && !devices.length && <ConnectPrompt />}

@@ -1,4 +1,4 @@
-import { useState, type PointerEvent } from "react";
+import { useState, type CSSProperties, type PointerEvent } from "react";
 import { hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -9,6 +9,7 @@ import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/compon
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
+import { useTween } from "~/features/common/ui/hooks/useTween";
 import { cn } from "~/features/common/ui/utils";
 import type { HomeUsage } from "~/features/home/types";
 import { CAR_COLOR, CAR_ID, OTHER_COLOR, WEEKDAY_SHORT, type Range } from "~/features/home/utils";
@@ -90,6 +91,7 @@ export function UsageCard({
   onCompare,
   previous,
   previousWords,
+  loading = false,
 }: {
   usage: HomeUsage | undefined;
   colors: Map<number, string>;
@@ -107,6 +109,8 @@ export function UsageCard({
   previous: HomeUsage | undefined;
   /** What it's compared with, in words: "yesterday", "the 7 days before". */
   previousWords: string;
+  /** The next day or period is loading: what's shown is the last one's, dimmed until it arrives. */
+  loading?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [off, setOff] = useState<Set<number>>(new Set()); // parts hidden from the chart (0: everything else)
@@ -131,6 +135,11 @@ export function UsageCard({
       return next.size === parts.length ? new Set() : next; // hiding the last one shows them all again
     });
   const only = (id: number) => setOff(new Set(parts.map((p) => p.id).filter((p) => p !== id)));
+  // The comparison's line has its place kept whether it's shown or not, so turning it on doesn't move the card; it
+  // fades in, and out with the words it had.
+  const compared = compare && previous && usage ? comparedText(usage, previous, previousWords) : null;
+  const [lastCompared, setLastCompared] = useState(compared);
+  if (compared && compared !== lastCompared) setLastCompared(compared);
 
   return (
     <Card aria-labelledby="h-usage" className="col-span-12 gap-6">
@@ -177,13 +186,13 @@ export function UsageCard({
             <div className="flex flex-col gap-1">
               <span className="text-[13px] text-ink-muted">Used at home</span>
               <span className="text-[40px] leading-11 font-light tracking-[-1.5px] tabular-nums">
-                {whole != null ? kWh(whole) : "—"}
+                <Tweened value={whole} format={kWh} />
               </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[13px] text-ink-muted">Cost</span>
               <span className="text-[40px] leading-11 font-light tracking-[-1.5px] tabular-nums">
-                {money(usage.total.cost.import + usage.total.cost.supply)}
+                <Tweened value={usage.total.cost.import + usage.total.cost.supply} format={money} />
               </span>
             </div>
             <div className="flex flex-col gap-1 pb-1.5 text-sm text-ink-muted tabular-nums">
@@ -193,7 +202,12 @@ export function UsageCard({
               </span>
               {usage.total.cost.credit > 0 && <span>{money(usage.total.cost.credit)} earned from feed-in</span>}
               {whole == null && <span>No inverter readings in this period, so only what the devices measured</span>}
-              {compare && previous && <ComparedLine usage={usage} previous={previous} words={previousWords} />}
+              <span
+                aria-hidden={!compared}
+                className={cn("truncate transition-opacity duration-300", compared ? "opacity-100" : "opacity-0")}
+              >
+                {compared ?? lastCompared ?? "\u00a0"}
+              </span>
             </div>
           </div>
           {usage.total.cost.import + usage.total.cost.supply > 0 && (
@@ -213,7 +227,10 @@ export function UsageCard({
                     <span
                       key={p.id}
                       style={{ flexGrow: p.kwh, background: p.color }}
-                      className={cn("min-w-[3px] transition-opacity", off.has(p.id) && "opacity-25")}
+                      className={cn(
+                        "min-w-[3px] transition-[flex-grow,opacity] duration-500 ease-out-soft",
+                        off.has(p.id) && "opacity-25",
+                      )}
                     />
                   ))}
               </div>
@@ -245,7 +262,9 @@ export function UsageCard({
                           />
                           <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{p.label}</span>
                         </span>
-                        <span className="text-[17px] leading-5 font-semibold">{kWh(p.kwh)}</span>
+                        <span className="text-[17px] leading-5 font-semibold">
+                          <Tweened value={p.kwh} format={kWh} />
+                        </span>
                         <span className="text-xs text-ink-faint">
                           {[p.cost >= 0.005 ? money(p.cost) : null, share(p.kwh, whole)].filter(Boolean).join(" · ") ||
                             "\u00a0"}
@@ -255,18 +274,24 @@ export function UsageCard({
                   );
                 })}
               </ul>
-              <span className="-mt-1 text-xs text-ink-faint">
-                Tap a card to show or hide it in the chart, or double-click to see it on its own.
-              </span>
-              {off.size > 0 && (
+              {/* "Show everything" waits in its place on the hint's row, so hiding a part doesn't move the card. */}
+              <div className="-mt-1 flex items-baseline justify-between gap-3">
+                <span className="text-xs text-ink-faint">
+                  Tap a card to show or hide it in the chart, or double-click to see it on its own.
+                </span>
                 <button
                   type="button"
                   onClick={() => setOff(new Set())}
-                  className="cursor-pointer self-start border-0 bg-transparent p-0 font-sans text-[13px] text-brand hover:underline"
+                  tabIndex={off.size ? 0 : -1}
+                  aria-hidden={!off.size}
+                  className={cn(
+                    "flex-none cursor-pointer border-0 bg-transparent p-0 font-sans text-[13px] whitespace-nowrap text-brand transition-opacity duration-200 hover:underline",
+                    off.size ? "opacity-100" : "pointer-events-none opacity-0",
+                  )}
                 >
                   Show everything
                 </button>
-              )}
+              </div>
             </div>
           )}
 
@@ -292,30 +317,38 @@ export function UsageCard({
               Compare with {previousWords}
             </button>
           </div>
-          {usage.bucket === "hour" ? (
-            <Lines
-              usage={usage}
-              devices={devices.filter((d) => !off.has(d.id))}
-              car={off.has(CAR_ID) ? null : usage.car}
-              other={!off.has(0)}
-              filtered={off.size > 0}
-              colors={colors}
-              previous={compare ? previous : undefined}
-              previousWords={previousWords}
-            />
-          ) : (
-            <Bars
-              usage={usage}
-              devices={devices.filter((d) => !off.has(d.id))}
-              car={off.has(CAR_ID) ? null : usage.car}
-              other={!off.has(0)}
-              filtered={off.size > 0}
-              colors={colors}
-              hover={hover}
-              setHover={setHover}
-              previous={compare ? previous : undefined}
-            />
-          )}
+          {/* Keyed by the period, so a new day or period draws in, while hiding a part or comparing eases what's
+              there. While the next one loads, the last stays, dimmed. */}
+          <div className={cn("transition-opacity duration-300", loading && "opacity-50")}>
+            {usage.bucket === "hour" ? (
+              <Lines
+                key={`${usage.start}:${usage.end}`}
+                usage={usage}
+                all={devices}
+                devices={devices.filter((d) => !off.has(d.id))}
+                car={off.has(CAR_ID) ? null : usage.car}
+                other={!off.has(0)}
+                filtered={off.size > 0}
+                colors={colors}
+                previous={compare ? previous : undefined}
+                previousWords={previousWords}
+              />
+            ) : (
+              <Bars
+                key={`${usage.start}:${usage.end}`}
+                usage={usage}
+                all={devices}
+                devices={devices.filter((d) => !off.has(d.id))}
+                car={off.has(CAR_ID) ? null : usage.car}
+                other={!off.has(0)}
+                filtered={off.size > 0}
+                colors={colors}
+                hover={hover}
+                setHover={setHover}
+                previous={compare ? previous : undefined}
+              />
+            )}
+          </div>
         </>
       )}
     </Card>
@@ -324,6 +357,7 @@ export function UsageCard({
 
 function Bars({
   usage,
+  all,
   devices,
   car,
   other,
@@ -336,6 +370,8 @@ function Bars({
   usage: HomeUsage;
   /** The same period before, drawn as a dashed outline behind each day's bar (the day the same distance back). */
   previous?: HomeUsage;
+  /** Every device, shown or not: a hidden one's part of each bar eases down to nothing, and back. */
+  all: HomeUsage["devices"];
   /** The devices shown. */
   devices: HomeUsage["devices"];
   /** The car's charging, if shown. */
@@ -358,6 +394,17 @@ function Bars({
   const top = niceMax(Math.max(0, ...usage.t.map((_, i) => Math.max(height(i), then(i) ?? 0))));
   const pc = (v: number) => `${Math.max(0, (v / top) * 100)}%`;
   const h = hover != null ? hover : null;
+  // Each bar's parts, bottom up, every one drawn (a hidden one at nothing), so a part shown or hidden eases its height.
+  const on = new Set(devices.map((d) => d.id));
+  const stack = [
+    ...all.map((d) => ({
+      key: `d${d.id}`,
+      color: colors.get(d.id)!,
+      kwh: (i: number) => (on.has(d.id) ? d.kwh[i] : 0),
+    })),
+    ...(usage.car ? [{ key: "car", color: CAR_COLOR, kwh: (i: number) => (car ? car.kwh[i] : 0) }] : []),
+    { key: "other", color: OTHER_COLOR, kwh: (i: number) => (other ? (usage.other[i] ?? 0) : 0) },
+  ];
 
   return (
     <div className="flex flex-col gap-2">
@@ -389,39 +436,37 @@ function Bars({
               onMouseEnter={() => setHover(i)}
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
+              style={{ "--i": i } as CSSProperties}
               className={cn(
-                "relative flex h-full min-w-0 flex-1 cursor-default flex-col-reverse gap-[2px] rounded-t-[4px] border-0 bg-transparent p-0",
+                "bar-grow relative flex h-full min-w-0 flex-1 cursor-default flex-col-reverse border-0 bg-transparent p-0 transition-opacity duration-150",
                 h != null && h !== i && "opacity-60",
               )}
             >
               {then(i) != null && then(i)! > 0 && (
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-x-0 bottom-0 z-1 rounded-t-[4px] border-[1.5px] border-b-0 border-dashed"
-                  style={{ height: pc(then(i)!), borderColor: THEN }}
+                  className="bar-grow pointer-events-none absolute inset-x-0 bottom-0 z-1 rounded-t-[4px] border-[1.5px] border-b-0 border-dashed transition-[height] duration-500 ease-out-soft"
+                  style={{ height: pc(then(i)!), borderColor: THEN, "--i": i } as CSSProperties}
                 />
               )}
-              {devices.map((d) =>
-                d.kwh[i] > 0 ? (
+              {(() => {
+                const top = stack.findLastIndex((p) => p.kwh(i) > 0);
+                // A 2px line in the card's colour over each part but the top one keeps them apart, as a gap would,
+                // without a gap left behind by a part at nothing.
+                return stack.map((p, k) => (
                   <span
-                    key={d.id}
-                    className="w-full flex-none first:rounded-b-none last:rounded-t-[4px]"
-                    style={{ height: pc(d.kwh[i]), background: colors.get(d.id) }}
+                    key={p.key}
+                    className="w-full flex-none border-surface transition-[height,border-width] duration-500 ease-out-soft"
+                    style={{
+                      height: pc(p.kwh(i)),
+                      background: p.color,
+                      borderTopWidth: p.kwh(i) > 0 && k !== top ? 2 : 0,
+                      borderTopLeftRadius: k === top ? 4 : 0,
+                      borderTopRightRadius: k === top ? 4 : 0,
+                    }}
                   />
-                ) : null,
-              )}
-              {car && car.kwh[i] > 0 && (
-                <span
-                  className="w-full flex-none last:rounded-t-[4px]"
-                  style={{ height: pc(car.kwh[i]), background: CAR_COLOR }}
-                />
-              )}
-              {other && (usage.other[i] ?? 0) > 0 && (
-                <span
-                  className="w-full flex-none rounded-t-[4px]"
-                  style={{ height: pc(usage.other[i]!), background: OTHER_COLOR }}
-                />
-              )}
+                ));
+              })()}
             </button>
           );
         })}
@@ -476,8 +521,8 @@ function total(
   );
 }
 
-/** The home's use against the period before's, in a line. A day still going is compared up to the same hour. */
-function ComparedLine({ usage, previous, words }: { usage: HomeUsage; previous: HomeUsage; words: string }) {
+/** The home's use against the period before's, in words. A day still going is compared up to the same hour. */
+function comparedText(usage: HomeUsage, previous: HomeUsage, words: string): string | null {
   const going = usage.bucket === "hour" && usage.end > nowS();
   const n = going ? usage.home.findLastIndex((v) => v != null) + 1 : usage.t.length;
   const sum = (u: HomeUsage) => u.home.slice(0, n).reduce<number>((a, v) => a + (v ?? 0), 0);
@@ -485,14 +530,17 @@ function ComparedLine({ usage, previous, words }: { usage: HomeUsage; previous: 
   const then = sum(previous);
   if (n <= 0 || then < 0.05) return null;
   const change = (now - then) / then;
-  return (
-    <span>
-      {Math.abs(change) < 0.05
-        ? `About the same as ${words}`
-        : `${Math.round(Math.abs(change) * 100)}% ${change > 0 ? "more" : "less"} than ${words}`}
-      {going ? " by this time" : ""}
-    </span>
-  );
+  const said =
+    Math.abs(change) < 0.05
+      ? `About the same as ${words}`
+      : `${Math.round(Math.abs(change) * 100)}% ${change > 0 ? "more" : "less"} than ${words}`;
+  return going ? `${said} by this time` : said;
+}
+
+/** A figure that glides to each new value (a part shown or hidden, another day). */
+function Tweened({ value, format }: { value: number | null; format: (v: number) => string }) {
+  const v = useTween(value, 500);
+  return <>{v == null ? "—" : format(v)}</>;
 }
 
 /** A line through the points, curved but never past a reading (monotone cubic, Fritsch–Carlson). */
@@ -536,6 +584,9 @@ function smooth(pts: [number, number][]): string {
 
 const LW = 1000;
 const LH = 220;
+/** A path's shape as a style too, so a browser that can (not Safari, yet) eases it to a new one (see .chart-ease). */
+const shape = (d: string) => ({ d: `path("${d}")` }) as CSSProperties;
+
 const LINE = {
   fill: "none",
   vectorEffect: "non-scaling-stroke",
@@ -551,6 +602,7 @@ const LINE = {
  */
 function Lines({
   usage,
+  all: everyDevice,
   devices,
   car,
   other,
@@ -560,6 +612,8 @@ function Lines({
   previousWords,
 }: {
   usage: HomeUsage;
+  /** Every device, shown or not: a hidden one's line fades out where it is, and back in. */
+  all: HomeUsage["devices"];
   devices: HomeUsage["devices"];
   car: HomeUsage["car"];
   other: boolean;
@@ -586,6 +640,13 @@ function Lines({
       ? [{ key: "other", label: "Everything else", color: OTHER_COLOR, kwh: usage.other.map((v) => v ?? 0) }]
       : []),
   ];
+  // Every part's line, shown or not, so one shown or hidden fades rather than appearing from nowhere.
+  const on = new Set(devices.map((d) => d.id));
+  const drawn = [
+    ...everyDevice.map((d) => ({ key: `d${d.id}`, color: colors.get(d.id)!, kwh: d.kwh, on: on.has(d.id) })),
+    ...(usage.car ? [{ key: "car", color: CAR_COLOR, kwh: usage.car.kwh, on: !!car }] : []),
+    { key: "other", color: OTHER_COLOR, kwh: usage.other.map((v) => v ?? 0), on: other },
+  ];
   const upto = Array.from({ length: Math.max(0, last + 1) }, (_, i) => i);
   const all = Array.from({ length: n }, (_, i) => i);
   const top = niceMax(
@@ -600,7 +661,10 @@ function Lines({
   const Y = (v: number) => LH - (Math.max(0, v) / top) * (LH - 6);
   const pts = (idx: number[], v: (i: number) => number | null) =>
     idx.filter((i) => v(i) != null).map((i): [number, number] => [X(i), Y(v(i)!)]);
-  const main = pts(upto, now);
+  // The main line runs over the hours the inverter read, whether it's the home's use or the parts shown, so it keeps
+  // its points (and eases, rather than jumps) when a part is hidden.
+  const read = upto.filter((i) => usage.home[i] != null);
+  const main = pts(read.length > 1 ? read : upto, now);
   const before = previous ? pts(all, then) : [];
   const mainD = smooth(main);
   const area =
@@ -638,33 +702,63 @@ function Lines({
           onPointerDown={onPoint}
           onPointerLeave={() => setHover(null)}
         >
-          <svg
-            viewBox={`0 0 ${LW} ${LH}`}
-            preserveAspectRatio="none"
-            className="absolute inset-0 h-full w-full overflow-visible"
-          >
-            <defs>
-              <linearGradient id="usage-area" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="var(--color-ink)" stopOpacity="0.14" />
-                <stop offset="1" stopColor="var(--color-ink)" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {area && <path d={area} style={{ fill: "url(#usage-area)" }} className="animate-fade" />}
-            {parts.map((p) => (
-              <path
-                key={p.key}
-                d={smooth(pts(upto, (i) => p.kwh[i]))}
-                {...LINE}
-                style={{ stroke: p.color }}
-                strokeWidth={1.6}
-                strokeOpacity={0.9}
-              />
-            ))}
-            {before.length > 1 && (
-              <path d={smooth(before)} {...LINE} style={{ stroke: THEN }} strokeWidth={1.6} strokeDasharray="5 5" />
-            )}
-            {main.length > 1 && <path d={mainD} {...LINE} style={{ stroke: COLOR.ink }} strokeWidth={2.4} />}
-          </svg>
+          {/* Lines ease to their new shape (a part shown or hidden rescales the chart); the day draws in from the
+              left when it opens, and the day before when it's compared. */}
+          <div className="absolute inset-0 animate-reveal-x">
+            <svg
+              viewBox={`0 0 ${LW} ${LH}`}
+              preserveAspectRatio="none"
+              className="absolute inset-0 h-full w-full overflow-visible"
+            >
+              <defs>
+                <linearGradient id="usage-area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="var(--color-ink)" stopOpacity="0.14" />
+                  <stop offset="1" stopColor="var(--color-ink)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {area && <path d={area} className="chart-ease" style={{ fill: "url(#usage-area)", ...shape(area) }} />}
+              {drawn.map((p) => {
+                const d = smooth(pts(upto, (i) => p.kwh[i]));
+                return (
+                  <path
+                    key={p.key}
+                    d={d}
+                    {...LINE}
+                    className="chart-ease"
+                    style={{ stroke: p.color, opacity: p.on ? 0.9 : 0, ...shape(d) }}
+                    strokeWidth={1.6}
+                  />
+                );
+              })}
+              {main.length > 1 && (
+                <path
+                  d={mainD}
+                  {...LINE}
+                  className="chart-ease"
+                  style={{ stroke: COLOR.ink, ...shape(mainD) }}
+                  strokeWidth={2.4}
+                />
+              )}
+            </svg>
+          </div>
+          {before.length > 1 && previous && (
+            <div key={previous.start} className="pointer-events-none absolute inset-0 animate-reveal-x">
+              <svg
+                viewBox={`0 0 ${LW} ${LH}`}
+                preserveAspectRatio="none"
+                className="absolute inset-0 h-full w-full overflow-visible"
+              >
+                <path
+                  d={smooth(before)}
+                  {...LINE}
+                  className="chart-ease"
+                  style={{ stroke: THEN, ...shape(smooth(before)) }}
+                  strokeWidth={1.6}
+                  strokeDasharray="5 5"
+                />
+              </svg>
+            </div>
+          )}
           {h != null && (
             <>
               <HoverLine left={((h + 0.5) / n) * 100} />
