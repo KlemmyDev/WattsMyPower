@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
-import { STORE_HOME_RANGE, STORE_HOME_VIEW, store } from "~/features/common/storage/utils";
+import { STORE_HOME_COMPARE, STORE_HOME_RANGE, STORE_HOME_VIEW, store } from "~/features/common/storage/utils";
+import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useNow } from "~/features/common/time/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -17,6 +18,8 @@ import { ChangesCard, GoalsCard, RoomsCard } from "~/features/home/components/Su
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
 import {
   BEFORE_WORDS,
+  beforeWords,
+  dayWords,
   deviceColors,
   groupPattern,
   groupUsage,
@@ -50,14 +53,24 @@ function ConnectPrompt() {
  * Home: where the home's power goes. Everything the home used, split between the devices connected (smart
  * appliances, plugs) and everything else; then each device with what it's doing, what it used, and its habits.
  */
-export function HomePage({ range }: { range: Range }) {
+export function HomePage({ range, day }: { range: Range; day?: number }) {
   const navigate = useNavigate();
   const now = useNow(60_000);
-  const [start, end, bucket] = period(range, now);
+  const [start, end, bucket] = period(range, now, day);
+  // The period shown in words ("today", "on Mon 6 Oct", "in 7 days"), and what it's compared with.
+  const rangeWords = range === "today" ? dayWords(start, now) : RANGE_WORDS[range];
+  const [compare, setCompare] = useState(() => store.get(STORE_HOME_COMPARE) === "1");
   const overview = useQuery(homeQuery);
   const usage = useQuery(homeUsageQuery(start, end, bucket));
   // The period before, to compare each device with (by the day, for 7 or 30 days).
   const before = useQuery({ ...homeUsageQuery(2 * start - end, start, "day"), enabled: range !== "today" });
+  // What the chart overlays when comparing: the day before, by the hour, or that same period before.
+  const previous = useQuery({
+    ...(range === "today"
+      ? homeUsageQuery(addDays(start, -1), start, "hour")
+      : homeUsageQuery(2 * start - end, start, "day")),
+    enabled: compare,
+  });
   const patterns = useQuery(homePatternsQuery);
   const found = useQuery(homeInsightsQuery);
   const devices = overview.data?.devices ?? [];
@@ -74,6 +87,7 @@ export function HomePage({ range }: { range: Range }) {
   const hasRooms = devices.some((d) => d.group && !d.hidden);
   const items = homeItems(devices, view === "rooms" || !hasRooms);
   const used = usage.data && groupUsage(usage.data, items);
+  const previousUsed = compare && previous.data ? groupUsage(previous.data, items) : undefined;
   const earlier = before.data && range !== "today" ? groupUsage(before.data, items) : undefined;
   const beforeOf = (id: number) => (earlier ? (earlier.devices.find((u) => u.id === id)?.total ?? 0) : undefined);
   const rooms = homeItems(devices);
@@ -113,11 +127,27 @@ export function HomePage({ range }: { range: Range }) {
           usage={used}
           colors={colors}
           range={range}
-          rangeWords={RANGE_WORDS[range]}
+          rangeWords={rangeWords}
           onRange={(r) => {
             store.set(STORE_HOME_RANGE, r); // opened again (or refreshed) later, it shows this period
             void navigate({ to: "/home", search: { range: r }, replace: true });
           }}
+          day={start}
+          today={midnight(now)}
+          onDay={(d) =>
+            void navigate({
+              to: "/home",
+              search: { range: "today", day: d >= midnight(now) ? undefined : dateKey(d) },
+              replace: true,
+            })
+          }
+          compare={compare}
+          onCompare={(on) => {
+            setCompare(on);
+            store.set(STORE_HOME_COMPARE, on ? "1" : "");
+          }}
+          previous={previousUsed}
+          previousWords={beforeWords(range, start, now)}
         />
         {overview.data && !devices.length && <ConnectPrompt />}
         {devices.length > 0 && (
@@ -128,7 +158,7 @@ export function HomePage({ range }: { range: Range }) {
               usage={roomUse}
               before={(id) => (roomsBefore ? (roomsBefore.devices.find((u) => u.id === id)?.total ?? 0) : undefined)}
               colors={colors}
-              rangeLabel={RANGE_WORDS[range]}
+              rangeLabel={rangeWords}
             />
             <GoalsCard standbyW={found.data?.standby.home_w} />
             <StandbyCard standby={found.data?.standby} devices={devices} colors={colors} />
@@ -165,7 +195,7 @@ export function HomePage({ range }: { range: Range }) {
               kindLabels={kindLabels}
               color={colors.get(item.id)!}
               home={usage.data?.total.home ?? null}
-              rangeLabel={RANGE_WORDS[range]}
+              rangeLabel={rangeWords}
               beforeLabel={BEFORE_WORDS[range]}
             />
           ) : (
@@ -179,7 +209,7 @@ export function HomePage({ range }: { range: Range }) {
               kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
               color={colors.get(item.id)!}
               home={usage.data?.total.home ?? null}
-              rangeLabel={RANGE_WORDS[range]}
+              rangeLabel={rangeWords}
               beforeLabel={BEFORE_WORDS[range]}
               best={found.data?.best_times.find((b) => b.id === item.id)}
               saving={found.data?.savings.find((x) => x.id === item.id)}
