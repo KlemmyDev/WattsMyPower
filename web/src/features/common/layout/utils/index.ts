@@ -1,19 +1,47 @@
+import type { LinkProps } from "@tanstack/react-router";
 import type { IconName } from "~/features/common/ui/components/Icon";
 
 export type Section = "/" | "/home" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
 
-export type NavItem = { to: Section; label: string; icon: IconName };
+/** Live: what's happening now. Over time: what happened, what's coming, and what it cost. */
+export type NavGroup = "Live" | "Over time";
+export const NAV_GROUPS: NavGroup[] = ["Live", "Over time"];
 
-/** The main sections, in the order the navigation shows them. Settings sits apart, at the end. */
+export type NavItem = { to: Section; label: string; icon: IconName; group: NavGroup };
+
+/** The main sections, group by group, in the order the navigation shows them. Settings sits apart, at the end. */
 export const NAV: NavItem[] = [
-  { to: "/", label: "Overview", icon: "layout" },
-  { to: "/home", label: "Home", icon: "home" },
-  { to: "/history", label: "History", icon: "chart" },
-  { to: "/plan", label: "Plan", icon: "cloudSun" },
-  { to: "/battery", label: "Battery", icon: "battery" },
-  { to: "/bills", label: "Bills", icon: "dollar" },
-  { to: "/tesla", label: "Tesla", icon: "car" },
+  { to: "/", label: "Overview", icon: "layout", group: "Live" },
+  { to: "/home", label: "Home", icon: "home", group: "Live" },
+  { to: "/battery", label: "Battery", icon: "battery", group: "Live" },
+  { to: "/tesla", label: "Tesla", icon: "car", group: "Live" },
+  { to: "/history", label: "History", icon: "chart", group: "Over time" },
+  { to: "/plan", label: "Plan", icon: "cloudSun", group: "Over time" },
+  { to: "/bills", label: "Bills", icon: "dollar", group: "Over time" },
 ];
 
 /** Which top-level section a path belongs to: "/home" for "/home/12". */
 export const sectionOf = (path: string) => (path === "/" ? "/" : `/${path.split("/")[1]}`);
+
+/** A page within a section (a device of Home's, a Settings page), as the side nav and the row over a page list it. */
+export type NavPage = {
+  key: string;
+  label: string;
+  link: LinkProps;
+  icon?: IconName;
+  /** A short reading beside it ("412 W"). */
+  value?: string;
+  /** Its part of the section's busiest, 0 to 1, drawn as a bar where there's room. */
+  share?: number;
+  /** The heading it's listed under (a room), with that heading's reading. */
+  group?: string;
+  groupValue?: string;
+};
+
+/** A section's pages, with the section's own first page when it has one ("All devices", for Home). */
+export type SectionPages = {
+  title: string;
+  sub?: string;
+  root?: { link: LinkProps; label: string };
+  pages: NavPage[];
+};
