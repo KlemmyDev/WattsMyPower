@@ -5,7 +5,7 @@ import type { HistoryResponse } from "~/features/common/readings/types";
 import type { SystemInfo } from "~/features/common/live/types";
 import { nearest } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
-import { batteryState, reserveOf } from "~/features/common/energy/utils";
+import { batteryState, batteryTone, reserveOf } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -16,9 +16,6 @@ const SPAN = 6 * 3600;
 const b6y = (soc: number) => B6H - 34 - (Math.max(0, Math.min(100, soc)) / 100) * (B6H - 62);
 
 type Point = { t: number; soc: number; w: number | null };
-
-// Blue while charging or idle, amber while discharging.
-const stateColor = (w: number | null) => (batteryState(w) === "discharge" ? COLOR.solar : COLOR.battery);
 
 /** Charted geometry for the last six hours (state of charge, split where readings are missing). */
 function chartOf(series: HistoryResponse["series"], start: number, end: number) {
@@ -129,7 +126,7 @@ export function BatteryHistory({
                       strokeWidth="2"
                       strokeLinecap="round"
                       vectorEffect="non-scaling-stroke"
-                      style={{ stroke: stateColor(p.w) }}
+                      style={{ stroke: batteryTone(p.w) }}
                     />
                   )),
               )}
@@ -193,11 +190,11 @@ export function BatteryHistory({
         >
           <span
             className="absolute inset-0 animate-[wmpPing_2.4s_var(--ease-out-soft)_infinite] rounded-full"
-            style={{ background: stateColor(last.w) }}
+            style={{ background: batteryTone(last.w) }}
           />
           <span
             className="absolute inset-0 rounded-full shadow-[0_0_0_2px_var(--color-surface)] transition-colors duration-500"
-            style={{ background: stateColor(last.w) }}
+            style={{ background: batteryTone(last.w) }}
           />
         </span>
       )}

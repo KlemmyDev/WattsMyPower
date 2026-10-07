@@ -1,4 +1,5 @@
 import type { LiveStatus, Snapshot, SystemInfo } from "~/features/common/live/types";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** Below this many watts a flow counts as idle. */
 export const ON = 50;
@@ -7,6 +8,10 @@ export type BatteryState = "charge" | "discharge" | "idle";
 /** Battery power is + when discharging and − when charging. */
 export const batteryState = (w: number | null | undefined): BatteryState | null =>
   w == null ? null : w < -ON ? "charge" : w > ON ? "discharge" : "idle";
+
+/** The battery's colour for what it's doing: its blue while charging or idle, amber while discharging. */
+export const batteryTone = (w: number | null | undefined) =>
+  batteryState(w) === "discharge" ? COLOR.solar : COLOR.battery;
 
 export const gridVerb = (g: number | null | undefined) =>
   g == null ? "Grid" : g > ON ? "Importing" : g < -ON ? "Exporting" : "Grid idle";
