@@ -102,7 +102,7 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
   }
 }
 
-/** Settings' pages: tabs over the page on narrower screens, the side nav's column on wider ones. */
+/** Settings' pages, as the side nav and the row of pages over them list them. */
 export const SETTINGS_TABS = [
   { to: "/settings/system", label: "System", icon: "home" },
   { to: "/settings/bills", label: "Bills", icon: "dollar" },

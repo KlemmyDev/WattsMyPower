@@ -1,225 +1,428 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
-import { batteryTone, ON } from "~/features/common/energy/utils";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { useLiveStatus, useNavColumn, useNavItems } from "~/features/common/layout/hooks";
-import { sectionOf } from "~/features/common/layout/utils";
+import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import {
+  NAV_DOCKED,
+  useLiveStatus,
+  useMedia,
+  useNavCollapsed,
+  useNavItems,
+  useSectionPages,
+} from "~/features/common/layout/hooks";
+import { NAV_GROUPS, sectionOf, type NavPage, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
-import { HomeNavColumn } from "~/features/home/components/HomeNavColumn";
-import { SettingsNavColumn } from "~/features/settings/components/SettingsNavColumn";
-
-/** Sections with a column of their own pages beside the rail. The rest have none, so their pages get the width. */
-export const NAV_COLUMNS: Partial<Record<string, ComponentType>> = {
-  "/home": HomeNavColumn,
-  "/settings": SettingsNavColumn,
-};
-
-/** Where the column shows (the `2xl` breakpoint): below it, a section's own page links to its pages instead. */
-const COLUMN_MEDIA = "(min-width: 1090px)";
 
 /**
- * The navigation, down the left on tablets and up (phones keep the top bar). A rail of section icons, whose right edge
- * is a conductor: lit from the logo down to the page you're on (from the live dot up, for Settings), with a pulse
- * running along it. Sections with pages of their own (Home's devices, Settings' tabs) open a column beside it.
+ * The navigation from tablets up, docked down the left. From xl it's the circuit: sections in groups with a reading
+ * each, on a wire lit from the top down to the page you're on, and the current section's pages branching off its node.
+ * Collapsed (or below xl) it's a rail of the same circuit with icons only, and a section's pages get a column beside
+ * it (from xl; narrower screens list them over the page). Below xl, the rail's button opens the full circuit as a menu.
  */
-export function SideNav() {
-  const items = useNavItems();
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  const current = sectionOf(path);
-  const [open, setOpen] = useNavColumn();
-  const { state, status, now } = useLiveStatus();
-  const p = useSnapshot();
-  const rail = useRef<HTMLElement>(null);
-  const spot = useConductor(rail, [current, items.length]);
-
-  // The column keeps the last section's pages while it folds away on the way to a section without any.
-  const [shown, setShown] = useState(current);
-  if (NAV_COLUMNS[current] && shown !== current) setShown(current);
-  const Column = NAV_COLUMNS[shown];
-  const columnOpen = open && !!NAV_COLUMNS[current];
-
-  // A section's icon, in that section, folds its column away and opens it again; anywhere else it goes there.
-  const toggle = (to: string) => (e: React.MouseEvent) => {
-    if (to === current && NAV_COLUMNS[to] && window.matchMedia(COLUMN_MEDIA).matches) {
-      e.preventDefault();
-      setOpen(!open);
-    }
-  };
-  const tip = (label: string, to: string) =>
-    to === current && NAV_COLUMNS[to] ? `${label} · ${open ? "hide" : "show"} pages` : label;
-
-  const soc = p?.battery_soc;
+export function SideNav({ onMenu }: { onMenu: () => void }) {
+  const docked = useMedia(NAV_DOCKED);
+  const [collapsed, setCollapsed] = useNavCollapsed();
+  const full = docked && !collapsed;
+  const current = useRouterState({ select: (s) => sectionOf(s.location.pathname) });
+  const pages = useSectionPages(current);
   return (
     <>
       <nav
-        ref={rail}
         aria-label="Main"
-        className="fixed inset-y-0 left-0 z-30 flex w-[72px] flex-col items-center gap-4 bg-canvas py-4 max-md:hidden"
+        data-full={full}
+        className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-canvas transition-[width] duration-[450ms] ease-out-soft data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
       >
-        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-px bg-line-subtle" />
-        {spot && (
-          <>
-            <span aria-hidden className="nav-tile" style={{ top: spot.to }} />
-            <span
-              aria-hidden
-              className="nav-current"
-              data-dir={spot.from > spot.to ? "up" : "down"}
-              style={{ top: Math.min(spot.from, spot.to), height: Math.abs(spot.to - spot.from) }}
+        {full ? (
+          <div className="h-full w-[236px]">
+            <Circuit
+              variant="full"
+              branches
+              toggle={{ icon: "panelClose", label: "Collapse", onClick: () => setCollapsed(true) }}
             />
-            <span aria-hidden className="nav-node" style={{ top: spot.to }} />
-          </>
-        )}
-        <Link
-          to="/"
-          data-nav-from
-          aria-label="WattsMyPower, overview"
-          className="flex size-11 flex-none items-center justify-center rounded-[14px] border border-fg/8 bg-linear-160 from-mark-from to-mark-to"
-        >
-          <BrandMark />
-        </Link>
-        <div className="flex flex-col items-center gap-1.5">
-          {items.map((i) => (
-            <RailLink
-              key={i.to}
-              to={i.to}
-              icon={i.icon}
-              label={i.label}
-              tip={tip(i.label, i.to)}
-              on={current === i.to}
-              onClick={toggle(i.to)}
-            >
-              {i.to === "/home" && p?.load_power != null && p.load_power > ON && (
-                <span aria-hidden className="nav-eq">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-              )}
-              {i.to === "/battery" && soc != null && (
-                <span
-                  aria-hidden
-                  className="nav-ring soc-ring"
-                  style={
-                    {
-                      "--deg": `${(Math.max(0, Math.min(100, soc)) * 3.6).toFixed(1)}deg`,
-                      "--ring": batteryTone(p?.battery_power),
-                    } as CSSProperties
-                  }
-                />
-              )}
-            </RailLink>
-          ))}
-        </div>
-        <div className="mt-auto flex flex-col items-center gap-3">
-          <RailLink
-            to="/settings"
-            icon="settings"
-            label="Settings"
-            tip={tip("Settings", "/settings")}
-            on={current === "/settings"}
-            onClick={toggle("/settings")}
-            from="below"
-          />
-          <span
-            data-nav-from-below
-            title={`${status}.`}
-            className="flex flex-col items-center gap-2 pt-1 font-mono text-[11px] text-ink-dim tabular-nums"
-          >
-            <span className="live-dot" data-state={state} />
-            {hhmm(now)}
-          </span>
-        </div>
-      </nav>
-      <aside
-        aria-label="Pages in this section"
-        data-open={columnOpen}
-        inert={!columnOpen}
-        className="fixed inset-y-0 left-[72px] z-20 w-[248px] overflow-hidden border-r border-line-subtle bg-surface transition-[width,border-color] duration-[450ms] ease-out-soft data-[open=false]:w-0 data-[open=false]:border-transparent max-2xl:hidden"
-      >
-        {Column && (
-          <div
-            key={shown}
-            className="nav-column-in flex h-full w-[248px] [scrollbar-width:thin] flex-col overflow-y-auto overscroll-contain px-3 pt-6 pb-6"
-          >
-            <Column />
           </div>
+        ) : (
+          <Circuit
+            variant="rail"
+            toggle={
+              docked
+                ? { icon: "panelOpen", label: "Expand", onClick: () => setCollapsed(false) }
+                : { icon: "menu", label: "Menu", onClick: onMenu }
+            }
+          />
         )}
-      </aside>
+      </nav>
+      {docked && collapsed && pages && <NavColumn key={current} pages={pages} />}
     </>
   );
 }
 
-function RailLink({
+/**
+ * The full circuit as a menu sliding in from the left, on a phone (from its top bar) or a tablet (from the rail): the
+ * sections only, as the current section's pages are always in the row of pills at the top of the page.
+ */
+export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  // Going somewhere closes it, as does Escape; the page behind doesn't scroll while it's open.
+  useEffect(() => onClose(), [path, onClose]);
+  useEffect(() => {
+    if (!open) return;
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    const html = document.documentElement;
+    const before = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", key);
+      html.style.overflow = before;
+    };
+  }, [open, onClose]);
+  return (
+    <div
+      data-open={open}
+      inert={!open}
+      className="group fixed inset-0 z-50 data-[open=false]:pointer-events-none xl:hidden"
+    >
+      <div
+        aria-hidden
+        onClick={onClose}
+        className="absolute inset-0 bg-black/45 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 group-data-[open=true]:opacity-100"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        className="absolute inset-y-0 left-0 w-[min(288px,86vw)] -translate-x-full border-r border-line-subtle bg-canvas shadow-pop transition-transform duration-[380ms] ease-out-soft group-data-[open=true]:translate-x-0"
+      >
+        <Circuit variant="full" toggle={{ icon: "x", label: "Close menu", onClick: onClose }} />
+      </div>
+    </div>
+  );
+}
+
+type Toggle = { icon: IconName; label: string; onClick: () => void };
+
+/**
+ * The circuit itself: in full (labels and readings) or as a rail of icons. Docked open, the current section's pages
+ * branch off it (`branches`); in the menu they don't, as the page lists them in its row of pills.
+ */
+function Circuit({
+  variant,
+  toggle,
+  branches = false,
+}: {
+  variant: "full" | "rail";
+  toggle: Toggle;
+  branches?: boolean;
+}) {
+  const full = variant === "full";
+  const items = useNavItems();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const current = sectionOf(path);
+  const pages = useSectionPages(current);
+  const p = useSnapshot();
+  const list = useRef<HTMLDivElement>(null);
+  const wire = useWire(list, [path, items.length, variant, pages?.pages.length]);
+  const at = items.findIndex((i) => i.to === current);
+  const value: Partial<Record<string, string>> = p
+    ? { "/": kW(p.pv_power), "/home": kW(p.load_power), "/battery": pct(p.battery_soc), "/history": kWh(p.daily_pv) }
+    : {};
+
+  return (
+    <div
+      className={cn("flex h-full flex-col", full ? "gap-5 px-3 pt-5 pb-3.5" : "items-center gap-3 px-3 pt-4 pb-3.5")}
+    >
+      <div className={cn("flex items-center", full ? "gap-3 px-1" : "flex-col gap-3")}>
+        <Link
+          to="/"
+          aria-label="WattsMyPower, overview"
+          className="flex flex-none items-center gap-3 text-ink no-underline hover:text-ink"
+        >
+          <span className="flex size-10 items-center justify-center rounded-[13px] border border-fg/8 bg-linear-160 from-mark-from to-mark-to">
+            <BrandMark />
+          </span>
+          {full && (
+            <span className="font-display text-[17px] font-semibold tracking-[-0.3px] whitespace-nowrap">
+              Watts<span className="text-solar">My</span>Power
+            </span>
+          )}
+        </Link>
+        <button
+          type="button"
+          onClick={toggle.onClick}
+          aria-label={toggle.label}
+          title={toggle.label}
+          className={cn(
+            "flex size-8 flex-none items-center justify-center rounded-[10px] text-ink-faint transition-colors hover:bg-fg/6 hover:text-ink",
+            full && "ml-auto",
+          )}
+        >
+          <Icon name={toggle.icon} size={17} />
+        </button>
+      </div>
+
+      {/* From xl the list scrolls on its own when a section's pages make it long; the rail never needs to, and mustn't
+          clip its tooltips. */}
+      <div
+        className={cn(
+          "min-h-0 w-full flex-1",
+          full && "-mx-3 w-auto [scrollbar-width:none] overflow-y-auto overscroll-contain px-3",
+        )}
+      >
+        <div ref={list} className="relative flex min-h-full flex-col">
+          {wire && (
+            <span aria-hidden className="circuit-wire" style={{ top: wire.top, height: wire.height }}>
+              <span className="circuit-lit" style={{ top: wire.litTop, height: wire.lit }} />
+            </span>
+          )}
+          {NAV_GROUPS.map((g, gi) => (
+            <Fragment key={g}>
+              <div
+                className={cn(
+                  "text-xs font-medium text-ink-faint",
+                  full ? "pb-1.5 pl-[38px]" : "h-2",
+                  full && (gi ? "pt-4" : "pt-0.5"),
+                )}
+              >
+                {full ? g : <span className="sr-only">{g}</span>}
+              </div>
+              {items
+                .filter((i) => i.group === g)
+                .map((i) => (
+                  <Fragment key={i.to}>
+                    <CircuitLink
+                      to={i.to}
+                      icon={i.icon}
+                      label={i.label}
+                      value={value[i.to]}
+                      full={full}
+                      on={current === i.to}
+                      lit={at >= 0 && items.indexOf(i) <= at}
+                    />
+                    {branches && current === i.to && pages && <Branch pages={pages} />}
+                  </Fragment>
+                ))}
+            </Fragment>
+          ))}
+          <div className="mt-auto flex flex-col pt-5">
+            <CircuitLink to="/settings" icon="settings" label="Settings" full={full} on={current === "/settings"} />
+            {branches && current === "/settings" && pages && <Branch pages={pages} />}
+          </div>
+        </div>
+      </div>
+      <LiveChip full={full} />
+    </div>
+  );
+}
+
+function CircuitLink({
   to,
   icon,
   label,
-  tip,
+  value,
+  full,
   on,
-  onClick,
-  from,
-  children,
+  lit,
 }: {
   to: string;
   icon: IconName;
   label: string;
-  tip: string;
+  value?: string;
+  full: boolean;
   on: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  /** Where the conductor's lit from to reach it: the logo, or the live dot for one at the bottom. */
-  from?: "below";
-  children?: ReactNode;
+  lit?: boolean;
 }) {
   return (
     <Link
       to={to}
-      data-nav={from ?? "above"}
-      aria-label={label}
+      data-circuit-row
+      data-lit={lit || undefined}
+      aria-label={full ? undefined : label}
       aria-current={on ? "page" : undefined}
-      onClick={onClick}
       className={cn(
-        "group relative z-1 flex size-[46px] flex-none items-center justify-center rounded-[15px] no-underline transition-[color,background-color,transform] duration-[260ms,200ms,160ms] active:scale-95",
-        on ? "text-ink hover:text-ink" : "text-ink-muted hover:bg-fg/4 hover:text-ink",
+        "group relative flex h-[38px] w-full flex-none items-center gap-[11px] rounded-[11px] text-[13.5px] font-medium text-ink-muted no-underline transition-colors duration-200 hover:bg-fg/4 hover:text-ink aria-[current=page]:bg-fg/6 aria-[current=page]:text-ink",
+        full ? "pr-2.5 pl-[38px]" : "pl-[26px]",
       )}
     >
-      <Icon name={icon} size={20} />
-      {children}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 left-[62px] z-40 -translate-x-1 -translate-y-1/2 rounded-[9px] bg-ink px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-ink-inverse opacity-0 shadow-pill transition-[opacity,translate] duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
-      >
-        {tip}
-      </span>
+      <span aria-hidden className="circuit-node" />
+      <Icon name={icon} size={16} />
+      {full ? (
+        <>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {value && <span className="flex-none text-xs font-normal text-ink-faint tabular-nums">{value}</span>}
+        </>
+      ) : (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 left-[calc(100%+14px)] z-40 -translate-x-1 -translate-y-1/2 rounded-[9px] bg-ink px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-ink-inverse opacity-0 shadow-pill transition-[opacity,translate] duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+        >
+          {label}
+          {value && <span className="ml-1.5 font-normal opacity-60">{value}</span>}
+        </span>
+      )}
     </Link>
   );
 }
 
+/** The current section's pages, each on an elbow off its node, under headings (rooms) where they have them. */
+function Branch({ pages }: { pages: SectionPages }) {
+  return (
+    <div className="circuit-branch-in flex flex-col">
+      {pages.pages.map((page, i) => (
+        <Fragment key={page.key}>
+          {page.group && page.group !== pages.pages[i - 1]?.group && (
+            <div className="flex items-baseline gap-2 pt-2 pr-2.5 pb-0.5 pl-[52px] text-[11.5px] font-medium text-ink-faint">
+              <span className="min-w-0 flex-1 truncate">{page.group}</span>
+              {page.groupValue && <span className="flex-none tabular-nums">{page.groupValue}</span>}
+            </div>
+          )}
+          <Link
+            {...page.link}
+            data-circuit-branch
+            activeProps={{ "aria-current": "page" }}
+            className="relative flex h-[31px] flex-none items-center gap-2 rounded-[9px] pr-2.5 pl-[52px] text-[13px] text-ink-faint no-underline transition-colors duration-150 hover:text-ink aria-[current=page]:text-ink"
+          >
+            <span aria-hidden className="circuit-elbow" />
+            <span aria-hidden className="circuit-sub-node" />
+            <span className="min-w-0 flex-1 truncate">{page.label}</span>
+            {page.value && <span className="flex-none text-[11.5px] tabular-nums">{page.value}</span>}
+          </Link>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+/** Whether readings are coming in, with the time: a chip in full, a dot over the time on the rail. */
+function LiveChip({ full }: { full: boolean }) {
+  const { state, status, now } = useLiveStatus();
+  const word = state === "live" ? "Inverter live" : state === "stale" ? "Readings delayed" : "Inverter offline";
+  return full ? (
+    <div
+      title={`${status}.`}
+      className="flex h-10 flex-none items-center gap-2.5 rounded-xl border border-fg/6 bg-fg/4 px-3 text-[12.5px] text-ink-soft tabular-nums"
+    >
+      <span className="live-dot" data-state={state} />
+      <span>{word}</span>
+      <span className="ml-auto text-ink-faint">{hhmm(now)}</span>
+    </div>
+  ) : (
+    <span
+      title={`${status}.`}
+      className="flex flex-col items-center gap-2 pt-1 font-mono text-[11px] text-ink-dim tabular-nums"
+    >
+      <span className="live-dot" data-state={state} />
+      {hhmm(now)}
+    </span>
+  );
+}
+
 /**
- * Where the conductor runs, in pixels down the rail: `from` the logo's middle (or the live dot's, for a link at the
- * bottom) `to` the current page's icon. Re-measured on resize and once web fonts load; null on a page outside the nav.
+ * A section's pages in a column beside the collapsed rail (from xl): its name, a line on what's in it, and each page
+ * with its reading and a bar for its share.
  */
-function useConductor(rail: React.RefObject<HTMLElement | null>, deps: unknown[]) {
-  const [spot, setSpot] = useState<{ from: number; to: number } | null>(null);
+function NavColumn({ pages }: { pages: SectionPages }) {
+  return (
+    <aside
+      aria-label={`${pages.title} pages`}
+      className="fixed inset-y-0 left-[72px] z-20 w-[248px] [scrollbar-width:thin] overflow-y-auto overscroll-contain border-r border-line-subtle bg-surface max-xl:hidden"
+    >
+      <div className="nav-column-in flex flex-col px-3 pt-6 pb-6">
+        <div className="flex flex-col gap-1 px-2 pb-3">
+          {pages.root ? (
+            <Link
+              {...pages.root.link}
+              className="font-display text-[21px] font-bold tracking-[-0.4px] text-ink no-underline hover:text-ink-hover"
+            >
+              {pages.title}
+            </Link>
+          ) : (
+            <span className="font-display text-[21px] font-bold tracking-[-0.4px] text-ink">{pages.title}</span>
+          )}
+          {pages.sub && <div className="text-[13px] leading-snug text-pretty text-ink-muted">{pages.sub}</div>}
+        </div>
+        {pages.pages.map((page, i) => (
+          <Fragment key={page.key}>
+            {page.group && page.group !== pages.pages[i - 1]?.group && (
+              <ColumnLabel aside={page.groupValue}>{page.group}</ColumnLabel>
+            )}
+            <Link
+              {...page.link}
+              activeProps={{ "aria-current": "page" }}
+              className="grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 rounded-[11px] px-2.5 py-1.5 text-[13.5px] text-ink-soft no-underline transition-colors duration-150 hover:bg-fg/4 hover:text-ink aria-[current=page]:bg-fg/7 aria-[current=page]:text-ink"
+            >
+              <ColumnRow page={page} />
+            </Link>
+          </Fragment>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function ColumnLabel({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 px-2.5 pt-3 pb-1.5 text-xs font-medium text-ink-faint">
+      <span className="min-w-0 truncate">{children}</span>
+      {aside && <span className="tabular-nums">{aside}</span>}
+    </div>
+  );
+}
+
+function ColumnRow({ page }: { page: NavPage }) {
+  return (
+    <>
+      {page.icon ? (
+        <Icon name={page.icon} size={16} />
+      ) : (
+        <span className="size-2 rounded-full" style={{ background: alpha(COLOR.fg, 0.22) }} />
+      )}
+      <span className="truncate">{page.label}</span>
+      <span className="text-[12.5px] text-ink-faint tabular-nums">{page.value}</span>
+      {page.share != null && (
+        <span className="col-span-full mt-1.5 h-0.5 overflow-hidden rounded-full bg-fg/7">
+          <span
+            className="block h-full rounded-full bg-solar transition-[width] duration-700 ease-out-soft"
+            style={{ width: `${Math.max(0, Math.min(1, page.share)) * 100}%` }}
+          />
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Where the wire runs, in pixels down the list: from the first section's node to the last node on it (Settings', or
+ * the last of its pages when they're open), lit from the top down to the current page (its branch, when one's open).
+ * Settings sits at the bottom, so it's lit from its own node down to its page instead. Re-measured as the list changes
+ * size (a section's pages arriving) and once web fonts load.
+ */
+function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
+  const [wire, setWire] = useState<{ top: number; height: number; litTop: number; lit: number } | null>(null);
   useLayoutEffect(() => {
-    const el = rail.current;
+    const el = list.current;
     if (!el) return;
-    const mid = (n: HTMLElement | null) => (n ? n.offsetTop + n.offsetHeight / 2 : null);
+    const mid = (n: HTMLElement) => n.offsetTop + n.offsetHeight / 2;
     const place = () => {
-      const cur = el.querySelector<HTMLElement>('[data-nav][aria-current="page"]');
-      const to = mid(cur);
-      if (!cur || to == null) return setSpot(null);
-      const origin = el.querySelector<HTMLElement>(
-        cur.dataset.nav === "below" ? "[data-nav-from-below]" : "[data-nav-from]",
-      );
-      setSpot({ from: mid(origin) ?? 0, to });
+      const rows = [...el.querySelectorAll<HTMLElement>("[data-circuit-row]")];
+      const nodes = [...el.querySelectorAll<HTMLElement>("[data-circuit-row], [data-circuit-branch]")];
+      if (rows.length < 2) return setWire(null);
+      const top = mid(rows[0]);
+      const height = mid(nodes[nodes.length - 1]) - top;
+      const branch = el.querySelector<HTMLElement>('[data-circuit-branch][aria-current="page"]');
+      const row = el.querySelector<HTMLElement>('[data-circuit-row][aria-current="page"]');
+      const from = row && row === rows[rows.length - 1] ? mid(row) - top : 0;
+      const to = (branch ?? row) ? mid((branch ?? row)!) - top : from;
+      setWire({ top, height, litTop: from, lit: Math.max(0, to - from) });
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(el);
     document.fonts?.ready.then(place);
     return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller says what moves the current link
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller says what moves the current page
   }, deps);
-  return spot;
+  return wire;
 }

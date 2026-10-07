@@ -2,9 +2,13 @@ import { useCallback, useLayoutEffect, useState, useSyncExternalStore, type RefO
 import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { NAV } from "~/features/common/layout/utils";
+import { kW } from "~/features/common/formatting/utils/number";
+import { NAV, type SectionPages } from "~/features/common/layout/utils";
+import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
+import { STORE_NAV_COLLAPSED, store } from "~/features/common/storage/utils";
+import { useHomeNavPages } from "~/features/home/hooks";
+import { SETTINGS_SUB, SETTINGS_TABS } from "~/features/settings/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
-import { STORE_NAV_COLUMN, store } from "~/features/common/storage/utils";
 import { useNow } from "~/features/common/time/hooks";
 
 function subscribe(onChange: () => void) {
@@ -80,24 +84,61 @@ export function useLiveStatus(): { state: LiveState; status: string; now: number
   return { state, status, now };
 }
 
-// Whether the side nav's column of a section's pages is open: remembered in this browser, open to start.
-let navColumn: boolean | undefined;
-const navColumnListeners = new Set<() => void>();
-const navColumnOpen = () => (navColumn ??= store.get(STORE_NAV_COLUMN) !== "closed");
-
-export function useNavColumn(): [boolean, (open: boolean) => void] {
-  const open = useSyncExternalStore(
+/** Whether a media query matches, following it as the window changes (false in the prerendered shell). */
+export function useMedia(query: string): boolean {
+  return useSyncExternalStore(
     (onChange) => {
-      navColumnListeners.add(onChange);
-      return () => navColumnListeners.delete(onChange);
+      const m = window.matchMedia(query);
+      m.addEventListener("change", onChange);
+      return () => m.removeEventListener("change", onChange);
     },
-    navColumnOpen,
-    () => true,
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
+
+/** Where the side nav docks open (the `xl` breakpoint); below it, it's a rail, or a menu on a phone. */
+export const NAV_DOCKED = "(min-width: 1000px)";
+
+// Whether the side nav is collapsed to a rail where it could be open: remembered in this browser, open to start.
+let collapsed: boolean | undefined;
+const collapsedListeners = new Set<() => void>();
+const isCollapsed = () => (collapsed ??= store.get(STORE_NAV_COLLAPSED) === "1");
+
+export function useNavCollapsed(): [boolean, (v: boolean) => void] {
+  const value = useSyncExternalStore(
+    (onChange) => {
+      collapsedListeners.add(onChange);
+      return () => collapsedListeners.delete(onChange);
+    },
+    isCollapsed,
+    () => false,
   );
   const set = useCallback((v: boolean) => {
-    navColumn = v;
-    store.set(STORE_NAV_COLUMN, v ? "open" : "closed");
-    navColumnListeners.forEach((f) => f());
+    collapsed = v;
+    store.set(STORE_NAV_COLLAPSED, v ? "1" : "");
+    collapsedListeners.forEach((f) => f());
   }, []);
-  return [open, set];
+  return [value, set];
+}
+
+const SETTINGS_PAGES: SectionPages = {
+  title: "Settings",
+  sub: SETTINGS_SUB,
+  pages: SETTINGS_TABS.map((t) => ({ key: t.to, label: t.label, icon: t.icon, link: { to: t.to } })),
+};
+
+/** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills…). */
+export function useSectionPages(section: string): SectionPages | null {
+  const home = useHomeNavPages(section === "/home");
+  const load = useSnapshot()?.load_power;
+  if (section === "/home" && home.length)
+    return {
+      title: "Home",
+      sub: load != null && load > 0 ? `Using ${kW(load)} now` : "Where your home's power goes",
+      root: { link: { to: "/home" }, label: "All devices" },
+      pages: home,
+    };
+  if (section === "/settings") return SETTINGS_PAGES;
+  return null;
 }

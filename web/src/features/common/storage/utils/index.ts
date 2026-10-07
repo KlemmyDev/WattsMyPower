@@ -23,4 +23,4 @@ export const STORE_DISPLAY = "wmp-display";
 export const STORE_IMPORT_WEATHER = "wmp-import-weather";
 export const STORE_HOME_RANGE = "wmp-home-range";
 export const STORE_HOME_VIEW = "wmp-home-view";
-export const STORE_NAV_COLUMN = "wmp-nav-column";
+export const STORE_NAV_COLLAPSED = "wmp-nav-collapsed";

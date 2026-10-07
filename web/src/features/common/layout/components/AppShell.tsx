@@ -1,9 +1,10 @@
 import { useRouterState } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Dock } from "~/features/common/layout/components/Dock";
-import { NAV_COLUMNS, SideNav } from "~/features/common/layout/components/SideNav";
+import { SectionPagesStrip } from "~/features/common/layout/components/SectionPagesStrip";
+import { NavDrawer, SideNav } from "~/features/common/layout/components/SideNav";
 import { TopBar } from "~/features/common/layout/components/TopBar";
-import { useNavColumn } from "~/features/common/layout/hooks";
+import { useNavCollapsed, useSectionPages } from "~/features/common/layout/hooks";
 import { sectionOf } from "~/features/common/layout/utils";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -13,23 +14,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   // screen stays put rather than starting its entrance again.
   const section = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname.split("/")[1] });
   const current = useRouterState({ select: (s) => sectionOf(s.location.pathname) });
-  const [open] = useNavColumn();
-  const column = open && !!NAV_COLUMNS[current];
+  const [collapsed] = useNavCollapsed();
+  const pages = !!useSectionPages(current);
+  const [menu, setMenu] = useState(false);
+  const openMenu = useCallback(() => setMenu(true), []);
+  const closeMenu = useCallback(() => setMenu(false), []);
   return (
-    // --nav-w is what the navigation takes on the left: nothing on a phone (it's the top bar there), the rail from
-    // tablets up, and the rail and a section's column from 2xl. The page and the dock centre in what's left.
+    // --nav-w is what the side nav takes on the left: nothing on a phone (it's a menu there), the rail on a tablet,
+    // and from xl the circuit open, or collapsed to the rail with a column of the section's pages beside it. The page
+    // and the dock centre in what's left.
     <div
-      data-nav-column={column ? "open" : "closed"}
-      className="min-h-screen bg-canvas [--nav-w:0px] md:[--nav-w:72px] 2xl:data-[nav-column=open]:[--nav-w:320px]"
+      data-nav={collapsed ? "collapsed" : "open"}
+      data-pages={pages}
+      className="min-h-screen bg-canvas [--nav-w:0px] md:[--nav-w:72px] xl:data-[nav=open]:[--nav-w:236px] xl:data-[nav=collapsed]:data-[pages=true]:[--nav-w:320px]"
     >
-      {/* The sticky header carries the space above and below it (pt-5/pb-3), so the page starts where it did. */}
-      <TopBar />
-      <SideNav />
+      {/* The sticky header carries the space above and below it, so the page starts where it did. */}
+      <TopBar onMenu={openMenu} />
+      <SideNav onMenu={openMenu} />
+      <NavDrawer open={menu} onClose={closeMenu} />
       <div className="pl-(--nav-w) transition-[padding] duration-[450ms] ease-out-soft">
         <main
           key={section}
           className="page-rise mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-8 pt-9 pb-[136px] max-sm:px-4 max-sm:pt-6 md:pt-10"
         >
+          <SectionPagesStrip />
           {children}
         </main>
       </div>
