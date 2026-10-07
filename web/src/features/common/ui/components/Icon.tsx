@@ -36,6 +36,7 @@ const ICONS = {
     P("M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"),
   ],
   battery: [["rect", { x: 2, y: 7, width: 16, height: 10, rx: 2 }], P("M22 11v2"), P("M11 9.5 8.5 12h3L9 14.5")],
+  batteryDraining: [["rect", { x: 2, y: 7, width: 16, height: 10, rx: 2 }], P("M22 11v2"), P("M6 10v4"), P("M10 10v4")],
   grid: ["M12 2v20", "M2 5h20", "M3 3v2", "M7 3v2", "M17 3v2", "M21 3v2", "m19 5-7 7-7-7"].map(P),
   car: [
     P(

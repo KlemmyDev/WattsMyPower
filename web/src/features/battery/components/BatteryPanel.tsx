@@ -2,7 +2,7 @@ import { useBatteryChange } from "~/features/battery/hooks";
 import type { BatteryView } from "~/features/battery/types";
 import { describeMode, KIND_COLOR, when } from "~/features/battery/utils";
 import { errorMessage } from "~/features/common/api/utils";
-import { batteryState, reserveOf } from "~/features/common/energy/utils";
+import { batteryState, batteryTone, reserveOf } from "~/features/common/energy/utils";
 import { kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import type { BatteryMode, Snapshot, SystemInfo } from "~/features/common/live/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -53,6 +53,9 @@ export function BatteryPanel({
             ? "Idle"
             : " ";
   const tone = c ? KIND_COLOR[c.kind] : st === "discharge" ? COLOR.warn : COLOR.battery;
+  // Left to itself and discharging, it says so, in the amber of the power flow and the charts, rather than "Normal".
+  const draining = !c && mode?.owner === "normal" && st === "discharge";
+  const modeColor = c ? KIND_COLOR[c.kind] : draining ? batteryTone(p?.battery_power) : COLOR.battery;
 
   return (
     <Card aria-labelledby="h-batpanel" className="gap-6 overflow-hidden">
@@ -79,11 +82,8 @@ export function BatteryPanel({
           <div className="flex max-w-[420px] flex-col items-start gap-3 max-sm:max-w-none">
             <div className="flex items-center gap-3">
               <span
-                className="flex size-11 flex-none items-center justify-center rounded-full"
-                style={{
-                  background: alpha(c ? KIND_COLOR[c.kind] : COLOR.battery, 0.18),
-                  color: c ? KIND_COLOR[c.kind] : COLOR.battery,
-                }}
+                className="flex size-11 flex-none items-center justify-center rounded-full transition-colors duration-500"
+                style={{ background: alpha(modeColor, 0.18), color: modeColor }}
               >
                 <Icon
                   name={
@@ -93,13 +93,15 @@ export function BatteryPanel({
                         ? "shield"
                         : c?.kind === "charge"
                           ? "bolt"
-                          : "battery"
+                          : draining
+                            ? "batteryDraining"
+                            : "battery"
                   }
                   size={20}
                 />
               </span>
               <div className="flex flex-col">
-                <span className="text-xl font-semibold tracking-[-0.3px]">{m.label}</span>
+                <span className="text-xl font-semibold tracking-[-0.3px]">{draining ? "Discharging" : m.label}</span>
                 <span className="text-sm text-pretty text-ink-muted">{m.detail ?? " "}</span>
               </div>
             </div>

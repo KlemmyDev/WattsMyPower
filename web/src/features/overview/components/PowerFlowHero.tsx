@@ -12,7 +12,7 @@ import { useLive } from "~/features/common/live/hooks/useLive";
 import { clock, duration, hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
-import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
+import { batteryState, batteryTone, gridVerb, ON } from "~/features/common/energy/utils";
 import { historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { ModeBadge } from "~/features/battery/components/ModeBadge";
@@ -573,7 +573,13 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
     ...historyQuery({ start: p.ts - SPARK_SPAN, end: p.ts, points: 48, fields: SPARK_FIELDS }),
     placeholderData: keepPreviousData,
   });
-  const spark = (field: string, color: string, live: number | null | undefined, range?: [number, number]) =>
+  const spark = (
+    field: string,
+    color: string,
+    live: number | null | undefined,
+    range?: [number, number],
+    tone?: SparkTone,
+  ) =>
     hist ? (
       <Spark
         series={hist.series}
@@ -583,12 +589,15 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
         end={p.ts}
         color={color}
         range={range}
+        tone={tone}
       />
     ) : null;
   const sun = (p.pv_power ?? 0) > ON;
   const dir = g == null ? null : g > ON ? "in" : g < -ON ? "out" : null;
   const gridColor = dir === "in" ? COLOR.import : dir === "out" ? COLOR.export : COLOR.ink;
   const cell = { ts: p.ts };
+  // the battery in its blue, amber while it discharges: its card, ring, icon and line, as on the Battery card
+  const batColor = batteryTone(b);
 
   return (
     // From 2xl up (where the drawing's tall enough to leave the heading clear), floating over its bottom corners (the
@@ -646,13 +655,23 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
             i={2}
             to="/battery"
             go="Battery"
-            tint={COLOR.battery}
-            spark={spark("battery_soc", COLOR.battery, p.battery_soc, [0, 100])}
+            tint={batColor}
+            spark={spark("battery_soc", COLOR.battery, p.battery_soc, [0, 100], {
+              field: "battery_power",
+              live: b,
+              color: batteryTone,
+            })}
             icon={
               // the Battery card's ring, small: drawn in, easing to each reading, with its streak while power moves
               <>
                 <BatteryArc frac={soc} st={st} size={ARC_SMALL} />
-                <Icon name="battery" size={15} className="relative" style={{ color: COLOR.battery }} />
+                <Icon
+                  key={st === "discharge" ? "out" : "in"}
+                  name={st === "discharge" ? "batteryDraining" : "battery"}
+                  size={15}
+                  className="relative animate-fade transition-colors duration-500"
+                  style={{ color: batColor }}
+                />
                 <ModeBadge now={now} ring="var(--tile)" />
               </>
             }
@@ -939,12 +958,16 @@ function Cell({
 }
 
 const SPARK_SPAN = 2 * 3600;
-const SPARK_FIELDS = ["pv_power", "grid_power", "battery_soc", "load_power"];
+const SPARK_FIELDS = ["pv_power", "grid_power", "battery_soc", "battery_power", "load_power"];
+
+/** The line coloured point by point from another field (the battery's charge by whether it's charging). */
+type SparkTone = { field: string; live: number | null | undefined; color: (v: number | null | undefined) => string };
 
 /**
  * A faint line of a field over [start, end], with the live value at its end, filled down to zero (or up to it, for
  * power sent to the grid), and fading in from the left. `range` is the scale's [low, high] at the least, which a
- * reading beyond widens; it draws in from the left the first time.
+ * reading beyond widens; it draws in from the left the first time. Given `tone`, each stretch of the line takes the
+ * colour of the reading it ends at.
  */
 function Spark({
   series,
@@ -954,6 +977,7 @@ function Spark({
   end,
   color,
   range,
+  tone,
 }: {
   series: HistorySeries;
   field: string;
@@ -962,14 +986,16 @@ function Spark({
   end: number;
   color: string;
   range?: [number, number];
+  tone?: SparkTone;
 }) {
-  const pts: [number, number][] = [];
+  const pts: [number, number, string][] = [];
   const vs = series[field] ?? [];
+  const ts = tone && series[tone.field];
   series.t.forEach((t, i) => {
     const v = vs[i];
-    if (v != null && t >= start && t < end) pts.push([t, v]);
+    if (v != null && t >= start && t < end) pts.push([t, v, tone ? tone.color(ts?.[i]) : color]);
   });
-  if (live != null) pts.push([end, live]);
+  if (live != null) pts.push([end, live, tone ? tone.color(tone.live) : color]);
   if (pts.length < 2) return null;
   const values = pts.map(([, v]) => v);
   const lo = Math.min(range?.[0] ?? 0, 0, ...values);
@@ -978,6 +1004,14 @@ function Spark({
   const y = (v: number) => 38 - ((v - lo) / (hi - lo)) * 34;
   const line = pts.map(([t, v], i) => `${i ? "L" : "M"}${x(t).toFixed(2)} ${y(v).toFixed(2)}`).join("");
   const zero = y(0).toFixed(2);
+  // the line in runs of one colour, each picking up from where the last left off
+  const runs: { d: string; c: string }[] = [];
+  pts.slice(1).forEach(([t, v, c], i) => {
+    const at = `L${x(t).toFixed(2)} ${y(v).toFixed(2)}`;
+    const run = runs[runs.length - 1];
+    if (run?.c === c) run.d += at;
+    else runs.push({ c, d: `M${x(pts[i][0]).toFixed(2)} ${y(pts[i][1]).toFixed(2)}${at}` });
+  });
   const area = `${line}L${x(pts[pts.length - 1][0]).toFixed(2)} ${zero}L${x(pts[0][0]).toFixed(2)} ${zero}Z`;
   return (
     <svg
@@ -987,15 +1021,19 @@ function Spark({
       className="absolute inset-0 size-full animate-reveal-x"
       style={{ maskImage: "linear-gradient(to right, transparent, black 45%)" }}
     >
-      <path d={area} fill={color} fillOpacity={0.07} />
-      <path
-        d={line}
-        fill="none"
-        stroke={color}
-        strokeOpacity={0.4}
-        strokeWidth={1.25}
-        vectorEffect="non-scaling-stroke"
-      />
+      <path d={area} fillOpacity={0.07} style={{ fill: color }} />
+      {runs.map((r, k) => (
+        <path
+          key={k}
+          d={r.d}
+          fill="none"
+          strokeOpacity={0.4}
+          strokeWidth={1.25}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          style={{ stroke: r.c }}
+        />
+      ))}
     </svg>
   );
 }
