@@ -101,7 +101,10 @@ const ICONS = {
   user: [P("M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"), ["circle", { cx: 12, cy: 7, r: 4 }]],
   database: ["M3 5a9 3 0 1 0 18 0a9 3 0 1 0 -18 0", "M3 5v14a9 3 0 0 0 18 0V5", "M3 12a9 3 0 0 0 18 0"].map(P),
   chevD: [P("m6 9 6 6 6-6")],
-  panel: [["rect", { x: 3, y: 3, width: 18, height: 18, rx: 2 }], P("M9 3v18")],
+  menu: [P("M4 6h16"), P("M4 12h16"), P("M4 18h16")],
+  x: [P("M18 6 6 18"), P("m6 6 12 12")],
+  panelClose: [["rect", { x: 3, y: 3, width: 18, height: 18, rx: 2 }], P("M9 3v18"), P("m16 15-3-3 3-3")],
+  panelOpen: [["rect", { x: 3, y: 3, width: 18, height: 18, rx: 2 }], P("M9 3v18"), P("m14 9 3 3-3 3")],
   washer: [
     P("M3 6h3"),
     P("M17 6h.01"),
