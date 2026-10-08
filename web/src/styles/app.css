@@ -837,6 +837,23 @@
   }
 }
 
+/* An outage that reaches the house, on the Grid page's radar: a ring spreading from it and fading. */
+.radar-ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: radarRipple 2.4s var(--ease-out-soft) infinite;
+}
+@keyframes radarRipple {
+  from {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
 @keyframes wmpPulse {
   0%,
   100% {

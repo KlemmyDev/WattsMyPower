@@ -23,12 +23,12 @@ const when = (ts: number, now: number) =>
 function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className="border-b border-line-subtle py-2.5 last:border-0">
+    <li className="border-b border-line-subtle py-1 last:border-0">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-start gap-2.5 text-left"
+        className="group -mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-fg/4"
       >
         <span
           className="mt-0.5 flex size-6 flex-none items-center justify-center rounded-lg"
@@ -50,11 +50,14 @@ function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
         <Icon
           name="chevD"
           size={14}
-          className={cn("mt-1 flex-none text-ink-faint transition-transform", open && "rotate-180")}
+          className={cn(
+            "mt-1 flex-none text-ink-faint transition-[transform,color] group-hover:text-ink",
+            open && "rotate-180",
+          )}
         />
       </button>
       {open && w.description && (
-        <p className="m-0 pt-2 pl-[34px] text-[12.5px] leading-[18px] whitespace-pre-wrap text-ink-muted">
+        <p className="m-0 pt-1 pb-1.5 pl-[34px] text-[12.5px] leading-[18px] whitespace-pre-wrap text-ink-muted">
           {w.description}
         </p>
       )}
