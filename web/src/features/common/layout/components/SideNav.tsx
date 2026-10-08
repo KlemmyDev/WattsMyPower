@@ -351,7 +351,33 @@ function LiveChip({ full }: { full: boolean }) {
 function VersionTag({ full }: { full: boolean }) {
   const app = useLive()?.app;
   const updates = useQuery(updatesQuery).data;
+  // The commit this page was loaded with: once the server's is another (it's been updated), the page is out of date.
+  const [loadedWith, setLoadedWith] = useState<string | null | undefined>(undefined);
+  if (loadedWith === undefined && app) setLoadedWith(app.commit);
   if (!app) return null;
+  const stale = !!app.commit && loadedWith != null && app.commit !== loadedWith;
+  if (stale)
+    return (
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        title={`Updated to ${app.version}: reload for the new dashboard`}
+        className={cn(
+          "flex cursor-pointer items-center gap-2 rounded-xl border border-good/30 bg-good-subtle font-sans font-medium text-good",
+          full ? "px-3 py-2 text-[12.5px]" : "px-1.5 py-0.5 text-[10px]",
+        )}
+      >
+        {full ? (
+          <>
+            <span aria-hidden className="size-1.5 flex-none rounded-full bg-good" />
+            Updated: reload
+            <span className="ml-auto font-normal tabular-nums opacity-75">v{app.version}</span>
+          </>
+        ) : (
+          "Reload"
+        )}
+      </button>
+    );
   const release = app.release ? app.release.charAt(0).toUpperCase() + app.release.slice(1) : null;
   const newer = updates?.available ? updates.latest : null;
   const title = `WattsMyPower ${app.version}${release ? `, ${app.release} release` : ""}${newer ? ". A newer version is available." : ""}`;

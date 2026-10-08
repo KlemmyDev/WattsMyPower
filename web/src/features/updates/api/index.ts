@@ -14,3 +14,6 @@ export const updatesQuery = queryOptions({
 
 /** Check GitHub now. */
 export const checkForUpdates = () => apiSend<UpdateStatus>("POST", "updates/check");
+
+/** Update now: ask the updater on the machine it's installed on to run install.sh. It starts within a minute. */
+export const installUpdate = () => apiSend<UpdateStatus>("POST", "updates/install");

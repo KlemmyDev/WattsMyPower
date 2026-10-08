@@ -20,6 +20,10 @@
 #                        set, in the dashboard: Settings → Integrations and Settings → System.
 #           --start      just start it (and Docker if needed): no update, rebuild or
 #                        questions. start.sh does the same.
+#           --no-dashboard-updates
+#                        don't set up updating from the dashboard (Settings → System → Updates).
+#                        Otherwise a cron job runs updater.sh every minute, which updates when the
+#                        dashboard asks (it runs this script, as you would).
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
 #                        passed in, e.g. TZ=Australia/Perth bash install.sh --yes, and on a first
 #                        install PV_KW=10 or INVERTER_HOST=... to set up without the dashboard
@@ -36,12 +40,14 @@ PULL=1
 CONFIGURE=0
 START=0
 HELP=0
+DASHBOARD_UPDATES=1
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) YES=1 ;;
     --configure) CONFIGURE=1 ;;
     --start) START=1; PULL=0 ;;
     --no-pull) PULL=0 ;;  # internal: used when the script restarts itself after updating
+    --no-dashboard-updates) DASHBOARD_UPDATES=0 ;;
     -h|--help) HELP=1 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
@@ -339,6 +345,25 @@ for name in ("wattsmypower", "collector"):  # the dashboard's database, and the 
         os.remove(old)
     print("  data/backups/" + os.path.basename(dest))
 PY
+fi
+
+# ---------------------------------------------------------------- updates from the dashboard
+# A cron job runs updater.sh every minute: it says it's there (so the dashboard offers "Update now"), and runs this
+# script when the dashboard asks. Its folder is made here, as you, so it can write in it (the dashboard only adds a
+# request to it).
+mkdir -p data/update
+CRON_TAG="# WattsMyPower: updates from the dashboard"
+if [ "$DASHBOARD_UPDATES" = 1 ]; then
+  if ! command -v crontab >/dev/null 2>&1; then
+    info "Updating from the dashboard needs cron, which isn't installed here: update with bash install.sh."
+  elif ! crontab -l 2>/dev/null | grep -qF "$HERE/updater.sh"; then
+    say "Setting up updates from the dashboard"
+    { crontab -l 2>/dev/null | grep -vF "$CRON_TAG" || true; printf '* * * * * bash "%s/updater.sh" >/dev/null 2>&1 %s\n' "$HERE" "$CRON_TAG"; } | crontab - \
+      && info "Settings → System → Updates can now update it. (bash install.sh --no-dashboard-updates turns this off.)" \
+      || warn "Couldn't add the cron job, so updates are by bash install.sh only."
+  fi
+elif crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; then
+  crontab -l 2>/dev/null | grep -vF "$CRON_TAG" | crontab - && info "Updating from the dashboard is off."
 fi
 
 say "Building and starting"
