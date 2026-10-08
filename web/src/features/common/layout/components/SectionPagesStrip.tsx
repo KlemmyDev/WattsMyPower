@@ -13,8 +13,8 @@ const PILL =
 
 /**
  * The current section's pages, with their readings, as a row of pills at the top of the page below xl: there, the side
- * nav is a rail or a menu of the sections alone, so (as the column beside the collapsed rail does on a desktop) this
- * keeps them in view. Nothing for a section without pages.
+ * nav is a rail or a menu of the sections alone, so (as the circuit's branches do from xl) this keeps them in view.
+ * Nothing for a section without pages.
  */
 export function SectionPagesStrip() {
   const path = useRouterState({ select: (s) => s.location.pathname });

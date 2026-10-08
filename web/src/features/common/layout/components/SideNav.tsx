@@ -1,20 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
-import {
-  NAV_DOCKED,
-  useLiveStatus,
-  useMedia,
-  useNavCollapsed,
-  useNavItems,
-  useSectionPages,
-} from "~/features/common/layout/hooks";
-import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type NavPage, type SectionPages } from "~/features/common/layout/utils";
+import { NAV_DOCKED, useLiveStatus, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
+import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type SectionPages } from "~/features/common/layout/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
-import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { updatesQuery } from "~/features/updates/api";
@@ -26,43 +18,24 @@ const EXACT = { exact: true, includeSearch: false } as const;
 /**
  * The navigation from tablets up, docked down the left. From xl it's the circuit: sections in groups with a reading
  * each, on a wire lit from the top down to the page you're on, and the current section's pages branching off its node.
- * Collapsed (or below xl) it's a rail of the same circuit with icons only, and a section's pages get a column beside
- * it (from xl; narrower screens list them over the page). Below xl, the rail's button opens the full circuit as a menu.
+ * Below xl it's a rail of the same circuit with icons only, whose button opens the full circuit as a menu.
  */
 export function SideNav({ onMenu }: { onMenu: () => void }) {
   const docked = useMedia(NAV_DOCKED);
-  const [collapsed, setCollapsed] = useNavCollapsed();
-  const full = docked && !collapsed;
-  const current = useRouterState({ select: (s) => sectionOf(s.location.pathname) });
-  const pages = useSectionPages(current);
   return (
-    <>
-      <nav
-        aria-label="Main"
-        data-full={full}
-        className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-canvas transition-[width] duration-[450ms] ease-out-soft data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
-      >
-        {full ? (
-          <div className="h-full w-[236px]">
-            <Circuit
-              variant="full"
-              branches
-              toggle={{ icon: "panelClose", label: "Collapse", onClick: () => setCollapsed(true) }}
-            />
-          </div>
-        ) : (
-          <Circuit
-            variant="rail"
-            toggle={
-              docked
-                ? { icon: "panelOpen", label: "Expand", onClick: () => setCollapsed(false) }
-                : { icon: "menu", label: "Menu", onClick: onMenu }
-            }
-          />
-        )}
-      </nav>
-      {docked && collapsed && pages && <NavColumn key={current} pages={pages} />}
-    </>
+    <nav
+      aria-label="Main"
+      data-full={docked}
+      className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-canvas data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
+    >
+      {docked ? (
+        <div className="h-full w-[236px]">
+          <Circuit variant="full" branches />
+        </div>
+      ) : (
+        <Circuit variant="rail" toggle={{ icon: "menu", label: "Menu", onClick: onMenu }} />
+      )}
+    </nav>
   );
 }
 
@@ -112,8 +85,9 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
 type Toggle = { icon: IconName; label: string; onClick: () => void };
 
 /**
- * The circuit itself: in full (labels and readings) or as a rail of icons. Docked open, the current section's pages
- * branch off it (`branches`); in the menu they don't, as the page lists them in its row of pills.
+ * The circuit itself: in full (labels and readings) or as a rail of icons. Docked, the current section's pages branch
+ * off it (`branches`); in the menu they don't, as the page lists them in its row of pills. `toggle` is the rail's menu
+ * button, or the menu's close.
  */
 function Circuit({
   variant,
@@ -121,7 +95,7 @@ function Circuit({
   branches = false,
 }: {
   variant: "full" | "rail";
-  toggle: Toggle;
+  toggle?: Toggle;
   branches?: boolean;
 }) {
   const full = variant === "full";
@@ -156,18 +130,20 @@ function Circuit({
             </span>
           )}
         </Link>
-        <button
-          type="button"
-          onClick={toggle.onClick}
-          aria-label={toggle.label}
-          title={toggle.label}
-          className={cn(
-            "flex size-8 flex-none items-center justify-center rounded-[10px] text-ink-faint transition-colors hover:bg-fg/6 hover:text-ink",
-            full && "ml-auto",
-          )}
-        >
-          <Icon name={toggle.icon} size={17} />
-        </button>
+        {toggle && (
+          <button
+            type="button"
+            onClick={toggle.onClick}
+            aria-label={toggle.label}
+            title={toggle.label}
+            className={cn(
+              "flex size-8 flex-none items-center justify-center rounded-[10px] text-ink-faint transition-colors hover:bg-fg/6 hover:text-ink",
+              full && "ml-auto",
+            )}
+          >
+            <Icon name={toggle.icon} size={17} />
+          </button>
+        )}
       </div>
 
       {/* From xl the list scrolls on its own when a section's pages make it long; the rail never needs to, and mustn't
@@ -188,7 +164,7 @@ function Circuit({
             <Fragment key={g}>
               <div
                 className={cn(
-                  "text-xs font-medium text-ink-faint",
+                  "text-[11px] font-semibold tracking-[0.08em] text-ink-faint uppercase",
                   full ? "pb-1.5 pl-[38px]" : "h-2",
                   full && (gi ? "pt-4" : "pt-0.5"),
                 )}
@@ -427,84 +403,6 @@ function VersionTag({ full }: { full: boolean }) {
         />
       )}
     </Link>
-  );
-}
-
-/**
- * A section's pages in a column beside the collapsed rail (from xl): its name, a line on what's in it, and each page
- * with its reading and a bar for its share.
- */
-function NavColumn({ pages }: { pages: SectionPages }) {
-  return (
-    <aside
-      aria-label={`${pages.title} pages`}
-      className="fixed inset-y-0 left-[72px] z-20 w-[248px] [scrollbar-width:thin] overflow-y-auto overscroll-contain border-r border-line-subtle bg-surface max-xl:hidden"
-    >
-      <div className="nav-column-in flex flex-col px-3 pt-6 pb-6">
-        <div className="flex flex-col gap-1 px-2 pb-3">
-          {pages.root ? (
-            <Link
-              {...pages.root.link}
-              className="font-display text-[21px] font-bold tracking-[-0.4px] text-ink no-underline hover:text-ink-hover"
-            >
-              {pages.title}
-            </Link>
-          ) : (
-            <span className="font-display text-[21px] font-bold tracking-[-0.4px] text-ink">{pages.title}</span>
-          )}
-          {pages.sub && <div className="text-[13px] leading-snug text-pretty text-ink-muted">{pages.sub}</div>}
-        </div>
-        {pages.pages.map((page, i) => (
-          <Fragment key={page.key}>
-            {page.group && page.group !== pages.pages[i - 1]?.group && (
-              <ColumnLabel aside={page.groupValue}>{page.group}</ColumnLabel>
-            )}
-            <Link
-              {...page.link}
-              activeOptions={EXACT}
-              aria-current={page.active ? "page" : undefined}
-              className="grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 rounded-[11px] px-2.5 py-1.5 text-[13.5px] text-ink-soft no-underline transition-colors duration-150 hover:bg-fg/4 hover:text-ink aria-[current=page]:bg-fg/7 aria-[current=page]:text-ink"
-            >
-              <ColumnRow page={page} />
-            </Link>
-          </Fragment>
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-function ColumnLabel({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 px-2.5 pt-3 pb-1.5 text-xs font-medium text-ink-faint">
-      <span className="min-w-0 truncate">{children}</span>
-      {aside && <span className="tabular-nums">{aside}</span>}
-    </div>
-  );
-}
-
-function ColumnRow({ page }: { page: NavPage }) {
-  return (
-    <>
-      {page.icon ? (
-        <Icon name={page.icon} size={16} />
-      ) : (
-        <span className="size-2 rounded-full" style={{ background: page.color ?? alpha(COLOR.fg, 0.22) }} />
-      )}
-      <span className="truncate">{page.label}</span>
-      <span className="text-[12.5px] text-ink-faint tabular-nums">{page.value}</span>
-      {page.share != null && (
-        <span className="col-span-full mt-1.5 h-0.5 overflow-hidden rounded-full bg-fg/7">
-          <span
-            className="block h-full rounded-full transition-[width] duration-700 ease-out-soft"
-            style={{
-              width: `${Math.max(0, Math.min(1, page.share)) * 100}%`,
-              background: page.color ?? COLOR.solar,
-            }}
-          />
-        </span>
-      )}
-    </>
   );
 }
 

@@ -103,8 +103,6 @@ const ICONS = {
   chevD: [P("m6 9 6 6 6-6")],
   menu: [P("M4 6h16"), P("M4 12h16"), P("M4 18h16")],
   x: [P("M18 6 6 18"), P("m6 6 12 12")],
-  panelClose: [["rect", { x: 3, y: 3, width: 18, height: 18, rx: 2 }], P("M9 3v18"), P("m16 15-3-3 3-3")],
-  panelOpen: [["rect", { x: 3, y: 3, width: 18, height: 18, rx: 2 }], P("M9 3v18"), P("m14 9 3 3-3 3")],
   washer: [
     P("M3 6h3"),
     P("M17 6h.01"),
