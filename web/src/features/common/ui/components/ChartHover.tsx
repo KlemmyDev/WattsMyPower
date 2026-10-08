@@ -77,20 +77,21 @@ export function nearest<T extends { t: number }>(points: T[], t: number): T | nu
 }
 
 /**
- * Hover for a row of bars: which bar is under the pointer (or focused), and the plot's width in layout px for
- * ChartTooltip. Spread `plot` on the bars' container and `bar(i)` on each bar.
+ * Hover for a row of bars, or the parts of one: which is under the pointer (or focused), keyed by index or any key,
+ * and the plot's width in layout px for ChartTooltip. Spread `plot` on the bars' container and `bar(k)` on each bar
+ * (and on anything else that stands for it, like its line in a legend).
  */
-export function useBarHover() {
-  const [hover, setHover] = useState<number | null>(null);
+export function useBarHover<K = number>() {
+  const [hover, setHover] = useState<K | null>(null);
   const [width, setWidth] = useState(0);
   const measure = (e: SyntheticEvent<HTMLElement>) => setWidth(e.currentTarget.offsetWidth);
   return {
     hover,
     width,
     plot: { onPointerEnter: measure, onFocus: measure, onMouseLeave: () => setHover(null) },
-    bar: (i: number) => ({
-      onMouseEnter: () => setHover(i),
-      onFocus: () => setHover(i),
+    bar: (k: K) => ({
+      onMouseEnter: () => setHover(k),
+      onFocus: () => setHover(k),
       onBlur: () => setHover(null),
     }),
   };
