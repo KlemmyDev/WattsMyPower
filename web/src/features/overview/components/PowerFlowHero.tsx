@@ -611,8 +611,8 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
           <Cell
             {...cell}
             i={0}
-            to="/history"
-            go="History"
+            to="/solar"
+            go="Solar"
             tint={COLOR.solar}
             spark={spark("pv_power", COLOR.solar, p.pv_power, [0, (s?.pv_kw ?? 0) * 1000])}
             icon={
@@ -639,8 +639,8 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
           <Cell
             {...cell}
             i={1}
-            to="/history"
-            go="History"
+            to="/grid"
+            go="Grid"
             tint={dir ? gridColor : COLOR.fg}
             spark={spark("grid_power", dir === "out" ? COLOR.export : COLOR.import, g)}
             icon={<Icon name="grid" size={18} />}
@@ -860,10 +860,11 @@ function Cell({
   className?: string;
   i: number;
   ts: number;
-  to: "/history" | "/battery" | "/home";
+  /** Its live page: Solar, Grid, Battery or Home. */
+  to: "/solar" | "/grid" | "/battery" | "/home";
   /** Its colour, for the wash and edge it takes on under the pointer (solar's yellow, the battery's blue…). */
   tint: string;
-  /** Where it links, in a word, for screen readers: "History". */
+  /** Where it links, in a word, for screen readers: "Solar". */
   go: string;
   spark?: ReactNode;
   icon: ReactNode;
