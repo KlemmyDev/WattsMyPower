@@ -259,7 +259,7 @@ class OutageService:
         net, auto = self.network()
         around = self.around(now) if net else {"now": [], "planned": []}
         with self._lock:
-            fetched_at, error = self._fetched_at, self._error
+            fetched_at, planned_at, error = self._fetched_at, self._future_at, self._error
         unplanned = [o for o in around["now"] if not o["planned"]]
         return {
             "network": {"id": net.id, "name": net.name, "site": net.site} if net else None,
@@ -276,6 +276,7 @@ class OutageService:
                 "nearest_km": min((o["distance_km"] for o in unplanned), default=None),
             },
             "fetched_at": fetched_at if net else None,
+            "planned_at": planned_at if net else None,  # planned work to come is fetched hourly, apart
             "error": error if net else None,
         }
 

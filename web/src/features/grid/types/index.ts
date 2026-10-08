@@ -79,7 +79,10 @@ export type OutagesView = {
   /** Planned work to come at the house's street, or within the radius in the next two weeks, soonest first. */
   planned: Outage[];
   summary: { outages: number; customers: number; nearest_km: number | null };
+  /** When the network's outages were last fetched (every 15 minutes), and its planned work to come (hourly). */
   fetched_at: number | null;
+  planned_at: number | null;
+  /** The last fetch failed: what's shown is from fetched_at. */
   error: string | null;
 };
 
@@ -129,7 +132,10 @@ export type HazardsView = {
   /** Each source followed: when it last answered, and why it didn't the last time it was asked. */
   sources: Partial<Record<"bom" | "qfd", { at: number | null; error: string | null }>>;
   /** When every source followed has answered at least once (null until then). */
+  /** When the network's outages were last fetched (every 15 minutes), and its planned work to come (hourly). */
   fetched_at: number | null;
+  planned_at: number | null;
+  /** The last fetch failed: what's shown is from fetched_at. */
   error: string | null;
 };
 
