@@ -31,13 +31,15 @@
   --breakpoint-2xl: 1090px;
   --breakpoint-3xl: 1180px;
 
-  /* surfaces */
-  --color-canvas: #0a0a0a;
-  --color-surface: #141414;
-  --color-surface-raised: #1f1f1f;
-  --color-surface-inset: #181818;
+  /* surfaces: the page a soft near-black rather than black, and the cards a step above it */
+  --color-canvas: #09090b;
+  --color-surface: #19191b;
+  --color-surface-raised: #242427;
+  --color-surface-inset: #1d1d20;
   --color-popover: #1c1c1e;
-  --color-chip: #141414;
+  --color-chip: #19191b;
+  /* The side nav (and its menu on a phone): a dark grey rather than the page's near-black. */
+  --color-nav: #18181b;
 
   /* the brand tile behind the logo, top to bottom */
   --color-mark-from: #242424;
@@ -84,6 +86,8 @@
   --color-solar-wash: #ffb547;
   --color-solar-deep: #ff7a1a;
   --color-battery: #6f8cff;
+  /* moonlight: the Solar page's resting state, at night */
+  --color-moon: #a8c2ff;
   --color-battery-soft: #8fa6ff;
   --color-battery-ring: #2f5bff;
   --color-grid: #3a3d44;
@@ -174,7 +178,8 @@
   :root[data-theme="light"] {
     color-scheme: light;
 
-    --color-canvas: #f4f4f5;
+    --color-canvas: #f9f9fa;
+    --color-nav: #f4f4f5;
     --color-surface: #ffffff;
     --color-surface-raised: #ececee;
     --color-surface-inset: #f7f7f8;
@@ -216,6 +221,7 @@
     --color-solar-wash: #f7a823;
     --color-solar-deep: #f26b12;
     --color-battery: #5a74f2;
+    --color-moon: #4a6bd4;
     --color-battery-soft: #4157de;
     --color-battery-ring: #3a5cf5;
     --color-grid: #4a4e58;
@@ -285,7 +291,9 @@
   ::selection {
     background: var(--color-selection);
   }
-  button {
+  /* Buttons, and what shows more on hover (a bar's tooltip, a part lighting up: data-hover, from useBarHover). */
+  button,
+  [data-hover] {
     cursor: pointer;
   }
   button:disabled {
@@ -530,7 +538,7 @@
     z-index: 1;
     border-radius: 999px;
     pointer-events: none;
-    background: var(--color-canvas);
+    background: var(--color-nav);
     border: 2px solid color-mix(in srgb, var(--color-fg) 22%, transparent);
     transition:
       border-color 400ms ease,
@@ -612,6 +620,57 @@
   /* A section's pages drop into place as it opens. */
   .circuit-branch-in {
     animation: circuitDrop 320ms var(--ease-out-soft) backwards;
+  }
+
+  /*
+   * Soft light behind every page (PageGlow): shapes a shade off the page's background, white in the dark theme and a
+   * cool near-black in the light one, at --glow-k of it at their strongest. Each fades out from its middle on an eased
+   * curve rather than a straight one, moves up with the page at its own --depth, and drifts slowly on its own
+   * (`translate` and `scale`, which add to the scroll's `transform`).
+   */
+  .page-glow {
+    --shape: #ffffff;
+    --glow-k: 0.075;
+    animation: pageGlow 1200ms var(--ease-out-soft) both;
+  }
+  [data-theme="light"] .page-glow {
+    --shape: #1e2433;
+    --glow-k: 0.06;
+  }
+  .page-glow-shape {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in oklab, var(--shape) calc(var(--shape-o) * var(--glow-k)), transparent),
+      color-mix(in oklab, var(--shape) calc(var(--shape-o) * var(--glow-k) * 0.62), transparent) 30%,
+      color-mix(in oklab, var(--shape) calc(var(--shape-o) * var(--glow-k) * 0.26), transparent) 60%,
+      color-mix(in oklab, var(--shape) calc(var(--shape-o) * var(--glow-k) * 0.07), transparent) 82%,
+      transparent
+    );
+    transform: translate3d(0, calc(var(--glow-scroll, 0) * var(--depth) * -1px), 0);
+    animation: glowDrift var(--drift) ease-in-out infinite alternate;
+    will-change: transform, translate;
+  }
+  /* A fine grain over the light, so its long gradients don't band on a dark screen. */
+  .page-glow-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  /*
+   * A card as frosted glass, the page's light showing softly through it: every page's cards but the power flow's
+   * (which has its sky).
+   */
+  .glass {
+    background-color: color-mix(in oklab, var(--color-surface) 66%, transparent);
+    backdrop-filter: blur(20px) saturate(1.15);
+  }
+  [data-theme="light"] .glass {
+    background-color: color-mix(in oklab, var(--color-surface) 72%, transparent);
   }
 
   /*
@@ -898,6 +957,21 @@
 @keyframes wmpSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+@keyframes glowDrift {
+  from {
+    translate: -26px 12px;
+    scale: 1;
+  }
+  to {
+    translate: 30px -20px;
+    scale: 1.08;
+  }
+}
+@keyframes pageGlow {
+  from {
+    opacity: 0;
   }
 }
 @keyframes wmpDrift {

@@ -219,7 +219,7 @@ function Chart({
                     (r ? `, likely ${kWh(lo)} to ${kWh(hi)}` : "")
                   }
                   className={cn(
-                    "relative h-full min-w-0 flex-1 cursor-default rounded-md outline-offset-[-2px]",
+                    "relative h-full min-w-0 flex-1 cursor-pointer rounded-md outline-offset-[-2px]",
                     on && "bg-fg/5",
                   )}
                   onPointerEnter={() => setHover(d.date)}

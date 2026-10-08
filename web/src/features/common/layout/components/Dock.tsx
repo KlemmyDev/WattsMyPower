@@ -135,7 +135,7 @@ export function NavPower({ full }: { full: boolean }) {
         <RailItem icon="home" color={COLOR.ink} v={f.home} />
         <RailItem icon="grid" color={COLOR.gridSoft} v={f.grid} />
         <span className="flex flex-col items-center gap-1">
-          <SocRing ring={f.ring} now={f.now} behind="var(--color-canvas)" className="size-6" inner="size-[19px]" />
+          <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
           <span className="text-[10.5px] font-semibold tabular-nums">{Math.round(f.soc)}%</span>
         </span>
       </Link>
@@ -161,7 +161,7 @@ export function NavPower({ full }: { full: boolean }) {
         <FlowItem icon="grid" color={COLOR.gridSoft} k={f.verb.replace(/ing$/, "")} v={f.grid} />
       </span>
       <span className="flex items-center gap-2 border-t border-fg/6 px-0.5 pt-2">
-        <SocRing ring={f.ring} now={f.now} behind="var(--color-canvas)" className="size-6" inner="size-[19px]" />
+        <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
         <span className="text-[12.5px] font-medium text-ink-soft">Battery {Math.round(f.soc)}%</span>
         <span
           className="ml-auto text-[12.5px] font-semibold tracking-[-0.2px] tabular-nums"

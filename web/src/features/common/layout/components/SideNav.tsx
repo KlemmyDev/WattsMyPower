@@ -27,7 +27,7 @@ export function SideNav({ onMenu }: { onMenu: () => void }) {
     <nav
       aria-label="Main"
       data-full={docked}
-      className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-canvas data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
+      className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-nav data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
     >
       {docked ? (
         <div className="h-full w-[236px]">
@@ -75,7 +75,7 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        className="absolute inset-y-0 left-0 w-[min(288px,86vw)] -translate-x-full border-r border-line-subtle bg-canvas shadow-pop transition-transform duration-[380ms] ease-out-soft group-data-[open=true]:translate-x-0"
+        className="absolute inset-y-0 left-0 w-[min(288px,86vw)] -translate-x-full border-r border-line-subtle bg-nav shadow-pop transition-transform duration-[380ms] ease-out-soft group-data-[open=true]:translate-x-0"
       >
         <Circuit variant="full" toggle={{ icon: "x", label: "Close menu", onClick: onClose }} />
       </div>
@@ -397,7 +397,7 @@ function VersionTag({ full }: { full: boolean }) {
       {newer && (
         <span
           aria-hidden
-          className="absolute -top-1 -right-1 size-2 rounded-full bg-brand shadow-[0_0_0_2px_var(--color-canvas)]"
+          className="absolute -top-1 -right-1 size-2 rounded-full bg-brand shadow-[0_0_0_2px_var(--color-nav)]"
         />
       )}
     </Link>

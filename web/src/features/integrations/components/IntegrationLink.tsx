@@ -18,7 +18,7 @@ type TileProps = {
 
 const ROW = "flex items-center gap-4 border-b border-line-subtle px-6 py-5 last:border-b-0 max-sm:px-5";
 const CARD =
-  "flex items-center gap-4 rounded-3xl border border-line-subtle bg-surface p-6 transition-[translate,border-color,background-color] duration-200 ease-out-soft max-sm:rounded-[20px] max-sm:p-5";
+  "flex items-center gap-4 rounded-3xl border border-line-subtle glass p-6 transition-[translate,border-color,background-color] duration-200 ease-out-soft max-sm:rounded-[20px] max-sm:p-5";
 
 /** Icon, name with a status pill, and a line of detail. */
 function TileBody({ icon, name, status, on, detail }: TileProps) {

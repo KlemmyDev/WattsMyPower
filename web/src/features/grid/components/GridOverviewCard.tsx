@@ -40,7 +40,7 @@ export function GridOverviewCard({ now }: { now: number }) {
     <Link
       to="/grid"
       aria-label="Grid"
-      className="group col-span-12 flex items-center gap-4 rounded-3xl border border-line-subtle bg-surface px-6 py-4 text-ink no-underline transition-colors hover:border-line-strong hover:text-ink max-sm:rounded-[20px] max-sm:px-5"
+      className="group glass col-span-12 flex items-center gap-4 rounded-3xl border border-line-subtle px-6 py-4 text-ink no-underline transition-colors hover:border-line-strong hover:text-ink max-sm:rounded-[20px] max-sm:px-5"
       style={{ backgroundImage: `linear-gradient(100deg, ${alpha(l.color, 0.09)}, transparent 45%)` }}
     >
       <span

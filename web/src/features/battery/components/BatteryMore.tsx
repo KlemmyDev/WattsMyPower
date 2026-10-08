@@ -68,7 +68,7 @@ function Split({
             tabIndex={0}
             {...bar(x.key)}
             className={cn(
-              "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-[background-color,opacity] duration-200 outline-none",
+              "flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-[background-color,opacity] duration-200 outline-none",
               hover === x.key && "bg-fg/5 text-ink",
               !lit(x.key) && "opacity-55",
             )}
@@ -406,7 +406,7 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
               {...bar(i)}
               aria-label={`${shortDay.format(parseYmd(d.date))}: charged ${kWh(d.daily_charge)}, discharged ${kWh(d.daily_discharge)}`}
               className={cn(
-                "flex h-full min-w-0 flex-1 cursor-default items-end gap-px border-0 bg-transparent p-0 transition-opacity duration-200",
+                "flex h-full min-w-0 flex-1 cursor-pointer items-end gap-px border-0 bg-transparent p-0 transition-opacity duration-200",
                 h != null && h !== i && "opacity-45",
               )}
             >

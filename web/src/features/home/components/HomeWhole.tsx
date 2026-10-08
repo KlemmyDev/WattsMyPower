@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { energyToday, ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, money, pct, powerParts } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot } from "~/features/common/live/types";
 import { costsQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
@@ -11,7 +11,7 @@ import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
-import { Icon } from "~/features/common/ui/components/Icon";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
@@ -55,16 +55,6 @@ function sourcesOf(series: HistorySeries | undefined) {
   return out;
 }
 
-function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-[13px] text-ink-muted">{label}</span>
-      <span className="text-[22px] leading-7 font-light tracking-[-0.4px] text-ink tabular-nums">{value}</span>
-      {sub && <span className="truncate text-xs text-ink-faint">{sub}</span>}
-    </div>
-  );
-}
-
 /**
  * The whole house, from the inverter (no plugs needed): what it's using now and where that's coming from, today so far
  * against a usual day by now, where it should end up by midnight, today's peak, and what today's grid power has cost.
@@ -81,7 +71,6 @@ export function HomeNow({
   now: number;
 }) {
   const load = p?.load_power;
-  const [value, unit] = load == null ? [DASH, ""] : powerParts(Math.max(0, load));
   const pv = Math.max(0, p?.pv_power ?? 0);
   const bat = Math.max(0, p?.battery_power ?? 0);
   const L = Math.max(0, load ?? 0);
@@ -107,70 +96,54 @@ export function HomeNow({
   const today = costs?.days.find((d) => d.date === dateKey(now));
   const diff = sofar != null && usual ? sofar / usual - 1 : null;
   return (
-    <section
-      className="col-span-12 flex flex-wrap items-center gap-x-10 gap-y-6 overflow-hidden rounded-3xl border border-line-subtle bg-surface p-7 max-sm:rounded-[20px] max-sm:p-5"
-      style={{ backgroundImage: `linear-gradient(110deg, ${alpha(HOME, 0.1)}, transparent 55%)` }}
-    >
-      <div className="flex items-center gap-5">
-        <span
-          className="flex size-14 flex-none items-center justify-center rounded-[18px]"
-          style={{ background: alpha(HOME, 0.16), color: HOME }}
-        >
-          <Icon name="home" size={26} />
-        </span>
-        <div className="flex flex-col">
-          <span className="flex items-baseline gap-1.5 text-[52px] leading-[56px] font-light tracking-[-2px] tabular-nums max-sm:text-[42px] max-sm:leading-[48px]">
-            {value}
-            <span className="text-lg font-normal tracking-normal text-ink-faint">{unit}</span>
-          </span>
-          <span className="flex flex-wrap items-center gap-x-2.5 text-[13px] text-ink-muted">
-            {now3.length ? (
-              <>
-                From
-                {now3.map((x, i) => (
-                  <span key={x.key} className="flex items-center gap-1.5">
-                    <i
-                      aria-hidden
-                      className="size-2 rounded-full"
-                      style={{ background: SOURCES[x.key as keyof typeof SOURCES] }}
-                    />
-                    {x.label}
-                    {now3.length > 1 && <span className="text-ink-faint tabular-nums">{kW(x.w)}</span>}
-                    {i < now3.length - 1 && <span className="text-ink-faint">·</span>}
-                  </span>
-                ))}
-              </>
-            ) : (
-              "The house is using next to nothing"
-            )}
-          </span>
-        </div>
-      </div>
-      <div className="grid min-w-[min(100%,26rem)] flex-1 grid-cols-4 gap-x-6 gap-y-4 max-lg:grid-cols-2">
-        <Stat
-          label="Today so far"
-          value={kWh(sofar)}
-          sub={
-            diff == null
-              ? undefined
-              : Math.abs(diff) < 0.05
-                ? "About usual"
-                : `${pct(Math.abs(diff) * 100)} ${diff > 0 ? "over" : "under"} usual`
-          }
-        />
-        <Stat
-          label="By midnight"
-          value={sofar != null && rest != null ? kWh(sofar + rest) : DASH}
-          sub="At a usual pace"
-        />
-        <Stat label="Peak today" value={peak ? kW(peak.w) : DASH} sub={peak ? `At ${hhmm(peak.t)}` : undefined} />
-        <Stat
-          label="Grid power today"
-          value={today ? money(today.import_cost) : DASH}
-          sub={today && today.saved > 0 ? `${money(today.saved)} saved` : undefined}
-        />
-      </div>
-    </section>
+    <SummaryCard icon="home" color={HOME} className="col-span-12">
+      <SummaryStat
+        label="Using now"
+        value={load == null ? DASH : kW(Math.max(0, load))}
+        sub={
+          now3.length ? (
+            <span className="inline-flex items-center gap-x-1.5">
+              From
+              {now3.map((x, i) => (
+                <span key={x.key} className="inline-flex items-center gap-1">
+                  <i
+                    aria-hidden
+                    className="size-1.5 flex-none rounded-full"
+                    style={{ background: SOURCES[x.key as keyof typeof SOURCES] }}
+                  />
+                  {x.label}
+                  {i < now3.length - 1 && <span>·</span>}
+                </span>
+              ))}
+            </span>
+          ) : (
+            "Next to nothing"
+          )
+        }
+      />
+      <SummaryStat
+        label="Today so far"
+        value={kWh(sofar)}
+        sub={
+          diff == null
+            ? undefined
+            : Math.abs(diff) < 0.05
+              ? "About usual"
+              : `${pct(Math.abs(diff) * 100)} ${diff > 0 ? "over" : "under"} usual`
+        }
+      />
+      <SummaryStat
+        label="By midnight"
+        value={sofar != null && rest != null ? kWh(sofar + rest) : DASH}
+        sub="At a usual pace"
+      />
+      <SummaryStat label="Peak today" value={peak ? kW(peak.w) : DASH} sub={peak ? `At ${hhmm(peak.t)}` : undefined} />
+      <SummaryStat
+        label="Grid power today"
+        value={today ? money(today.import_cost) : DASH}
+        sub={today && today.saved > 0 ? `${money(today.saved)} saved` : undefined}
+      />
+    </SummaryCard>
   );
 }
 
@@ -345,7 +318,7 @@ export function HomeDaysCard({ days }: { days: DataDay[] }) {
               {...bar(i)}
               aria-label={`${shortDay.format(parseYmd(d.key))}: ${kWh(d.home)} (solar ${kWh(d.direct)}, battery ${kWh(d.battery)}, grid ${kWh(d.imp)})`}
               className={cn(
-                "flex h-full min-w-0 flex-1 cursor-default items-end border-0 bg-transparent p-0 transition-opacity duration-200",
+                "flex h-full min-w-0 flex-1 cursor-pointer items-end border-0 bg-transparent p-0 transition-opacity duration-200",
                 h != null && h !== i && "opacity-45",
               )}
             >

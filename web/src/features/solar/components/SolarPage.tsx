@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, pct, powerParts } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -16,6 +16,7 @@ import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
@@ -77,16 +78,6 @@ export function SolarPage() {
 
 // ---------------------------------------------------------------------------------------------- now
 
-function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-[13px] text-ink-muted">{label}</span>
-      <span className="text-[22px] leading-7 font-light tracking-[-0.4px] text-ink tabular-nums">{value}</span>
-      {sub && <span className="truncate text-xs text-ink-faint">{sub}</span>}
-    </div>
-  );
-}
-
 /** Solar now, big: how much of the array it is, then today so far, where it should end up, its peak, and the sky. */
 function SolarNow({
   p,
@@ -104,7 +95,6 @@ function SolarNow({
   now: number;
 }) {
   const pv = p?.pv_power;
-  const [value, unit] = pv == null ? [DASH, ""] : powerParts(pv);
   const array = s?.pv_kw;
   const share = pv != null && array ? pv / (array * 1000) : null;
   const made = p?.daily_pv ?? null;
@@ -125,46 +115,41 @@ function SolarNow({
   const fahrenheit = useFahrenheit();
   const sky = p ? liveWeather(p, f, now, fahrenheit) : null;
   const producing = pv != null && pv > ON;
+  // The sun's orange while the panels make power; resting, the moon's blue.
+  const tint = producing ? SOLAR : COLOR.moon;
   return (
-    <section
-      className="relative flex flex-wrap items-center gap-x-10 gap-y-6 overflow-hidden rounded-3xl border border-line-subtle bg-surface p-7 max-sm:rounded-[20px] max-sm:p-5"
-      style={{ backgroundImage: `linear-gradient(110deg, ${alpha(SOLAR, producing ? 0.13 : 0.05)}, transparent 55%)` }}
-    >
-      <div className="flex items-center gap-5">
-        <span
-          className="flex size-14 flex-none items-center justify-center rounded-[18px]"
-          style={{ background: alpha(SOLAR, 0.16), color: SOLAR }}
-        >
-          <Icon name={producing ? "sun" : "moon"} size={26} />
-        </span>
-        <div className="flex flex-col">
-          <span className="flex items-baseline gap-1.5 text-[52px] leading-[56px] font-light tracking-[-2px] tabular-nums max-sm:text-[42px] max-sm:leading-[48px]">
-            {value}
-            <span className="text-lg font-normal tracking-normal text-ink-faint">{unit}</span>
-          </span>
-          <span className="text-[13px] text-ink-muted">
-            {producing
-              ? share != null
-                ? `${pct(share * 100)} of your ${array} kW array`
-                : "Making power now"
-              : "Resting: no sun on the panels"}
-          </span>
-        </div>
-      </div>
-      <div className="grid min-w-[min(100%,26rem)] flex-1 grid-cols-4 gap-x-6 gap-y-4 max-lg:grid-cols-2">
-        <Stat label="Made today" value={kWh(made)} sub={peak ? `Peak ${kW(peak.w)} at ${hhmm(peak.t)}` : undefined} />
-        <Stat label="By midnight" value={expected != null ? kWh(expected) : DASH} sub={likely ?? "From the forecast"} />
-        <Stat
-          label="Tomorrow"
-          value={(() => {
-            const t = f?.days.find((d) => d.date === dateKey(addDays(midnight(now), 1)));
-            return t ? kWh(t.pv_kwh) : DASH;
-          })()}
-          sub="Forecast"
-        />
-        <Stat label="The sky" value={sky ? sky.name : DASH} sub={sky?.temp ?? undefined} />
-      </div>
-    </section>
+    <SummaryCard icon={producing ? "sun" : "moon"} color={tint} wash={producing ? 0.13 : 0.08}>
+      <SummaryStat
+        label="Generating"
+        value={pv == null ? DASH : kW(pv)}
+        sub={
+          array
+            ? producing && share != null
+              ? `${pct(share * 100)} of your ${array} kW array`
+              : `${array} kW array`
+            : undefined
+        }
+      />
+      <SummaryStat
+        label="Made today"
+        value={kWh(made)}
+        sub={peak ? `Peak ${kW(peak.w)} at ${hhmm(peak.t)}` : undefined}
+      />
+      <SummaryStat
+        label="By midnight"
+        value={expected != null ? kWh(expected) : DASH}
+        sub={likely ?? "From the forecast"}
+      />
+      <SummaryStat
+        label="Tomorrow"
+        value={(() => {
+          const t = f?.days.find((d) => d.date === dateKey(addDays(midnight(now), 1)));
+          return t ? kWh(t.pv_kwh) : DASH;
+        })()}
+        sub="Forecast"
+      />
+      <SummaryStat label="The sky" value={sky ? sky.name : DASH} sub={sky?.temp ?? undefined} />
+    </SummaryCard>
   );
 }
 
@@ -483,7 +468,7 @@ function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
               {...bar(i)}
               aria-label={`${shortDay.format(parseYmd(d.date))}: made ${kWh(d.actual_kwh)}, forecast ${kWh(d.forecast_kwh)}`}
               className={cn(
-                "relative flex h-full min-w-0 flex-1 cursor-default items-end border-0 bg-transparent p-0 transition-opacity duration-200",
+                "relative flex h-full min-w-0 flex-1 cursor-pointer items-end border-0 bg-transparent p-0 transition-opacity duration-200",
                 h != null && h !== i && "opacity-45",
               )}
             >

@@ -127,7 +127,7 @@ function Breakdown({ parts, total }: { parts: Record<Kind, number>; total: numbe
           {placed.map((k) => (
             <div
               key={k.id}
-              className="h-full min-w-[3px] transition-opacity duration-200"
+              className="h-full min-w-[3px] cursor-pointer transition-opacity duration-200"
               style={{ flexGrow: k.width, flexBasis: 0, background: k.color, opacity: hot && hot !== k.id ? 0.35 : 1 }}
               onMouseEnter={() => setHot(k.id)}
             />
@@ -151,7 +151,7 @@ function Breakdown({ parts, total }: { parts: Record<Kind, number>; total: numbe
           <li
             key={k.id}
             className={cn(
-              "flex items-center gap-2 text-[13px] transition-opacity duration-200",
+              "flex cursor-pointer items-center gap-2 text-[13px] transition-opacity duration-200",
               hot && hot !== k.id && "opacity-50",
             )}
             onMouseEnter={() => setHot(k.id)}

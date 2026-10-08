@@ -6,7 +6,7 @@ export function SettingsCard({ padded, className, ...rest }: ComponentPropsWithR
   return (
     <section
       className={cn(
-        "flex min-w-0 flex-col rounded-3xl border border-line-subtle bg-surface max-sm:rounded-[20px]",
+        "glass flex min-w-0 flex-col rounded-3xl border border-line-subtle max-sm:rounded-[20px]",
         padded ? "gap-6 p-7 max-sm:p-5" : "overflow-hidden",
         className,
       )}

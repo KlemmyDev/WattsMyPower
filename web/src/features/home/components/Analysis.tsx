@@ -163,7 +163,7 @@ export function AheadCard({
                 {...bar(i)}
                 aria-label={`${shortDay.format(parseYmd(d.date))}: ${d.kwh != null ? `about ${kWh(d.kwh)}` : "not known yet"}`}
                 className={cn(
-                  "relative flex h-full min-w-0 flex-1 cursor-default items-end justify-center border-0 bg-transparent p-0 transition-opacity duration-200",
+                  "relative flex h-full min-w-0 flex-1 cursor-pointer items-end justify-center border-0 bg-transparent p-0 transition-opacity duration-200",
                   h != null && h !== i && "opacity-45",
                 )}
               >
