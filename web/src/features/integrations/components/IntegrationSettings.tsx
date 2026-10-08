@@ -13,6 +13,7 @@ import type { HomeIntegration } from "~/features/home/types";
 import { integrationIcon } from "~/features/home/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { useInverters } from "~/features/integrations/hooks";
+import { gridQuery } from "~/features/grid/api";
 import type { InverterState } from "~/features/integrations/utils";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -148,6 +149,37 @@ function CarLink() {
   );
 }
 
+function GridLink() {
+  const { data: grid, isPending, error } = useQuery(gridQuery);
+  const out = grid?.outages;
+  const [label, detail] = isPending
+    ? ["Checking", "Checking…"]
+    : error || !grid
+      ? ["Unavailable", errorMessage(error)]
+      : [
+          out?.network ? (out.error ? "Not updating" : "Following") : grid.enabled ? "Prices only" : "Not following",
+          [
+            out?.network
+              ? `${out.network.name} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
+              : "No network's outages",
+            grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ];
+  return (
+    <IntegrationLink
+      card
+      to="/settings/integrations/grid"
+      icon="grid"
+      name="Grid"
+      status={label}
+      on={!!out?.network && !out.error}
+      detail={<span className="line-clamp-2">{detail}</span>}
+    />
+  );
+}
+
 /** A smart-home integration (Hisense through ConnectLife…): whether it's connected and reading, and its devices. */
 function HomeLink({ integration: i }: { integration: HomeIntegration }) {
   const a = i.account;
@@ -220,7 +252,12 @@ export function IntegrationSettings() {
       <Group id="vehicles" title="Electric vehicles" sub="Cars to plan charging for">
         <CarLink />
       </Group>
-      <Group id="prices-weather" title="Prices and weather" sub="Where your prices and the solar forecast come from">
+      <Group
+        id="prices-weather"
+        title="Grid, prices and weather"
+        sub="Outages around you, where your prices come from, and the solar forecast"
+      >
+        <GridLink />
         <AmberLink />
         <WeatherLink />
       </Group>

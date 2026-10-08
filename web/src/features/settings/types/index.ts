@@ -28,4 +28,13 @@ export type PlanTariff = {
   plan: { name: string; brand: string; id: string; type: string; updated: string };
 };
 
-export type Place = { label: string; detail: string; name: string; latitude: number; longitude: number };
+export type Place = {
+  label: string;
+  detail: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  /** The street's name and the suburb, for matching the network's outages. */
+  road?: string | null;
+  suburb?: string | null;
+};

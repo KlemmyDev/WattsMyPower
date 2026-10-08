@@ -39,6 +39,7 @@ import { Route as AppTeslaSetupRouteImport } from './routes/_app/tesla/setup'
 import { Route as AppHomeRoomsRoomRouteImport } from './routes/_app/home_.rooms.$room'
 import { Route as AppSettingsIntegrationsIndexRouteImport } from './routes/_app/settings/integrations/index'
 import { Route as AppSettingsIntegrationsAmberRouteImport } from './routes/_app/settings/integrations/amber'
+import { Route as AppSettingsIntegrationsGridRouteImport } from './routes/_app/settings/integrations/grid'
 import { Route as AppSettingsIntegrationsWeatherRouteImport } from './routes/_app/settings/integrations/weather'
 import { Route as AppSettingsIntegrationsCarIndexRouteImport } from './routes/_app/settings/integrations/car/index'
 import { Route as AppSettingsIntegrationsCarCarIdRouteImport } from './routes/_app/settings/integrations/car/$carId'
@@ -199,6 +200,12 @@ const AppSettingsIntegrationsAmberRoute =
     path: '/integrations/amber',
     getParentRoute: () => AppSettingsRouteRoute,
   } as any)
+const AppSettingsIntegrationsGridRoute =
+  AppSettingsIntegrationsGridRouteImport.update({
+    id: '/integrations/grid',
+    path: '/integrations/grid',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
 const AppSettingsIntegrationsWeatherRoute =
   AppSettingsIntegrationsWeatherRouteImport.update({
     id: '/integrations/weather',
@@ -277,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/tesla/': typeof AppTeslaIndexRoute
   '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
+  '/settings/integrations/grid': typeof AppSettingsIntegrationsGridRoute
   '/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
   '/settings/integrations/': typeof AppSettingsIntegrationsIndexRoute
   '/settings/integrations/car/$carId': typeof AppSettingsIntegrationsCarCarIdRoute
@@ -315,6 +323,7 @@ export interface FileRoutesByTo {
   '/tesla': typeof AppTeslaIndexRoute
   '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
+  '/settings/integrations/grid': typeof AppSettingsIntegrationsGridRoute
   '/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
   '/settings/integrations': typeof AppSettingsIntegrationsIndexRoute
   '/settings/integrations/car/$carId': typeof AppSettingsIntegrationsCarCarIdRoute
@@ -356,6 +365,7 @@ export interface FileRoutesById {
   '/_app/tesla/': typeof AppTeslaIndexRoute
   '/_app/home_/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/_app/settings/integrations/amber': typeof AppSettingsIntegrationsAmberRoute
+  '/_app/settings/integrations/grid': typeof AppSettingsIntegrationsGridRoute
   '/_app/settings/integrations/weather': typeof AppSettingsIntegrationsWeatherRoute
   '/_app/settings/integrations/': typeof AppSettingsIntegrationsIndexRoute
   '/_app/settings/integrations/car/$carId': typeof AppSettingsIntegrationsCarCarIdRoute
@@ -397,6 +407,7 @@ export interface FileRouteTypes {
     | '/tesla/'
     | '/home/rooms/$room'
     | '/settings/integrations/amber'
+    | '/settings/integrations/grid'
     | '/settings/integrations/weather'
     | '/settings/integrations/'
     | '/settings/integrations/car/$carId'
@@ -435,6 +446,7 @@ export interface FileRouteTypes {
     | '/tesla'
     | '/home/rooms/$room'
     | '/settings/integrations/amber'
+    | '/settings/integrations/grid'
     | '/settings/integrations/weather'
     | '/settings/integrations'
     | '/settings/integrations/car/$carId'
@@ -475,6 +487,7 @@ export interface FileRouteTypes {
     | '/_app/tesla/'
     | '/_app/home_/rooms/$room'
     | '/_app/settings/integrations/amber'
+    | '/_app/settings/integrations/grid'
     | '/_app/settings/integrations/weather'
     | '/_app/settings/integrations/'
     | '/_app/settings/integrations/car/$carId'
@@ -704,6 +717,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsIntegrationsAmberRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/integrations/grid': {
+      id: '/_app/settings/integrations/grid'
+      path: '/integrations/grid'
+      fullPath: '/settings/integrations/grid'
+      preLoaderRoute: typeof AppSettingsIntegrationsGridRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/integrations/weather': {
       id: '/_app/settings/integrations/weather'
       path: '/integrations/weather'
@@ -774,6 +794,7 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsTariffsRoute: typeof AppSettingsTariffsRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
   AppSettingsIntegrationsAmberRoute: typeof AppSettingsIntegrationsAmberRoute
+  AppSettingsIntegrationsGridRoute: typeof AppSettingsIntegrationsGridRoute
   AppSettingsIntegrationsWeatherRoute: typeof AppSettingsIntegrationsWeatherRoute
   AppSettingsIntegrationsIndexRoute: typeof AppSettingsIntegrationsIndexRoute
   AppSettingsIntegrationsCarCarIdRoute: typeof AppSettingsIntegrationsCarCarIdRoute
@@ -796,6 +817,7 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsTariffsRoute: AppSettingsTariffsRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppSettingsIntegrationsAmberRoute: AppSettingsIntegrationsAmberRoute,
+  AppSettingsIntegrationsGridRoute: AppSettingsIntegrationsGridRoute,
   AppSettingsIntegrationsWeatherRoute: AppSettingsIntegrationsWeatherRoute,
   AppSettingsIntegrationsIndexRoute: AppSettingsIntegrationsIndexRoute,
   AppSettingsIntegrationsCarCarIdRoute: AppSettingsIntegrationsCarCarIdRoute,

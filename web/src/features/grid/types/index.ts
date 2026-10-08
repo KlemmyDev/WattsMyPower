@@ -43,6 +43,46 @@ export type OutlookReason = {
   alert?: boolean;
 };
 
+/** An outage on the electricity network, as the house sees it. Times are unix seconds (null when not given). */
+export type Outage = {
+  id: string;
+  network: string;
+  planned: boolean;
+  status: string | null;
+  reason: string | null;
+  customers: number | null;
+  start: number | null;
+  end: number | null;
+  /** The network's words when it gives no time back ("Under Investigation"). */
+  end_text: string | null;
+  streets: string[];
+  suburbs: string[];
+  lat: number;
+  lon: number;
+  distance_km: number;
+  direction: string;
+  /** It reaches the house: it lists the house's street, or its area covers the house. */
+  affects: "street" | "area" | null;
+};
+
+/** The network's outages around the house (Energex, Ergon Energy). */
+export type OutagesView = {
+  network: { id: string; name: string; site: string } | null;
+  network_auto: boolean;
+  /** The house is somewhere a network is supported (Queensland, for now), or one was chosen. */
+  supported: boolean;
+  radius_km: number;
+  street: string | null;
+  suburb: string | null;
+  /** Outages now (and planned work under way) that reach the house or are within the radius, ours first. */
+  now: Outage[];
+  /** Planned work to come at the house's street, or within the radius in the next two weeks, soonest first. */
+  planned: Outage[];
+  summary: { outages: number; customers: number; nearest_km: number | null };
+  fetched_at: number | null;
+  error: string | null;
+};
+
 export type GridView = {
   /** AEMO is followed: the house is in the NEM, and it hasn't been turned off. */
   enabled: boolean;
@@ -56,6 +96,7 @@ export type GridView = {
   /** Hours with thunderstorms forecast in the next day (`ts` is the hour's end). */
   storms: { ts: number; code: number; precip_prob: number | null }[];
   outlook: { level: OutlookLevel; reasons: OutlookReason[] };
+  outages: OutagesView | null;
   fetched_at: number | null;
   error: string | null;
   limits: { voltage_low: number; voltage_high: number; freq_low: number; freq_high: number; spike: number };

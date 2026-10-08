@@ -9,6 +9,16 @@ import {
   type Settings,
 } from "~/features/common/settings/types";
 
+const GRID_SETTINGS = [
+  "nem_region",
+  "power_network",
+  "home_street",
+  "home_suburb",
+  "outage_radius_km",
+  "latitude",
+  "longitude",
+] as const;
+
 /** Save the forecast location, billing period, bill discounts and budget, or system details, and refresh what depends on it. */
 export function useSaveSettings() {
   const qc = useQueryClient();
@@ -28,6 +38,12 @@ export function useSaveSettings() {
         qc.invalidateQueries({ queryKey: liveQuery.queryKey });
         qc.invalidateQueries({ queryKey: ["forecast"] });
         qc.invalidateQueries({ queryKey: ["insights"] });
+      }
+      // The grid's region, network, street or radius: the page asks again now, and once more when the server has
+      // fetched for the new one in the background.
+      if (GRID_SETTINGS.some((k) => k in changes)) {
+        qc.invalidateQueries({ queryKey: ["grid"] });
+        setTimeout(() => qc.invalidateQueries({ queryKey: ["grid"] }), 5000);
       }
       // Checking for updates turned on or off.
       if ("update_check" in changes) qc.invalidateQueries({ queryKey: ["updates"] });

@@ -20,7 +20,12 @@ from app.core.config import Config
 from app.core.database import Database
 
 # Text settings: key -> max length. Stored in the kv table (the settings table holds REALs).
-TEXT: dict[str, int] = {"location_name": 120}
+TEXT: dict[str, int] = {
+    "location_name": 120,
+    # The house's street (its name only, no number) and suburb, to tell which of the network's outages reach it.
+    "home_street": 80,
+    "home_suburb": 60,
+}
 # Text settings with a fixed set of values: key -> (allowed values, default).
 CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # Open-Meteo's weather model for the forecast: its own pick for the location, or one model.
@@ -35,6 +40,9 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # The NEM region whose wholesale prices and notices the Grid page follows (from AEMO): worked out from the
     # location ("auto"), one region, or none (outside the NEM, or not wanted: then nothing is asked of AEMO).
     "nem_region": (("auto", "QLD1", "NSW1", "VIC1", "SA1", "TAS1", "none"), "auto"),
+    # The electricity network (distributor) whose outages the Grid page follows: worked out from the location, one of
+    # those supported, or none.
+    "power_network": (("auto", "energex", "ergon", "none"), "auto"),
 }
 # Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
 # battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.
@@ -114,6 +122,8 @@ class SettingsStore:
             "forecast_learning": (0, 1, 1),
             # Ask GitHub every few hours whether there's a newer version (Settings → System → Updates).
             "update_check": (0, 1, 1),
+            # How far around the house (km) the network's outages are shown (the Grid page).
+            "outage_radius_km": (1, 100, 15),
             # The house as the Overview draws it (Settings → System → Your house): storeys, and car spaces in
             # the garage (0 = none).
             "house_storeys": (1, 2, 1),

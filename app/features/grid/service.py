@@ -26,6 +26,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.features.grid.aemo import REGION_NAMES, REGIONS, AemoClient, AemoError
+from app.features.grid.outages.service import OutageService
 from app.features.inverters.sungrow.sh_rs import OFF_GRID
 from app.features.inverters.types import Snapshot
 from app.features.settings.store import SettingsStore
@@ -85,12 +86,14 @@ class GridService:
         latest: Callable[[], Snapshot | None],
         client: AemoClient | None = None,
         clock: Callable[[], float] = time.time,
+        outages: OutageService | None = None,
     ):
         self.settings = settings
         self.weather = weather
         self.latest = latest
         self.client = client or AemoClient()
         self.clock = clock
+        self.outages = outages  # the electricity network's outages around the house
         self._lock = threading.Lock()
         self._market: dict[str, dict[str, Any]] = {}  # region -> now
         self._prices: list[dict[str, Any]] = []  # the region's, oldest first
@@ -207,6 +210,7 @@ class GridService:
             "notices": notices,
             "storms": self._storms(now),
             "outlook": self.outlook(now, notices=notices),
+            "outages": self.outages.view() if self.outages is not None else None,
             "fetched_at": fetched_at,
             "error": error if enabled else None,
             "limits": {
@@ -311,6 +315,12 @@ class GridService:
                     "alert": n["kind"] in ALERTING,
                 }
             )
+
+        if self.outages is not None:
+            try:
+                reasons += self.outages.reasons(now)
+            except Exception:
+                log.exception("Working out the outages around the house failed")
 
         storms = self._storms(now)
         if storms:

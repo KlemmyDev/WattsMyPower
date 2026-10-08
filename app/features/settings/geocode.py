@@ -5,7 +5,9 @@ most one request a second, and only search when asked (no search-as-you-type).
 Results are cached.
 
 Names are kept at suburb level ("Paddington, QLD") even when an exact address was
-searched, so a home address isn't stored or shown anywhere.
+searched, so a home address isn't stored or shown anywhere. The one exception is opt-in:
+the street's name (never its number) and suburb, saved for matching the electricity
+network's outages (Settings → Integrations → Electricity network).
 """
 
 from __future__ import annotations
@@ -22,12 +24,17 @@ BASE = "https://nominatim.openstreetmap.org"
 CACHE_SECONDS = 24 * 3600
 
 
-def place_name(a: dict[str, Any]) -> str:
-    """Suburb-level name: "Paddington, QLD" (state as its short code where there is one)."""
-    town = (
+def town_of(a: dict[str, Any]) -> str | None:
+    """The suburb, town or village of an address."""
+    return (
         a.get("suburb") or a.get("town") or a.get("village") or a.get("hamlet")
         or a.get("city_district") or a.get("city") or a.get("county")
     )  # fmt: skip
+
+
+def place_name(a: dict[str, Any]) -> str:
+    """Suburb-level name: "Paddington, QLD" (state as its short code where there is one)."""
+    town = town_of(a)
     region = (a.get("ISO3166-2-lvl4") or "").split("-")[-1] or a.get("state")
     return ", ".join(p for p in (town, region) if p) or a.get("country", "")
 
@@ -72,6 +79,9 @@ class Geocoder:
                     "label": f"{street}, {place}" if street else place,
                     "detail": ", ".join(p for p in (a.get("postcode"), a.get("country")) if p),
                     "name": place,  # what gets saved
+                    # For the electricity network's outages, when chosen there: the street's name and suburb.
+                    "road": a.get("road"),
+                    "suburb": town_of(a),
                     "latitude": round(float(r["lat"]), 4),
                     "longitude": round(float(r["lon"]), 4),
                 }

@@ -519,6 +519,63 @@ def grid_warning(f: Facts, v: Values, s: RuleState) -> Check:
     return Check("bad", first["title"], f"{first['detail']}{also}{advice}")
 
 
+def _reasons(f: Facts, kind: str) -> list[dict[str, Any]] | None:
+    """The grid outlook's reasons of a kind (outages around the house), or None when there's no outlook."""
+    o = f.grid()
+    return None if o is None else [r for r in o["reasons"] if r["kind"] == kind]
+
+
+def _battery_advice(f: Facts, charge: bool) -> str:
+    snap = f.reading()
+    soc = snap.get("battery_soc") if snap else None
+    if soc is None:
+        return ""
+    if charge and soc < 90:
+        return f" Your battery is at {soc:.0f}%: charge it from the grid beforehand (Battery page) to ride it out."
+    return f" Your battery is at {soc:.0f}%."
+
+
+def power_outage(f: Facts, v: Values, s: RuleState) -> Check:
+    here = _reasons(f, "outage_here")
+    if here is None:
+        return UNKNOWN
+    if here:
+        r = here[0]
+        return Check("bad", r["title"], f"Your network reports an outage: {r['detail']}{_battery_advice(f, False)}")
+    return Check("ok", "Power's back at your street", f"Your network reports the outage is over{_after(s, f.now)}.")
+
+
+def planned_outage(f: Facts, v: Values, s: RuleState) -> Check:
+    planned = _reasons(f, "planned_here")
+    if not planned:
+        return UNKNOWN
+    told = list(s.data.get("told") or [])
+    for r in planned:
+        start = r.get("at")
+        if r["id"] in told or start is None or r.get("started") or start - f.now > v["hours"] * HOUR:
+            continue
+        return Check(
+            "report",
+            r["title"],
+            f"Your network has planned work that turns the power off at your street: {r['detail']}"
+            f"{_battery_advice(f, True)}",
+            data={"told": [*told, r["id"]][-50:]},
+        )
+    return UNKNOWN
+
+
+def outages_nearby(f: Facts, v: Values, s: RuleState) -> Check:
+    nearby = _reasons(f, "outages_nearby")
+    if nearby is None:
+        return UNKNOWN
+    if nearby and nearby[0].get("count", 0) >= v["count"]:
+        r = nearby[0]
+        return Check("bad", r["title"], f"{r['detail']}{_battery_advice(f, False)}")
+    if not nearby:
+        return Check("ok", "Outages nearby are over", "Your network reports no outages around you now.")
+    return UNKNOWN
+
+
 def grid_voltage(f: Facts, v: Values, s: RuleState) -> Check:
     snap = f.reading()
     volts = snap.get("grid_voltage") if snap else None
@@ -774,6 +831,39 @@ RULES: tuple[Rule, ...] = (
         "battery charged.",
         grid_warning,
         cooldown=6 * HOUR,
+        category="grid",
+        page="/grid",
+    ),
+    Rule(
+        "power_outage",
+        "Outage at your street",
+        "Your electricity network reports an outage at your street (Settings → Integrations → Electricity network). "
+        "You'll hear when it's over.",
+        power_outage,
+        cooldown=0,
+        urgent=True,
+        category="grid",
+        page="/grid",
+    ),
+    Rule(
+        "planned_outage",
+        "Planned outage at your street",
+        "Your network has planned work that turns the power off at your street: once, this long before it starts.",
+        planned_outage,
+        (Setting("hours", "Tell me", "hours before", 1, 168, 24),),
+        cooldown=None,
+        category="grid",
+        page="/grid",
+        resolves=False,
+    ),
+    Rule(
+        "outages_nearby",
+        "Outages nearby",
+        "At least this many outages within your outage radius at once (it's usually a storm).",
+        outages_nearby,
+        (Setting("count", "At least", "outages", 1, 50, 3),),
+        enabled=False,
+        cooldown=3 * HOUR,
         category="grid",
         page="/grid",
     ),
