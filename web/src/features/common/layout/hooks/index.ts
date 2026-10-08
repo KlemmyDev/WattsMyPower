@@ -1,12 +1,11 @@
 import { useRouterState } from "@tanstack/react-router";
-import { useCallback, useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
 import { NAV, SETTINGS_COLOR, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
-import { STORE_NAV_COLLAPSED, store } from "~/features/common/storage/utils";
 import { useHomeNavPages } from "~/features/home/hooks";
 import { SETTINGS_SUB, SETTINGS_TABS } from "~/features/settings/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -98,30 +97,8 @@ export function useMedia(query: string): boolean {
   );
 }
 
-/** Where the side nav docks open (the `xl` breakpoint); below it, it's a rail, or a menu on a phone. */
+/** Where the side nav docks in full (the `xl` breakpoint); below it, it's a rail, or a menu on a phone. */
 export const NAV_DOCKED = "(min-width: 1000px)";
-
-// Whether the side nav is collapsed to a rail where it could be open: remembered in this browser, open to start.
-let collapsed: boolean | undefined;
-const collapsedListeners = new Set<() => void>();
-const isCollapsed = () => (collapsed ??= store.get(STORE_NAV_COLLAPSED) === "1");
-
-export function useNavCollapsed(): [boolean, (v: boolean) => void] {
-  const value = useSyncExternalStore(
-    (onChange) => {
-      collapsedListeners.add(onChange);
-      return () => collapsedListeners.delete(onChange);
-    },
-    isCollapsed,
-    () => false,
-  );
-  const set = useCallback((v: boolean) => {
-    collapsed = v;
-    store.set(STORE_NAV_COLLAPSED, v ? "1" : "");
-    collapsedListeners.forEach((f) => f());
-  }, []);
-  return [value, set];
-}
 
 /** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills…). */
 export function useSectionPages(section: string): SectionPages | null {

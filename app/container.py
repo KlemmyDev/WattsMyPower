@@ -20,6 +20,7 @@ from app.features.bills.service import BillsService
 from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
+from app.features.grid.service import GridService
 from app.features.home import insights as home_insights
 from app.features.home.service import HomeService
 from app.features.imports.service import ImportService
@@ -69,6 +70,7 @@ class Services:
     alerts: AlertsService
     battery: BatteryService
     updates: UpdateService
+    grid: GridService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -93,6 +95,7 @@ def build_services(config: Config) -> Services:
     insights = InsightsService(db, readings, settings, weather, forecast, tariffs, amber.repo)
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
+    grid = GridService(settings, weather, lambda: live.latest)
     return Services(
         config=config,
         db=db,
@@ -116,7 +119,9 @@ def build_services(config: Config) -> Services:
         storage=StorageService(config, db, collector),
         onboarding=OnboardingService(config, db, integrations),
         live=live,
-        alerts=AlertsService(db, live, settings, readings, tariffs, insights, prices=amber.repo, bills=bills),
+        alerts=AlertsService(
+            db, live, settings, readings, tariffs, insights, prices=amber.repo, bills=bills, grid=grid.outlook
+        ),
         battery=BatteryService(
             db,
             live,
@@ -124,5 +129,6 @@ def build_services(config: Config) -> Services:
             planner=ForecastPlanner(forecast, tariffs, amber.repo, settings),
         ),
         updates=UpdateService(settings, Path(config.db_path).parent / "update"),
+        grid=grid,
         source=source,
     )

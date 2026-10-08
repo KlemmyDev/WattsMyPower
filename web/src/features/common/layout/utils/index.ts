@@ -2,7 +2,7 @@ import type { LinkProps } from "@tanstack/react-router";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { IconName } from "~/features/common/ui/components/Icon";
 
-export type Section = "/" | "/home" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
+export type Section = "/" | "/home" | "/grid" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
 
 /** Live: what's happening now. Over time: what happened, what's coming, and what it cost. */
 export type NavGroup = "Live" | "Over time";
@@ -16,6 +16,7 @@ export const NAV: NavItem[] = [
   { to: "/", label: "Overview", icon: "layout", group: "Live", color: COLOR.solar },
   { to: "/home", label: "Home", icon: "home", group: "Live", color: COLOR.teal },
   { to: "/battery", label: "Battery", icon: "battery", group: "Live", color: COLOR.battery },
+  { to: "/grid", label: "Grid", icon: "grid", group: "Live", color: COLOR.import },
   { to: "/tesla", label: "Tesla", icon: "car", group: "Live", color: COLOR.danger },
   { to: "/history", label: "History", icon: "chart", group: "Over time", color: COLOR.lilac },
   { to: "/plan", label: "Plan", icon: "cloudSun", group: "Over time", color: COLOR.export },

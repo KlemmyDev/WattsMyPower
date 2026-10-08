@@ -40,6 +40,7 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "weather_model": "best_match",
         "bill_discount_on": "usage",
         "house_style": "estate",
+        "nem_region": "auto",
         "inverter_places": [],
         "battery_places": [],
     }

@@ -1,0 +1,298 @@
+import { useId, useMemo, useState, type PointerEvent, type ReactNode } from "react";
+import { hourLabel } from "~/features/common/formatting/utils/date";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { ChartTooltip, HoverLine } from "~/features/common/ui/components/ChartHover";
+import { cn } from "~/features/common/ui/utils";
+
+const W = 1000;
+const PAD = 8;
+const HOUR = 3600;
+
+/** A reading on the line: dashed where it's a forecast. */
+export type LinePoint = { t: number; v: number | null; forecast?: boolean };
+
+const STROKE = {
+  fill: "none",
+  vectorEffect: "non-scaling-stroke",
+  strokeLinejoin: "round",
+  strokeLinecap: "round",
+} as const;
+
+/** Runs of points with values, split where they're missing or where actuals give way to the forecast. */
+function runs(points: LinePoint[]) {
+  const out: { pts: LinePoint[]; forecast: boolean }[] = [];
+  let cur: { pts: LinePoint[]; forecast: boolean } | null = null;
+  for (const p of points) {
+    if (p.v == null) {
+      cur = null;
+      continue;
+    }
+    const f = !!p.forecast;
+    if (!cur || cur.forecast !== f) {
+      // The forecast carries on from the last actual, so the line doesn't break where it starts.
+      const from: LinePoint[] = cur && !cur.forecast && f ? [cur.pts[cur.pts.length - 1]] : [];
+      cur = { pts: [...from], forecast: f };
+      out.push(cur);
+    }
+    cur.pts.push(p);
+  }
+  return out.filter((r) => r.pts.length > 1);
+}
+
+/**
+ * One measure through a stretch of time, as a line (dashed where it's a forecast), with what's under the pointer in a
+ * tooltip. `signed` fills above zero in one colour and below in another (the grid: from it, to it); `band` shades the
+ * range a value should stay in; `marks` are reference lines with a label.
+ */
+export function TimeLine({
+  points,
+  start,
+  end,
+  now,
+  color,
+  height = 160,
+  domain,
+  signed,
+  band,
+  marks = [],
+  every = 6,
+  tip,
+  empty,
+}: {
+  points: LinePoint[];
+  start: number;
+  end: number;
+  now?: number;
+  color: string;
+  height?: number;
+  /** The values the plot must show, at least (it grows to fit the readings). */
+  domain?: [number, number];
+  signed?: { above: string; below: string };
+  band?: { from: number; to: number; label?: string };
+  marks?: { v: number; label: string; color?: string }[];
+  /** Hours between the marks along the bottom (every other one is left out on a phone). */
+  every?: number;
+  tip: (p: LinePoint) => ReactNode;
+  empty?: ReactNode;
+}) {
+  const H = height;
+  const clip = useId().replace(/:/g, "");
+  const chart = useMemo(() => {
+    const shown = points.filter((p) => p.t >= start && p.t <= end);
+    const values = shown.map((p) => p.v).filter((v): v is number => v != null);
+    let lo = Math.min(...values, domain?.[0] ?? Infinity, ...(signed ? [0] : []));
+    let hi = Math.max(...values, domain?.[1] ?? -Infinity, ...(signed ? [0] : []));
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) [lo, hi] = [0, 1];
+    if (hi - lo < 1e-9) hi = lo + 1;
+    const span = hi - lo;
+    if (!domain || hi > domain[1]) hi += span * 0.08;
+    if ((!domain || lo < domain[0]) && !(signed && lo === 0)) lo -= span * 0.08;
+    const X = (t: number) => ((Math.max(start, Math.min(end, t)) - start) / (end - start)) * W;
+    const Y = (v: number) => H - PAD - ((v - lo) / (hi - lo)) * (H - 2 * PAD);
+    const path = (pts: LinePoint[]) =>
+      pts.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)} ${Y(p.v ?? 0).toFixed(1)}`).join(" ");
+    const lines = runs(shown).map((r) => ({ d: path(r.pts), forecast: r.forecast, pts: r.pts }));
+    const zero = Y(0);
+    return {
+      shown: shown.filter((p) => p.v != null),
+      lines,
+      areas: signed
+        ? lines.map(
+            (l) =>
+              `${l.d} L${X(l.pts[l.pts.length - 1].t).toFixed(1)} ${zero.toFixed(1)} L${X(l.pts[0].t).toFixed(1)} ${zero.toFixed(1)} Z`,
+          )
+        : [],
+      zero: lo < 0 && hi > 0 ? zero : null,
+      Y,
+      topOf: (v: number) => (Y(v) / H) * 100,
+      leftOf: (t: number) => (X(t) / W) * 100,
+    };
+  }, [points, start, end, domain, signed, H]);
+
+  const [hover, setHover] = useState<LinePoint | null>(null);
+  const [width, setWidth] = useState(0);
+  const onPoint = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setWidth(e.currentTarget.offsetWidth);
+    const t = start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (end - start);
+    let best: LinePoint | null = null;
+    for (const p of chart.shown) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+    setHover(best);
+  };
+
+  // Hour marks every `every` hours (twice that on a phone), on the hour, across the stretch shown.
+  const ticks: { left: number; label: string; odd: boolean }[] = [];
+  const first = Math.ceil(start / HOUR) * HOUR;
+  for (let t = first; t <= end; t += HOUR) {
+    const h = new Date(t * 1000).getHours();
+    if (h % every) continue;
+    ticks.push({ left: chart.leftOf(t), label: hourLabel(h), odd: (h / every) % 2 === 1 });
+  }
+  const nowLeft = now != null && now >= start && now <= end ? chart.leftOf(now) : null;
+
+  if (!chart.shown.length)
+    return (
+      <div className="flex items-center justify-center text-sm text-ink-faint" style={{ height }}>
+        {empty}
+      </div>
+    );
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div
+        className="relative cursor-crosshair touch-pan-y"
+        style={{ height }}
+        onPointerMove={onPoint}
+        onPointerDown={onPoint}
+        onPointerLeave={() => setHover(null)}
+      >
+        <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
+        <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
+        {band && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 rounded-[3px]"
+            style={{
+              top: `${chart.topOf(band.to)}%`,
+              height: `${chart.topOf(band.from) - chart.topOf(band.to)}%`,
+              background: alpha(COLOR.good, 0.07),
+            }}
+          />
+        )}
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
+        >
+          {signed && (
+            <defs>
+              <clipPath id={`${clip}-up`}>
+                <rect x="0" y="0" width={W} height={Math.max(0, chart.Y(0))} />
+              </clipPath>
+              <clipPath id={`${clip}-down`}>
+                <rect x="0" y={chart.Y(0)} width={W} height={Math.max(0, H - chart.Y(0))} />
+              </clipPath>
+            </defs>
+          )}
+          {signed &&
+            chart.areas.map((d, i) => (
+              <g key={`a${i}`}>
+                <path d={d} clipPath={`url(#${clip}-up)`} style={{ fill: alpha(signed.above, 0.22) }} />
+                <path d={d} clipPath={`url(#${clip}-down)`} style={{ fill: alpha(signed.below, 0.22) }} />
+              </g>
+            ))}
+          {chart.zero != null && (
+            <line
+              x1="0"
+              x2={W}
+              y1={chart.zero.toFixed(1)}
+              y2={chart.zero.toFixed(1)}
+              vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.fg, 0.22) }}
+            />
+          )}
+          {marks.map((m) => (
+            <line
+              key={m.label}
+              x1="0"
+              x2={W}
+              y1={chart.Y(m.v).toFixed(1)}
+              y2={chart.Y(m.v).toFixed(1)}
+              vectorEffect="non-scaling-stroke"
+              strokeDasharray="3 4"
+              style={{ stroke: m.color ?? alpha(COLOR.fg, 0.3) }}
+            />
+          ))}
+          {chart.lines.map((l, i) =>
+            signed ? (
+              <g key={i}>
+                <path
+                  d={l.d}
+                  {...STROKE}
+                  strokeWidth="2"
+                  clipPath={`url(#${clip}-up)`}
+                  style={{ stroke: signed.above }}
+                />
+                <path
+                  d={l.d}
+                  {...STROKE}
+                  strokeWidth="2"
+                  clipPath={`url(#${clip}-down)`}
+                  style={{ stroke: signed.below }}
+                />
+              </g>
+            ) : (
+              <path
+                key={i}
+                d={l.d}
+                {...STROKE}
+                strokeWidth="2"
+                strokeDasharray={l.forecast ? "4 4" : undefined}
+                strokeOpacity={l.forecast ? 0.75 : 1}
+                style={{ stroke: color }}
+              />
+            ),
+          )}
+        </svg>
+        {band?.label && (
+          <span
+            className="pointer-events-none absolute right-0 pt-0.5 text-[10.5px] text-ink-faint"
+            style={{ top: `${chart.topOf(band.to)}%` }}
+          >
+            {band.label}
+          </span>
+        )}
+        {marks.map((m) => (
+          <span
+            key={m.label}
+            className="pointer-events-none absolute left-0 -translate-y-full pb-0.5 text-[10.5px] text-ink-faint"
+            style={{ top: `${chart.topOf(m.v)}%` }}
+          >
+            {m.label}
+          </span>
+        ))}
+        {nowLeft != null && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 border-l border-dashed border-line-strong"
+            style={{ left: `${nowLeft.toFixed(2)}%` }}
+          >
+            <span className="absolute -top-0.5 left-1.5 font-mono text-[10px] text-ink-faint">Now</span>
+          </div>
+        )}
+        {hover && hover.v != null && (
+          <>
+            <HoverLine left={chart.leftOf(hover.t)} />
+            <span
+              className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+              style={{
+                left: `${chart.leftOf(hover.t)}%`,
+                top: `${chart.topOf(hover.v)}%`,
+                background: signed ? (hover.v >= 0 ? signed.above : signed.below) : color,
+              }}
+            />
+            <ChartTooltip left={chart.leftOf(hover.t)} flip={chart.leftOf(hover.t) > 60} width={width}>
+              {tip(hover)}
+            </ChartTooltip>
+          </>
+        )}
+      </div>
+      <div className="relative h-3.5">
+        {ticks.map((t, i) => (
+          <span
+            key={`${t.left}`}
+            className={cn(
+              "absolute font-mono text-[11px] whitespace-nowrap text-ink-faint",
+              t.left < 3 ? "" : t.left > 97 ? "-translate-x-full" : "-translate-x-1/2",
+              t.odd && i !== 0 && "max-md:hidden",
+            )}
+            style={{ left: `${t.left}%` }}
+          >
+            {t.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

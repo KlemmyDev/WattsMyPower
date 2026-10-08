@@ -4,8 +4,6 @@ import { Dock } from "~/features/common/layout/components/Dock";
 import { SectionPagesStrip } from "~/features/common/layout/components/SectionPagesStrip";
 import { NavDrawer, SideNav } from "~/features/common/layout/components/SideNav";
 import { TopBar } from "~/features/common/layout/components/TopBar";
-import { useNavCollapsed, useSectionPages } from "~/features/common/layout/hooks";
-import { sectionOf } from "~/features/common/layout/utils";
 
 export function AppShell({ children }: { children: ReactNode }) {
   // Keyed by section, so opening a page lets its sections rise into place (.page-rise), while moving
@@ -13,26 +11,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   // the page being shown (resolvedLocation), not the address: while the next page loads, the one on
   // screen stays put rather than starting its entrance again.
   const section = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname.split("/")[1] });
-  const current = useRouterState({ select: (s) => sectionOf(s.location.pathname) });
-  const [collapsed] = useNavCollapsed();
-  const pages = !!useSectionPages(current);
   const [menu, setMenu] = useState(false);
   const openMenu = useCallback(() => setMenu(true), []);
   const closeMenu = useCallback(() => setMenu(false), []);
   return (
     // --nav-w is what the side nav takes on the left: nothing on a phone (it's a menu there), the rail on a tablet,
-    // and from xl the circuit open, or collapsed to the rail with a column of the section's pages beside it. The page
-    // and the dock centre in what's left.
-    <div
-      data-nav={collapsed ? "collapsed" : "open"}
-      data-pages={pages}
-      className="min-h-screen bg-canvas [--nav-w:0px] md:[--nav-w:72px] xl:data-[nav=open]:[--nav-w:236px] xl:data-[nav=collapsed]:data-[pages=true]:[--nav-w:320px]"
-    >
+    // and from xl the circuit. The page and the dock centre in what's left.
+    <div className="min-h-screen bg-canvas [--nav-w:0px] md:[--nav-w:72px] xl:[--nav-w:236px]">
       {/* The sticky header carries the space above and below it, so the page starts where it did. */}
       <TopBar onMenu={openMenu} />
       <SideNav onMenu={openMenu} />
       <NavDrawer open={menu} onClose={closeMenu} />
-      <div className="pl-(--nav-w) transition-[padding] duration-[450ms] ease-out-soft">
+      <div className="pl-(--nav-w)">
         <main
           key={section}
           className="page-rise mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-8 pt-9 pb-[136px] max-sm:px-4 max-sm:pt-6 md:pt-10"

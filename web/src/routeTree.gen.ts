@@ -16,6 +16,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppBatteryRouteImport } from './routes/_app/battery'
 import { Route as AppBillsRouteImport } from './routes/_app/bills'
 import { Route as AppForecastRouteImport } from './routes/_app/forecast'
+import { Route as AppGridRouteImport } from './routes/_app/grid'
 import { Route as AppHealthRouteImport } from './routes/_app/health'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppHomeRouteImport } from './routes/_app/home'
@@ -79,6 +80,11 @@ const AppBillsRoute = AppBillsRouteImport.update({
 const AppForecastRoute = AppForecastRouteImport.update({
   id: '/forecast',
   path: '/forecast',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGridRoute = AppGridRouteImport.update({
+  id: '/grid',
+  path: '/grid',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHealthRoute = AppHealthRouteImport.update({
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
+  '/grid': typeof AppGridRoute
   '/health': typeof AppHealthRoute
   '/history': typeof AppHistoryRoute
   '/home': typeof AppHomeRoute
@@ -286,6 +293,7 @@ export interface FileRoutesByTo {
   '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
   '/forecast': typeof AppForecastRoute
+  '/grid': typeof AppGridRoute
   '/health': typeof AppHealthRoute
   '/history': typeof AppHistoryRoute
   '/home': typeof AppHomeRoute
@@ -326,6 +334,7 @@ export interface FileRoutesById {
   '/_app/battery': typeof AppBatteryRoute
   '/_app/bills': typeof AppBillsRoute
   '/_app/forecast': typeof AppForecastRoute
+  '/_app/grid': typeof AppGridRoute
   '/_app/health': typeof AppHealthRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/home': typeof AppHomeRoute
@@ -367,6 +376,7 @@ export interface FileRouteTypes {
     | '/battery'
     | '/bills'
     | '/forecast'
+    | '/grid'
     | '/health'
     | '/history'
     | '/home'
@@ -403,6 +413,7 @@ export interface FileRouteTypes {
     | '/battery'
     | '/bills'
     | '/forecast'
+    | '/grid'
     | '/health'
     | '/history'
     | '/home'
@@ -442,6 +453,7 @@ export interface FileRouteTypes {
     | '/_app/battery'
     | '/_app/bills'
     | '/_app/forecast'
+    | '/_app/grid'
     | '/_app/health'
     | '/_app/history'
     | '/_app/home'
@@ -529,6 +541,13 @@ declare module '@tanstack/react-router' {
       path: '/forecast'
       fullPath: '/forecast'
       preLoaderRoute: typeof AppForecastRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/grid': {
+      id: '/_app/grid'
+      path: '/grid'
+      fullPath: '/grid'
+      preLoaderRoute: typeof AppGridRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/health': {
@@ -801,6 +820,7 @@ interface AppRouteChildren {
   AppBatteryRoute: typeof AppBatteryRoute
   AppBillsRoute: typeof AppBillsRoute
   AppForecastRoute: typeof AppForecastRoute
+  AppGridRoute: typeof AppGridRoute
   AppHealthRoute: typeof AppHealthRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppHomeRoute: typeof AppHomeRoute
@@ -819,6 +839,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBatteryRoute: AppBatteryRoute,
   AppBillsRoute: AppBillsRoute,
   AppForecastRoute: AppForecastRoute,
+  AppGridRoute: AppGridRoute,
   AppHealthRoute: AppHealthRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppHomeRoute: AppHomeRoute,

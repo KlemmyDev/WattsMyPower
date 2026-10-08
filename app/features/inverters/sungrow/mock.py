@@ -105,6 +105,8 @@ class MockInverter:
             "battery_current": r(abs(batt) / 380),
             "inverter_temp": r(30 + 15 * sun),
             "grid_freq": r(50 + random.uniform(-0.05, 0.05), 2),
+            # The street's voltage rises with the solar sent into it, and sags with the house drawing hard.
+            "grid_voltage": r(240 + 0.0022 * -grid + random.uniform(-1.5, 1.5)),
             "mppt1_v": r(320 * min(1, sun * 4)),
             "mppt1_a": r(pv * 0.55 / 320 if pv else 0),
             "mppt2_v": r(310 * min(1, sun * 4)),

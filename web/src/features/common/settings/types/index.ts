@@ -43,6 +43,8 @@ export type Settings = {
    * (0 = no garage); and where each inverter and battery is, in the order they're connected (missing = outside).
    */
   house_style: "estate" | "modern" | "queenslander" | "federation" | "farmhouse";
+  /** The NEM region the Grid page follows AEMO for: worked out from the location, one region, or none. */
+  nem_region: "auto" | "QLD1" | "NSW1" | "VIC1" | "SA1" | "TAS1" | "none";
   house_storeys: number;
   garage_spaces: number;
   inverter_places: ("wall" | "garage")[];

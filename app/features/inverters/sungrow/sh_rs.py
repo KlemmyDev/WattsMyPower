@@ -33,6 +33,8 @@ REGISTERS = [
     Reg("mppt2_v", 5013, 1, False, 0.1),
     Reg("mppt2_a", 5014, 1, False, 0.1),
     Reg("pv_power", 5017, 2, False, 1),
+    # The AC side's voltage (phase A on a three-phase model): the grid's, while it's connected.
+    Reg("grid_voltage", 5019, 1, False, 0.1),
     # Scale differs by firmware (0.1 Hz per doc, 0.01 Hz on some units) - normalised in derive().
     Reg("grid_freq", 5036, 1, False, 0.1),
     Reg("running_state", 13000),
@@ -90,6 +92,9 @@ RUNNING_STATE = {
     0x8200: "Dispatch",
     0x9100: "Warn run",
 }
+
+# The running states that mean it's running the house without the grid (the grid's down).
+OFF_GRID = frozenset({0x1000, 0x0041})
 
 # Register 5000, the device type code, for the SH family (they all share this register map).
 DEVICE_TYPES = {

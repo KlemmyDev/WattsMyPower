@@ -55,7 +55,7 @@ SAMPLE_COLUMNS: dict[str, str] = {
     "pv_power": "AVG", "load_power": "AVG", "grid_power": "AVG", "battery_power": "AVG",
     "battery_soc": "AVG", "battery_soh": "AVG", "battery_temp": "AVG",
     "battery_voltage": "AVG", "battery_current": "AVG",
-    "inverter_temp": "AVG", "grid_freq": "AVG",
+    "inverter_temp": "AVG", "grid_freq": "AVG", "grid_voltage": "AVG",
     "mppt1_v": "AVG", "mppt1_a": "AVG", "mppt2_v": "AVG", "mppt2_a": "AVG",
     # second inverter, and the hybrid's own figures before it's added in (see inverters.merge)
     "pv1_power": "AVG", "pv2_power": "AVG", "load_hybrid": "AVG", "grid_hybrid": "AVG", "pv2_temp": "AVG",
@@ -108,7 +108,7 @@ SAMPLE_BOUNDS: dict[str, tuple[float, float]] = {
     "battery_soc": (0, 100), "battery_soh": (0, 100),
     "battery_voltage": (0, 1000), "battery_current": (-500, 500),
     "battery_temp": _TEMP, "inverter_temp": _TEMP, "pv2_temp": _TEMP,
-    "grid_freq": (40, 70),
+    "grid_freq": (40, 70), "grid_voltage": (0, 400),
     "mppt1_v": (0, 1500), "mppt2_v": (0, 1500), "mppt1_a": (0, 100), "mppt2_a": (0, 100),
     **{c: _DAY_KWH for c in SAMPLE_COLUMNS if c.startswith("daily_")},
     **{c: _TOTAL_KWH for c in SAMPLE_COLUMNS if c.startswith("total_")},
