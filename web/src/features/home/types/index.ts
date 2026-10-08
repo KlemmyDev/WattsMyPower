@@ -55,6 +55,8 @@ export type DeviceNow = {
   remaining_min: number | null;
   run: { start: number; kwh: number } | null;
   details: Record<string, string>;
+  /** About the device itself (its Wi-Fi signal, firmware…), for its own page. */
+  info?: Record<string, string>;
   /** For a device that can be switched: whether it's on (null: it doesn't say). */
   switched_on: boolean | null;
 };
@@ -235,3 +237,44 @@ export type HomeInsights = {
 
 /** A run with what the appliance drew through it (W per 5 minutes). */
 export type RunCurve = { run: HomeRun; t: number[]; w: number[] };
+
+/** A peak: the most a device was read drawing in a 5 minutes, against its usual daily highest. */
+export type HomePeak = { ts: number; device: number; w: number; usual_w: number | null; spike: boolean };
+
+/** A day ahead: what's usually used on that weekday, and the range 8 in 10 of them came within (null: nothing yet). */
+export type HomeDayAhead = { date: string; kwh: number | null; low: number | null; high: number | null };
+
+/** Some devices' use together (a room's, or one device's), looked at closely. */
+export type HomeProfile = {
+  /** Past days it's judged by (up to eight weeks). */
+  days: number;
+  today: {
+    /** 5-minute buckets so far today, and the average W in each. */
+    t: number[];
+    w: number[];
+    kwh: number;
+    usual: {
+      /** The usual day is this weekday's (otherwise every day's, with too few of them). */
+      same_weekday: boolean;
+      days: number;
+      /** W through each slot of the day (seconds long), from midnight. */
+      slot: number;
+      w: number[];
+      /** kWh usually used by now, and in the whole day. */
+      by_now: number;
+      kwh: number;
+    };
+    /** Where today's likely to end up (null: nothing to go on). */
+    by_midnight: number | null;
+  };
+  /** Average kWh in each hour (24) of each weekday (7, Monday first); null for a weekday not seen yet. */
+  week: (number | null)[][];
+  ahead: HomeDayAhead[];
+  month: { used: number; likely: number | null; days_left: number };
+  /** Each device's usual peak (the median of its days' highest, on days it did something) and its highest, over the
+   * last 30 days; the highest usual first. */
+  peaks: { device: number; usual_w: number; days: number; max: HomePeak }[];
+  /** Days a device drew well over its usual peak, newest first. */
+  spikes: HomePeak[];
+  peak_today: HomePeak | null;
+};

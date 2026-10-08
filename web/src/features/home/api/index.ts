@@ -5,6 +5,7 @@ import type {
   DeviceRaw,
   HomeInsights,
   HomeOverview,
+  HomeProfile,
   HomeRuleSettings,
   HomeRun,
   HomeUsage,
@@ -37,6 +38,17 @@ export const homePatternsQuery = queryOptions({
   queryFn: ({ signal }) => apiGet<DevicePattern[]>("home/patterns", undefined, { signal }),
   staleTime: 10 * MIN,
 });
+
+/** Some devices' use together (a room's), looked at closely: today against a usual day, the week, spikes, what's
+ * likely ahead. */
+export const homeProfileQuery = (devices: number[]) =>
+  queryOptions({
+    queryKey: ["home", "profile", devices.join(",")],
+    queryFn: ({ signal }) => apiGet<HomeProfile>("home/profile", { devices: devices.join(",") }, { signal }),
+    staleTime: MIN,
+    refetchInterval: 5 * MIN,
+    enabled: devices.length > 0,
+  });
 
 /** Runs that started in [start, end), newest first. */
 export const homeRunsQuery = (start: number, end: number, device?: number) =>

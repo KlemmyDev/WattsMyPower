@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.container import Services
 from app.dependencies import JsonBody, ServicesDep, time_range
 from app.features.home import car as home_car
-from app.features.home import insights, usage
+from app.features.home import insights, profile, usage
 from app.features.home.service import HomeSetupError
 from app.features.home.types import Hints
 from app.features.readings.repository import KWH_PER_W_ROLLUP
@@ -169,6 +169,20 @@ async def get_insights(svc: ServicesDep):
         }
 
     return await asyncio.to_thread(build)
+
+
+@router.get("/profile")
+async def get_profile(svc: ServicesDep, devices: str):
+    """Some devices' use together (a room's), looked at closely: today against a usual day, when in the week they use
+    power, their power spikes, and what they're likely to use in the days ahead and this month. `devices`: their ids,
+    comma-separated."""
+    try:
+        ids = [int(x) for x in devices.split(",") if x.strip()]
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="devices: device ids, comma-separated.") from e
+    if not ids:
+        raise HTTPException(status_code=422, detail="Choose at least one device.")
+    return await asyncio.to_thread(profile.profile, svc.home.repo, ids, int(time.time()))
 
 
 @router.get("/runs/{run_id}/curve")

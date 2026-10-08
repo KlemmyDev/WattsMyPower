@@ -12,7 +12,9 @@ While every plug answers, new ones are only looked for when asked (Look for new 
 Each poll reads a plug's details (name, whether it's switched on) and its energy: get_energy_usage gives its power
 now (current_power, in mW) and what it's used today (today_energy, Wh, from the plug's midnight), read as a counter
 that starts over each day. Firmware without current_power there has get_current_power, in W. A plug is switched on or
-off with set_device_info {"device_on": …}, over the same connection.
+off with set_device_info {"device_on": …}, over the same connection. What else the two say about the plug (its Wi-Fi
+signal, how long it's been on and on today, its own count for the month, its firmware, and an overload or overheating)
+is shown on its page.
 """
 
 from __future__ import annotations
@@ -68,6 +70,48 @@ def _power_w(client: Client, energy: dict[str, Any]) -> float | None:
     except TapoError:
         return None
     return float(w) if w is not None else None
+
+
+SIGNAL = {3: "Strong", 2: "Good", 1: "Weak", 0: "Very weak"}
+
+
+def _hours(minutes: float) -> str:
+    """60 → "1 h", 312 → "5 h 12 min", 9 → "9 min"."""
+    h, m = divmod(round(minutes), 60)
+    return " ".join(p for p in (f"{h} h" if h else "", f"{m} min" if m or not h else "") if p)
+
+
+def _info(info: dict[str, Any], energy: dict[str, Any]) -> dict[str, str]:
+    """What the plug says about itself, in words, for its page."""
+    out: dict[str, str] = {}
+    rssi, level = info.get("rssi"), info.get("signal_level")
+    if isinstance(level, int) and level in SIGNAL:
+        out["Wi-Fi signal"] = SIGNAL[level] + (f" ({rssi} dBm)" if isinstance(rssi, int) else "")
+    elif isinstance(rssi, int):
+        out["Wi-Fi signal"] = f"{rssi} dBm"
+    if info.get("device_on") and isinstance(on := info.get("on_time"), int | float) and on > 0:
+        out["On for"] = _hours(on / 60)
+    if isinstance(today := energy.get("today_runtime"), int | float):
+        out["On today"] = _hours(today)
+    month, runtime = energy.get("month_energy"), energy.get("month_runtime")
+    if isinstance(month, int | float):
+        out["This month, by the plug"] = f"{month / 1000:.2f} kWh" + (
+            f" over {_hours(runtime)}" if isinstance(runtime, int | float) and runtime else ""
+        )
+    if fw := str(info.get("fw_ver") or "").split(" ")[0]:
+        out["Firmware"] = fw
+    return out
+
+
+def _warnings(info: dict[str, Any]) -> dict[str, str]:
+    """Anything wrong the plug reports, for its card."""
+    out: dict[str, str] = {}
+    if info.get("overheated") is True:
+        out["Overheated"] = "Yes"
+    for key, label in (("power_protection_status", "Overload"), ("overcurrent_status", "Over current")):
+        if (v := info.get(key)) and str(v).lower() not in ("normal", "none", "0"):
+            out[label] = str(v).replace("_", " ").capitalize()
+    return out
 
 
 class Tapo(Integration):
@@ -295,8 +339,12 @@ class Tapo(Integration):
             energy_kwh=float(today) / 1000 if today is not None else None,
             counter="cycle",  # today's energy: starts over at the plug's midnight
             switched_on=on if isinstance(on, bool) else None,
+            details=_warnings(info),
+            info=_info(info, energy),
             raw={"device_info": {k: info.get(k) for k in ("model", "fw_ver", "hw_ver", "device_on", "type", "ip",
-                                                          "rssi", "on_time", "overheated")}, "energy": energy},
+                                                          "rssi", "signal_level", "on_time", "overheated",
+                                                          "power_protection_status", "overcurrent_status")},
+                 "energy": energy},
         )  # fmt: skip
 
     def poll(self) -> list[Reading]:

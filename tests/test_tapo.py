@@ -436,3 +436,23 @@ def test_a_plug_that_cant_be_reached_says_so(lan: Network, db: Database, config:
     with pytest.raises(HomeSetupError, match="couldn't be switched off") as e:
         home.switch(tv["id"], False)
     assert e.value.status == 502
+
+
+def test_what_a_plug_says_about_itself_is_put_in_words_for_its_page() -> None:
+    from app.features.home.integrations.tapo import _info, _warnings
+
+    info = {"rssi": -58, "signal_level": 3, "device_on": True, "on_time": 7260, "fw_ver": "1.4.8 Build 240509 Rel.1"}
+    energy = {"today_runtime": 312, "month_runtime": 4500, "month_energy": 12400}
+    assert _info(info, energy) == {
+        "Wi-Fi signal": "Strong (-58 dBm)",
+        "On for": "2 h 1 min",
+        "On today": "5 h 12 min",
+        "This month, by the plug": "12.40 kWh over 75 h",
+        "Firmware": "1.4.8",
+    }
+    assert _info({"device_on": False, "on_time": 0}, {"today_runtime": 0}) == {"On today": "0 min"}
+    assert _warnings({"overheated": False, "power_protection_status": "normal"}) == {}
+    assert _warnings({"overheated": True, "power_protection_status": "overloaded"}) == {
+        "Overheated": "Yes",
+        "Overload": "Overloaded",
+    }

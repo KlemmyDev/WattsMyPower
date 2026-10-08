@@ -11,13 +11,24 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { cn } from "~/features/common/ui/utils";
-import { homeQuery, homeRunsQuery, homeUsageQuery, runCurveQuery } from "~/features/home/api";
+import {
+  homeInsightsQuery,
+  homeProfileQuery,
+  homeQuery,
+  homeRunsQuery,
+  homeUsageQuery,
+  runCurveQuery,
+} from "~/features/home/api";
+import { AboutCard, AheadCard, SpikesCard, UsualDayCard, WeekCard } from "~/features/home/components/Analysis";
 import { RuleCard } from "~/features/home/components/RuleCard";
 import type { HomeRun } from "~/features/home/types";
 import { deviceColors } from "~/features/home/utils";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
 
 const WEEKS = 8;
+// The analysis cards, two to a row: the wider on the left.
+const WIDE = "col-span-7 max-xl:col-span-12";
+const NARROW = "col-span-5 max-xl:col-span-12";
 
 /** Monday 00:00 of the week `ts` is in. */
 function weekStart(ts: number) {
@@ -98,12 +109,16 @@ export function DevicePage({ id }: { id: number }) {
   const overview = useQuery(homeQuery);
   const usage = useQuery(homeUsageQuery(first, addDays(today, 1), "day"));
   const runs = useQuery(homeRunsQuery(first, addDays(today, 1), id));
+  const profile = useQuery(homeProfileQuery([id]));
+  const found = useQuery(homeInsightsQuery);
   const [open, setOpen] = useState<number | null>(null);
   const devices = overview.data?.devices ?? [];
   const device = devices.find((d) => d.id === id);
   const color = deviceColors(devices).get(id) ?? "var(--color-brand)";
   const kind = overview.data?.kinds.find((k) => k.id === device?.kind);
   const used = usage.data?.devices.find((d) => d.id === id);
+  const rate = used && used.total > 0.1 ? used.cost / used.total : null;
+  const standby = found.data?.standby.devices.find((x) => x.id === id);
 
   const weeks = Array.from({ length: WEEKS }, (_, i) => addDays(first, 7 * i));
   const byWeek = weeks.map(() => 0);
@@ -143,6 +158,25 @@ export function DevicePage({ id }: { id: number }) {
       {overview.data && !device && <Notice>There's no such device. It may have been disconnected.</Notice>}
       <div className="grid grid-cols-12 gap-5">
         {device && <RuleCard key={device.id} device={device} />}
+        {device && profile.data ? (
+          <>
+            <UsualDayCard profile={profile.data} color={color} now={now} className={WIDE} />
+            <AheadCard profile={profile.data} color={color} rate={rate} className={NARROW} />
+            <WeekCard profile={profile.data} color={color} className={WIDE} />
+            <SpikesCard
+              profile={profile.data}
+              devices={[device]}
+              colors={new Map([[id, color]])}
+              standby={standby ? { w: standby.w, yearly: standby.yearly_cost } : null}
+              className={NARROW}
+            />
+          </>
+        ) : (
+          <>
+            <Skeleton className={cn("h-[300px] rounded-3xl", WIDE)} />
+            <Skeleton className={cn("h-[300px] rounded-3xl", NARROW)} />
+          </>
+        )}
         <Card aria-labelledby="h-weeks" className="col-span-6 gap-4 max-lg:col-span-12">
           <div className="flex flex-col gap-0.5">
             <h2 id="h-weeks">Week by week</h2>
@@ -240,6 +274,7 @@ export function DevicePage({ id }: { id: number }) {
             ))}
           </Card>
         )}
+        {device && <AboutCard device={device} kindLabel={kind?.label ?? "Device"} className="col-span-12" />}
       </div>
     </>
   );

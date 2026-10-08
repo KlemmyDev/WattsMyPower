@@ -11,7 +11,8 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { Swatch } from "~/features/common/ui/components/Swatch";
 import { cn } from "~/features/common/ui/utils";
-import { homeInsightsQuery, homePatternsQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
+import { homeInsightsQuery, homePatternsQuery, homeProfileQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
+import { AheadCard, SpikesCard, UsualDayCard, WeekCard } from "~/features/home/components/Analysis";
 import { DeviceCard } from "~/features/home/components/DeviceCard";
 import { RANGES } from "~/features/home/components/UsageCard";
 import type { HomeDevice, HomeUsage } from "~/features/home/types";
@@ -27,11 +28,16 @@ import {
 } from "~/features/home/utils";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
 
+// The analysis cards, two to a row: the wider on the left.
+const WIDE = "col-span-7 max-xl:col-span-12";
+const NARROW = "col-span-5 max-xl:col-span-12";
+
 const pct = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`;
 
 /**
  * A room: the plugs and appliances grouped under its name. What the room used and cost in the period, split device by
- * device, then each of them on its own: what it's doing, its switch, what it used and its habits.
+ * device; today against a usual day and what's likely ahead; when in the week it uses power and its spikes; then each
+ * device on its own: what it's doing, its switch, what it used and its habits.
  */
 export function RoomPage({ room, range }: { room: string; range: Range }) {
   const navigate = useNavigate();
@@ -45,7 +51,17 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
   const devices = overview.data?.devices ?? [];
   const colors = deviceColors(devices);
   const kinds = new Map((overview.data?.kinds ?? []).map((k) => [k.id, k]));
-  const members = homeItems(devices).find((i) => i.group === room)?.members ?? [];
+  const item = homeItems(devices).find((i) => i.group === room);
+  const members = item?.members ?? [];
+  const ids = members.map((d) => d.id);
+  const profile = useQuery(homeProfileQuery(ids));
+  const color = (item && colors.get(item.id)) ?? COLOR.gridSoft;
+  // What a kWh has cost the room over the last 30 days, to price what's ahead.
+  const month = useQuery(homeUsageQuery(...period("month", now)));
+  const spent = month.data?.devices.filter((u) => ids.includes(u.id)) ?? [];
+  const spentKwh = spent.reduce((a, u) => a + u.total, 0);
+  const rate = spentKwh > 0.1 ? spent.reduce((a, u) => a + u.cost, 0) / spentKwh : null;
+  const standby = found.data?.standby.devices.filter((x) => ids.includes(x.id));
   const running = members.filter((d) => d.now?.running && !d.now.stale);
   const w = members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
   const beforeOf = (id: number) =>
@@ -85,6 +101,32 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
               void navigate({ to: "/home/rooms/$room", params: { room }, search: { range: r }, replace: true });
             }}
           />
+          {profile.data ? (
+            <>
+              <UsualDayCard profile={profile.data} color={color} now={now} className={WIDE} />
+              <AheadCard profile={profile.data} color={color} rate={rate} className={NARROW} />
+              <WeekCard profile={profile.data} color={color} className={WIDE} />
+              <SpikesCard
+                profile={profile.data}
+                devices={members}
+                colors={colors}
+                standby={
+                  standby?.length
+                    ? {
+                        w: standby.reduce((a, x) => a + x.w, 0),
+                        yearly: standby.reduce((a, x) => a + x.yearly_cost, 0),
+                      }
+                    : null
+                }
+                className={NARROW}
+              />
+            </>
+          ) : (
+            <>
+              <Skeleton className={cn("h-[300px] rounded-3xl", WIDE)} />
+              <Skeleton className={cn("h-[300px] rounded-3xl", NARROW)} />
+            </>
+          )}
           {members.map((d) => (
             <DeviceCard
               key={d.id}
