@@ -36,6 +36,8 @@ export type Settings = {
   panel_tilt: number;
   panel_bearing: number;
   forecast_learning: number;
+  /** Ask GitHub every few hours whether there's a newer version (1), or not (0) (Settings → System → Updates). */
+  update_check: number;
   /**
    * The house as the Overview draws it (Settings → System → Your house): its style; 1 or 2 storeys; car spaces in the garage
    * (0 = no garage); and where each inverter and battery is, in the order they're connected (missing = outside).

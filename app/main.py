@@ -35,6 +35,7 @@ from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
 from app.features.storage.router import router as storage_router
 from app.features.tariffs.router import router as tariffs_router
+from app.features.updates.router import router as updates_router
 from app.features.weather.router import router as weather_router
 
 log = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ ROUTERS = [
     battery_router,
     home_router,
     health_router,
+    updates_router,
 ]
 
 
@@ -93,11 +95,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.weather.start()  # the forecast, filling in past weather, and the forecast's learning
             await services.home.start()  # polls the smart-home accounts connected, if any
             await services.battery.start_loop()  # ends battery controls when they're done
+            await services.updates.start()  # asks GitHub for a newer version every few hours, unless turned off
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
+            await services.updates.stop()
             await services.battery.stop_loop()
             await services.home.stop()
             await services.weather.stop()

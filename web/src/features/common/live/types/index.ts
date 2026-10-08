@@ -94,5 +94,5 @@ export type LiveStatus = {
   battery_mode?: BatteryMode | null;
   /** Which version this is: the date it was released ("2026.10.8"), and how far along it is ("alpha"; null once it's
    * stable). */
-  app?: { version: string; release: string | null };
+  app?: { version: string; release: string | null; commit: string | null };
 };

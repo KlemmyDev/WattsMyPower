@@ -41,7 +41,10 @@ FROM python AS api
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 COPY --from=web /web/dist/client ./web/dist/client
-ENV DB_PATH=/data/wattsmypower.db
+# The commit it's built from (install.sh passes it), so it can tell when GitHub has a newer one. Last, as it changes
+# with every build.
+ARG GIT_COMMIT=""
+ENV DB_PATH=/data/wattsmypower.db GIT_COMMIT=${GIT_COMMIT}
 EXPOSE 8080
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4)"

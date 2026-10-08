@@ -28,6 +28,7 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "panel_tilt": 0,
         "panel_bearing": 0,
         "forecast_learning": 1,
+        "update_check": 1,
         "house_storeys": 1,
         "garage_spaces": 0,
         "system_cost": 0,

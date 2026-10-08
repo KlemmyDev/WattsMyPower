@@ -26,6 +26,14 @@ def get_json(url: str, headers: dict[str, str] | None = None, timeout: float = 1
     return fetch_json(url, headers, timeout)[0]
 
 
+def get_text(url: str, headers: dict[str, str] | None = None, timeout: float = 15) -> str:
+    """GET a URL's body as text (UTF-8). Raises as fetch_json does."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body: bytes = resp.read()
+        return body.decode("utf-8")
+
+
 def request_json(
     method: str, url: str, body: bytes | None = None, headers: dict[str, str] | None = None, timeout: float = 30
 ) -> Any:

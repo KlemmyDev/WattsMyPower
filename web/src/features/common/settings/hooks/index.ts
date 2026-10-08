@@ -29,6 +29,8 @@ export function useSaveSettings() {
         qc.invalidateQueries({ queryKey: ["forecast"] });
         qc.invalidateQueries({ queryKey: ["insights"] });
       }
+      // Checking for updates turned on or off.
+      if ("update_check" in changes) qc.invalidateQueries({ queryKey: ["updates"] });
       if (OWNERSHIP_SETTINGS.some((k) => k in changes)) {
         qc.invalidateQueries({ queryKey: ["insights"] });
         qc.invalidateQueries({ queryKey: ["bills"] });

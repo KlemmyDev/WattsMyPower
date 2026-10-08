@@ -35,6 +35,9 @@ services:
     build:
       context: .
       target: api
+      args:
+        # The commit it's built from (install.sh sets it), so Settings → System can tell when there's a newer one.
+        GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: wattsmypower
     restart: unless-stopped
     depends_on:
