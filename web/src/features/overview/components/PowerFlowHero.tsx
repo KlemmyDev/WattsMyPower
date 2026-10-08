@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { carsQuery } from "~/features/car/api";
 import { carName, paintOf } from "~/features/car/utils";
 import { homeQuery } from "~/features/home/api";
-import { deviceColors, liveBreakdown, OTHER_COLOR, type LivePart } from "~/features/home/utils";
+import { deviceColors, ESTIMATED, liveBreakdown, OTHER_COLOR, watts, type LivePart } from "~/features/home/utils";
 import { forecastQuery } from "~/features/common/weather/api";
 import type { Forecast, ForecastHour, WeatherTiming } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
@@ -756,7 +756,7 @@ function HomeSplit({ split, colors }: { split: Split; colors: Map<number, string
     ]),
   );
   const bar = [
-    ...shown.map((x) => ({ key: String(x.id), name: x.name, w: x.w, bg: color.get(x.id)! })),
+    ...shown.map((x) => ({ key: String(x.id), name: x.name, w: x.w, bg: color.get(x.id)!, estimated: x.estimated })),
     { key: "rest", name: `${rest.length} more`, w: restW, bg: REST_BG },
     { key: "other", name: "Everything else", w: other, bg: OTHER_COLOR },
   ].filter((x) => x.w > 0);
@@ -767,12 +767,12 @@ function HomeSplit({ split, colors }: { split: Split; colors: Map<number, string
       <div
         className="flex h-2 origin-left animate-fill-x gap-[3px]"
         role="img"
-        aria-label={bar.map((x) => `${x.name} ${kW(x.w)}`).join(", ")}
+        aria-label={bar.map((x) => `${x.name} ${watts(x.w, "estimated" in x && x.estimated)}`).join(", ")}
       >
         {bar.map((x) => (
           <span
             key={x.key}
-            title={`${x.name} · ${kW(x.w)}`}
+            title={`${x.name} · ${watts(x.w, "estimated" in x && x.estimated)}`}
             className="min-w-1 rounded-full transition-[flex-grow] duration-1000 ease-(--ease-out-soft)"
             style={{ flexGrow: x.w / total, background: x.bg }}
           />
@@ -826,7 +826,12 @@ function Part({ x, color, i }: { x: LivePart; color: string; i: number }) {
           {x.name}
         </Link>
       )}
-      <b className="ml-auto pl-1 font-semibold whitespace-nowrap text-ink tabular-nums">{kW(x.w)}</b>
+      <b
+        className="ml-auto pl-1 font-semibold whitespace-nowrap text-ink tabular-nums"
+        title={x.estimated ? ESTIMATED : undefined}
+      >
+        {watts(x.w, x.estimated)}
+      </b>
     </li>
   );
 }

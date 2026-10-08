@@ -38,6 +38,12 @@ export const OTHER_COLOR = COLOR.bar;
 export const CAR_COLOR = COLOR.lilac;
 export const CAR_ID = -1;
 
+/** Power as shown: "412 W", or "≈412 W" when it's what an appliance's runs usually draw rather than a reading. */
+export const watts = (w: number, estimated?: boolean) => (estimated ? `≈${kW(w)}` : kW(w));
+
+/** Said of a power that's estimated, for a tooltip. */
+export const ESTIMATED = "Estimated from what its runs usually draw: it doesn't report its power";
+
 /** What a device is doing now, in a few words. */
 export function nowLine(d: HomeDevice): { text: string; running: boolean } {
   const n = d.now;
@@ -46,7 +52,8 @@ export function nowLine(d: HomeDevice): { text: string; running: boolean } {
   if (!n.online) return { text: "Offline", running: false };
   if (n.running) {
     const left = n.remaining_min ? `${Math.round(n.remaining_min)} min left` : null;
-    return { text: [n.phase ?? "Running", left].filter(Boolean).join(" · "), running: true };
+    const w = n.power_w != null && n.power_w >= 2 ? watts(n.power_w, n.estimated) : null;
+    return { text: [n.phase ?? "Running", left, w].filter(Boolean).join(" · "), running: true };
   }
   if (n.power_w != null && n.power_w >= 2) return { text: `Using ${kW(n.power_w)}`, running: false };
   return { text: "Idle", running: false };
@@ -232,8 +239,9 @@ export function suggestedGroup(name: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-/** A device (or a group as one) in what the home is drawing now: its power (W), and its colour by the first member. */
-export type LivePart = { id: number; name: string; kind: DeviceKind; w: number; group: boolean };
+/** A device (or a group as one) in what the home is drawing now: its power (W), whether any of that is estimated, and
+ * its colour by the first member. */
+export type LivePart = { id: number; name: string; kind: DeviceKind; w: number; group: boolean; estimated: boolean };
 
 /**
  * What the home is drawing now, as far as the plugs and appliances say: each visible device, and each group as one,
@@ -251,7 +259,8 @@ export function liveBreakdown(
     .map((item) => {
       const w = item.members.reduce((a, d) => a + (live(d) ?? 0), 0);
       const first = item.members[0];
-      return { id: item.id, name: item.group ?? first.name, kind: first.kind, w, group: !!item.group };
+      const estimated = item.members.some((d) => d.now?.estimated && live(d) != null);
+      return { id: item.id, name: item.group ?? first.name, kind: first.kind, w, group: !!item.group, estimated };
     })
     .filter((p) => p.w >= min)
     .sort((a, b) => b.w - a.w);
@@ -301,10 +310,10 @@ export function drawing(d: HomeDevice): number | null {
   return w != null && w >= 2 ? w : null;
 }
 
-/** A device's reading in a word or two: "412 W", "Idle", "Offline". */
+/** A device's reading in a word or two: "412 W" ("≈412 W" estimated), "Idle", "Offline". */
 export function reading(d: HomeDevice): string {
   if (!d.now || d.now.stale) return "—";
   if (!d.now.online) return "Offline";
   const w = drawing(d);
-  return w != null ? kW(w) : "Idle";
+  return w != null ? watts(w, d.now.estimated) : "Idle";
 }

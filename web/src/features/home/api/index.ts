@@ -113,6 +113,8 @@ export const updateDevice = ({
   hidden?: boolean;
   /** A group's name, or null to take it out of its group. */
   group?: string | null;
+  /** Show what its runs usually draw while it runs (an appliance that doesn't report its power). */
+  estimate?: boolean;
 }) => apiSend<HomeOverview>("PATCH", `home/devices/${id}`, changes);
 
 /** Switch a device on or off. A fridge or freezer is only switched off with `confirm`. */

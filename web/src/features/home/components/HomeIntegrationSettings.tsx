@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
+import { kW } from "~/features/common/formatting/utils/number";
 import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -224,8 +225,36 @@ function Properties({ device }: { device: HomeDevice }) {
 }
 
 /**
- * A device the account brought: rename it, say what it is, put it in a group, keep it out of the breakdown, see what
- * it sends.
+ * For an appliance that doesn't report its power (a Hisense washer or dryer): showing what its runs usually draw while
+ * it runs, once enough runs have finished with their energy.
+ */
+function Estimate({ device }: { device: HomeDevice }) {
+  const { update } = useHomeChange();
+  const e = device.estimate!;
+  const runs = (n: number) => `${n} ${n === 1 ? "run" : "runs"}`;
+  return (
+    <div className="flex basis-full flex-col gap-1.5 pl-[60px] max-sm:pl-0">
+      <label className="flex items-center gap-2 text-[13px] text-ink-muted">
+        <Switch
+          on={e.on}
+          label="Estimate its power while it runs"
+          disabled={update.isPending}
+          onChange={(on) => update.mutate({ id: device.id, estimate: on })}
+        />
+        Estimate its power while it runs
+      </label>
+      <HelpText>
+        {e.w != null
+          ? `It only says what a run used once it's finished. With this on, while it runs it shows what its runs usually draw: about ${kW(e.w)}, from its last ${runs(e.runs)}. That's only shown: what's counted is still what it reports at the end.`
+          : `It only says what a run used once it's finished. Once ${runs(e.needs)} have finished with their energy (${e.runs} so far), this can show what its runs usually draw while it runs.`}
+      </HelpText>
+    </div>
+  );
+}
+
+/**
+ * A device the account brought: rename it, say what it is, put it in a group, keep it out of the breakdown, estimate
+ * its power while it runs (an appliance that doesn't report it), see what it sends.
  */
 function DeviceRow({
   device,
@@ -292,6 +321,7 @@ function DeviceRow({
       <Button variant="icon" size="sm" title="What it sends" aria-pressed={raw} onClick={() => setRaw(!raw)}>
         <Icon name="code" size={16} />
       </Button>
+      {device.estimate && <Estimate device={device} />}
       {update.isError && (
         <div className="basis-full pl-[60px] max-sm:pl-0">
           <HelpText tone="bad">{errorMessage(update.error)}</HelpText>

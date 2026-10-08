@@ -82,7 +82,8 @@ async def disconnect(svc: ServicesDep, integration: str):
 @router.patch("/devices/{device_id}")
 async def update_device(svc: ServicesDep, device_id: int, body: JsonBody):
     """Rename a device ({"name"}), say what it is ({"kind"}), put it in a group shown as one on the Home page
-    ({"group"}: a name, or null for none), or leave it out of the breakdown ({"hidden"})."""
+    ({"group"}: a name, or null for none), leave it out of the breakdown ({"hidden"}), or show what its runs usually
+    draw while it runs, for an appliance that doesn't report its power ({"estimate"})."""
     return await _run(svc.home.update_device, device_id, body)
 
 

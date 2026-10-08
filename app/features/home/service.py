@@ -29,7 +29,7 @@ from typing import Any
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.home import rules
+from app.features.home import estimate, rules
 from app.features.home.energy import MAX_W, Meter, step
 from app.features.home.registry import INTEGRATIONS
 from app.features.home.repository import Account, Device, HomeRepository
@@ -96,12 +96,14 @@ class HomeService:
         accounts = {a.integration: a for a in self.repo.accounts()}
         devices = self.repo.devices()
         last = self.repo.last_runs()
+        now = self.clock()
+        usual = estimate.typical(self.repo.runs(int(now) - estimate.LOOKBACK_DAYS * 86400, int(now) + 1))
         return {
             "integrations": [
                 self._integration_view(cls, accounts.get(cls.id), devices) for cls in self.available().values()
             ],
             "kinds": [{"id": k, "label": v.label, "cycles": v.cycles} for k, v in KINDS.items()],
-            "devices": [self._device_view(d, accounts, last.get(d.id)) for d in devices],
+            "devices": [self._device_view(d, accounts, last.get(d.id), usual.get(d.id)) for d in devices],
         }
 
     def _integration_view(
@@ -148,13 +150,24 @@ class HomeService:
             "devices": sum(d.account == a.id for d in devices),
         }
 
-    def _device_view(self, d: Device, accounts: dict[str, Account], last_run: dict[str, Any] | None) -> dict[str, Any]:
+    def _device_view(
+        self,
+        d: Device,
+        accounts: dict[str, Account],
+        last_run: dict[str, Any] | None,
+        usual: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         integration = next((a.integration for a in accounts.values() if a.id == d.account), None)
         cls = self.integrations.get(integration or "")
         now = self._now.get(d.id)
         # What it was doing is only what it's doing for a few polls; after that it's unknown (not being read).
         if now and cls and self.clock() - now["at"] > 3 * cls.poll_seconds + 60:
             now = {**now, "stale": True}
+        can_estimate = estimate.estimable(d)
+        w = (usual or {}).get("w")
+        # While it runs, what its runs usually draw stands in for the power it doesn't report.
+        if can_estimate and d.estimate and w and now and now["running"] and now["online"] and not now.get("stale"):
+            now = estimate.overlay(now, w, self.clock()) if now["power_w"] is None else now
         return {
             "id": d.id,
             "account": d.account,
@@ -168,6 +181,16 @@ class HomeService:
             "last_run": last_run,
             "can_switch": bool(cls and cls.can_switch),
             "rule": self._rule_view(d) if d.rule.get("settings") else None,
+            # For an appliance that doesn't report its power: whether it shows what its runs usually draw while it
+            # runs, that (W, None until enough runs have counted), and how many runs it's from.
+            "estimate": {
+                "on": d.estimate,
+                "w": w,
+                "runs": (usual or {}).get("runs", 0),
+                "needs": estimate.MIN_RUNS,
+            }
+            if can_estimate
+            else None,
         }
 
     @staticmethod
@@ -309,8 +332,9 @@ class HomeService:
         return self.overview()
 
     def update_device(self, device_id: int, body: dict[str, Any]) -> dict[str, Any]:
-        """Rename a device, say what it is, put it in a group (or take it out, with an empty one), or hide it from the
-        breakdown. A group named as one that's there already, but for its capitals, is that one."""
+        """Rename a device, say what it is, put it in a group (or take it out, with an empty one), hide it from the
+        breakdown, or show what its runs usually draw while it runs (for an appliance that doesn't report its power).
+        A group named as one that's there already, but for its capitals, is that one."""
         changes: dict[str, Any] = {}
         if "name" in body:
             name = str(body["name"] or "").strip()
@@ -325,6 +349,10 @@ class HomeService:
             if not isinstance(body["hidden"], bool):
                 raise HomeSetupError("Say whether to leave it out of the breakdown.")
             changes["hidden"] = int(body["hidden"])
+        if "estimate" in body:
+            if not isinstance(body["estimate"], bool):
+                raise HomeSetupError("Say whether to estimate what it draws while it runs.")
+            changes["estimate"] = int(body["estimate"])
         if "group" in body:
             if body["group"] is not None and not isinstance(body["group"], str):
                 raise HomeSetupError("Name the group, or leave it empty.")
