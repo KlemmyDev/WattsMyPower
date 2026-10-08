@@ -7,12 +7,22 @@ import { STORE_HOME_COMPARE, STORE_HOME_RANGE, STORE_HOME_VIEW, store } from "~/
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useNow } from "~/features/common/time/hooks";
+import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
+import { historyQuery } from "~/features/common/readings/api";
+import { useForecast } from "~/features/common/weather/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { homeInsightsQuery, homePatternsQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
 import { DeviceCard, GroupCard } from "~/features/home/components/DeviceCard";
+import {
+  HomeDaysCard,
+  HomeNow,
+  HomeSourcesCard,
+  HomeTodayCard,
+  useHomeDays,
+} from "~/features/home/components/HomeWhole";
 import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
 import { ChangesCard, GoalsCard, RoomsCard } from "~/features/home/components/SummaryCards";
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
@@ -49,6 +59,9 @@ function ConnectPrompt() {
   );
 }
 
+// The whole house through today, from the inverter: for the cards above the devices.
+const WHOLE_FIELDS = ["load_power", "pv_power", "battery_power"];
+
 /**
  * Home: where the home's power goes. Everything the home used, split between the devices connected (smart
  * appliances, plugs) and everything else; then each device with what it's doing, what it used, and its habits.
@@ -61,6 +74,13 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
   const rangeWords = range === "today" ? dayWords(start, now) : RANGE_WORDS[range];
   const [compare, setCompare] = useState(() => store.get(STORE_HOME_COMPARE) === "1");
   const overview = useQuery(homeQuery);
+  const p = useSnapshot();
+  const f = useForecast();
+  const today = midnight(now);
+  const { data: whole } = useQuery(
+    historyQuery({ start: today, end: addDays(today, 1), points: 288, fields: WHOLE_FIELDS, live: true }),
+  );
+  const homeDays = useHomeDays(now);
   // While another day or period loads, the last one stays on screen (dimmed) rather than the card emptying.
   const usage = useQuery({ ...homeUsageQuery(start, end, bucket), placeholderData: keepPreviousData });
   // The period before, to compare each device with (by the day, for 7 or 30 days).
@@ -124,6 +144,7 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
         </Notice>
       ))}
       <div className="grid grid-cols-12 gap-5">
+        <HomeNow p={p} f={f} series={whole?.series} now={now} />
         <UsageCard
           usage={used}
           colors={colors}
@@ -151,6 +172,9 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
           loading={usage.isPlaceholderData}
           previousWords={beforeWords(range, start, now)}
         />
+        <HomeTodayCard series={whole?.series} f={f} start={today} now={now} />
+        <HomeSourcesCard series={whole?.series} p={p} days={homeDays} />
+        <HomeDaysCard days={homeDays} />
         {overview.data && !devices.length && <ConnectPrompt />}
         {devices.length > 0 && (
           <>
