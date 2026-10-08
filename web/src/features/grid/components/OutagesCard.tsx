@@ -193,15 +193,17 @@ export function OutagesCard({
   const net = view.network;
   const s = view.summary;
   const underway = view.now.filter((o) => o.planned).length;
-  // Nothing's come from the network's map yet (it can refuse the dashboard): nothing to show, rather than "no
-  // outages". Settings → Integrations → Grid says why. Once something has come, it's shown as it last was.
-  if (net && view.fetched_at == null) return null;
+  // Nothing's come from the network's map yet (it can turn the dashboard away): the card stays, with the radius,
+  // but doesn't claim there are no outages when it can't know. Settings → Integrations → Grid says why.
+  const waiting = !!net && view.fetched_at == null;
   const sub = !net
     ? ""
     : [
         s.outages
           ? `${s.outages} ${s.outages === 1 ? "outage" : "outages"} within ${view.radius_km} km, ${intAU(s.customers)} ${s.customers === 1 ? "home" : "homes"} without power`
-          : `No outages within ${view.radius_km} km`,
+          : waiting
+            ? `Outages within ${radius} km will show here`
+            : `No outages within ${radius} km`,
         underway ? `${underway} planned ${underway === 1 ? "job" : "jobs"} under way` : null,
         `from ${net.name}`,
       ]
@@ -241,7 +243,7 @@ export function OutagesCard({
       </div>
       {net ? (
         <div className="flex items-start gap-6 max-md:flex-col max-md:items-center">
-          {home && <Radar list={list} radius={view.radius_km} home={home} hover={hover} onHover={setHover} />}
+          {home && <Radar list={list} radius={radius} home={home} hover={hover} onHover={setHover} />}
           <div className="flex min-w-0 flex-1 flex-col gap-2 self-stretch">
             {list.length ? (
               <ul className="-mx-2.5 grid max-h-[280px] grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] content-start gap-x-4 overflow-y-auto">
@@ -251,9 +253,11 @@ export function OutagesCard({
               </ul>
             ) : (
               <div className="py-6 text-[13px] text-ink-faint">
-                {tab === "now"
-                  ? `No outages within ${view.radius_km} km right now.`
-                  : `No planned work within ${view.radius_km} km in the next two weeks.`}
+                {waiting
+                  ? `Nothing from ${net.name}'s outage map yet. Outages and planned work within ${radius} km show here as it reports them.`
+                  : tab === "now"
+                    ? `No outages within ${radius} km right now.`
+                    : `No planned work within ${radius} km in the next two weeks.`}
               </div>
             )}
             <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-faint">
