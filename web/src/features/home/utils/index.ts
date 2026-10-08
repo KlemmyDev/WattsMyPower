@@ -17,13 +17,14 @@ const KIND_ICONS: Record<DeviceKind, IconName> = {
   hot_water: "droplet",
   pool_pump: "droplet",
   plug: "plug",
+  power_station: "battery",
 };
 
 export const kindIcon = (kind: DeviceKind): IconName => KIND_ICONS[kind] ?? "bolt";
 
 /** An integration's icon, if the web app has it. */
 export const integrationIcon = (i: Pick<HomeIntegration, "icon">): IconName =>
-  (["washer", "flask", "plug", "bolt", "fridge"] as const).find((n) => n === i.icon) ?? "plug";
+  (["washer", "flask", "plug", "bolt", "fridge", "battery"] as const).find((n) => n === i.icon) ?? "plug";
 
 /**
  * Each device's colour: by its place among every device (hidden ones included), so hiding or adding one never

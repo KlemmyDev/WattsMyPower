@@ -42,6 +42,19 @@ export type HomeIntegration = {
   account: HomeAccount | null;
 };
 
+/** A device that holds charge (a portable battery in a room): how full it is and where its power is going. What it
+ * draws from the house is its power_w. */
+export type DeviceBattery = {
+  /** % charged. */
+  soc: number | null;
+  /** What it holds full (null: not known). */
+  capacity_kwh: number | null;
+  /** Coming in from its own panels, not the house (W). */
+  solar_w: number | null;
+  /** What it's powering, from its outlets (W). */
+  output_w: number | null;
+};
+
 /** What a device is doing, as last read. */
 export type DeviceNow = {
   at: number;
@@ -57,8 +70,11 @@ export type DeviceNow = {
   details: Record<string, string>;
   /** About the device itself (its Wi-Fi signal, firmware…), for its own page. */
   info?: Record<string, string>;
-  /** For a device that can be switched: whether it's on (null: it doesn't say). */
+  /** For a device that can be switched: whether it's on (null: it doesn't say). A portable battery's switch is its
+   * AC outlets. */
   switched_on: boolean | null;
+  /** For a device that holds charge. */
+  battery?: DeviceBattery | null;
 };
 
 export type HomeRun = {

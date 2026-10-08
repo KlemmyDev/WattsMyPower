@@ -8,7 +8,8 @@ off a device it switched on), and never while power costs more than `max_price` 
 Amber's price). After a switch it waits MIN_MINUTES before the next, so a passing cloud doesn't flick it on and off.
 
 Switching the device by hand pauses its rule for the rest of the day: the household's choice wins. A fridge or freezer
-can't have one: off, it stops keeping food cold.
+can't have one: off, it stops keeping food cold. Nor can a portable battery: its switch is its outlets, so a rule
+would power what's plugged into it rather than charge it (charging it on spare solar is a rule on its charger's plug).
 
 `decide` is pure; the service (app.features.home.service) gives it what's happening and does the switching.
 """
@@ -42,6 +43,11 @@ def validate(body: dict[str, Any], kind: str) -> dict[str, Any]:
     """A rule from the dashboard's form, checked. Raises RuleError, in words."""
     if kind in PROTECTED:
         raise RuleError("A fridge or freezer can't run on spare solar: switched off, it stops keeping food cold.")
+    if kind == "power_station":
+        raise RuleError(
+            "A portable battery's switch is its outlets, not its charging. To charge it on spare solar, plug its "
+            "charger into a smart plug and give the plug this rule."
+        )
     rule = {**DEFAULTS, **{k: body[k] for k in DEFAULTS if k in body}}
     if not isinstance(rule["enabled"], bool):
         raise RuleError("Say whether the rule is on.")
