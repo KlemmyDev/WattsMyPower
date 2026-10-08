@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
+import { ON } from "~/features/common/energy/utils";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { NAV_DOCKED, useLiveStatus, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
 import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type SectionPages } from "~/features/common/layout/utils";
@@ -108,7 +109,13 @@ function Circuit({
   const wire = useWire(list, [path, items.length, variant, pages?.pages.length]);
   const at = items.findIndex((i) => i.to === current);
   const value: Partial<Record<string, string>> = p
-    ? { "/": kW(p.pv_power), "/home": kW(p.load_power), "/battery": pct(p.battery_soc), "/history": kWh(p.daily_pv) }
+    ? {
+        "/": kW(p.pv_power),
+        "/home": kW(p.load_power),
+        "/battery": pct(p.battery_soc),
+        "/grid": p.grid_power == null ? undefined : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
+        "/history": kWh(p.daily_pv),
+      }
     : {};
 
   return (

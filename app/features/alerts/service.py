@@ -29,6 +29,7 @@ import contextlib
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, replace
 from typing import Any
 
@@ -72,6 +73,7 @@ class AlertsService:
         send: Send = post,
         prices: PriceRepository | None = None,
         bills: BillsService | None = None,
+        grid: Callable[[float], dict[str, Any]] | None = None,
     ):
         self.repo = AlertsRepository(db)
         self.live = live
@@ -81,6 +83,7 @@ class AlertsService:
         self.insights = insights
         self.prices = prices  # Amber's stored prices, for an Amber tariff
         self.bills = bills  # for the current bill against its budget
+        self.grid = grid  # the grid's outlook (app.features.grid)
         self.send = send
         self.push = PushService(db, send)
         self._lock = threading.Lock()
@@ -137,6 +140,7 @@ class AlertsService:
             yesterday=lambda: self._yesterday(now),
             price=lambda: self._price(now),
             bill=lambda: self._current_bill(now),
+            grid=lambda: self.grid(now) if self.grid else None,
         )
 
     def _performance(self) -> dict[str, Any] | None:

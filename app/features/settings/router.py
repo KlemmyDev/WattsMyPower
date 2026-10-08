@@ -50,6 +50,8 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
             svc.weather.request_backfill(refetch=True)  # the weather stored for days past was another place's
         else:
             svc.weather.wake()
+    if {"nem_region", "latitude", "longitude", "location_name"} & changes.keys():
+        svc.grid.wake()  # the region (or whether to follow it) may have changed
     if moved:  # coordinates typed in by hand: look up a place name for them
         named = await asyncio.to_thread(name_location, svc)
         return named or saved

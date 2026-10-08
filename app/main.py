@@ -21,6 +21,7 @@ from app.features.battery.router import router as battery_router
 from app.features.bills.router import router as bills_router
 from app.features.car.router import router as car_router
 from app.features.forecast.router import router as forecast_router
+from app.features.grid.router import router as grid_router
 from app.features.home.router import router as home_router
 from app.features.imports.router import router as imports_router
 from app.features.insights.router import router as insights_router
@@ -63,6 +64,7 @@ ROUTERS = [
     home_router,
     health_router,
     updates_router,
+    grid_router,
 ]
 
 
@@ -96,11 +98,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.home.start()  # polls the smart-home accounts connected, if any
             await services.battery.start_loop()  # ends battery controls when they're done
             await services.updates.start()  # asks GitHub for a newer version every few hours, unless turned off
+            await services.grid.start()  # AEMO's prices and notices for the region, unless turned off
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
+            await services.grid.stop()
             await services.updates.stop()
             await services.battery.stop_loop()
             await services.home.stop()

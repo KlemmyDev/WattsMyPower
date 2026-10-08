@@ -32,6 +32,9 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     "bill_discount_on": (("usage", "usage_supply"), "usage"),
     # How the Overview draws the house (Settings → System → Your house).
     "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
+    # The NEM region whose wholesale prices and notices the Grid page follows (from AEMO): worked out from the
+    # location ("auto"), one region, or none (outside the NEM, or not wanted: then nothing is asked of AEMO).
+    "nem_region": (("auto", "QLD1", "NSW1", "VIC1", "SA1", "TAS1", "none"), "auto"),
 }
 # Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
 # battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.

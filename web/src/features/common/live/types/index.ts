@@ -13,6 +13,8 @@ export type Snapshot = {
   battery_temp?: number | null;
   inverter_temp?: number | null;
   grid_freq?: number | null;
+  grid_voltage?: number | null; // V, the AC side's (the grid's while it's connected)
+  running_state?: number | null; // the inverter's raw running state (0x1000: off-grid)
   daily_pv: number | null;
   daily_import: number | null;
   daily_export: number | null;

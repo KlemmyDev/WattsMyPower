@@ -134,6 +134,7 @@ class MockSite:
         _put(h, 5011, [round(320 * min(1, sun * 4) * 10), round(pv * 0.55 / 320 * 10)])  # MPPT1 V, A (0.1)
         _put(h, 5013, [round(310 * min(1, sun * 4) * 10), round(pv * 0.45 / 310 * 10)])  # MPPT2 V, A (0.1)
         _put(h, 5017, _u32(pv))  # W
+        h[5019] = round((240 + 0.0022 * -grid + random.uniform(-1.5, 1.5)) * 10)  # grid voltage, 0.1 V
         h[5036] = round((50 + random.uniform(-0.05, 0.05)) * 10)  # 0.1 Hz
         _put(h, 13000, [0, flow, daily("pv"), *total("pv"), daily("pv_export"), *total("pv_export")])
         _put(h, 13008, _u32(load))  # signed 32-bit, two's complement

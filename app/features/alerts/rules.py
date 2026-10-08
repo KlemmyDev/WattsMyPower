@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from app.features.inverters.sungrow.sh_rs import OFF_GRID
 from app.features.inverters.types import Snapshot
 
 HOUR = 3600
@@ -50,6 +51,8 @@ class Facts:
     # The current bill against the budget set in Settings → Bills: {"start", "end" (YYYY-MM-DD), "day" (of the
     # period), "expected" ($, or None without an estimate yet), "budget" ($)}. None with no budget set.
     bill: Callable[[], dict[str, Any] | None] = lambda: None
+    # How the grid's holding up (app.features.grid): {"level", "reasons": [{kind, level, title, detail, alert?}]}.
+    grid: Callable[[], dict[str, Any] | None] = lambda: None
 
     def fresh(self, ts: float | None) -> bool:
         """Whether something read at `ts` is current: within the last three polls."""
@@ -470,6 +473,70 @@ def grid_import(f: Facts, v: Values, s: RuleState) -> Check:
     return UNKNOWN
 
 
+def grid_down(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    state = snap.get("running_state") if snap else None
+    if state is None:
+        return UNKNOWN
+    if int(state) in OFF_GRID:
+        soc = snap.get("battery_soc") if snap else None
+        battery = (
+            f" Your battery ({soc:.0f}%) is running the house"
+            if soc is not None
+            else " Your battery is running the house"
+        )
+        return Check(
+            "bad",
+            "The grid's down",
+            f"Your inverter has lost the grid.{battery}: go easy on big appliances (ovens, heaters, air "
+            "conditioning, the car) to make it last.",
+        )
+    return Check("ok", "The grid's back", f"Power from the grid is back{_after(s, f.now)}.")
+
+
+def grid_warning(f: Facts, v: Values, s: RuleState) -> Check:
+    o = f.grid()
+    if o is None:
+        return UNKNOWN
+    reasons = [r for r in o["reasons"] if r.get("alert")]
+    if not reasons:
+        return Check(
+            "ok", "Grid warnings over", "AEMO's warnings for your region have ended, and no storms are forecast."
+        )
+    snap = f.reading()
+    soc = snap.get("battery_soc") if snap else None
+    if soc is not None and soc < 80:
+        advice = (
+            f" Your battery is at {soc:.0f}%: worth charging it from the grid while it's there (Battery page), and "
+            "holding off on big appliances."
+        )
+    elif soc is not None:
+        advice = f" Your battery is at {soc:.0f}%: keep it that way, and go easy on big appliances."
+    else:
+        advice = ""
+    first, rest = reasons[0], reasons[1:]
+    also = f" Also: {'; '.join(r['title'].lower() for r in rest)}." if rest else ""
+    return Check("bad", first["title"], f"{first['detail']}{also}{advice}")
+
+
+def grid_voltage(f: Facts, v: Values, s: RuleState) -> Check:
+    snap = f.reading()
+    volts = snap.get("grid_voltage") if snap else None
+    if volts is None or volts < 50:  # not read, or the grid's down (another alert says so)
+        return UNKNOWN
+    if volts >= v["volts"]:
+        return Check(
+            "bad",
+            f"Grid voltage at {volts:.0f} V",
+            f"The grid has been at {volts:.0f} V or more for {span(v['minutes'] * 60)}. Above 253 V is outside the "
+            "standard, and your inverter will hold back solar it sends out. If it happens often, your network "
+            "(not your retailer) can check the street's transformer.",
+        )
+    if volts < v["volts"] - 3:
+        return Check("ok", "Grid voltage back down", f"The grid's back down to {volts:.0f} V.")
+    return UNKNOWN
+
+
 def grid_today(f: Facts, v: Values, s: RuleState) -> Check:
     snap = f.reading()
     kwh = snap.get("daily_import") if snap else None
@@ -534,7 +601,7 @@ def price_negative(f: Facts, v: Values, s: RuleState) -> Check:
 CATEGORIES: dict[str, tuple[str, str]] = {
     "system": ("Problems", "Something needs looking at. Each is sent once, with a follow-up when it's fixed."),
     "solar": ("Solar and battery", "Good times to use power, and milestones. Off until you turn them on."),
-    "grid": ("Grid", "When the house leans on the grid."),
+    "grid": ("Grid", "When the grid goes down or looks shaky, and when the house leans on it."),
     "prices": ("Prices", "When Amber's price spikes or goes negative."),
     "bills": ("Bills", "When a bill is on course to cost more than you planned."),
     "summary": ("Summaries", "A look back at the day."),
@@ -687,6 +754,40 @@ RULES: tuple[Rule, ...] = (
         cooldown=HOUR,
         category="grid",
         page="/",
+    ),
+    Rule(
+        "grid_down",
+        "Grid down",
+        "Your inverter has lost the grid and the battery is running the house. You'll hear when it's back.",
+        grid_down,
+        (Setting("minutes", "After", "minutes", 0, 30, 1),),
+        debounce=lambda v: v["minutes"] * 60,
+        cooldown=0,
+        urgent=True,
+        category="grid",
+        page="/grid",
+    ),
+    Rule(
+        "grid_warning",
+        "Blackout risk",
+        "AEMO warns of tight supply or load shedding in your region, or storms are forecast: a heads-up to keep the "
+        "battery charged.",
+        grid_warning,
+        cooldown=6 * HOUR,
+        category="grid",
+        page="/grid",
+    ),
+    Rule(
+        "grid_voltage",
+        "High grid voltage",
+        "The grid's voltage stays at or above this. High voltage makes the inverter hold back solar it exports.",
+        grid_voltage,
+        (Setting("volts", "At or above", "V", 245, 270, 255), Setting("minutes", "For", "minutes", 1, 120, 10)),
+        enabled=False,
+        debounce=lambda v: v["minutes"] * 60,
+        cooldown=6 * HOUR,
+        category="grid",
+        page="/grid",
     ),
     Rule(
         "grid_today",
