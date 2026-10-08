@@ -4,17 +4,17 @@ import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
 import { gridVerb, ON, reserveOf } from "~/features/common/energy/utils";
 import { duration, hhmm } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
-import { historyQuery } from "~/features/common/readings/api";
+import { costsQuery, historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { ButtonLink, Button } from "~/features/common/ui/components/Button";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { TooltipRow } from "~/features/common/ui/components/ChartHover";
@@ -22,6 +22,7 @@ import { Select } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
@@ -52,8 +53,7 @@ export function GridPage() {
     <>
       <PageHeader title="Grid" sub="What you buy and sell, what power costs right now, and how the grid's holding up" />
       <div className="flex flex-col gap-5">
-        {grid ? <Outlook grid={grid} p={p} s={s} /> : !isError && <Skeleton className="h-[132px] rounded-3xl" />}
-        <NowTiles p={p} grid={grid} />
+        <GridSummary grid={grid} p={p} s={s} now={now} />
         {grid?.outages && (
           <OutagesCard
             view={grid.outages}
@@ -80,13 +80,97 @@ export function GridPage() {
   );
 }
 
-// ---------------------------------------------------------------------------------------------- the outlook
+// ---------------------------------------------------------------------------------------------- the summary
+
+/** The outlook's level in a word, as the summary's first figure. */
+const STATUS: Record<GridView["outlook"]["level"], string> = {
+  normal: "Normal",
+  watch: "Worth knowing",
+  warning: "Blackout risk",
+  outage: "Down",
+};
 
 /**
- * How the grid's holding up, in a word and a colour, with each reason under it. When it's shaky and there's a
- * battery: how long the battery would last, and a way to top it up from the grid while it's there.
+ * The grid in one card, as the Solar and Home pages have theirs: how it's holding up (in a word, its colour and icon),
+ * then the house's power to or from it now, what it bought and sold today, and the wholesale price now. When it's not
+ * normal, what to do and why under them: how long the battery would last, a way to top it up from the grid while it's
+ * there, and each reason.
  */
-function Outlook({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: SystemInfo | undefined }) {
+function GridSummary({
+  grid,
+  p,
+  s,
+  now,
+}: {
+  grid: GridView | undefined;
+  p: Snapshot | null;
+  s: SystemInfo | undefined;
+  now: number;
+}) {
+  const level = grid?.outlook.level;
+  const l = level ? LEVEL[level] : null;
+  const g = p?.grid_power;
+  const market = grid?.market;
+  // Today's cost of what was bought and credit for what was sold, at your rates (the Home page asks for the same).
+  const today = useQuery(costsQuery(midnight(now))).data?.days.find((d) => d.date === dateKey(now));
+  const steady = grid
+    ? grid.enabled
+      ? "No warnings from AEMO, no storms forecast, and the grid's steady at your house."
+      : "The grid's steady at your house. Choose your region below for AEMO's warnings too."
+    : undefined;
+  return (
+    <SummaryCard
+      icon={!level ? "grid" : level === "normal" ? "check" : level === "outage" ? "bolt" : "shield"}
+      color={l?.color ?? COLOR.gridSoft}
+      footer={grid && level !== "normal" && <Warnings grid={grid} p={p} s={s} />}
+    >
+      <SummaryStat
+        label="Grid"
+        value={level ? STATUS[level] : DASH}
+        color={level && level !== "normal" ? l?.color : undefined}
+        sub={grid ? (grid.region_name ?? "Your house") : "Checking"}
+        title={level === "normal" ? steady : l?.sub}
+      />
+      <SummaryStat
+        label={gridVerb(g)}
+        dot={g == null ? undefined : g > ON ? IMPORT : g < -ON ? EXPORT : undefined}
+        value={g == null ? DASH : kW(Math.abs(g))}
+        sub={
+          g != null && Math.abs(g) <= ON ? "Nothing in or out" : g != null && g > ON ? "From the grid" : "To the grid"
+        }
+      />
+      <SummaryStat
+        label="Bought today"
+        dot={IMPORT}
+        value={kWh(p?.daily_import)}
+        sub={today ? `${money(today.import_cost)} at your rates` : "From the grid"}
+      />
+      <SummaryStat
+        label="Sold today"
+        dot={EXPORT}
+        value={kWh(p?.daily_export)}
+        sub={today ? `${money(today.feed_in_credit)} earned` : "To the grid"}
+      />
+      <SummaryStat
+        label="Wholesale now"
+        value={market ? `${wholesaleCents(market.price)}/kWh` : DASH}
+        sub={
+          market
+            ? `${perMWh(market.price)} · ${grid?.region_name}`
+            : grid && !grid.enabled
+              ? "Not following AEMO"
+              : "Waiting for AEMO"
+        }
+      />
+    </SummaryCard>
+  );
+}
+
+/**
+ * Under the summary when the grid's not normal: what it means, the battery (how long it would last at this use, and a
+ * way to charge it from the grid while there's still grid, when it's worth it), and each reason.
+ */
+function Warnings({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: SystemInfo | undefined }) {
   const { level, reasons } = grid.outlook;
   const l = LEVEL[level];
   const hasBattery = useHasBattery();
@@ -98,33 +182,10 @@ function Outlook({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: System
     soc != null && cap && load && load > ON ? ((Math.max(0, soc - reserveOf(s)) / 100) * cap * 1000) / load : null;
   const worried = level === "warning" || reasons.some((r) => r.kind === "storm");
   return (
-    <section
-      className="relative flex flex-col gap-4 overflow-hidden rounded-3xl border border-line-subtle bg-surface p-6 max-sm:rounded-[20px] max-sm:p-5"
-      style={{ backgroundImage: `linear-gradient(110deg, ${alpha(l.color, 0.1)}, transparent 55%)` }}
-    >
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <span
-          className="flex size-11 flex-none items-center justify-center rounded-2xl"
-          style={{ background: alpha(l.color, 0.16), color: l.color }}
-        >
-          <Icon name={level === "normal" ? "check" : level === "outage" ? "bolt" : "shield"} size={20} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="flex items-center gap-2.5">
-            {l.word}
-            {grid.region_name && level === "normal" && (
-              <span className="text-[13px] font-normal text-ink-faint">{grid.region_name}</span>
-            )}
-          </h2>
-          <div className="text-[13px] leading-5 text-pretty text-ink-muted">
-            {level === "normal"
-              ? grid.enabled
-                ? "No warnings from AEMO, no storms forecast, and the grid's steady at your house."
-                : "The grid's steady at your house. Choose your region below for AEMO's warnings too."
-              : l.sub}
-          </div>
-        </div>
-        {hasBattery && level !== "normal" && (
+    <div className="flex flex-col gap-4 border-t border-line-subtle pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <div className="text-[13.5px] leading-5 text-pretty text-ink-muted">{l.sub}</div>
+        {hasBattery && (
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex flex-col items-end text-right text-[13px] leading-5 tabular-nums max-sm:items-start max-sm:text-left">
               <span className="font-medium text-ink">Battery {pct(soc)}</span>
@@ -139,13 +200,13 @@ function Outlook({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: System
         )}
       </div>
       {reasons.length > 0 && (
-        <ul className="flex flex-col gap-2 border-t border-line-subtle pt-4">
+        <ul className="flex flex-col gap-2">
           {reasons.map((r, i) => (
             <Reason key={`${r.kind}${i}`} r={r} />
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -162,88 +223,6 @@ function Reason({ r }: { r: OutlookReason }) {
         <span className="text-ink-muted"> · {r.detail}</span>
       </span>
     </li>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------- now
-
-function Tile({
-  label,
-  value,
-  unit,
-  sub,
-  color,
-}: {
-  label: string;
-  value: string;
-  unit?: string;
-  sub?: string;
-  color?: string;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-[20px] border border-line-subtle bg-surface px-5 py-4">
-      <span className="flex items-center gap-2 text-[13px] text-ink-muted">
-        {color && <i aria-hidden className="size-2 rounded-full" style={{ background: color }} />}
-        {label}
-      </span>
-      <span className="flex items-baseline gap-1 text-[26px] leading-8 font-light tracking-[-0.6px] text-ink tabular-nums">
-        {value}
-        {unit && <span className="text-sm font-normal tracking-normal text-ink-faint">{unit}</span>}
-      </span>
-      {sub && <span className="truncate text-xs text-ink-faint">{sub}</span>}
-    </div>
-  );
-}
-
-/** The grid at the house now, today's totals, and the wholesale price now. */
-function NowTiles({ p, grid }: { p: Snapshot | null; grid: GridView | undefined }) {
-  const g = p?.grid_power;
-  const [value, unit] = g == null ? [DASH] : kW(g).split(" ");
-  const market = grid?.market;
-  const net = p?.daily_export != null && p?.daily_import != null ? p.daily_export - p.daily_import : null;
-  return (
-    <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2">
-      <Tile
-        label={gridVerb(g)}
-        value={value}
-        unit={unit}
-        color={g == null ? undefined : g > ON ? IMPORT : g < -ON ? EXPORT : undefined}
-        sub={
-          g != null && Math.abs(g) <= ON ? "Nothing in or out" : g != null && g > ON ? "From the grid" : "To the grid"
-        }
-      />
-      <Tile
-        label="Bought today"
-        value={kWh(p?.daily_import).split(" ")[0]}
-        unit={kWh(p?.daily_import).split(" ")[1]}
-        color={IMPORT}
-      />
-      <Tile
-        label="Sold today"
-        value={kWh(p?.daily_export).split(" ")[0]}
-        unit={kWh(p?.daily_export).split(" ")[1]}
-        color={EXPORT}
-        sub={
-          net == null || Math.abs(net) < 0.05
-            ? undefined
-            : net >= 0
-              ? `${kWh(net)} more sold than bought`
-              : `${kWh(-net)} more bought than sold`
-        }
-      />
-      <Tile
-        label="Wholesale now"
-        value={market ? wholesaleCents(market.price) : DASH}
-        unit={market ? "/kWh" : undefined}
-        sub={
-          market
-            ? `${perMWh(market.price)} · ${grid?.region_name}`
-            : grid && !grid.enabled
-              ? "Not following AEMO"
-              : "Waiting for AEMO"
-        }
-      />
-    </div>
   );
 }
 

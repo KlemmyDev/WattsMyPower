@@ -34,7 +34,7 @@ export type NavItem = { to: Section; label: string; icon: IconName; group?: NavG
 
 /** The sections, Overview then group by group, in the order the navigation shows them. */
 export const NAV: NavItem[] = [
-  { to: "/", label: "Overview", icon: "layout", color: COLOR.solar },
+  { to: "/", label: "Overview", icon: "layout", color: COLOR.brand },
   { to: "/solar", label: "Solar", icon: "sun", group: "Live", color: COLOR.solar },
   { to: "/home", label: "Home", icon: "home", group: "Live", color: COLOR.teal },
   { to: "/battery", label: "Battery", icon: "battery", group: "Live", color: COLOR.battery },

@@ -39,7 +39,7 @@ export function Breakdown({ parts, total }: { parts: BreakdownPart[]; total: num
             tabIndex={0}
             {...bar(x.key)}
             className={cn(
-              "flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-1 text-[13.5px] transition-[background-color,opacity] duration-200 outline-none",
+              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1 text-[13.5px] transition-[background-color,opacity] duration-200 outline-none",
               hover === x.key && "bg-fg/5",
               !lit(x.key) && "opacity-55",
             )}

@@ -165,7 +165,7 @@ function DayBar({
           : `${label}: ${pct(d.ratio * 100)} of expected (${kWh(d.actual_kwh)} of ${kWh(d.expected_kwh)})${d.clear ? "" : ", cloudy"}`
       }
       className={cn(
-        "flex h-full min-w-0 flex-1 cursor-default items-end border-0 bg-transparent p-0 transition-opacity duration-200",
+        "flex h-full min-w-0 flex-1 cursor-pointer items-end border-0 bg-transparent p-0 transition-opacity duration-200",
         hover != null && hover !== i && "opacity-45",
       )}
     >
@@ -251,7 +251,7 @@ export function SolarTrend({ trend: t }: { trend: SolarInsights["trend"] }) {
                     {...bar(k)}
                     aria-label={`${monthYear.format(parseYmd(m.month))}: ${pct(m.ratio * 100)} of the array's size per unit of sunshine, from ${m.hours} bright ${plural(m.hours, "hour")}`}
                     className={cn(
-                      "flex h-full min-w-0 flex-1 cursor-default flex-col items-center justify-end gap-1.5 border-0 bg-transparent p-0 transition-opacity duration-200",
+                      "flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-end gap-1.5 border-0 bg-transparent p-0 transition-opacity duration-200",
                       h != null && h !== k && "opacity-45",
                     )}
                   >

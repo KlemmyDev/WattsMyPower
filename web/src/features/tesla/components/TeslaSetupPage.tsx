@@ -17,7 +17,7 @@ export function TeslaSetupPage() {
       <PageHeader title="Connect Tesla" sub="Four steps, about two minutes" />
       <section
         aria-labelledby="h-su"
-        className="flex w-full max-w-[720px] flex-col gap-7 rounded-3xl border border-line-subtle bg-surface p-8 max-sm:p-5"
+        className="glass flex w-full max-w-[720px] flex-col gap-7 rounded-3xl border border-line-subtle p-8 max-sm:p-5"
       >
         <Steps current={0} />
         <div className="flex flex-col gap-2">

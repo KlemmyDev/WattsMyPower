@@ -165,7 +165,7 @@ function ChangePassword() {
     <form
       onSubmit={submit}
       aria-labelledby="h-pw"
-      className="flex min-w-0 flex-col gap-6 rounded-3xl border border-line-subtle bg-surface p-7 max-sm:rounded-[20px] max-sm:p-5"
+      className="glass flex min-w-0 flex-col gap-6 rounded-3xl border border-line-subtle p-7 max-sm:rounded-[20px] max-sm:p-5"
     >
       <TitleBlock id="h-pw" title="Change password" sub="Changing it signs out every other browser." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">

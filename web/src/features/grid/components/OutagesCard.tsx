@@ -120,7 +120,7 @@ function Radar({
                 key={o.id}
                 onPointerEnter={() => onHover(o.id, "radar")}
                 onPointerLeave={() => onHover(null, "radar")}
-                className={cn("cursor-default transition-opacity duration-200", hover && !on && "opacity-35")}
+                className={cn("cursor-pointer transition-opacity duration-200", hover && !on && "opacity-35")}
               >
                 {o.affects && (
                   <>
@@ -200,7 +200,10 @@ function Row({
       data-outage={o.id}
       onPointerEnter={() => onHover(o.id, "row")}
       onPointerLeave={() => onHover(null, "row")}
-      className={cn("flex items-start gap-3 rounded-xl px-2.5 py-2 transition-colors", hover && "bg-fg/5")}
+      className={cn(
+        "flex cursor-pointer items-start gap-3 rounded-xl px-2.5 py-2 transition-colors",
+        hover && "bg-fg/5",
+      )}
     >
       <span aria-hidden className="mt-1.5 size-2 flex-none rounded-full" style={{ background: c }} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">

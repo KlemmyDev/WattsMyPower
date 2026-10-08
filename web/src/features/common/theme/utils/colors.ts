@@ -17,6 +17,8 @@ export const COLOR = {
   solarWash: v("solar-wash"),
   solarDeep: v("solar-deep"),
   battery: v("battery"),
+  /** Moonlight: the Solar page while the panels rest. */
+  moon: v("moon"),
   batteryRing: v("battery-ring"),
   grid: v("grid"),
   pill: v("pill"),
@@ -38,6 +40,8 @@ export const COLOR = {
   /** The collector's raw registers, in Manage → Data. */
   teal: v("teal"),
   link: v("link"),
+  /** The app's own colour: Overview's, in the navigation. */
+  brand: v("brand"),
   /** Quiet bars: grid power, the supply charge, past days. */
   bar: v("bar"),
   /** Quieter still: past bills, empty tracks. */

@@ -6,7 +6,7 @@ export function Card({ className, ...rest }: ComponentProps<"section">) {
   return (
     <section
       className={cn(
-        "flex min-w-0 flex-col gap-5 rounded-3xl border border-line-subtle bg-surface p-7 max-sm:rounded-[20px] max-sm:p-5",
+        "glass flex min-w-0 flex-col gap-5 rounded-3xl border border-line-subtle p-7 max-sm:rounded-[20px] max-sm:p-5",
         className,
       )}
       {...rest}

@@ -438,7 +438,7 @@ function Bars({
               onBlur={() => setHover(null)}
               style={{ "--i": i } as CSSProperties}
               className={cn(
-                "bar-grow relative flex h-full min-w-0 flex-1 cursor-default flex-col-reverse border-0 bg-transparent p-0 transition-opacity duration-150",
+                "bar-grow relative flex h-full min-w-0 flex-1 cursor-pointer flex-col-reverse border-0 bg-transparent p-0 transition-opacity duration-150",
                 h != null && h !== i && "opacity-60",
               )}
             >

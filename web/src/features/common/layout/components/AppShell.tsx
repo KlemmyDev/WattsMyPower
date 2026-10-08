@@ -4,6 +4,7 @@ import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
 import { Dock } from "~/features/common/layout/components/Dock";
 import { SectionPagesStrip } from "~/features/common/layout/components/SectionPagesStrip";
 import { NavDrawer, SideNav } from "~/features/common/layout/components/SideNav";
+import { PageGlow } from "~/features/common/layout/components/PageGlow";
 import { HeaderClock, TopBar } from "~/features/common/layout/components/TopBar";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -21,7 +22,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-canvas [--nav-w:0px] md:[--nav-w:72px] xl:[--nav-w:236px]">
       <SideNav onMenu={openMenu} />
       <NavDrawer open={menu} onClose={closeMenu} />
-      <div className="relative pl-(--nav-w)">
+      <div className="relative isolate pl-(--nav-w)">
+        {/* Soft light behind the page, for its glass cards to sit over. */}
+        <PageGlow />
         {/* The phone's header, sticky; it carries the space above and below it, so the page starts where it did. */}
         <TopBar onMenu={openMenu} />
         {/* From tablets up, the live clock and the account sit in the page's top right corner, centred on its title's
