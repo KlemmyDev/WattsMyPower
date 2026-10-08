@@ -4,17 +4,14 @@ from __future__ import annotations
 
 import datetime as dt
 import time
-from typing import Any
 
 import pytest
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.alerts.rules import Facts
 from app.features.bills.service import BillsService
 from app.features.forecast.learning import Sample
-from app.features.insights import battery, checkup, performance
-from app.features.insights.repository import InsightsRepository
+from app.features.insights import battery, performance
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
@@ -137,85 +134,7 @@ def test_a_bigger_battery_keeps_what_was_sent_away_for_the_evening() -> None:
     assert battery.sizing(rows[: 288 * 5], 10.0, 5.0, 10.0, None) is None  # too few days
 
 
-# ------------------------------------------------------------------ the checkup
-def facts(**over: Any) -> Facts:
-    base: dict[str, Any] = {
-        "now": NOW,
-        "snapshot": {"ts": NOW},
-        "hybrid_connected": True,
-        "last_success": NOW - 30,
-        "error": None,
-        "poll_interval": 60,
-        "pv2": None,
-        "reserve": 10,
-        "sun": 50,
-        "daylight_since": NOW - 5 * 3600,
-    }
-    return Facts(**(base | over))
-
-
-GOOD_PERF = {"days": [{"date": f"2026-10-{d:02d}", "ratio": 0.97, "clear": True} for d in range(1, 14)], "causes": {}}
-INSIGHTS = {
-    "performance": GOOD_PERF,
-    "lifetime": {"battery_kwh": 10.0, "soh": 98.0},
-    "battery": {"months": [{"month": "2026-09", "soh": 98.0, "efficiency": 91.0}]},
-    "warranty": None,
-}
-COVERED = {"days": 30, "share": 0.995, "longest": None}
-ACCURACY = {"days": [{}] * 20, "mae_kwh": 2.0, "actual_mean": 20.0}
-
-
-def statuses(
-    f: Facts, active: set[str] = frozenset(), insights: dict[str, Any] = INSIGHTS, **kw: Any
-) -> dict[str, str]:  # type: ignore[assignment]
-    out = checkup.checkup(f, set(active), insights, kw.get("coverage", COVERED), kw.get("accuracy", ACCURACY))
-    return {i["id"]: i["status"] for i in out["items"]}
-
-
-def test_a_healthy_system_is_all_green() -> None:
-    out = checkup.checkup(facts(), set(), INSIGHTS, COVERED, ACCURACY)
-    assert out["status"] == "ok" and {i["id"] for i in out["items"]} == {"inverter", "panels", "battery", "forecast"}
-
-
-def test_the_checkup_turns_red_as_the_alerts_would() -> None:
-    assert statuses(facts(last_success=NOW - 3600))["inverter"] == "bad"
-    assert statuses(facts(frozen_since=NOW - 1800))["inverter"] == "bad"
-    assert statuses(facts(), {"battery_not_charging"})["battery"] == "bad"
-    assert statuses(facts(), {"solar_underperforming"})["panels"] == "bad"
-    # A second inverter that hasn't woken with the sun; asleep at night is fine.
-    pv2 = {"last_success": NOW - 8 * 3600}
-    assert statuses(facts(pv2=pv2))["pv2"] == "warn"
-    assert statuses(facts(pv2=pv2, daylight_since=None))["pv2"] == "ok"
-
-
-def test_the_checkup_warns_before_things_break() -> None:
-    gaps = {"days": 30, "share": 0.9, "longest": {"seconds": 6 * 3600, "at": NOW - 5 * DAY}}
-    assert statuses(facts(), coverage=gaps)["inverter"] == "warn"
-    dull = {**GOOD_PERF, "days": [{**d, "ratio": 0.85} for d in GOOD_PERF["days"]]}
-    assert statuses(facts(), insights={**INSIGHTS, "performance": dull})["panels"] == "warn"
-    falling = {"months": [{"month": f"2026-0{m}", "soh": 98.0 - m, "efficiency": 90.0} for m in range(5, 10)]}
-    lossy = {"months": [{"month": "2026-08", "soh": 98.0, "efficiency": 75.0}]}
-    assert statuses(facts(), insights={**INSIGHTS, "battery": lossy})["battery"] == "warn"
-    # This month so far is too short to judge.
-    this_month = {"months": [{"month": time.strftime("%Y-%m"), "soh": 98.0, "efficiency": 75.0}]}
-    assert statuses(facts(), insights={**INSIGHTS, "battery": this_month})["battery"] == "ok"
-    assert statuses(facts(), insights={**INSIGHTS, "battery": falling})["battery"] == "warn"
-    assert statuses(facts(), accuracy={**ACCURACY, "mae_kwh": 8.0})["forecast"] == "warn"
-    assert statuses(facts(), accuracy=None)["forecast"] == "unknown"
-
-
 # ------------------------------------------------------------------ the database's side
-def test_coverage_counts_readings_and_finds_the_longest_gap(db: Database, readings: ReadingsRepository) -> None:
-    start = at(10, 0)
-    rows = [(t, {"grid_power": 100.0}) for t in range(start, NOW, 300) if not at(5, 6) <= t < at(5, 12)]
-    conn = readings.db.connect()
-    readings.insert_many(conn, rows)
-    conn.close()
-    out = InsightsRepository(db).coverage(start, NOW)
-    assert out is not None and out["longest"] == {"seconds": 6 * 3600 + 300, "at": at(5, 6) - 300}
-    assert out["share"] == pytest.approx(1 - 6 / (24 * 10 + 12), abs=0.005)
-
-
 def test_payback_from_what_the_system_saves(db: Database, config: Config, readings: ReadingsRepository) -> None:
     # 60 days of 1 kW of solar used at home all day: 24 kWh a day the grid didn't supply, at 30c.
     start = at(60, 0)

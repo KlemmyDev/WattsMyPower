@@ -280,7 +280,7 @@ class OutageService:
             "error": error if net else None,
         }
 
-    # ------------------------------------------------------------------ for the outlook and alerts
+    # ------------------------------------------------------------------ for the outlook
     def reasons(self, now: float | None = None) -> list[dict[str, Any]]:
         """What the outages mean for the grid's outlook (GridService.outlook)."""
         now = self.clock() if now is None else now
@@ -331,7 +331,6 @@ class OutageService:
                     "detail": f"{homes:,} {'home' if homes == 1 else 'homes'} without power. The nearest is "
                     f"{near['distance_km']:g} km {near['direction']}, in {_suburbs(near)}.",
                     "count": len(nearby),
-                    "alert": many,  # widespread: the blackout risk alert tells of it
                 }
             )
         return out

@@ -1,4 +1,4 @@
-"""Smart-meter data (Manage → Bills & rates): preview and import NEM12 files, list and remove imports, compare.
+"""Smart-meter data (Bills → Rates & settings): preview and import NEM12 files, list and remove imports, compare.
 
 Files are sent as the raw request body (Content-Type: application/octet-stream) with the file's
 name as a query parameter: the API doesn't depend on a multipart form parser.

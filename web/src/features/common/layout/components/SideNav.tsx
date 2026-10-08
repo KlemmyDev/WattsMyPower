@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { hhmm } from "~/features/common/formatting/utils/date";
 import { ON } from "~/features/common/energy/utils";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { NavPower } from "~/features/common/layout/components/Dock";
-import { NAV_DOCKED, useLiveStatus, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
+import { NAV_DOCKED, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
 import { NAV_GROUPS, sectionOf, type SectionPages } from "~/features/common/layout/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
@@ -109,7 +108,7 @@ function Circuit({
   const list = useRef<HTMLDivElement>(null);
   const wire = useWire(list, [path, items.length, variant, pages?.pages.length]);
   // Where the list scrolls (a short screen), the current page is kept in view: Manage's sit at the bottom. Again as
-  // its room changes, as the power flow and live chip arrive below it after the page opens.
+  // its room changes, as the power flow arrives below it after the page opens.
   useEffect(() => {
     const box = list.current?.parentElement;
     if (!box) return;
@@ -122,7 +121,6 @@ function Circuit({
   const at = items.findIndex((i) => i.to === current);
   const value: Partial<Record<string, string>> = p
     ? {
-        "/": kW(p.pv_power),
         "/solar": kW(p.pv_power),
         "/home": kW(p.load_power),
         "/battery": pct(p.battery_soc),
@@ -228,7 +226,6 @@ function Circuit({
       </div>
       <div className={cn("flex flex-none flex-col gap-2", !full && "items-center")}>
         <NavPower full={full} />
-        <LiveChip full={full} />
         <VersionTag full={full} />
       </div>
     </div>
@@ -320,32 +317,8 @@ function Branch({ pages }: { pages: SectionPages }) {
   );
 }
 
-/** Whether readings are coming in, with the time: a chip in full, a dot over the time on the rail. */
-function LiveChip({ full }: { full: boolean }) {
-  const { state, status, now } = useLiveStatus();
-  const word = state === "live" ? "Inverter live" : state === "stale" ? "Readings delayed" : "Inverter offline";
-  return full ? (
-    <div
-      title={`${status}.`}
-      className="flex h-10 flex-none items-center gap-2.5 rounded-xl border border-fg/6 bg-fg/4 px-3 text-[12.5px] text-ink-soft tabular-nums"
-    >
-      <span className="live-dot" data-state={state} />
-      <span>{word}</span>
-      <span className="ml-auto text-ink-faint">{hhmm(now)}</span>
-    </div>
-  ) : (
-    <span
-      title={`${status}.`}
-      className="flex flex-col items-center gap-2 pt-1 font-mono text-[11px] text-ink-dim tabular-nums"
-    >
-      <span className="live-dot" data-state={state} />
-      {hhmm(now)}
-    </span>
-  );
-}
-
 /**
- * Which version this is, and its release ("Alpha") until it's marked stable: under the live chip, or on the rail the
+ * Which version this is, and its release ("Alpha") until it's marked stable: under the power flow, or on the rail the
  * release alone (the version in its tooltip). When GitHub has a newer one, a link to System → Updates says so
  * (on the rail, a dot on the tag).
  */

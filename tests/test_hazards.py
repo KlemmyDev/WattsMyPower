@@ -10,7 +10,6 @@ import pytest
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.alerts.rules import BY_ID, Facts, RuleState
 from app.features.grid.warnings import bom, qfd
 from app.features.grid.warnings.service import HazardService
 from app.features.settings.store import SettingsStore
@@ -164,21 +163,14 @@ def test_warnings_for_the_house(settings: SettingsStore) -> None:
     assert v["fires"][1]["here"] and v["fires"][0]["direction"] == "NW"
 
 
-def test_reasons_and_alert(settings: SettingsStore) -> None:
+def test_reasons(settings: SettingsStore) -> None:
     reasons = _service(settings).reasons()
     by = {(r["kind"], r["id"]): r for r in reasons}
     storm = next(r for r in reasons if r["kind"] == "bom" and "Thunderstorm" in r["title"])
-    assert storm["level"] == "warning" and storm["alert"]
-    assert by[("fire", "qfd:F1")]["level"] == "warning" and by[("fire", "qfd:F1")]["alert"]
+    assert storm["level"] == "warning"
+    assert by[("fire", "qfd:F1")]["level"] == "warning"
     assert by[("fire", "qfd:F4")]["level"] == "watch" and "your area" in by[("fire", "qfd:F4")]["detail"]
     assert ("fire", "qfd:F2") not in by  # no warning: on the page only
-    facts = Facts(
-        now=NOW, snapshot={"ts": NOW, "battery_soc": 50.0}, hybrid_connected=True, last_success=NOW, error=None,
-        poll_interval=60, pv2=None, reserve=5.0, sun=10.0, daylight_since=NOW - 3600,
-        grid=lambda: {"level": "warning", "reasons": reasons},
-    )  # fmt: skip
-    check = BY_ID["grid_warning"].check(facts, {}, RuleState("grid_warning"))
-    assert check.state == "bad" and "Thunderstorm" in check.title
 
 
 def test_outside_queensland_and_turned_off(settings: SettingsStore) -> None:

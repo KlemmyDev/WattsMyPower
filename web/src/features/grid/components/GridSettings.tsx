@@ -163,10 +163,10 @@ function Street() {
                   in <b className="font-semibold text-ink">{title(system.home_suburb)}</b>
                 </>
               )}{" "}
-              are marked as reaching you, and the alerts tell you about them.
+              are marked as reaching you.
             </>
           ) : (
-            "Planned work lists the streets it turns off. Add yours to know which reach you, and to hear before they do."
+            "Planned work lists the streets it turns off. Add yours to know which reach you."
           )
         }
         aside={
@@ -275,7 +275,7 @@ function Hazards() {
           <>
             The Bureau of Meteorology's severe weather, flood and fire weather warnings
             {town ? ` for the ${town} area` : " for your area"}, and in Queensland the Fire Department's bushfire
-            warnings within your radius. They feed the Grid page's outlook and the blackout risk alert.
+            warnings within your radius. They feed the Grid page's outlook.
           </>
         }
         aside={
@@ -353,7 +353,7 @@ export function GridSettings() {
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-grid"
         title="Grid"
-        sub="Power outages around your house from your electricity network, weather and fire warnings, and the wholesale market from AEMO, for the Grid page and its alerts."
+        sub="Power outages around your house from your electricity network, weather and fire warnings, and the wholesale market from AEMO, for the Grid page."
       />
       {/* Started afresh once the saved street is known, and after it's saved. */}
       <Network />

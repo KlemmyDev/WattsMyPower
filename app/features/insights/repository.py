@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import pairwise
 from typing import Any
 
 from app.core.database import Database
@@ -45,22 +44,3 @@ class InsightsRepository:
         )
         with self.db.reading() as conn:
             return {m: round(v, 1) for m, v in conn.execute(sql, (start, end)) if v is not None}
-
-    def coverage(self, start: int, end: int) -> dict[str, Any] | None:
-        """How many of the 5-minute readings in [start, end) were recorded (from the first one, if later),
-        and the longest gap between two."""
-        with self.db.reading() as conn:
-            ts = [
-                t
-                for (t,) in conn.execute("SELECT ts FROM samples_5m WHERE ts >= ? AND ts < ? ORDER BY ts", (start, end))
-            ]
-        if not ts:
-            return None
-        expected = max(1, (end - ts[0]) // 300)
-        gaps = [(b - a, a) for a, b in pairwise(ts)] + [(end - ts[-1], ts[-1])]
-        seconds, at = max(gaps)
-        return {
-            "days": max(1, round((end - ts[0]) / 86400)),
-            "share": min(1.0, len(ts) / expected),
-            "longest": {"seconds": seconds, "at": at} if seconds > 900 else None,
-        }

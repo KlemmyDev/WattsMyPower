@@ -1,7 +1,7 @@
 """
 Official warnings for where the house is, as early signs the power may go: the Bureau of Meteorology's (bom.py) for
 severe thunderstorms, severe weather, cyclones, floods and fire weather, and in Queensland the Fire Department's
-bushfire warnings and incidents (qfd.py). They feed the Grid page's outlook and its blackout risk alert.
+bushfire warnings and incidents (qfd.py). They feed the Grid page's outlook.
 
 Matched here, on the dashboard: the Bureau's by the house's districts (from its nearest forecast town, looked up once
 a day) and any polygon around it; fires by their warning area around the house, or how far away they are. Fetched
@@ -28,8 +28,7 @@ EVERY = 600
 PLACES_EVERY = 24 * 3600
 FIRE_INFO_KM = 10  # a fire with no warning (Information) counts only this close; warnings count within the radius
 
-# What each kind of Bureau warning means for the power: how serious for the outlook, and whether it's one the blackout
-# risk alert tells of.
+# The kinds of Bureau warning that mean the most for the power: how serious they are for the outlook.
 SEVERE = ("thunderstorm", "severe weather", "cyclone", "damaging wind", "destructive")
 
 
@@ -252,7 +251,6 @@ class HazardService:
                     "detail": f"From the Bureau of Meteorology{until}. Storms, wind and floods are what bring power "
                     "lines down.",
                     "at": w.get("effective"),
-                    "alert": w["level"] == "warning",
                 }
             )
         for f in around["fires"]:
@@ -272,7 +270,6 @@ class HazardService:
                     + (f"{f['action']}. " if f["action"] else "")
                     + "Fires can bring power lines down, or have them turned off.",
                     "at": f.get("at"),
-                    "alert": serious,
                 }
             )
         return out

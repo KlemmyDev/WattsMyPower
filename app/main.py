@@ -13,7 +13,6 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.container import build_services
 from app.core.config import Config
 from app.core.spa import mount_spa
-from app.features.alerts.router import router as alerts_router
 from app.features.amber.router import router as amber_router
 from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
@@ -53,7 +52,6 @@ ROUTERS = [
     weather_router,
     insights_router,
     integrations_router,
-    alerts_router,
     onboarding_router,
     bills_router,
     meter_router,
@@ -92,7 +90,6 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
         await asyncio.to_thread(services.amber.load)
         if poll:
             await services.source.start()
-            await services.alerts.start()  # follows the live status the source publishes
             await services.amber.start()  # does nothing until an Amber account is connected
             await services.weather.start()  # the forecast, filling in past weather, and the forecast's learning
             await services.home.start()  # polls the smart-home accounts connected, if any
@@ -114,7 +111,6 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.home.stop()
             await services.weather.stop()
             await services.amber.stop()
-            await services.alerts.stop()
             await services.source.stop()
 
     app = FastAPI(title="WattsMyPower", lifespan=lifespan)

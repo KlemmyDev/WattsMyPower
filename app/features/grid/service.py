@@ -1,5 +1,5 @@
 """
-The grid (the Grid page, and the grid alerts): the wholesale market the house is connected to, and how the grid is
+The grid (the Grid page): the wholesale market the house is connected to, and how the grid is
 holding up, from three places.
 
 - AEMO (aemo.py): the region's wholesale price and demand every five minutes, its prices ahead (refreshed every half
@@ -52,8 +52,8 @@ FREQ_EVENT_LOW, FREQ_EVENT_HIGH = 49.5, 50.5
 SPIKE = 300.0
 
 LEVELS = ("normal", "watch", "warning", "outage")
-# Notice kinds worth an alert (the rest are shown on the page only).
-ALERTING = {"lor2", "lor3", "load_shedding", "suspension", "price_cap"}
+# Notice kinds that make the outlook a warning, whatever AEMO's own level (the rest are worth watching).
+SERIOUS = {"lor2", "lor3", "load_shedding", "suspension", "price_cap"}
 
 STATES = {"QLD": "QLD1", "NSW": "NSW1", "ACT": "NSW1", "VIC": "VIC1", "SA": "SA1", "TAS": "TAS1"}
 
@@ -312,11 +312,10 @@ class GridService:
             reasons.append(
                 {
                     "kind": n["kind"],
-                    "level": "warning" if n["level"] == "critical" or n["kind"] in ALERTING else "watch",
+                    "level": "warning" if n["level"] == "critical" or n["kind"] in SERIOUS else "watch",
                     "title": NOTICE_TITLES.get(n["kind"], n["title"]),
                     "detail": n["title"],
                     "at": n["at"],
-                    "alert": n["kind"] in ALERTING,
                 }
             )
 
@@ -346,7 +345,6 @@ class GridService:
                     + (" now" if first <= now else f" from {time.strftime('%-I %p', time.localtime(first))}")
                     + ". Storms are the most common cause of blackouts.",
                     "at": first,
-                    "alert": True,
                 }
             )
 
@@ -362,7 +360,6 @@ class GridService:
                     "level": "warning",
                     "title": "Prices capped",
                     "detail": "AEMO has capped wholesale prices after a run of extreme ones: supply is very tight.",
-                    "alert": True,
                 }
             )
         if market and market.get("price") is not None and market["price"] >= SPIKE:

@@ -33,7 +33,7 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
         ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
         "best_match",
     ),
-    # What a bill's discount comes off (Manage → Bills & rates): usage alone, or usage and the supply charge.
+    # What a bill's discount comes off (Bills → Rates & settings): usage alone, or usage and the supply charge.
     "bill_discount_on": (("usage", "usage_supply"), "usage"),
     # How the Overview draws the house (Manage → System → Your house).
     "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
@@ -73,7 +73,7 @@ OWNERSHIP: dict[str, tuple[str, str]] = {
     "battery_warranty_years": ("Battery warranty", " years"),
     "battery_warranty_mwh": ("Battery warranty energy", " MWh"),
 }
-# Discounts, credits and the budget (Manage → Bills & rates), named the same way.
+# Discounts, credits and the budget (Bills → Rates & settings), named the same way.
 BILLS: dict[str, tuple[str, str]] = {
     "bill_discount_pct": ("The discount", "%"),
     "bill_credits_year": ("Credits a year", ""),

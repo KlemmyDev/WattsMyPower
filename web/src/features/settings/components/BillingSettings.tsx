@@ -16,7 +16,7 @@ const FREQUENCIES = [
 
 const dm = (d: Date) => dayMonth(d.getTime() / 1000);
 
-/** Manage → Bills & rates: how often bills come and when a period starts, so estimates line up with the retailer's. */
+/** Bills → Rates & settings: how often bills come and when a period starts, so estimates line up with the retailer's. */
 export function BillingSettings() {
   return (
     <SettingsCard padded aria-labelledby="h-billing">

@@ -29,7 +29,7 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
                 : "The bill so far. An expected total needs at least one full day of readings."
           }
         />
-        <ButtonLink to="/rates" hash="period" variant="chip" className="flex-none px-3.5 py-1.5">
+        <ButtonLink to="/bills/rates" hash="period" variant="chip" className="flex-none px-3.5 py-1.5">
           Bill settings
         </ButtonLink>
       </div>

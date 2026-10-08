@@ -17,14 +17,11 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.alerts.rules import Facts, RuleState, daily_summary
-from app.features.alerts.service import AlertsService
 from app.features.amber.client import AmberClient, AmberError
 from app.features.amber.prices import PriceLookup, convert
 from app.features.amber.repository import PriceRepository
 from app.features.amber.service import NEM, AmberService, AmberSetupError, mask
 from app.features.bills.service import BillsService
-from app.features.live.service import LiveService
 from app.features.meter.service import MeterService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
@@ -573,38 +570,3 @@ def test_amber_prices_meter_days_by_interval_and_inverter_days_by_reading(
         v = validate(t)
         args = (readings, v, rate_tables(v), _at(d1, 0), _at(d2, 0) + 86400, meter)
         assert daily_costs(*args, prices) == daily_costs(*args)
-
-
-# -- the daily summary alert -------------------------------------------------------------------------
-def test_the_daily_summary_prices_yesterday_at_amber_prices(
-    db: Database, config: Config, readings: ReadingsRepository, tariffs: TariffStore
-) -> None:
-    _grid(readings, TEN, 60, 1000)  # 1 kWh from the grid, 10:00 to 11:00
-    _grid(readings, TEN + 7200, 60, -1000)  # 1 kWh to the grid, 12:00 to 13:00
-    prices = _prices(
-        db,
-        [
-            interval("general", TEN, 30, 50.0),  # 10:00-10:30 only
-            interval("feedIn", TEN + 7200, 30, 4.0),  # exporting cost 4c a kWh from 12:00 to 13:00
-            interval("feedIn", TEN + 9000, 30, 4.0),
-        ],
-    )
-    tariffs.save(AMBER)
-    settings = SettingsStore(db, config)
-    settings.load()
-    live = LiveService(config, settings, tariffs)
-    alerts = AlertsService(db, live, settings, readings, tariffs, None, prices=prices)  # type: ignore[arg-type]
-
-    y = alerts._yesterday(TEN + 86400)
-    assert y is not None
-    # Half the import at Amber's 50c, half (no price) at the 30c fallback; exporting cost 4c a kWh.
-    assert y["credit"] == pytest.approx(-0.04)
-    assert y["cost"] == pytest.approx(0.25 + 0.15 + 1.0 + 0.04)
-    assert y["unpriced"] == pytest.approx(0.5)
-
-    now = TEN + 86400 - 3 * 3600  # 07:00 the next morning
-    base = {"now": now, "snapshot": None, "hybrid_connected": True, "last_success": now, "error": None}
-    facts = Facts(**base, poll_interval=60, pv2=None, reserve=5.0, sun=10.0, daylight_since=now, yesterday=lambda: y)
-    check = daily_summary(facts, {"hour": 7}, RuleState("daily_summary"))
-    assert "including $0.04 paid to send power to the grid" in check.message
-    assert "0.5 kWh was costed at your fallback rates" in check.message

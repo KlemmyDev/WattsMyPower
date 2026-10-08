@@ -14,7 +14,7 @@ const amberLink = (text: ReactNode) => (
 );
 
 /**
- * Manage → Bills & rates: a line about Amber Electric. Connected, it switches the rates to Amber's prices;
+ * Bills → Rates & settings: a line about Amber Electric. Connected, it switches the rates to Amber's prices;
  * not, it says where to connect it.
  */
 export function AmberTariffRow({ onUse }: { onUse: () => void }) {

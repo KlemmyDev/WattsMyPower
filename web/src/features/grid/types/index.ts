@@ -39,8 +39,6 @@ export type OutlookReason = {
   title: string;
   detail: string;
   at?: number;
-  /** It's one the blackout risk alert tells of. */
-  alert?: boolean;
 };
 
 /** An outage on the electricity network, as the house sees it. Times are unix seconds (null when not given). */

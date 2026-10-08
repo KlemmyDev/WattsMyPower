@@ -1,13 +1,15 @@
 import { Link } from "@tanstack/react-router";
+import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { useLiveStatus, useScrolled } from "~/features/common/layout/hooks";
 import { cn } from "~/features/common/ui/utils";
 import { fullDate, hhmm, pillDate, tzName } from "~/features/common/formatting/utils/date";
 
 /**
- * The header on a phone: a menu button that opens the side nav's circuit, the name, and the live clock. It stays at
- * the top while the page scrolls. At the top it's see-through; once content passes under it, it gets a translucent
- * background and a hairline so the two don't clash.
+ * The header on a phone: a menu button that opens the side nav's circuit, the name, the live clock, and the account.
+ * It stays at the top while the page scrolls. At the top it's see-through; once content passes under it, it gets a
+ * translucent background and a hairline so the two don't clash. From tablets up the clock and account are in the
+ * page's top right corner instead (AppShell).
  */
 export function TopBar({ onMenu }: { onMenu: () => void }) {
   const scrolled = useScrolled();
@@ -34,18 +36,23 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         >
           Watts<span className="text-solar">My</span>Power
         </Link>
-        <HeaderClock />
+        <HeaderClock className="ml-auto" />
+        <AccountAvatar />
       </header>
     </div>
   );
 }
 
-function HeaderClock() {
+/** Whether readings are coming in, with the date and time: a pill beside the account. */
+export function HeaderClock({ className }: { className?: string }) {
   const { state, status, now } = useLiveStatus();
   const d = new Date(now * 1000);
   return (
     <span
-      className="ml-auto flex h-10 flex-none items-center gap-2 rounded-full border border-chip-line bg-chip px-3.5 font-mono text-[13px] whitespace-nowrap text-ink-soft tabular-nums"
+      className={cn(
+        "flex h-10 flex-none items-center gap-2 rounded-full border border-chip-line bg-chip px-3.5 font-mono text-[13px] whitespace-nowrap text-ink-soft tabular-nums",
+        className,
+      )}
       title={`${fullDate.format(d)}, ${hhmm(now)} ${tzName}. ${status}.`}
     >
       <span className="live-dot" data-state={state} />

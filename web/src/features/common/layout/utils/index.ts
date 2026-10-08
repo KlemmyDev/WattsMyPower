@@ -13,18 +13,15 @@ export type Section =
   | "/bills"
   | "/tesla"
   | "/system"
-  | "/rates"
   | "/integrations"
-  | "/alerts"
-  | "/data"
-  | "/account";
+  | "/data";
 
 /**
- * Live: what's happening now. Over time: what happened, what's coming, and what it cost. Manage: setting it all up
+ * Live: what's happening now. Insights: what happened, what's coming, and what it cost. Manage: setting it all up
  * (what were Settings' pages).
  */
-export type NavGroup = "Live" | "Over time" | "Manage";
-export const NAV_GROUPS: NavGroup[] = ["Live", "Over time", "Manage"];
+export type NavGroup = "Live" | "Insights" | "Manage";
+export const NAV_GROUPS: NavGroup[] = ["Live", "Insights", "Manage"];
 
 /**
  * `color`: the section's own colour, its node's glow once the wire's power reaches it. `group`: none for Overview,
@@ -43,15 +40,12 @@ export const NAV: NavItem[] = [
   { to: "/battery", label: "Battery", icon: "battery", group: "Live", color: COLOR.battery },
   { to: "/grid", label: "Grid", icon: "grid", group: "Live", color: COLOR.import },
   { to: "/tesla", label: "Tesla", icon: "car", group: "Live", color: COLOR.danger },
-  { to: "/history", label: "History", icon: "chart", group: "Over time", color: COLOR.lilac },
-  { to: "/plan", label: "Plan", icon: "cloudSun", group: "Over time", color: COLOR.export },
-  { to: "/bills", label: "Bills", icon: "dollar", group: "Over time", color: COLOR.good },
+  { to: "/history", label: "History", icon: "chart", group: "Insights", color: COLOR.lilac },
+  { to: "/plan", label: "Plan", icon: "cloudSun", group: "Insights", color: COLOR.export },
+  { to: "/bills", label: "Bills", icon: "dollar", group: "Insights", color: COLOR.good },
   { to: "/system", label: "System", icon: "settings", group: "Manage", color: MANAGE_COLOR },
-  { to: "/rates", label: "Bills & rates", icon: "tag", group: "Manage", color: MANAGE_COLOR },
   { to: "/integrations", label: "Integrations", icon: "plug", group: "Manage", color: MANAGE_COLOR },
-  { to: "/alerts", label: "Alerts", icon: "bell", group: "Manage", color: MANAGE_COLOR },
   { to: "/data", label: "Data", icon: "database", group: "Manage", color: MANAGE_COLOR },
-  { to: "/account", label: "Account", icon: "user", group: "Manage", color: MANAGE_COLOR },
 ];
 
 /** Which top-level section a path belongs to: "/home" for "/home/12". */

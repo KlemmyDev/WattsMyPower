@@ -25,7 +25,7 @@ export function TodayCard({ tariff, now }: { tariff: Tariff | undefined; now: nu
         title="Today so far"
         id="h-today"
         action={
-          <ButtonLink to="/rates" hash="rates" variant="chip">
+          <ButtonLink to="/bills/rates" hash="rates" variant="chip">
             {t ? RATE_TYPE[t.type] : "Rates"}
           </ButtonLink>
         }
