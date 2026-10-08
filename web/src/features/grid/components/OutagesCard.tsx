@@ -42,6 +42,15 @@ export function when(o: Outage, now: number): string {
   return `${day(o.start)}, ${hhmm(o.start)} to ${end}`;
 }
 
+/** How long ago the network's map was read: "just now", "4 min ago", "at 2:15 pm", "Wed 8 Oct, 2:15 pm". */
+function ago(at: number, now: number): string {
+  const mins = Math.floor((now - at) / 60);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (new Date(at * 1000).toDateString() === new Date(now * 1000).toDateString()) return `at ${hhmm(at)}`;
+  return `${shortDay.format(new Date(at * 1000))}, ${hhmm(at)}`;
+}
+
 /**
  * Where each outage sits around the house: the house in the middle, rings at thirds of the radius. Pointing at one
  * says what it is, and fades the rest back; one that reaches the house ripples.
@@ -259,6 +268,8 @@ export function OutagesCard({
   // Nothing's come from the network's map yet (it can turn the dashboard away): the card stays, with the radius,
   // but doesn't claim there are no outages when it can't know. Settings → Integrations → Grid says why.
   const waiting = !!net && view.fetched_at == null;
+  // Planned work to come is read hourly, apart from the outages now.
+  const checked = tab === "planned" ? (view.planned_at ?? view.fetched_at) : view.fetched_at;
   const sub = !net
     ? ""
     : [
@@ -348,6 +359,15 @@ export function OutagesCard({
                   {view.street ? "Change" : "Add your street to see what reaches you"}
                 </Link>
               </span>
+              {checked != null && (
+                <span
+                  className={cn("ml-auto tabular-nums", view.error && "text-warn")}
+                  title={`${shortDay.format(new Date(checked * 1000))}, ${hhmm(checked)}${view.error ? ` · ${view.error}` : ""}`}
+                >
+                  {view.error ? `Couldn't reach ${net.name} · last checked ` : `Checked ${net.name} `}
+                  {ago(checked, now)}
+                </span>
+              )}
             </div>
           </div>
         </div>

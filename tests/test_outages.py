@@ -134,6 +134,7 @@ def test_outages_around_the_house(settings: SettingsStore) -> None:
     assert [o["id"] for o in v["planned"]] == ["energex:INCD-5"]  # INCD-6 is more than two weeks off
     assert v["planned"][0]["affects"] == "street"
     assert v["summary"] == {"outages": 1, "customers": 27, "nearest_km": 0.0}
+    assert v["fetched_at"] == v["planned_at"] == NOW and v["error"] is None
     settings.save({"outage_radius_km": 25})
     assert "energex:INCD-2" in [o["id"] for o in svc.view()["now"]]
 
