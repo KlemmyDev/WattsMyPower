@@ -9,7 +9,7 @@ import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
-import { TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { TimeLine } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
 import type { Forecast } from "~/features/common/weather/types";
@@ -31,6 +31,7 @@ function Corner({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** A bar split into its parts, with a line for each below: pointing at a part, or its line, lights both. */
 function Split({
   parts,
   total,
@@ -38,24 +39,48 @@ function Split({
   parts: { key: string; label: string; kwh: number; color: string }[];
   total: number;
 }) {
+  const { hover, plot, bar } = useBarHover<string>();
+  const lit = (key: string) => hover == null || hover === key;
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-fg/6">
+    <div className="flex flex-col gap-2" {...plot}>
+      <div className="flex h-2.5 gap-0.5 rounded-full bg-fg/6">
         {total > 0 &&
           parts
             .filter((x) => x.kwh > 0.005)
             .map((x) => (
               <span
                 key={x.key}
-                className="h-full transition-[flex-grow] duration-700 ease-out-soft"
+                aria-hidden
+                {...bar(x.key)}
+                className={cn(
+                  "h-full transition-[flex-grow,opacity,scale] duration-300 ease-out-soft first:rounded-l-full last:rounded-r-full",
+                  !lit(x.key) && "opacity-30",
+                  hover === x.key && "scale-y-150",
+                )}
                 style={{ flexGrow: x.kwh, background: x.color } as CSSProperties}
               />
             ))}
       </div>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+      <ul className="-mx-1.5 flex flex-wrap gap-x-1.5 text-xs text-ink-muted">
         {parts.map((x) => (
-          <li key={x.key} className="flex items-center gap-1.5">
-            <i aria-hidden className="size-2 rounded-full" style={{ background: x.color }} />
+          <li
+            key={x.key}
+            tabIndex={0}
+            {...bar(x.key)}
+            className={cn(
+              "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none transition-[background-color,opacity] duration-200",
+              hover === x.key && "bg-fg/5 text-ink",
+              !lit(x.key) && "opacity-55",
+            )}
+          >
+            <i
+              aria-hidden
+              className="size-2 rounded-full transition-shadow duration-200"
+              style={{
+                background: x.color,
+                boxShadow: hover === x.key ? `0 0 0 3px ${alpha(x.color, 0.25)}` : undefined,
+              }}
+            />
             {x.label} <span className="text-ink tabular-nums">{kWh(x.kwh)}</span>
           </li>
         ))}
@@ -357,6 +382,7 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
   const end = midnight(now);
   const { data } = useQuery(dailyQuery(addDays(end, -30), end));
   const days = (data ?? []).filter((d) => d.daily_charge != null || d.daily_discharge != null);
+  const { hover: h, width, plot, bar } = useBarHover();
   if (!days.length) return null;
   const top = Math.max(0.5, ...days.flatMap((d) => [d.daily_charge ?? 0, d.daily_discharge ?? 0]));
   const out = days.reduce((a, d) => a + (d.daily_discharge ?? 0), 0);
@@ -372,12 +398,17 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
         {cap ? <Corner label="Cycles a day">{(out / days.length / cap).toFixed(2)}</Corner> : null}
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="flex h-28 items-end gap-[3px] max-sm:gap-px">
+        <div className="relative flex h-28 items-end gap-[3px] max-sm:gap-px" {...plot}>
           {days.map((d, i) => (
-            <div
+            <button
               key={d.date}
-              className="flex h-full min-w-0 flex-1 items-end gap-px"
-              title={`${shortDay.format(parseYmd(d.date))}: charged ${kWh(d.daily_charge)}, discharged ${kWh(d.daily_discharge)}`}
+              type="button"
+              {...bar(i)}
+              aria-label={`${shortDay.format(parseYmd(d.date))}: charged ${kWh(d.daily_charge)}, discharged ${kWh(d.daily_discharge)}`}
+              className={cn(
+                "flex h-full min-w-0 flex-1 cursor-default items-end gap-px border-0 bg-transparent p-0 transition-opacity duration-200",
+                h != null && h !== i && "opacity-45",
+              )}
             >
               {[
                 [d.daily_charge ?? 0, CHARGE],
@@ -385,18 +416,28 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
               ].map(([v, c], k) => (
                 <i
                   key={k}
-                  className={cn("bar-grow block min-w-0 flex-1 rounded-[3px_3px_1px_1px]")}
+                  className="bar-grow block min-w-0 flex-1 rounded-[3px_3px_1px_1px] transition-[background-color] duration-200"
                   style={
                     {
                       height: `${((v as number) / top) * 100}%`,
-                      background: alpha(c as string, 0.8),
+                      background: alpha(c as string, h === i ? 1 : 0.8),
                       "--i": i,
                     } as CSSProperties
                   }
                 />
               ))}
-            </div>
+            </button>
           ))}
+          {h != null && (
+            <ChartTooltip left={((h + 0.5) / days.length) * 100} flip={h > days.length / 2} width={width}>
+              <span className="font-medium text-ink">{shortDay.format(parseYmd(days[h].date))}</span>
+              <TooltipRow label="Charged" value={kWh(days[h].daily_charge)} color={CHARGE} />
+              <TooltipRow label="Discharged" value={kWh(days[h].daily_discharge)} color={DISCHARGE} />
+              {cap && days[h].daily_discharge != null && (
+                <TooltipRow label="Cycles" value={(days[h].daily_discharge! / cap).toFixed(2)} />
+              )}
+            </ChartTooltip>
+          )}
         </div>
         <div className="flex justify-between font-mono text-[11px] text-ink-faint">
           {[days[0], days[days.length - 1]].map((d) => (

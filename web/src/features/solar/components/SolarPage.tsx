@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct, powerParts } from "~/features/common/formatting/utils/number";
@@ -266,13 +266,8 @@ function WhereItWent({ p }: { p: Snapshot | null }) {
   ];
   const kept = pv > 0 ? (home + toBattery) / pv : null;
   // The part under the pointer, on the bar or its line below: it stays lit, the rest fade back.
-  const [hover, setHover] = useState<string | null>(null);
+  const { hover, plot, bar: point } = useBarHover<string>();
   const lit = (key: string) => hover == null || hover === key;
-  const point = (key: string) => ({
-    onMouseEnter: () => setHover(key),
-    onFocus: () => setHover(key),
-    onBlur: () => setHover(null),
-  });
   return (
     <Card>
       <div className="flex items-end justify-between gap-3">
@@ -285,7 +280,7 @@ function WhereItWent({ p }: { p: Snapshot | null }) {
         )}
       </div>
       {pv > 0 ? (
-        <div className="flex flex-col gap-4" onMouseLeave={() => setHover(null)}>
+        <div className="flex flex-col gap-4" {...plot}>
           <div className="flex h-3 gap-0.5">
             {parts
               .filter((x) => x.kwh > 0)
