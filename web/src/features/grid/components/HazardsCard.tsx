@@ -93,33 +93,48 @@ function FireRow({ f }: { f: FireWarning }) {
  */
 export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
   const count = view.weather.length + view.fires.filter((f) => f.level !== "Information").length;
+  const bom = view.sources.bom;
+  const qfd = view.sources.qfd;
+  const asked = (s: typeof bom) => !!s && s.at != null;
   const sub = !view.enabled
     ? "Turned off"
     : count
       ? `${count} ${count === 1 ? "warning" : "warnings"} for your area`
-      : view.fetched_at
-        ? `No weather${view.fires_followed ? " or fire" : ""} warnings for your area`
-        : "Weather and fire warnings for your area will show here";
+      : asked(bom) && (!view.fires_followed || asked(qfd))
+        ? "All clear for your area"
+        : "Weather and fire warnings for your area";
+  // What's known, source by source: no warnings from those that answered; those that haven't, said plainly.
+  const clear = [
+    asked(bom) &&
+      !view.weather.length &&
+      `no Bureau of Meteorology warnings${view.town ? ` for the ${view.town} area` : ""}`,
+    view.fires_followed && asked(qfd) && !view.fires.length && `no fires within ${view.radius_km} km`,
+  ].filter(Boolean);
   return (
     <Card>
       <TitleBlock title="Warnings" sub={sub} />
       {view.enabled ? (
-        view.weather.length || view.fires.length ? (
-          <ul className="-my-1 flex flex-col">
-            {view.weather.map((w) => (
-              <WeatherRow key={w.id} w={w} now={now} />
-            ))}
-            {view.fires.map((f) => (
-              <FireRow key={f.id} f={f} />
-            ))}
+        <>
+          {(view.weather.length > 0 || view.fires.length > 0) && (
+            <ul className="-my-1 flex flex-col">
+              {view.weather.map((w) => (
+                <WeatherRow key={w.id} w={w} now={now} />
+              ))}
+              {view.fires.map((f) => (
+                <FireRow key={f.id} f={f} />
+              ))}
+            </ul>
+          )}
+          {clear.length > 0 && (
+            <div className="text-[13px] text-ink-muted">
+              {`${clear.join(", and ")}.`.replace(/^./, (c) => c.toUpperCase())}
+            </div>
+          )}
+          <ul className="flex flex-col gap-1 text-xs text-ink-faint">
+            <SourceLine name="Bureau of Meteorology" source={bom} />
+            {view.fires_followed && <SourceLine name="Queensland Fire Department" source={qfd} />}
           </ul>
-        ) : (
-          <div className="text-[13px] text-ink-faint">
-            {view.fetched_at
-              ? `Nothing from the Bureau of Meteorology${view.town ? ` for the ${view.town} area` : ""}${view.fires_followed ? `, and no fires within ${view.radius_km} km` : ""}.`
-              : "Checking the Bureau of Meteorology and the Fire Department…"}
-          </div>
-        )
+        </>
       ) : (
         <div className="text-[13px] text-ink-muted">
           <Link to="/settings/integrations/grid" className="text-brand no-underline hover:underline">
@@ -128,12 +143,28 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
           for severe weather and bushfire warnings near you.
         </div>
       )}
-      {view.enabled && (
-        <div className="text-xs text-ink-faint">
-          Severe weather, floods{view.fires_followed ? " and fires" : ""} are what usually take the power out.
-          {view.fetched_at && ` Checked ${hhmm(view.fetched_at)}.`}
-        </div>
-      )}
     </Card>
+  );
+}
+
+/** Where a source is at: checked at a time, still being asked, or not answering (and trying again). */
+function SourceLine({ name, source }: { name: string; source: HazardsView["sources"]["bom"] }) {
+  const state = !source || (source.at == null && !source.error) ? "asking" : source.error ? "down" : "ok";
+  return (
+    <li className="flex items-center gap-2">
+      <i
+        aria-hidden
+        className={cn("size-1.5 flex-none rounded-full", state === "asking" && "animate-pulse")}
+        style={{ background: state === "ok" ? COLOR.good : state === "down" ? COLOR.warn : alpha(COLOR.fg, 0.35) }}
+      />
+      <span>
+        {name}:{" "}
+        {state === "asking"
+          ? "checking…"
+          : state === "down"
+            ? `couldn't be reached${source?.at ? `, showing what it had at ${hhmm(source.at)}` : ""}. Trying again every 10 minutes.`
+            : `checked ${hhmm(source!.at!)}`}
+      </span>
+    </li>
   );
 }
