@@ -3,7 +3,7 @@ Browser notifications, through the Web Push protocol: alerts arrive as the brows
 notifications, even with the dashboard closed, with no app or account needed.
 
 How it fits together:
-- A browser that turns notifications on (Settings → Alerts) subscribes with its push service (Google's for
+- A browser that turns notifications on (Manage → Alerts) subscribes with its push service (Google's for
   Chrome and Edge, Mozilla's for Firefox, Apple's for Safari) and sends us the subscription: an address at that
   service, and two keys only it can decrypt with. Each is a row of `push_subscriptions`.
 - To notify, we encrypt the message for that browser (RFC 8291, the "aes128gcm" content coding of RFC 8188)

@@ -8,8 +8,8 @@ import { BillAdjustments } from "~/features/settings/components/BillAdjustments"
 import { BillingSettings } from "~/features/settings/components/BillingSettings";
 import { TariffSettings } from "~/features/settings/components/TariffSettings";
 
-export const Route = createFileRoute("/_app/settings/bills")({
-  head: () => ({ meta: [{ title: "Settings · WattsMyPower" }] }),
+export const Route = createFileRoute("/_app/rates")({
+  head: () => ({ meta: [{ title: "Bills & rates · WattsMyPower" }] }),
   component: BillsSettingsPage,
 });
 
@@ -24,7 +24,7 @@ const SECTIONS = [
 export type BillsSection = (typeof SECTIONS)[number]["id"];
 
 /**
- * Settings → Bills: everything a bill is worked out from. The rates (Amber, a published plan, or entered by hand),
+ * Manage → Bills & rates: everything a bill is worked out from. The rates (Amber, a published plan, or entered by hand),
  * then when bills come, what comes off them and the budget, then the smart meter's data and how it compares.
  */
 function BillsSettingsPage() {
@@ -36,7 +36,7 @@ function BillsSettingsPage() {
         {SECTIONS.map((x) => (
           <Link
             key={x.id}
-            to="/settings/bills"
+            to="/rates"
             hash={x.id}
             className="rounded-full border border-chip-line bg-chip px-3.5 py-1.5 text-[13px] font-medium text-ink-muted no-underline transition-colors hover:text-ink"
           >

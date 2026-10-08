@@ -1,5 +1,5 @@
 """
-Electric cars to choose from when connecting one (Settings → Integrations → Electric vehicle), so their details
+Electric cars to choose from when connecting one (Manage → Integrations → Electric vehicle), so their details
 don't need looking up. Choosing one fills in the details, which can then be changed: the figures are typical,
 not exact for every build year.
 

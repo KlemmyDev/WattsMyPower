@@ -99,7 +99,7 @@ function Scene({
               body: c.car.car_body,
               paint: paintOf(c.car.car_colour).hex,
               label: [carName(c), c.level && `${Math.round(c.level.soc)}%`].filter(Boolean).join(" · "),
-              href: `/settings/integrations/car/${c.id}`,
+              href: `/integrations/car/${c.id}`,
             }))}
             links
           />

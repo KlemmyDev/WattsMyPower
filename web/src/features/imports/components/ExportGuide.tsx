@@ -65,7 +65,7 @@ function Steps({ title, badge, children }: { title: string; badge?: string; chil
   );
 }
 
-/** Settings → Integrations → Sungrow → Import: which iSolarCloud export holds the 5-minute data, and how to get it. */
+/** Manage → Integrations → Sungrow → Import: which iSolarCloud export holds the 5-minute data, and how to get it. */
 export function ExportGuide() {
   return (
     <SettingsCard padded aria-labelledby="h-export-guide">

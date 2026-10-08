@@ -300,7 +300,7 @@ function Manual({
   );
 }
 
-/** Connecting an inverter, by scanning the network or by address (Settings → Integrations → Sungrow, and the set-up guide). */
+/** Connecting an inverter, by scanning the network or by address (Manage → Integrations → Sungrow, and the set-up guide). */
 export function ConnectInverter({
   overview,
   onConnected,

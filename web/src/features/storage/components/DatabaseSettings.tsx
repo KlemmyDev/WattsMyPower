@@ -6,7 +6,7 @@ import { measureAgain, storageQuery } from "~/features/storage/api";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
 import { StorageOverview } from "~/features/storage/components/StorageOverview";
 
-/** Settings → Database: everything stored, in both databases, and how much room each part takes. */
+/** Manage → Data: everything stored, in both databases, and how much room each part takes. */
 export function DatabaseSettings() {
   const qc = useQueryClient();
   const report = useQuery(storageQuery);

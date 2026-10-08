@@ -403,7 +403,7 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
   );
 }
 
-/** Settings → Integrations → Weather: the Open-Meteo forecast behind the solar forecast, and what it learns. */
+/** Manage → Integrations → Weather: the Open-Meteo forecast behind the solar forecast, and what it learns. */
 export function WeatherSettings() {
   const system = useLive()?.system;
   const { data: status } = useQuery(weatherStatusQuery);
@@ -411,7 +411,7 @@ export function WeatherSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-weather"
         title="Weather"
         sub={

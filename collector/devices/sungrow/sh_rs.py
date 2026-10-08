@@ -90,7 +90,7 @@ class ShRsDevice:
 
     def _connect(self) -> Any:
         if not self.host:
-            raise ConnectionError("No inverter address set. Connect it in Settings → Integrations.")
+            raise ConnectionError("No inverter address set. Connect it in Manage → Integrations.")
         client = self._client_cls(self.host, port=self.port, timeout=5, retries=1)
         if not client.connect():
             raise ConnectionError(f"Could not connect to {self.host}:{self.port}")

@@ -43,7 +43,9 @@ export function TeslaSetupPage() {
               {p}
             </div>
           ))}
-          <div className="px-4 py-3 text-[13px] text-ink-faint">You can remove access at any time in Settings.</div>
+          <div className="px-4 py-3 text-[13px] text-ink-faint">
+            You can remove access at any time in Manage → Integrations.
+          </div>
         </div>
         <div className="flex items-start gap-3 rounded-xl bg-canvas px-4 py-3.5 text-[13px] leading-5 text-ink-muted">
           <span>

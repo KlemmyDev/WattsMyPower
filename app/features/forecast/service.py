@@ -4,7 +4,7 @@ Solar and battery forecast for the next ~24 hours.
 Weather comes from Open-Meteo (free, no API key), through the stored weather (app.features.weather).
 Solar per hour is modelled one of two ways:
 
-  - plainly, as pv_kwh = k * radiation_kwh_per_m2, where k starts at the array size (Settings →
+  - plainly, as pv_kwh = k * radiation_kwh_per_m2, where k starts at the array size (Manage →
     System) * 0.8 and is then calibrated against what the inverter actually produced over the
     last week (so orientation, shading and clipping are roughly absorbed without being configured);
   - or by the model learned from weather history (app.features.forecast.learning), once it has

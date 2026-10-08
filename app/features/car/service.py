@@ -1,5 +1,5 @@
 """
-The cars: each one's details (Settings → Integrations → Electric vehicle), its battery level, and charges planned
+The cars: each one's details (Manage → Integrations → Electric vehicle), its battery level, and charges planned
 ahead. Until a car can be charged from spare solar automatically, you say when it will charge and how (or take a
 suggested charge, app.features.car.planner), and the forecast counts it as home use (app.features.forecast).
 

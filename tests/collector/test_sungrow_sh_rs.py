@@ -116,7 +116,7 @@ def test_the_unit_id_kwarg_follows_the_pymodbus_version() -> None:
 
 
 def test_no_host_is_a_connection_error() -> None:
-    with pytest.raises(ConnectionError, match="Settings → Integrations"):
+    with pytest.raises(ConnectionError, match="Manage → Integrations"):
         ShRsDevice("", client_cls=fake_client()).read(include_info=False)
 
 

@@ -375,7 +375,7 @@ class BatteryService:
         events = list(reversed(self._kv(LOG_KEY) or []))[:10]
         if driver is None:
             reason = (
-                "Connect the inverter first (Settings → Integrations)."
+                "Connect the inverter first (Manage → Integrations)."
                 if not self.live.driver
                 else "This inverter's battery can't be controlled from the dashboard yet."
             )

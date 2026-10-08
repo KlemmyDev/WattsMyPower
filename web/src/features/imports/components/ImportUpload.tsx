@@ -102,7 +102,7 @@ function ColumnPicker({
   );
 }
 
-/** Settings → Integrations → Sungrow → Import: pick iSolarCloud exports, check what they hold, and import them. */
+/** Manage → Integrations → Sungrow → Import: pick iSolarCloud exports, check what they hold, and import them. */
 export function ImportUpload() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -433,7 +433,7 @@ export function ImportUpload() {
                 : "Choose your location first, so the weather is fetched for the right place. Days imported before then get theirs once it's set."}
             </span>
             {!locationSet && (
-              <ButtonLink to="/settings/integrations/weather" variant="link" size="sm" className="mt-1">
+              <ButtonLink to="/integrations/weather" variant="link" size="sm" className="mt-1">
                 Choose your location
               </ButtonLink>
             )}

@@ -113,7 +113,7 @@ export function AmberConnect({ onReady }: { onReady: () => void }) {
   if (!status.site_id) return <SitePicker status={status} onChosen={onReady} />;
   return (
     <HelpText className="text-[13px]">
-      Connected to Amber (API key {status.key}). The connection is in Settings → Integrations → Amber Electric.
+      Connected to Amber (API key {status.key}). The connection is in Manage → Integrations → Amber Electric.
     </HelpText>
   );
 }
@@ -216,7 +216,7 @@ function AmberAccount() {
               {tariff && tariff.type !== "amber" && (
                 <Notice tone="info" className="flex flex-wrap items-center justify-between gap-3">
                   <span>Your rates don't use Amber's prices yet.</span>
-                  <ButtonLink to="/settings/bills" hash="rates" size="sm" variant="outline">
+                  <ButtonLink to="/rates" hash="rates" size="sm" variant="outline">
                     Use them in Tariffs
                   </ButtonLink>
                 </Notice>
@@ -229,12 +229,12 @@ function AmberAccount() {
   );
 }
 
-/** Settings → Integrations → Amber Electric: the API key and site, and whether the rates use its prices. */
+/** Manage → Integrations → Amber Electric: the API key and site, and whether the rates use its prices. */
 export function AmberSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-amber"
         title="Amber Electric"
         sub="With Amber, the price of power changes every 5 or 30 minutes. Connect your account to cost your power at the price of the time."

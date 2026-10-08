@@ -11,7 +11,7 @@ export type LatestVersion = {
 
 /** This version, the latest on GitHub, and whether that's an update (GET /api/updates). */
 export type UpdateStatus = {
-  /** Checking every few hours is on (Settings → System → Updates). */
+  /** Checking every few hours is on (Manage → System → Updates). */
   enabled: boolean;
   current: { version: string; release: string | null; commit: string | null };
   latest: LatestVersion | null;

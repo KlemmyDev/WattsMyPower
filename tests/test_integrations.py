@@ -1,4 +1,4 @@
-"""Connecting inverters from Settings → Integrations: the API's side (the collector is faked)."""
+"""Connecting inverters from Manage → Integrations: the API's side (the collector is faked)."""
 
 from __future__ import annotations
 

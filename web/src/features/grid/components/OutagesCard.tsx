@@ -17,7 +17,7 @@ export const PLANNED = COLOR.lilac;
 
 const title = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
-/** The distances the radius can be set to (Settings → Integrations → Grid has the same). */
+/** The distances the radius can be set to (Manage → Integrations → Grid has the same). */
 export const RADII = [5, 10, 15, 20, 30, 50];
 
 export const suburbsOf = (o: Outage) => {
@@ -266,7 +266,7 @@ export function OutagesCard({
   const s = view.summary;
   const underway = view.now.filter((o) => o.planned).length;
   // Nothing's come from the network's map yet (it can turn the dashboard away): the card stays, with the radius,
-  // but doesn't claim there are no outages when it can't know. Settings → Integrations → Grid says why.
+  // but doesn't claim there are no outages when it can't know. Manage → Integrations → Grid says why.
   const waiting = !!net && view.fetched_at == null;
   // Planned work to come is read hourly, apart from the outages now.
   const checked = tab === "planned" ? (view.planned_at ?? view.fetched_at) : view.fetched_at;
@@ -355,7 +355,7 @@ export function OutagesCard({
                     {view.suburb ? `, ${title(view.suburb)}` : ""} ·{" "}
                   </>
                 ) : null}
-                <Link to="/settings/integrations/grid" className="text-brand no-underline hover:underline">
+                <Link to="/integrations/grid" className="text-brand no-underline hover:underline">
                   {view.street ? "Change" : "Add your street to see what reaches you"}
                 </Link>
               </span>
@@ -376,7 +376,7 @@ export function OutagesCard({
           {view.supported ? (
             <>
               Outages aren't being followed.{" "}
-              <Link to="/settings/integrations/grid" className="text-brand no-underline hover:underline">
+              <Link to="/integrations/grid" className="text-brand no-underline hover:underline">
                 Choose your network
               </Link>
             </>

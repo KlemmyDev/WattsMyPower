@@ -31,7 +31,7 @@ function newerWords(s: UpdateStatus) {
 }
 
 /**
- * Updates (Settings → System): the version running, the latest on GitHub and whether it's newer, checking now, and
+ * Updates (Manage → System): the version running, the latest on GitHub and whether it's newer, checking now, and
  * turning the checks every few hours off. With the updater set up on the machine it's installed on, Update now; else
  * how to update by hand.
  */

@@ -1,4 +1,4 @@
-"""Connecting inverters (Settings → Integrations): list, scan the network, connect, change, remove."""
+"""Connecting inverters (Manage → Integrations): list, scan the network, connect, change, remove."""
 
 from __future__ import annotations
 

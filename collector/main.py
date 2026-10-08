@@ -104,7 +104,7 @@ async def storage(request: Request) -> dict[str, Any]:
     return {**await asyncio.to_thread(run), "retention_days": store.retention_days}
 
 
-# -- devices: the inverters to read, connected in the dashboard (Settings → Integrations) ---------
+# -- devices: the inverters to read, connected in the dashboard (Manage → Integrations) ---------
 
 _HOSTNAME = re.compile(
     r"^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
@@ -351,7 +351,7 @@ def create_app(
             if seeded:
                 log.info(
                     "Moved the inverters set in the environment into the database: %s. They're managed in "
-                    "the dashboard from now on (Settings → Integrations); INVERTER_HOST and PV2_HOST are no longer read.",
+                    "the dashboard from now on (Manage → Integrations); INVERTER_HOST and PV2_HOST are no longer read.",
                     ", ".join(f"{d.role} at {d.host}" for d in seeded),
                 )
         if hybrid is None:
@@ -359,7 +359,7 @@ def create_app(
         if not config.token:
             log.warning("COLLECTOR_TOKEN is not set: /v1/* will refuse every request (503) until it is")
         if not poller.devices:
-            log.info("No inverter connected yet: connect one in the dashboard (Settings → Integrations)")
+            log.info("No inverter connected yet: connect one in the dashboard (Manage → Integrations)")
         if config.mock and await asyncio.to_thread(store.is_empty):
             await asyncio.to_thread(backfill, store, poller.devices, config.poll_interval, MOCK_BACKFILL_DAYS)
         if poll:

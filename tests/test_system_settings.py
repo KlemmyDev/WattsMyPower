@@ -1,6 +1,6 @@
 """
 The system details (array size, battery capacity, reserve, rate) live in the database and are
-edited in Settings → System. An install from before that keeps exactly the values it ran with.
+edited in Manage → System. An install from before that keeps exactly the values it ran with.
 """
 
 from __future__ import annotations

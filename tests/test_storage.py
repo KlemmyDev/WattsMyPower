@@ -1,4 +1,4 @@
-"""Settings → Database: both databases measured table by table, described, and how fast they grow."""
+"""Manage → Data: both databases measured table by table, described, and how fast they grow."""
 
 from __future__ import annotations
 

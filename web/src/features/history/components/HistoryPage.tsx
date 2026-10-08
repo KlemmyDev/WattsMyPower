@@ -260,7 +260,7 @@ export function HistoryPage() {
                   : "No weather is stored for these days yet."}{" "}
                 Past weather can be filled in from Open-Meteo.
               </span>
-              <ButtonLink to="/settings/integrations/weather" variant="link" size="sm">
+              <ButtonLink to="/integrations/weather" variant="link" size="sm">
                 Fill in past weather
               </ButtonLink>
             </div>

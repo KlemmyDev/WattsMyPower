@@ -7,7 +7,7 @@ export type Settings = {
   bill_day: number;
   bill_anchor: number;
   /**
-   * What comes off each bill (Settings → Bills): the retailer's discount (%) off usage, or off usage and the supply
+   * What comes off each bill (Manage → Bills & rates): the retailer's discount (%) off usage, or off usage and the supply
    * charge; credits a year in dollars (concessions, government rebates), spread over the days; and a budget a bill in
    * dollars, for the Bills page and its alert. 0 = none.
    */
@@ -19,7 +19,7 @@ export type Settings = {
   home_standby_goal: number;
   location_name: string | null;
   /**
-   * What the inverter can't report (Settings → System): the array size in kW, the battery's capacity in kWh
+   * What the inverter can't report (Manage → System): the array size in kW, the battery's capacity in kWh
    * (0 = what the inverter reports), the reserve (%) used when the inverter doesn't report one, and its maximum rate in kW.
    */
   pv_kw: number;
@@ -27,7 +27,7 @@ export type Settings = {
   battery_reserve_fallback: number;
   battery_max_kw: number;
   /**
-   * Weather (Settings → Integrations → Weather): temperatures in °F (1) or °C (0); Open-Meteo's weather model; how the
+   * Weather (Manage → Integrations → Weather): temperatures in °F (1) or °C (0); Open-Meteo's weather model; how the
    * panels sit (tilt from flat, 0 = flat or not known, and the compass bearing they face, 0 = north); and whether the
    * forecast may use what it has learned from weather history (1).
    */
@@ -36,10 +36,10 @@ export type Settings = {
   panel_tilt: number;
   panel_bearing: number;
   forecast_learning: number;
-  /** Ask GitHub every few hours whether there's a newer version (1), or not (0) (Settings → System → Updates). */
+  /** Ask GitHub every few hours whether there's a newer version (1), or not (0) (Manage → System → Updates). */
   update_check: number;
   /**
-   * The house as the Overview draws it (Settings → System → Your house): its style; 1 or 2 storeys; car spaces in the garage
+   * The house as the Overview draws it (Manage → System → Your house): its style; 1 or 2 storeys; car spaces in the garage
    * (0 = no garage); and where each inverter and battery is, in the order they're connected (missing = outside).
    */
   house_style: "estate" | "modern" | "queenslander" | "federation" | "farmhouse";
@@ -58,7 +58,7 @@ export type Settings = {
   inverter_places: ("wall" | "garage")[];
   battery_places: ("wall" | "garage")[];
   /**
-   * Cost and warranty (Settings → System): what the system cost in dollars, and when it went in, for payback on Bills;
+   * Cost and warranty (Manage → System): what the system cost in dollars, and when it went in, for payback on Bills;
    * when the battery went in if later, and its warranty in years and in MWh delivered, for Health. 0 = not set. Dates
    * are unix seconds at local midnight.
    */

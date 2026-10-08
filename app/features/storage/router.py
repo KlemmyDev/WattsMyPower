@@ -1,4 +1,4 @@
-"""Settings → Database: what's stored in the dashboard's and the collector's databases, and how much room it takes."""
+"""Manage → Data: what's stored in the dashboard's and the collector's databases, and how much room it takes."""
 
 from __future__ import annotations
 

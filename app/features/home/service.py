@@ -1,5 +1,5 @@
 """
-Smart-home devices (the Home page, and Settings → Integrations → Smart home): connecting accounts, polling them, and
+Smart-home devices (the Home page, and Manage → Integrations → Smart home): connecting accounts, polling them, and
 recording what their devices use.
 
 Each connected account is polled on its integration's interval (Integration.poll_seconds) by a background loop. A

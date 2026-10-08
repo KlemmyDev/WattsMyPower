@@ -38,7 +38,7 @@ function split(dbs: MeasuredDatabase[]): Record<Kind, number> {
   return out;
 }
 
-/** Settings → Database, the top: how much is stored in all, what kinds of data take the room, and how fast it grows. */
+/** Manage → Data, the top: how much is stored in all, what kinds of data take the room, and how fast it grows. */
 export function StorageOverview({
   report,
   measuring,

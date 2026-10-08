@@ -24,7 +24,7 @@ ROLES = ("hybrid", "pv2")
 
 @dataclass(frozen=True)
 class DeviceConfig:
-    """A connected inverter, as stored in the collector's database (Settings → Integrations).
+    """A connected inverter, as stored in the collector's database (Manage → Integrations).
 
     `settings` belong to the API (e.g. where a second inverter connects): stored and served as they
     are, never interpreted here.

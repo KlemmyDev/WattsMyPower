@@ -37,7 +37,7 @@ const valuesOf = (s: Settings): Values => ({
 const saved = (v: string) => (v.trim() === "" ? 0 : Number(v));
 
 /**
- * Settings → Bills: what comes off a bill (the retailer's discount, and credits such as concessions), and a budget a
+ * Manage → Bills & rates: what comes off a bill (the retailer's discount, and credits such as concessions), and a budget a
  * bill to hold it to. Bill totals across the app take them off; each day stays at the rates alone.
  */
 export function BillAdjustments({ system: s }: { system: SystemInfo }) {

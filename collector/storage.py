@@ -1,5 +1,5 @@
 """
-Measuring the collector's database for the dashboard (GET /v1/storage, shown in Settings → Database): its
+Measuring the collector's database for the dashboard (GET /v1/storage, shown in Manage → Data): its
 files on disk, and how much of them each table and index takes.
 
 A copy of the dashboard's app/features/storage/measure.py (the collector's image doesn't include the

@@ -55,7 +55,7 @@ function SungrowLink() {
   return (
     <IntegrationLink
       card
-      to="/settings/integrations/sungrow"
+      to="/integrations/sungrow"
       icon="sun"
       name="Sungrow"
       status={summary.status}
@@ -71,7 +71,7 @@ function WeatherLink() {
   return (
     <IntegrationLink
       card
-      to="/settings/integrations/weather"
+      to="/integrations/weather"
       icon="cloudSun"
       name="Weather"
       status={forecast ? "Connected" : forecast === undefined ? "Checking" : "Unavailable"}
@@ -106,7 +106,7 @@ function AmberLink() {
   return (
     <IntegrationLink
       card
-      to="/settings/integrations/amber"
+      to="/integrations/amber"
       icon="dollar"
       name="Amber Electric"
       status={label}
@@ -139,7 +139,7 @@ function CarLink() {
   return (
     <IntegrationLink
       card
-      to="/settings/integrations/car"
+      to="/integrations/car"
       icon="car"
       name={cars && cars.length > 1 ? "Electric vehicles" : "Electric vehicle"}
       status={label}
@@ -170,7 +170,7 @@ function GridLink() {
   return (
     <IntegrationLink
       card
-      to="/settings/integrations/grid"
+      to="/integrations/grid"
       icon="grid"
       name="Grid"
       status={label}
@@ -200,7 +200,7 @@ function HomeLink({ integration: i }: { integration: HomeIntegration }) {
   return (
     <IntegrationLink
       card
-      to="/settings/integrations/home/$integration"
+      to="/integrations/home/$integration"
       params={{ integration: i.id }}
       icon={integrationIcon(i)}
       name={i.name}
@@ -232,7 +232,7 @@ function Group({ id, title, sub, children }: { id: string; title: string; sub: s
 }
 
 /**
- * Settings → Integrations: each integration as a card with how it's doing, opening to its own page, grouped by what
+ * Manage → Integrations: each integration as a card with how it's doing, opening to its own page, grouped by what
  * it's for. Your solar and battery first, then smart appliances, the car, and the services rates and the forecast
  * come from.
  */

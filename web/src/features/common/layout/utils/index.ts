@@ -2,19 +2,40 @@ import type { LinkProps } from "@tanstack/react-router";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { IconName } from "~/features/common/ui/components/Icon";
 
-export type Section = "/" | "/solar" | "/home" | "/grid" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
+export type Section =
+  | "/"
+  | "/solar"
+  | "/home"
+  | "/grid"
+  | "/history"
+  | "/plan"
+  | "/battery"
+  | "/bills"
+  | "/tesla"
+  | "/system"
+  | "/rates"
+  | "/integrations"
+  | "/alerts"
+  | "/data"
+  | "/account";
 
-/** Live: what's happening now. Over time: what happened, what's coming, and what it cost. */
-export type NavGroup = "Live" | "Over time";
-export const NAV_GROUPS: NavGroup[] = ["Live", "Over time"];
+/**
+ * Live: what's happening now. Over time: what happened, what's coming, and what it cost. Manage: setting it all up
+ * (what were Settings' pages).
+ */
+export type NavGroup = "Live" | "Over time" | "Manage";
+export const NAV_GROUPS: NavGroup[] = ["Live", "Over time", "Manage"];
 
 /**
  * `color`: the section's own colour, its node's glow once the wire's power reaches it. `group`: none for Overview,
  * which sits on its own at the top, above the groups.
  */
+/** Manage's colour: quiet, as it powers nothing. */
+const MANAGE_COLOR = COLOR.gridSoft;
+
 export type NavItem = { to: Section; label: string; icon: IconName; group?: NavGroup; color: string };
 
-/** The main sections, Overview then group by group, in the order the navigation shows them. Settings sits apart, at the end. */
+/** The sections, Overview then group by group, in the order the navigation shows them. */
 export const NAV: NavItem[] = [
   { to: "/", label: "Overview", icon: "layout", color: COLOR.solar },
   { to: "/solar", label: "Solar", icon: "sun", group: "Live", color: COLOR.solar },
@@ -25,10 +46,13 @@ export const NAV: NavItem[] = [
   { to: "/history", label: "History", icon: "chart", group: "Over time", color: COLOR.lilac },
   { to: "/plan", label: "Plan", icon: "cloudSun", group: "Over time", color: COLOR.export },
   { to: "/bills", label: "Bills", icon: "dollar", group: "Over time", color: COLOR.good },
+  { to: "/system", label: "System", icon: "settings", group: "Manage", color: MANAGE_COLOR },
+  { to: "/rates", label: "Bills & rates", icon: "tag", group: "Manage", color: MANAGE_COLOR },
+  { to: "/integrations", label: "Integrations", icon: "plug", group: "Manage", color: MANAGE_COLOR },
+  { to: "/alerts", label: "Alerts", icon: "bell", group: "Manage", color: MANAGE_COLOR },
+  { to: "/data", label: "Data", icon: "database", group: "Manage", color: MANAGE_COLOR },
+  { to: "/account", label: "Account", icon: "user", group: "Manage", color: MANAGE_COLOR },
 ];
-
-/** Settings' colour: quiet, as it powers nothing. */
-export const SETTINGS_COLOR = COLOR.gridSoft;
 
 /** Which top-level section a path belongs to: "/home" for "/home/12". */
 export const sectionOf = (path: string) => (path === "/" ? "/" : `/${path.split("/")[1]}`);

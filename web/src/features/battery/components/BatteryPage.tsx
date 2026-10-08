@@ -59,7 +59,7 @@ export function BatteryPage() {
         <div className="flex flex-col gap-5">
           {rooms.length > 0 && <AllBatteries p={p} s={s} devices={rooms} />}
           <EmptyState icon="battery" title="No home battery found" id="h-nobat">
-            Your inverter doesn't report a battery. If it has one, set its size in Settings → System.
+            Your inverter doesn't report a battery. If it has one, set its size in Manage → System.
           </EmptyState>
         </div>
       </>

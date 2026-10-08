@@ -21,7 +21,7 @@ const places = (chosen: string[] | undefined, n: number): Place[] =>
   Array.from({ length: n }, (_, i) => (chosen?.[i] === "garage" ? "garage" : "wall"));
 
 /**
- * The house to draw, from Settings → System → Your house, with as many inverters and batteries as are connected,
+ * The house to draw, from Manage → System → Your house, with as many inverters and batteries as are connected,
  * and where each connected car would rather park.
  */
 export function houseOptions(s: SystemInfo | undefined, cars: Park[] = []): HouseOptions {

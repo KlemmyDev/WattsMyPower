@@ -3,7 +3,7 @@ Power outages around the house, from its electricity network (the distributor th
 retailer): outages now within a radius, planned work coming up, and which of them reach the house's own street.
 
 Only Queensland's networks so far (energyq.py: Energex and Ergon Energy); others slot in as providers with the same
-shape. The network is worked out from where the house is (its service area), or chosen in Settings → Integrations →
+shape. The network is worked out from where the house is (its service area), or chosen in Manage → Integrations →
 Electricity network. An outage "affects you" when it lists the house's street in its suburb (home_street, home_suburb:
 the street's name only, no number, entered there), or, for an outage drawn as an area, when the area covers the
 house's location.

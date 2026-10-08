@@ -81,7 +81,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             log.info(
                 "Moved the system details into the database (solar array %g kW, battery capacity %s, backup reserve "
                 "%g%% if the inverter doesn't report one, maximum rate %g kW). They're changed in the dashboard from "
-                "now on (Settings → System); PV_KW, BATTERY_KWH, BATTERY_RESERVE and BATTERY_MAX_KW are no longer read.",
+                "now on (Manage → System); PV_KW, BATTERY_KWH, BATTERY_RESERVE and BATTERY_MAX_KW are no longer read.",
                 c.pv_kw,
                 f"{c.battery_kwh:g} kWh" if c.battery_kwh else "from the inverter",
                 c.battery_reserve,

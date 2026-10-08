@@ -128,14 +128,15 @@ function RuleRow({ rule }: { rule: AlertRule }) {
           )}
           {rule.needs === "amber" && (
             <HelpText>
-              This watches Amber&apos;s prices, so it stays quiet until your rates are set to Amber in Settings → Bills.
+              This watches Amber&apos;s prices, so it stays quiet until your rates are set to Amber in Manage → Bills &
+              rates.
             </HelpText>
           )}
           {rule.needs === "budget" && (
             <HelpText>
               This stays quiet until you set a budget a bill in{" "}
-              <Link to="/settings/bills" hash="discounts">
-                Settings → Bills
+              <Link to="/rates" hash="discounts">
+                Manage → Bills & rates
               </Link>
               .
             </HelpText>
@@ -202,7 +203,7 @@ function RuleGroup({ category, rules }: { category: AlertCategory; rules: AlertR
   );
 }
 
-/** Settings → Alerts: browser notifications, other places alerts can go, which ones to send, and what's been sent. */
+/** Manage → Alerts: browser notifications, other places alerts can go, which ones to send, and what's been sent. */
 export function AlertSettings() {
   const { data, isPending, error } = useQuery(alertsQuery);
   const history = data?.history ?? [];

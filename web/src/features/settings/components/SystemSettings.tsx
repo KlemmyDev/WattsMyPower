@@ -40,7 +40,7 @@ function systemRows(s: SystemInfo | undefined): [string, string][] {
   ];
 }
 
-/** Settings → System: what the inverters report about the installation, the details they can't, and the house. */
+/** Manage → System: what the inverters report about the installation, the details they can't, and the house. */
 export function SystemSettings() {
   const live = useLive();
   const last = live?.last_success;
@@ -73,7 +73,7 @@ export function SystemSettings() {
           </dl>
         </div>
         <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-          These details come from your inverters over the local network. Inverters are connected in Settings →
+          These details come from your inverters over the local network. Inverters are connected in Manage →
           Integrations → Sungrow.
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-6 py-4">

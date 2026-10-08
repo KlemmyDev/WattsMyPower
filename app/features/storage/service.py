@@ -1,5 +1,5 @@
 """
-What's stored, and how much room it takes (Settings → Database): both SQLite databases, the dashboard's
+What's stored, and how much room it takes (Manage → Data): both SQLite databases, the dashboard's
 and the collector's, measured table by table and described in plain words.
 
 Measuring reads every page of both databases, so a report is kept for a few minutes; `fresh` measures again.

@@ -54,7 +54,7 @@ function Blocked({ support }: { support: Exclude<PushSupport, "ready"> }): React
         On an iPhone or iPad, notifications only work once the dashboard is on your home screen: tap{" "}
         <strong className="font-semibold text-ink">Share</strong>, then{" "}
         <strong className="font-semibold text-ink">Add to Home Screen</strong>, open WattsMyPower from there, and come
-        back to Settings → Alerts.
+        back to Manage → Alerts.
       </Notice>
     );
   if (support === "denied")
@@ -71,7 +71,7 @@ function Blocked({ support }: { support: Exclude<PushSupport, "ready"> }): React
   );
 }
 
-/** Settings → Alerts, the top: notifications on this browser, and every browser that has them. */
+/** Manage → Alerts, the top: notifications on this browser, and every browser that has them. */
 export function BrowserNotifications({ push }: { push: PushOverview }) {
   const qc = useQueryClient();
   const toast = useToast();

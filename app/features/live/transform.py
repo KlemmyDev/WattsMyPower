@@ -45,7 +45,7 @@ def _unknown_driver(device: str, driver: str | None) -> None:
 
 
 def behind_meter(pv2: dict[str, Any] | None, default: bool) -> bool:
-    """Where the second inverter connects: its setting (Settings → Integrations), else PV2_BEHIND_METER."""
+    """Where the second inverter connects: its setting (Manage → Integrations), else PV2_BEHIND_METER."""
     value = ((pv2 or {}).get("settings") or {}).get("behind_meter")
     return value if isinstance(value, bool) else default
 

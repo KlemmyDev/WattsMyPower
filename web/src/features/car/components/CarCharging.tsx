@@ -77,7 +77,7 @@ export function CarCharging() {
             Connect your EV and this suggests when to charge it: from spare solar where it can, at the cheapest rates
             where it can't.
           </span>
-          <ButtonLink to="/settings/integrations/car" variant="outline" size="sm">
+          <ButtonLink to="/integrations/car" variant="outline" size="sm">
             Connect your EV
           </ButtonLink>
         </Notice>
@@ -104,12 +104,7 @@ export function CarCharging() {
           <span>
             {view.car.car_battery_kwh} kWh battery, {view.car.car_efficiency}% efficient, up to {view.car.car_amps} A
           </span>
-          <ButtonLink
-            to="/settings/integrations/car/$carId"
-            params={{ carId: String(view.id) }}
-            variant="link"
-            size="sm"
-          >
+          <ButtonLink to="/integrations/car/$carId" params={{ carId: String(view.id) }} variant="link" size="sm">
             Car details
           </ButtonLink>
         </div>

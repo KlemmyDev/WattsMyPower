@@ -1,5 +1,5 @@
 """
-The readers the collector can run, by driver id. Each connected device (Settings → Integrations,
+The readers the collector can run, by driver id. Each connected device (Manage → Integrations,
 stored in the devices table) names its driver. Supporting a new inverter means adding a reader here
 and a decoder with the same id in the API (app/features/inverters/drivers.py).
 """

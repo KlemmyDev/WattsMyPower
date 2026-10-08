@@ -1,12 +1,12 @@
 """
-Whether a newer version is on GitHub (Settings → System → Updates, and the version at the foot of the navigation).
+Whether a newer version is on GitHub (Manage → System → Updates, and the version at the foot of the navigation).
 
 Every few hours, and when asked, the latest commit on the repository's main branch is compared with the commit this was
 built from (app.core.version.COMMIT): one that's different is an update, and GitHub's compare counts the commits since.
 Its version is read from that commit's pyproject.toml. Without a commit to compare (an image built without install.sh),
 or one GitHub doesn't know (a local build), the versions are compared instead.
 
-Settings → System turns it off (update_check), and then nothing is asked of GitHub but a check asked for by hand. A
+Manage → System turns it off (update_check), and then nothing is asked of GitHub but a check asked for by hand. A
 check makes three requests at most, well inside GitHub's 60 an hour without an account.
 
 Updating is done on the host, by updater.sh (run every minute by cron, set up by install.sh), through the data folder
@@ -191,7 +191,7 @@ class UpdateService:
         return [line for line in lines if line.strip()][-LOG_LINES:]
 
     def install(self) -> dict[str, Any]:
-        """Ask updater.sh to update (Settings → System → Update now). It starts within a minute."""
+        """Ask updater.sh to update (Manage → System → Update now). It starts within a minute."""
         current = self.installer()
         if not current["ready"]:
             raise UpdateRefused(current["why"] or "The updater isn't ready.")

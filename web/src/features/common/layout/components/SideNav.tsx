@@ -6,7 +6,7 @@ import { ON } from "~/features/common/energy/utils";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { NavPower } from "~/features/common/layout/components/Dock";
 import { NAV_DOCKED, useLiveStatus, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
-import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type SectionPages } from "~/features/common/layout/utils";
+import { NAV_GROUPS, sectionOf, type SectionPages } from "~/features/common/layout/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
@@ -108,6 +108,17 @@ function Circuit({
   const p = useSnapshot();
   const list = useRef<HTMLDivElement>(null);
   const wire = useWire(list, [path, items.length, variant, pages?.pages.length]);
+  // Where the list scrolls (a short screen), the current page is kept in view: Manage's sit at the bottom. Again as
+  // its room changes, as the power flow and live chip arrive below it after the page opens.
+  useEffect(() => {
+    const box = list.current?.parentElement;
+    if (!box) return;
+    const show = () => list.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+    show();
+    const ro = new ResizeObserver(show);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [path]);
   const at = items.findIndex((i) => i.to === current);
   const value: Partial<Record<string, string>> = p
     ? {
@@ -166,7 +177,7 @@ function Circuit({
         <div ref={list} className="relative flex min-h-full flex-col">
           {wire && (
             <span aria-hidden className="circuit-wire" style={{ top: wire.top, height: wire.height }}>
-              <span className="circuit-lit" style={{ top: wire.litTop, height: wire.lit }} />
+              <span className="circuit-lit" style={{ height: wire.lit }} />
             </span>
           )}
           {items
@@ -213,17 +224,6 @@ function Circuit({
                 ))}
             </Fragment>
           ))}
-          <div className="mt-auto flex flex-col pt-5">
-            <CircuitLink
-              to="/settings"
-              icon="settings"
-              label="Settings"
-              color={SETTINGS_COLOR}
-              full={full}
-              on={current === "/settings"}
-            />
-            {branches && current === "/settings" && pages && <Branch pages={pages} />}
-          </div>
         </div>
       </div>
       <div className={cn("flex flex-none flex-col gap-2", !full && "items-center")}>
@@ -265,7 +265,8 @@ function CircuitLink({
       style={{ "--node-c": color } as CSSProperties}
       className={cn(
         "circuit-row group relative flex h-[38px] w-full flex-none items-center gap-[11px] rounded-[11px] text-[13.5px] font-medium text-ink-muted no-underline hover:bg-fg/4 hover:text-ink aria-[current=page]:text-ink",
-        full ? "pr-2.5 pl-[38px]" : "pl-[26px]",
+        // The rail doesn't scroll (its tooltips would be clipped), so on a short screen its rows close up to fit.
+        full ? "pr-2.5 pl-[38px]" : "pl-[26px] [@media(max-height:820px)]:h-8",
       )}
     >
       <span aria-hidden className="circuit-node" />
@@ -345,7 +346,7 @@ function LiveChip({ full }: { full: boolean }) {
 
 /**
  * Which version this is, and its release ("Alpha") until it's marked stable: under the live chip, or on the rail the
- * release alone (the version in its tooltip). When GitHub has a newer one, a link to Settings → System → Updates says so
+ * release alone (the version in its tooltip). When GitHub has a newer one, a link to System → Updates says so
  * (on the rail, a dot on the tag).
  */
 function VersionTag({ full }: { full: boolean }) {
@@ -390,7 +391,7 @@ function VersionTag({ full }: { full: boolean }) {
     <>
       {newer && (
         <Link
-          to="/settings/system"
+          to="/system"
           hash="updates"
           className="flex items-center gap-2 rounded-xl border border-brand/25 bg-brand-subtle px-3 py-2 text-[12.5px] font-medium text-brand no-underline transition-colors hover:border-brand/45 hover:text-brand"
         >
@@ -413,7 +414,7 @@ function VersionTag({ full }: { full: boolean }) {
     </>
   ) : (
     <Link
-      to="/settings/system"
+      to="/system"
       hash={newer ? "updates" : undefined}
       title={title}
       aria-label={title}
@@ -431,13 +432,12 @@ function VersionTag({ full }: { full: boolean }) {
 }
 
 /**
- * Where the wire runs, in pixels down the list: from the first section's node to the last node on it (Settings', or
- * the last of its pages when they're open), lit from the top down to the current page (its branch, when one's open).
- * Settings sits at the bottom, so it's lit from its own node down to its page instead. Re-measured as the list changes
- * size (a section's pages arriving) and once web fonts load.
+ * Where the wire runs, in pixels down the list: from the first section's node to the last node on it (the last
+ * section's, or the last of its pages when they're open), lit from the top down to the current page (its branch, when
+ * one's open). Re-measured as the list changes size (a section's pages arriving) and once web fonts load.
  */
 function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
-  const [wire, setWire] = useState<{ top: number; height: number; litTop: number; lit: number } | null>(null);
+  const [wire, setWire] = useState<{ top: number; height: number; lit: number } | null>(null);
   useLayoutEffect(() => {
     const el = list.current;
     if (!el) return;
@@ -450,11 +450,10 @@ function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
       const height = mid(nodes[nodes.length - 1]) - top;
       const branch = el.querySelector<HTMLElement>('[data-circuit-branch][aria-current="page"]');
       const row = el.querySelector<HTMLElement>('[data-circuit-row][aria-current="page"]');
-      const from = row && row === rows[rows.length - 1] ? mid(row) - top : 0;
       // A page on a branch is reached through its elbow, which leaves the wire at the top of its row: the wire stops
       // there, or it would carry on straight past the curve.
-      const to = branch ? branch.offsetTop - top : row ? mid(row) - top : from;
-      setWire({ top, height, litTop: from, lit: Math.max(0, to - from) });
+      const to = branch ? branch.offsetTop - top : row ? mid(row) - top : 0;
+      setWire({ top, height, lit: Math.max(0, to) });
     };
     place();
     const ro = new ResizeObserver(place);

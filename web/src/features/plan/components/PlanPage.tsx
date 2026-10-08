@@ -198,7 +198,7 @@ function LocationChip() {
       <span>
         Outlook for <b className="font-semibold text-ink">{locationLabel(system)}</b>
       </span>
-      <ButtonLink to="/settings/integrations/weather" variant="link" size="sm" className="ml-1">
+      <ButtonLink to="/integrations/weather" variant="link" size="sm" className="ml-1">
         Change
       </ButtonLink>
     </div>

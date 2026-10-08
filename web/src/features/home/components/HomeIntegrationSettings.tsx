@@ -303,7 +303,7 @@ function DeviceRow({
 }
 
 /**
- * Settings → Integrations → a smart-home integration (Hisense, through ConnectLife; the demo in mock mode): connect
+ * Manage → Integrations → a smart-home integration (Hisense, through ConnectLife; the demo in mock mode): connect
  * its account, and the devices it brought.
  */
 export function HomeIntegrationSettings({ id }: { id: string }) {
@@ -314,7 +314,7 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-home-integration"
         title={integration ? `${integration.name}` : "Smart home"}
         sub={integration?.about ?? ""}

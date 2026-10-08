@@ -17,7 +17,7 @@ import { useDisplay } from "~/features/common/display/hooks";
 import { CLOCK_OPTIONS, DENSITY_OPTIONS, SIZE_OPTIONS } from "~/features/common/display/utils";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 
-/** Settings → Account: who's signed in, how the dashboard looks, change password, sign out. */
+/** Manage → Account: who's signed in, how the dashboard looks, change password, sign out. */
 export function AccountSettings() {
   const { data: session } = useQuery(sessionQuery);
   const logout = useLogout();

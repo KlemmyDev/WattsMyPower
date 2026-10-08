@@ -26,6 +26,6 @@ async def get_grid_hours(svc: ServicesDep):
 
 @router.get("/bills/payback")
 async def get_payback(svc: ServicesDep):
-    """What the system has saved so far and a year, and when it pays for itself (from Settings → System)."""
+    """What the system has saved so far and a year, and when it pays for itself (from Manage → System)."""
     total_pv = (svc.live.latest or {}).get("total_pv")
     return await asyncio.to_thread(svc.bills.payback, int(time.time()), total_pv)

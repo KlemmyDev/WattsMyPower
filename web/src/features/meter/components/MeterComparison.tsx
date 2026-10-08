@@ -47,8 +47,8 @@ function DayRow({ day }: { day: ReconcileDay }) {
 }
 
 const integrations = (
-  <Link to="/settings/integrations/sungrow" className="text-link hover:text-link-hover">
-    Settings → Integrations → Sungrow
+  <Link to="/integrations/sungrow" className="text-link hover:text-link-hover">
+    Manage → Integrations → Sungrow
   </Link>
 );
 
@@ -81,7 +81,7 @@ function Explanation({ s }: { s: NonNullable<Reconciliation["summary"]> }) {
   return null;
 }
 
-/** Settings → Bills: the meter's daily import and export against the dashboard's, and the days that differ. */
+/** Manage → Bills & rates: the meter's daily import and export against the dashboard's, and the days that differ. */
 export function MeterComparison() {
   const { data } = useQuery(reconcileQuery);
   const [all, setAll] = useState(false);

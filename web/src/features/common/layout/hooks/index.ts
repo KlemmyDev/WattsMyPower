@@ -4,10 +4,9 @@ import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
-import { NAV, SETTINGS_COLOR, type SectionPages } from "~/features/common/layout/utils";
+import { NAV, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
-import { SETTINGS_SUB, SETTINGS_TABS } from "~/features/settings/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
 
@@ -56,7 +55,7 @@ export function usePillIndicator(
   return ind;
 }
 
-/** The sections to offer: Tesla once a car's connected (until then it's reached from Overview and Settings), Battery
+/** The sections to offer: Tesla once a car's connected (until then it's reached from Overview and Integrations), Battery
  * when there is one. */
 export function useNavItems() {
   const teslaConnected = !!useLive()?.system.tesla_connected;
@@ -111,19 +110,6 @@ export function useSectionPages(section: string): SectionPages | null {
       sub: load != null && load > 0 ? `Using ${kW(load)} now` : "Where your home's power goes",
       root: { link: { to: "/home" }, label: "Whole home", active: path === "/home" },
       pages: home,
-    };
-  if (section === "/settings")
-    return {
-      title: "Settings",
-      sub: SETTINGS_SUB,
-      pages: SETTINGS_TABS.map((t) => ({
-        key: t.to,
-        label: t.label,
-        icon: t.icon,
-        color: SETTINGS_COLOR,
-        link: { to: t.to },
-        active: path === t.to || path.startsWith(`${t.to}/`),
-      })),
     };
   return null;
 }

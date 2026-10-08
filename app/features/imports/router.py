@@ -1,4 +1,4 @@
-"""Importing history from iSolarCloud exports (Settings → Import)."""
+"""Importing history from iSolarCloud exports (Manage → Integrations → Sungrow)."""
 
 from __future__ import annotations
 

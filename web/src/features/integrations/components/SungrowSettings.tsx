@@ -8,7 +8,7 @@ import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Settings → Integrations → Sungrow: the inverters WattsMyPower reads, each opening to its own page, the
+ * Manage → Integrations → Sungrow: the inverters WattsMyPower reads, each opening to its own page, the
  * way to connect another, and importing history from iSolarCloud.
  */
 export function SungrowSettings() {
@@ -20,7 +20,7 @@ export function SungrowSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-sungrow"
         title="Sungrow"
         sub="Your inverters, read every minute over your home network, straight from the inverter"
@@ -36,7 +36,7 @@ export function SungrowSettings() {
         {inverters.map(({ device, name, hybrid, status, on, reading }) => (
           <IntegrationLink
             key={device.role}
-            to="/settings/integrations/sungrow/$role"
+            to="/integrations/sungrow/$role"
             params={{ role: device.role }}
             icon={hybrid ? "battery" : "sun"}
             name={name}
@@ -54,7 +54,7 @@ export function SungrowSettings() {
         ))}
         {canConnect && hasHybrid && (
           <IntegrationLink
-            to="/settings/integrations/sungrow/connect"
+            to="/integrations/sungrow/connect"
             icon="plus"
             name="Add an inverter"
             detail="Find inverters on your network, or enter an address"
@@ -70,14 +70,14 @@ export function SungrowSettings() {
                   : "Nothing is recorded until your main inverter is connected. Find it on your network, or enter its address."}
               </span>
             </div>
-            <ButtonLink to="/settings/integrations/sungrow/connect">Find your inverter</ButtonLink>
+            <ButtonLink to="/integrations/sungrow/connect">Find your inverter</ButtonLink>
           </div>
         )}
         {data?.available && readOnly && <ReadOnlyNote />}
       </SettingsCard>
       <SettingsCard aria-label="History">
         <IntegrationLink
-          to="/settings/integrations/sungrow/import"
+          to="/integrations/sungrow/import"
           icon="upload"
           name="Import history from iSolarCloud"
           detail="Bring in the days before WattsMyPower was set up, or fill gaps, from iSolarCloud's 5-minute exports"

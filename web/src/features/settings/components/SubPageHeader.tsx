@@ -19,7 +19,7 @@ const BackAnchor = forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchor
 
 const CreatedBackLink = createLink(BackAnchor);
 
-/** A link back up a level, with a chevron: <BackLink to="/settings/integrations">Integrations</BackLink>. */
+/** A link back up a level, with a chevron: <BackLink to="/integrations">Integrations</BackLink>. */
 export const BackLink: LinkComponent<typeof BackAnchor> = (props) => <CreatedBackLink preload="intent" {...props} />;
 
 /** The top of a settings page a level down: the way back, its title, and a line of explanation. */
