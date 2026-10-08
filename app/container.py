@@ -22,6 +22,7 @@ from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
 from app.features.grid.outages.service import OutageService
 from app.features.grid.service import GridService
+from app.features.grid.warnings.service import HazardService
 from app.features.home import insights as home_insights
 from app.features.home.service import HomeService
 from app.features.imports.service import ImportService
@@ -73,6 +74,7 @@ class Services:
     updates: UpdateService
     grid: GridService
     outages: OutageService
+    hazards: HazardService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -98,7 +100,8 @@ def build_services(config: Config) -> Services:
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
     outages = OutageService(settings, lambda: grid.region()[0])  # in Queensland? (grid is set by the time it asks)
-    grid = GridService(settings, weather, lambda: live.latest, outages=outages)
+    hazards = HazardService(settings, lambda: grid.region()[0])
+    grid = GridService(settings, weather, lambda: live.latest, outages=outages, hazards=hazards)
     return Services(
         config=config,
         db=db,
@@ -134,5 +137,6 @@ def build_services(config: Config) -> Services:
         updates=UpdateService(settings, Path(config.db_path).parent / "update"),
         grid=grid,
         outages=outages,
+        hazards=hazards,
         source=source,
     )

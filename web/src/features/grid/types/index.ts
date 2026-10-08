@@ -83,6 +83,53 @@ export type OutagesView = {
   error: string | null;
 };
 
+/** A Bureau of Meteorology warning for the house's districts (or drawn around it). Times are unix seconds. */
+export type WeatherWarning = {
+  id: string;
+  event: string;
+  severity: string;
+  headline: string;
+  description: string;
+  effective: number | null;
+  expires: number | null;
+  areas: string[];
+  /** How serious for the power: "warning" (keep the battery charged) or "watch". */
+  level: "warning" | "watch";
+  /** It came with a polygon around the house. */
+  here: boolean;
+};
+
+/** A Queensland Fire Department fire or warning near the house. */
+export type FireWarning = {
+  id: string;
+  level: "Information" | "Advice" | "Watch and Act" | "Emergency Warning";
+  title: string;
+  area: string;
+  action: string | null;
+  status: string | null;
+  kind: string;
+  at: number | null;
+  lat: number;
+  lon: number;
+  /** Its warning area covers the house. */
+  here: boolean;
+  distance_km: number;
+  direction: string | null;
+};
+
+export type HazardsView = {
+  enabled: boolean;
+  /** The Bureau's forecast town nearest the house, whose districts its warnings are matched by. */
+  town: string | null;
+  /** Fires are followed (in Queensland). */
+  fires_followed: boolean;
+  radius_km: number;
+  weather: WeatherWarning[];
+  fires: FireWarning[];
+  fetched_at: number | null;
+  error: string | null;
+};
+
 export type GridView = {
   /** AEMO is followed: the house is in the NEM, and it hasn't been turned off. */
   enabled: boolean;
@@ -97,6 +144,7 @@ export type GridView = {
   storms: { ts: number; code: number; precip_prob: number | null }[];
   outlook: { level: OutlookLevel; reasons: OutlookReason[] };
   outages: OutagesView | null;
+  hazards: HazardsView | null;
   fetched_at: number | null;
   error: string | null;
   limits: { voltage_low: number; voltage_high: number; freq_low: number; freq_high: number; spike: number };

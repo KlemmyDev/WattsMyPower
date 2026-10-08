@@ -30,6 +30,7 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "forecast_learning": 1,
         "update_check": 1,
         "outage_radius_km": 15,
+        "hazard_warnings": 1,
         "house_storeys": 1,
         "garage_spaces": 0,
         "system_cost": 0,

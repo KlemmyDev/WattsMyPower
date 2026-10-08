@@ -15,6 +15,7 @@ const GRID_SETTINGS = [
   "home_street",
   "home_suburb",
   "outage_radius_km",
+  "hazard_warnings",
   "latitude",
   "longitude",
 ] as const;
