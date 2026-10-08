@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { listDays, monthShort, monthYear, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kWh, pct, plural } from "~/features/common/formatting/utils/number";
 import { Card, Footnote, Muted, TitleBlock } from "~/features/common/ui/components/Card";
+import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
 import type { Causes, SolarInsights } from "~/features/solar/types";
 
@@ -59,6 +60,7 @@ export function SolarPerformance({ performance: P }: { performance: SolarInsight
   const days = P?.days ?? [];
   const rated = days.filter((d): d is Rated => d.ratio != null);
   const { tone, note } = performanceNote(P, rated);
+  const { hover: h, width, plot, bar } = useBarHover();
   return (
     <Card aria-labelledby="h-sp">
       <div className="flex items-end justify-between gap-4">
@@ -74,15 +76,20 @@ export function SolarPerformance({ performance: P }: { performance: SolarInsight
       </div>
       {rated.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <div className="relative flex h-32 items-end gap-1 max-sm:gap-0.5">
+          <div className="relative flex h-32 items-end gap-1 max-sm:gap-0.5" {...plot}>
             <div className="pointer-events-none absolute inset-x-0 top-1/4 border-t border-dashed border-line-strong">
               <span className="absolute right-0 bottom-1 bg-surface pl-1.5 text-[10.5px] text-ink-faint">
                 As expected
               </span>
             </div>
             {days.map((d, i) => (
-              <DayBar key={d.date} day={d} i={i} />
+              <DayBar key={d.date} day={d} i={i} hover={h} {...bar(i)} />
             ))}
+            {h != null && (
+              <ChartTooltip left={((h + 0.5) / days.length) * 100} flip={h > days.length / 2} width={width}>
+                <DayTip day={days[h]} />
+              </ChartTooltip>
+            )}
           </div>
           <div className="flex justify-between font-mono text-[11px] text-ink-faint">
             {[days[0], days[Math.floor(days.length / 2)], days[days.length - 1]].map((d, i) => (
@@ -138,18 +145,58 @@ function LikelyCauses({ causes: c }: { causes: Causes }) {
   );
 }
 
-function DayBar({ day: d, i }: { day: Day; i: number }) {
+/** A day's column, the full height of the chart so a short bar is as easy to point at as a tall one. */
+function DayBar({
+  day: d,
+  i,
+  hover,
+  ...on
+}: { day: Day; i: number; hover: number | null } & ReturnType<ReturnType<typeof useBarHover>["bar"]>) {
   const label = shortDay.format(parseYmd(d.date));
-  const base = "min-w-0 flex-1 rounded-[4px_4px_2px_2px]";
-  if (d.ratio == null) return <div className={base} style={{ height: 0 }} title={`${label}: not enough readings`} />;
   // 70% of expected sits at the floor and 110% at the top, so 100% lines up with the dashed line.
-  const h = Math.max(0.04, Math.min(1, (d.ratio - 0.7) / 0.4)) * 100;
+  const h = d.ratio == null ? 0 : Math.max(0.04, Math.min(1, (d.ratio - 0.7) / 0.4)) * 100;
   return (
-    <div
-      className={cn(base, "bar-grow", isLow(d) ? "bg-solar" : "bg-bar-muted")}
-      style={{ height: `${h.toFixed(1)}%`, "--i": i } as CSSProperties}
-      title={`${label}: ${pct(d.ratio * 100)} of expected (${kWh(d.actual_kwh)} of ${kWh(d.expected_kwh)})${d.clear ? "" : ", cloudy"}`}
-    />
+    <button
+      type="button"
+      {...on}
+      aria-label={
+        d.ratio == null
+          ? `${label}: not enough readings`
+          : `${label}: ${pct(d.ratio * 100)} of expected (${kWh(d.actual_kwh)} of ${kWh(d.expected_kwh)})${d.clear ? "" : ", cloudy"}`
+      }
+      className={cn(
+        "flex h-full min-w-0 flex-1 cursor-default items-end border-0 bg-transparent p-0 transition-opacity duration-200",
+        hover != null && hover !== i && "opacity-45",
+      )}
+    >
+      <i
+        className={cn(
+          "bar-grow block w-full rounded-[4px_4px_2px_2px] transition-[background-color,filter] duration-200",
+          isLow(d) ? "bg-solar" : hover === i ? "bg-ink-faint" : "bg-bar-muted",
+        )}
+        style={{ height: `${h.toFixed(1)}%`, "--i": i } as CSSProperties}
+      />
+    </button>
+  );
+}
+
+function DayTip({ day: d }: { day: Day }) {
+  return (
+    <>
+      <span className="flex items-baseline justify-between gap-2">
+        <span className="font-medium text-ink">{shortDay.format(parseYmd(d.date))}</span>
+        <span className="text-xs text-ink-faint">{d.clear ? "Clear" : "Cloudy"}</span>
+      </span>
+      {d.ratio == null ? (
+        <span className="text-ink-muted">Not enough readings</span>
+      ) : (
+        <>
+          <TooltipRow label="Of expected" value={pct(d.ratio * 100)} />
+          <TooltipRow label="Made" value={kWh(d.actual_kwh)} />
+          <TooltipRow label="Expected" value={kWh(d.expected_kwh)} />
+        </>
+      )}
+    </>
   );
 }
 
@@ -174,6 +221,7 @@ export function SolarTrend({ trend: t }: { trend: SolarInsights["trend"] }) {
   const months = t?.months ?? [];
   const top = Math.max(0.5, ...months.map((m) => m.ratio)) * 1.1;
   const last = months.length - 1;
+  const { hover: h, width, plot, bar } = useBarHover();
   return (
     <Card aria-labelledby="h-st">
       <div className="flex items-end justify-between gap-4">
@@ -195,23 +243,35 @@ export function SolarTrend({ trend: t }: { trend: SolarInsights["trend"] }) {
         <>
           {months.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <div className="flex h-[120px] items-end gap-2 max-sm:gap-[3px]">
+              <div className="relative flex h-[120px] items-end gap-2 max-sm:gap-[3px]" {...plot}>
                 {months.map((m, k) => (
-                  <div
+                  <button
                     key={m.month}
-                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
-                    title={`${monthYear.format(parseYmd(m.month))}: ${pct(m.ratio * 100)} of the array's size per unit of sunshine, from ${m.hours} bright ${plural(m.hours, "hour")}`}
+                    type="button"
+                    {...bar(k)}
+                    aria-label={`${monthYear.format(parseYmd(m.month))}: ${pct(m.ratio * 100)} of the array's size per unit of sunshine, from ${m.hours} bright ${plural(m.hours, "hour")}`}
+                    className={cn(
+                      "flex h-full min-w-0 flex-1 cursor-default flex-col items-center justify-end gap-1.5 border-0 bg-transparent p-0 transition-opacity duration-200",
+                      h != null && h !== k && "opacity-45",
+                    )}
                   >
                     <span className="font-mono text-[10px] text-ink-faint tabular-nums">{pct(m.ratio * 100)}</span>
                     <i
                       className={cn(
-                        "bar-grow block w-full max-w-9 rounded-md",
-                        k === last ? "bg-solar" : "bg-bar-muted",
+                        "bar-grow block w-full max-w-9 rounded-md transition-[background-color] duration-200",
+                        k === last ? "bg-solar" : h === k ? "bg-ink-faint" : "bg-bar-muted",
                       )}
                       style={{ height: `${((m.ratio / top) * 100).toFixed(1)}%`, "--i": k } as CSSProperties}
                     />
-                  </div>
+                  </button>
                 ))}
+                {h != null && (
+                  <ChartTooltip left={((h + 0.5) / months.length) * 100} flip={h > months.length / 2} width={width}>
+                    <span className="font-medium text-ink">{monthYear.format(parseYmd(months[h].month))}</span>
+                    <TooltipRow label="Per unit of sun" value={pct(months[h].ratio * 100)} />
+                    <TooltipRow label="Bright hours" value={months[h].hours.toLocaleString("en-AU")} />
+                  </ChartTooltip>
+                )}
               </div>
               <div className="flex gap-2 max-sm:gap-[3px]">
                 {months.map((m) => (

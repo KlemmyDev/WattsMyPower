@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode, type SyntheticEvent } from "react";
 import { cn } from "~/features/common/ui/utils";
 
 /**
@@ -74,4 +74,24 @@ export function nearest<T extends { t: number }>(points: T[], t: number): T | nu
   let best: T | null = null;
   for (const p of points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
   return best;
+}
+
+/**
+ * Hover for a row of bars: which bar is under the pointer (or focused), and the plot's width in layout px for
+ * ChartTooltip. Spread `plot` on the bars' container and `bar(i)` on each bar.
+ */
+export function useBarHover() {
+  const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState(0);
+  const measure = (e: SyntheticEvent<HTMLElement>) => setWidth(e.currentTarget.offsetWidth);
+  return {
+    hover,
+    width,
+    plot: { onPointerEnter: measure, onFocus: measure, onMouseLeave: () => setHover(null) },
+    bar: (i: number) => ({
+      onMouseEnter: () => setHover(i),
+      onFocus: () => setHover(i),
+      onBlur: () => setHover(null),
+    }),
+  };
 }

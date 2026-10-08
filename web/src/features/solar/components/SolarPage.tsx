@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct, powerParts } from "~/features/common/formatting/utils/number";
@@ -13,10 +13,11 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
-import { TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
+import { cn } from "~/features/common/ui/utils";
 import { useFahrenheit, useForecast, useForecastAccuracy } from "~/features/common/weather/hooks";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { codeIcon, codeName, degrees, liveWeather } from "~/features/common/weather/utils";
@@ -264,6 +265,14 @@ function WhereItWent({ p }: { p: Snapshot | null }) {
     { key: "grid", label: "Sent to the grid", kwh: toGrid, color: COLOR.export },
   ];
   const kept = pv > 0 ? (home + toBattery) / pv : null;
+  // The part under the pointer, on the bar or its line below: it stays lit, the rest fade back.
+  const [hover, setHover] = useState<string | null>(null);
+  const lit = (key: string) => hover == null || hover === key;
+  const point = (key: string) => ({
+    onMouseEnter: () => setHover(key),
+    onFocus: () => setHover(key),
+    onBlur: () => setHover(null),
+  });
   return (
     <Card>
       <div className="flex items-end justify-between gap-3">
@@ -276,29 +285,53 @@ function WhereItWent({ p }: { p: Snapshot | null }) {
         )}
       </div>
       {pv > 0 ? (
-        <>
-          <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
+        <div className="flex flex-col gap-4" onMouseLeave={() => setHover(null)}>
+          <div className="flex h-3 gap-0.5">
             {parts
               .filter((x) => x.kwh > 0)
               .map((x) => (
                 <span
                   key={x.key}
-                  className="h-full transition-[flex-grow] duration-700 ease-out-soft first:rounded-l-full last:rounded-r-full"
+                  aria-hidden
+                  {...point(x.key)}
+                  className={cn(
+                    "h-full transition-[flex-grow,opacity,scale] duration-300 ease-out-soft first:rounded-l-full last:rounded-r-full",
+                    !lit(x.key) && "opacity-30",
+                    hover === x.key && "scale-y-150",
+                  )}
                   style={{ flexGrow: x.kwh, background: x.color } as CSSProperties}
                 />
               ))}
           </div>
-          <ul className="flex flex-col gap-2">
+          <ul className="-mx-2.5 flex flex-col">
             {parts.map((x) => (
-              <li key={x.key} className="flex items-center gap-2.5 text-[13.5px]">
-                <i aria-hidden className="size-2 rounded-full" style={{ background: x.color }} />
-                <span className="flex-1 text-ink-soft">{x.label}</span>
+              <li
+                key={x.key}
+                tabIndex={0}
+                {...point(x.key)}
+                className={cn(
+                  "flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-1 text-[13.5px] outline-none transition-[background-color,opacity] duration-200",
+                  hover === x.key && "bg-fg/5",
+                  !lit(x.key) && "opacity-55",
+                )}
+              >
+                <i
+                  aria-hidden
+                  className="size-2 rounded-full transition-shadow duration-200"
+                  style={{
+                    background: x.color,
+                    boxShadow: hover === x.key ? `0 0 0 3px ${alpha(x.color, 0.25)}` : undefined,
+                  }}
+                />
+                <span className={cn("flex-1 transition-colors", hover === x.key ? "text-ink" : "text-ink-soft")}>
+                  {x.label}
+                </span>
                 <span className="text-ink-faint tabular-nums">{pct((x.kwh / pv) * 100)}</span>
                 <span className="w-16 text-right text-ink tabular-nums">{kWh(x.kwh)}</span>
               </li>
             ))}
           </ul>
-        </>
+        </div>
       ) : (
         <div className="text-[13px] text-ink-faint">No solar yet today.</div>
       )}
@@ -462,9 +495,17 @@ function DaysAhead({
   );
 }
 
+/** What a day made against its forecast, signed: "+1.2 kWh · +8%". */
+function against(made: number, forecast: number): string {
+  const d = made - forecast;
+  const sign = d > 0.05 ? "+" : d < -0.05 ? "−" : "";
+  return `${sign}${kWh(Math.abs(d))} · ${sign}${pct((Math.abs(d) / forecast) * 100)}`;
+}
+
 /** The last 30 days: what the panels made each day, against what the day-ahead forecast said. */
 function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
   const days = acc?.days ?? [];
+  const { hover: h, width, plot, bar } = useBarHover();
   if (!days.length) return null;
   const top = Math.max(1, ...days.flatMap((d) => [d.actual_kwh, d.forecast_kwh])) * 1.08;
   const total = days.reduce((a, d) => a + d.actual_kwh, 0);
@@ -487,19 +528,24 @@ function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="flex h-32 items-end gap-1 max-sm:gap-0.5">
+        <div className="relative flex h-32 items-end gap-1 max-sm:gap-0.5" {...plot}>
           {days.map((d, i) => (
-            <div
+            <button
               key={d.date}
-              className="relative flex h-full min-w-0 flex-1 items-end"
-              title={`${shortDay.format(parseYmd(d.date))}: made ${kWh(d.actual_kwh)}, forecast ${kWh(d.forecast_kwh)}`}
+              type="button"
+              {...bar(i)}
+              aria-label={`${shortDay.format(parseYmd(d.date))}: made ${kWh(d.actual_kwh)}, forecast ${kWh(d.forecast_kwh)}`}
+              className={cn(
+                "relative flex h-full min-w-0 flex-1 cursor-default items-end border-0 bg-transparent p-0 transition-opacity duration-200",
+                h != null && h !== i && "opacity-45",
+              )}
             >
               <i
-                className="bar-grow block w-full rounded-[4px_4px_2px_2px]"
+                className="bar-grow block w-full rounded-[4px_4px_2px_2px] transition-[background-color] duration-200"
                 style={
                   {
                     height: `${(d.actual_kwh / top) * 100}%`,
-                    background: alpha(SOLAR, 0.75),
+                    background: alpha(SOLAR, h === i ? 1 : 0.75),
                     "--i": i,
                   } as CSSProperties
                 }
@@ -507,10 +553,20 @@ function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
               <i
                 aria-hidden
                 className="absolute inset-x-0 border-t-2"
-                style={{ bottom: `${(d.forecast_kwh / top) * 100}%`, borderColor: EXPECTED }}
+                style={{ bottom: `${(d.forecast_kwh / top) * 100}%`, borderColor: h === i ? COLOR.fg : EXPECTED }}
               />
-            </div>
+            </button>
           ))}
+          {h != null && (
+            <ChartTooltip left={((h + 0.5) / days.length) * 100} flip={h > days.length / 2} width={width}>
+              <span className="font-medium text-ink">{shortDay.format(parseYmd(days[h].date))}</span>
+              <TooltipRow label="Made" value={kWh(days[h].actual_kwh)} color={SOLAR} />
+              <TooltipRow label="Forecast" value={kWh(days[h].forecast_kwh)} color={EXPECTED} />
+              {days[h].forecast_kwh > 0 && (
+                <TooltipRow label="Difference" value={against(days[h].actual_kwh, days[h].forecast_kwh)} />
+              )}
+            </ChartTooltip>
+          )}
         </div>
         <div className="flex justify-between font-mono text-[11px] text-ink-faint">
           {[days[0], days[days.length - 1]].map((d) => (
