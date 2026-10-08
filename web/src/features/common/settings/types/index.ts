@@ -45,6 +45,12 @@ export type Settings = {
   house_style: "estate" | "modern" | "queenslander" | "federation" | "farmhouse";
   /** The NEM region the Grid page follows AEMO for: worked out from the location, one region, or none. */
   nem_region: "auto" | "QLD1" | "NSW1" | "VIC1" | "SA1" | "TAS1" | "none";
+  /** The electricity network whose outages the Grid page follows, and the house's street (name only) and suburb to
+   * match them to, and how far around (km). */
+  power_network: "auto" | "energex" | "ergon" | "none";
+  home_street: string | null;
+  home_suburb: string | null;
+  outage_radius_km: number;
   house_storeys: number;
   garage_spaces: number;
   inverter_places: ("wall" | "garage")[];

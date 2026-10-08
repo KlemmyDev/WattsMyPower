@@ -25,6 +25,7 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
+import { OutagesCard } from "~/features/grid/components/OutagesCard";
 import { TimeLine, type LinePoint } from "~/features/grid/components/TimeLine";
 import type { GridView, MarketNotice, OutlookReason } from "~/features/grid/types";
 import { EXPORT, IMPORT, LEVEL, NOTICE_HELP, perMWh, REGIONS, wholesaleCents } from "~/features/grid/utils";
@@ -52,6 +53,13 @@ export function GridPage() {
       <div className="flex flex-col gap-5">
         {grid ? <Outlook grid={grid} p={p} s={s} /> : !isError && <Skeleton className="h-[132px] rounded-3xl" />}
         <NowTiles p={p} grid={grid} />
+        {grid?.outages && (
+          <OutagesCard
+            view={grid.outages}
+            now={now}
+            home={s?.latitude != null && s.longitude != null ? { lat: s.latitude, lon: s.longitude } : null}
+          />
+        )}
         <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
           <div className="flex min-w-0 flex-col gap-5">
             <TodayCard series={series} p={p} start={start} now={now} />
@@ -332,17 +340,7 @@ function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
   const top = Math.max(...today.map((x) => x.v ?? 0));
   const spike = grid.limits.spike / 10;
   const choose = (value: string) => {
-    save.mutate(
-      { nem_region: value as never },
-      {
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: gridQuery.queryKey });
-          // AEMO is asked again in the background: look again shortly for the new region's prices.
-          setTimeout(() => qc.invalidateQueries({ queryKey: gridQuery.queryKey }), 4000);
-        },
-        onError: (e) => toast(errorMessage(e)),
-      },
-    );
+    save.mutate({ nem_region: value as never }, { onError: (e) => toast(errorMessage(e)) });
   };
   const retry = async () => {
     setBusy(true);

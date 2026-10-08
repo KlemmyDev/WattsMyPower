@@ -803,7 +803,7 @@ wheels = [
 
 [[package]]
 name = "wattsmypower"
-version = "2026.10.8.1"
+version = "2026.10.8.2"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
