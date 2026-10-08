@@ -16,7 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const closeMenu = useCallback(() => setMenu(false), []);
   return (
     // --nav-w is what the side nav takes on the left: nothing on a phone (it's a menu there), the rail on a tablet,
-    // and from xl the circuit. The page and the dock centre in what's left.
+    // and from xl the circuit. The page centres in what's left. The power flow is in the side nav, or on a phone the dock.
     <div className="min-h-screen bg-canvas [--nav-w:0px] md:[--nav-w:72px] xl:[--nav-w:236px]">
       {/* The sticky header carries the space above and below it, so the page starts where it did. */}
       <TopBar onMenu={openMenu} />
@@ -25,7 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="pl-(--nav-w)">
         <main
           key={section}
-          className="page-rise mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-8 pt-9 pb-[136px] max-sm:px-4 max-sm:pt-6 md:pt-10"
+          className="page-rise mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-8 pt-9 pb-[136px] max-sm:px-4 max-sm:pt-6 md:pt-10 md:pb-16"
         >
           <SectionPagesStrip />
           {children}

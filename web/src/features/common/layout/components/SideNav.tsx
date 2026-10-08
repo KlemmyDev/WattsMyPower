@@ -4,6 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { ON } from "~/features/common/energy/utils";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { NavPower } from "~/features/common/layout/components/Dock";
 import { NAV_DOCKED, useLiveStatus, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
 import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type SectionPages } from "~/features/common/layout/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -212,6 +213,7 @@ function Circuit({
         </div>
       </div>
       <div className={cn("flex flex-none flex-col gap-2", !full && "items-center")}>
+        <NavPower full={full} />
         <LiveChip full={full} />
         <VersionTag full={full} />
       </div>
