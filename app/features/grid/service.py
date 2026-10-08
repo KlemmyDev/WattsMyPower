@@ -27,6 +27,7 @@ from typing import Any
 
 from app.features.grid.aemo import REGION_NAMES, REGIONS, AemoClient, AemoError
 from app.features.grid.outages.service import OutageService
+from app.features.grid.warnings.service import HazardService
 from app.features.inverters.sungrow.sh_rs import OFF_GRID
 from app.features.inverters.types import Snapshot
 from app.features.settings.store import SettingsStore
@@ -87,6 +88,7 @@ class GridService:
         client: AemoClient | None = None,
         clock: Callable[[], float] = time.time,
         outages: OutageService | None = None,
+        hazards: HazardService | None = None,
     ):
         self.settings = settings
         self.weather = weather
@@ -94,6 +96,7 @@ class GridService:
         self.client = client or AemoClient()
         self.clock = clock
         self.outages = outages  # the electricity network's outages around the house
+        self.hazards = hazards  # the Bureau of Meteorology's and the Fire Department's warnings for it
         self._lock = threading.Lock()
         self._market: dict[str, dict[str, Any]] = {}  # region -> now
         self._prices: list[dict[str, Any]] = []  # the region's, oldest first
@@ -211,6 +214,7 @@ class GridService:
             "storms": self._storms(now),
             "outlook": self.outlook(now, notices=notices),
             "outages": self.outages.view() if self.outages is not None else None,
+            "hazards": self.hazards.view() if self.hazards is not None else None,
             "fetched_at": fetched_at,
             "error": error if enabled else None,
             "limits": {
@@ -321,8 +325,16 @@ class GridService:
                 reasons += self.outages.reasons(now)
             except Exception:
                 log.exception("Working out the outages around the house failed")
+        bom_storm = False
+        if self.hazards is not None:
+            try:
+                warned = self.hazards.reasons(now)
+                bom_storm = any(r["kind"] == "bom" and "thunderstorm" in r["title"].lower() for r in warned)
+                reasons += warned
+            except Exception:
+                log.exception("Working out the warnings for the house failed")
 
-        storms = self._storms(now)
+        storms = [] if bom_storm else self._storms(now)  # the Bureau's warning says it better than the forecast
         if storms:
             first = storms[0]["ts"] - 3600  # the hour before the stamp
             reasons.append(

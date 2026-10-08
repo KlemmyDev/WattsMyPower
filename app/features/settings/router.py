@@ -54,6 +54,8 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
         svc.grid.wake()  # the region (or whether to follow it) may have changed
     if {"power_network", "nem_region", "latitude", "longitude", "location_name"} & changes.keys():
         svc.outages.wake()  # the network may have changed
+    if {"hazard_warnings", "nem_region", "latitude", "longitude"} & changes.keys():
+        svc.hazards.wake()  # the house's districts may have changed
     if moved:  # coordinates typed in by hand: look up a place name for them
         named = await asyncio.to_thread(name_location, svc)
         return named or saved

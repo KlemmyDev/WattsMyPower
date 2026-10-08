@@ -101,6 +101,14 @@ def test_reading_the_map_files() -> None:
     assert qld_time("Under Investigation") is None
 
 
+def test_cancelled_work_is_left_out() -> None:
+    called_off = _feature(
+        "INCD-9", "PLANNED", "8:00AM 09 Oct 2026", "2:00PM 09 Oct 2026", "BOYNE ST", "ELLEN GROVE", (-27.61, 152.94)
+    )
+    called_off["properties"]["STATUS"] = "Cancelled"
+    assert outage("energex", called_off) is None
+
+
 def test_streets_compare_however_theyre_written() -> None:
     assert street_key("Delilah Street") == street_key("DELILAH ST") == "DELILAH STREET"
     assert street_key("St Lucia Rd") == "ST LUCIA ROAD"  # only the last word is the street's type

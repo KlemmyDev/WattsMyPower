@@ -51,6 +51,8 @@ export type Settings = {
   home_street: string | null;
   home_suburb: string | null;
   outage_radius_km: number;
+  /** Follow the Bureau of Meteorology's and Queensland Fire Department's warnings for the house (1) or not (0). */
+  hazard_warnings: number;
   house_storeys: number;
   garage_spaces: number;
   inverter_places: ("wall" | "garage")[];

@@ -92,6 +92,8 @@ def outage(network: str, feature: dict[str, Any]) -> dict[str, Any] | None:
     point, rings = _rings(feature.get("geometry"))
     if not oid:
         return None
+    if str(p.get("STATUS") or "").strip().lower().startswith("cancel"):
+        return None  # planned work called off: the map keeps it, marked Cancelled, until its day has passed
     if point is None and rings:  # no marker: the middle of its area
         xs, ys = [x for x, _ in rings[0]], [y for _, y in rings[0]]
         point = (sum(xs) / len(xs), sum(ys) / len(ys))

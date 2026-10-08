@@ -10,6 +10,7 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
+import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { gridQuery } from "~/features/grid/api";
 import { RADII } from "~/features/grid/components/OutagesCard";
@@ -258,6 +259,46 @@ function Radius() {
   );
 }
 
+/** The Bureau of Meteorology's and the Fire Department's warnings for the house, on or off. */
+function Hazards() {
+  const system = useLive()?.system;
+  const { data: grid } = useQuery(gridQuery);
+  const save = useSaveNow();
+  const on = save.isPending ? !!save.variables?.hazard_warnings : (system?.hazard_warnings ?? 1) === 1;
+  const town = grid?.hazards?.town;
+  return (
+    <SettingsCard padded aria-labelledby="h-hazards" className="gap-4">
+      <CardTitle
+        id="h-hazards"
+        title="Weather and fire warnings"
+        sub={
+          <>
+            The Bureau of Meteorology's severe weather, flood and fire weather warnings
+            {town ? ` for the ${town} area` : " for your area"}, and in Queensland the Fire Department's bushfire
+            warnings within your radius. They feed the Grid page's outlook and the blackout risk alert.
+          </>
+        }
+        aside={
+          <Switch
+            on={on}
+            label="Weather and fire warnings"
+            onChange={(v) =>
+              save.now(
+                { hazard_warnings: v ? 1 : 0 },
+                v ? "Following weather and fire warnings." : "Warnings turned off.",
+              )
+            }
+          />
+        }
+      />
+      <HelpText>
+        From the Bureau's public data service and QFD's public warnings feed, both meant for this. Matched to your
+        location here.
+      </HelpText>
+    </SettingsCard>
+  );
+}
+
 /** The NEM region whose wholesale prices and notices (AEMO) the Grid page follows. */
 function Market() {
   const system = useLive()?.system;
@@ -312,12 +353,13 @@ export function GridSettings() {
         back={<BackLink to="/settings/integrations">Integrations</BackLink>}
         id="h-grid"
         title="Grid"
-        sub="Power outages around your house from your electricity network, and the wholesale market from AEMO, for the Grid page and its alerts."
+        sub="Power outages around your house from your electricity network, weather and fire warnings, and the wholesale market from AEMO, for the Grid page and its alerts."
       />
       {/* Started afresh once the saved street is known, and after it's saved. */}
       <Network />
       <Street key={`${system?.home_street},${system?.home_suburb}`} />
       <Radius />
+      <Hazards />
       <Market />
     </>
   );

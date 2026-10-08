@@ -25,6 +25,7 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
+import { HazardsCard } from "~/features/grid/components/HazardsCard";
 import { OutagesCard } from "~/features/grid/components/OutagesCard";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import type { GridView, MarketNotice, OutlookReason } from "~/features/grid/types";
@@ -66,6 +67,7 @@ export function GridPage() {
             {grid ? <WholesaleCard grid={grid} now={now} /> : <Skeleton className="h-[300px] rounded-3xl" />}
           </div>
           <div className="flex min-w-0 flex-col gap-5">
+            {grid?.hazards && <HazardsCard view={grid.hazards} now={now} />}
             <QualityCard series={series} p={p} grid={grid} start={start} now={now} />
             {grid && <NoticesCard grid={grid} />}
           </div>

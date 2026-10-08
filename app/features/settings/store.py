@@ -54,6 +54,7 @@ LISTS: dict[str, tuple[tuple[str, ...], int]] = {
 WHOLE = {
     "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
     "house_storeys", "garage_spaces", "system_installed", "battery_installed", "home_standby_goal", "update_check",
+    "hazard_warnings",
 }  # fmt: skip
 # The system details (Settings → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
@@ -122,8 +123,11 @@ class SettingsStore:
             "forecast_learning": (0, 1, 1),
             # Ask GitHub every few hours whether there's a newer version (Settings → System → Updates).
             "update_check": (0, 1, 1),
-            # How far around the house (km) the network's outages are shown (the Grid page).
+            # How far around the house (km) the network's outages, and fires, are shown (the Grid page).
             "outage_radius_km": (1, 100, 15),
+            # Follow the Bureau of Meteorology's warnings and Queensland Fire Department's for the house (the Grid
+            # page's outlook and its alerts).
+            "hazard_warnings": (0, 1, 1),
             # The house as the Overview draws it (Settings → System → Your house): storeys, and car spaces in
             # the garage (0 = none).
             "house_storeys": (1, 2, 1),

@@ -99,12 +99,14 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.battery.start_loop()  # ends battery controls when they're done
             await services.updates.start()  # asks GitHub for a newer version every few hours, unless turned off
             await services.grid.start()  # AEMO's prices and notices for the region, unless turned off
-            await services.outages.start()  # the electricity network's outages around the house
+            await services.outages.start()
+            await services.hazards.start()  # the Bureau's and the Fire Department's warnings for the house  # the electricity network's outages around the house
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
         if poll:
             naming.cancel()
+            await services.hazards.stop()
             await services.outages.stop()
             await services.grid.stop()
             await services.updates.stop()
