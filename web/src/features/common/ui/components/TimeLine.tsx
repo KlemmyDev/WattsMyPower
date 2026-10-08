@@ -42,7 +42,8 @@ function runs(points: LinePoint[]) {
 /**
  * One measure through a stretch of time, as a line (dashed where it's a forecast), with what's under the pointer in a
  * tooltip. `signed` fills above zero in one colour and below in another (the grid: from it, to it); `band` shades the
- * range a value should stay in; `marks` are reference lines with a label.
+ * range a value should stay in; `marks` are reference lines with a label. `fill` shades under the line; `compare` draws
+ * a second line (dashed: what was expected) on the same scale, and the tooltip is given both.
  */
 export function TimeLine({
   points,
@@ -56,6 +57,8 @@ export function TimeLine({
   band,
   marks = [],
   every = 6,
+  fill = false,
+  compare,
   tip,
   empty,
 }: {
@@ -72,14 +75,19 @@ export function TimeLine({
   marks?: { v: number; label: string; color?: string }[];
   /** Hours between the marks along the bottom (every other one is left out on a phone). */
   every?: number;
-  tip: (p: LinePoint) => ReactNode;
+  fill?: boolean;
+  compare?: { points: LinePoint[]; color: string };
+  /** What's under the pointer: the line's reading (its `v` null where there's none, beyond the readings so far)
+   * and the compared line's. */
+  tip: (p: LinePoint, other?: LinePoint | null) => ReactNode;
   empty?: ReactNode;
 }) {
   const H = height;
   const clip = useId().replace(/:/g, "");
   const chart = useMemo(() => {
     const shown = points.filter((p) => p.t >= start && p.t <= end);
-    const values = shown.map((p) => p.v).filter((v): v is number => v != null);
+    const other = (compare?.points ?? []).filter((p) => p.t >= start && p.t <= end);
+    const values = [...shown, ...other].map((p) => p.v).filter((v): v is number => v != null);
     let lo = Math.min(...values, domain?.[0] ?? Infinity, ...(signed ? [0] : []));
     let hi = Math.max(...values, domain?.[1] ?? -Infinity, ...(signed ? [0] : []));
     if (!Number.isFinite(lo) || !Number.isFinite(hi)) [lo, hi] = [0, 1];
@@ -93,9 +101,18 @@ export function TimeLine({
       pts.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)} ${Y(p.v ?? 0).toFixed(1)}`).join(" ");
     const lines = runs(shown).map((r) => ({ d: path(r.pts), forecast: r.forecast, pts: r.pts }));
     const zero = Y(0);
+    const base = Y(Math.max(lo, 0));
     return {
       shown: shown.filter((p) => p.v != null),
+      other: other.filter((p) => p.v != null),
       lines,
+      compared: runs(other.map((p) => ({ ...p, forecast: false }))).map((r) => path(r.pts)),
+      fills: fill
+        ? lines.map(
+            (l) =>
+              `${l.d} L${X(l.pts[l.pts.length - 1].t).toFixed(1)} ${base.toFixed(1)} L${X(l.pts[0].t).toFixed(1)} ${base.toFixed(1)} Z`,
+          )
+        : [],
       areas: signed
         ? lines.map(
             (l) =>
@@ -107,17 +124,23 @@ export function TimeLine({
       topOf: (v: number) => (Y(v) / H) * 100,
       leftOf: (t: number) => (X(t) / W) * 100,
     };
-  }, [points, start, end, domain, signed, H]);
+  }, [points, compare, start, end, domain, signed, fill, H]);
 
-  const [hover, setHover] = useState<LinePoint | null>(null);
+  const [hover, setHover] = useState<{ p: LinePoint; other: LinePoint | null } | null>(null);
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setWidth(e.currentTarget.offsetWidth);
     const t = start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (end - start);
-    let best: LinePoint | null = null;
-    for (const p of chart.shown) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
-    setHover(best);
+    const near = (list: LinePoint[], within = Infinity) => {
+      let best: LinePoint | null = null;
+      for (const p of list) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+      return best && Math.abs(best.t - t) <= within ? best : null;
+    };
+    // With a line to compare, the readings only count near the pointer (they stop at now; the other goes on).
+    const p = near(chart.shown, compare ? 1800 : Infinity);
+    const other = compare ? near(chart.other, 1800) : null;
+    setHover(p || other ? { p: p ?? { t: other!.t, v: null }, other } : null);
   };
 
   // Hour marks every `every` hours (twice that on a phone), on the hour, across the stretch shown.
@@ -130,7 +153,7 @@ export function TimeLine({
   }
   const nowLeft = now != null && now >= start && now <= end ? chart.leftOf(now) : null;
 
-  if (!chart.shown.length)
+  if (!chart.shown.length && !chart.other.length)
     return (
       <div className="flex items-center justify-center text-sm text-ink-faint" style={{ height }}>
         {empty}
@@ -181,6 +204,20 @@ export function TimeLine({
                 <path d={d} clipPath={`url(#${clip}-up)`} style={{ fill: alpha(signed.above, 0.22) }} />
                 <path d={d} clipPath={`url(#${clip}-down)`} style={{ fill: alpha(signed.below, 0.22) }} />
               </g>
+            ))}
+          {chart.fills.map((d, i) => (
+            <path key={`f${i}`} d={d} style={{ fill: alpha(color, 0.14) }} />
+          ))}
+          {compare &&
+            chart.compared.map((d, i) => (
+              <path
+                key={`c${i}`}
+                d={d}
+                {...STROKE}
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+                style={{ stroke: compare.color }}
+              />
             ))}
           {chart.zero != null && (
             <line
@@ -261,19 +298,31 @@ export function TimeLine({
             <span className="absolute -top-0.5 left-1.5 font-mono text-[10px] text-ink-faint">Now</span>
           </div>
         )}
-        {hover && hover.v != null && (
+        {hover && (
           <>
-            <HoverLine left={chart.leftOf(hover.t)} />
-            <span
-              className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
-              style={{
-                left: `${chart.leftOf(hover.t)}%`,
-                top: `${chart.topOf(hover.v)}%`,
-                background: signed ? (hover.v >= 0 ? signed.above : signed.below) : color,
-              }}
-            />
-            <ChartTooltip left={chart.leftOf(hover.t)} flip={chart.leftOf(hover.t) > 60} width={width}>
-              {tip(hover)}
+            <HoverLine left={chart.leftOf(hover.p.t)} />
+            {hover.p.v != null && (
+              <span
+                className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+                style={{
+                  left: `${chart.leftOf(hover.p.t)}%`,
+                  top: `${chart.topOf(hover.p.v)}%`,
+                  background: signed ? (hover.p.v >= 0 ? signed.above : signed.below) : color,
+                }}
+              />
+            )}
+            {compare && hover.other?.v != null && (
+              <span
+                className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+                style={{
+                  left: `${chart.leftOf(hover.other.t)}%`,
+                  top: `${chart.topOf(hover.other.v)}%`,
+                  background: compare.color,
+                }}
+              />
+            )}
+            <ChartTooltip left={chart.leftOf(hover.p.t)} flip={chart.leftOf(hover.p.t) > 60} width={width}>
+              {tip(hover.p, hover.other)}
             </ChartTooltip>
           </>
         )}

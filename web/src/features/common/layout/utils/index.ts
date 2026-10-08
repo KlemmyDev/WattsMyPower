@@ -2,7 +2,7 @@ import type { LinkProps } from "@tanstack/react-router";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { IconName } from "~/features/common/ui/components/Icon";
 
-export type Section = "/" | "/home" | "/grid" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
+export type Section = "/" | "/solar" | "/home" | "/grid" | "/history" | "/plan" | "/battery" | "/bills" | "/tesla";
 
 /** Live: what's happening now. Over time: what happened, what's coming, and what it cost. */
 export type NavGroup = "Live" | "Over time";
@@ -14,6 +14,7 @@ export type NavItem = { to: Section; label: string; icon: IconName; group: NavGr
 /** The main sections, group by group, in the order the navigation shows them. Settings sits apart, at the end. */
 export const NAV: NavItem[] = [
   { to: "/", label: "Overview", icon: "layout", group: "Live", color: COLOR.solar },
+  { to: "/solar", label: "Solar", icon: "sun", group: "Live", color: COLOR.solar },
   { to: "/home", label: "Home", icon: "home", group: "Live", color: COLOR.teal },
   { to: "/battery", label: "Battery", icon: "battery", group: "Live", color: COLOR.battery },
   { to: "/grid", label: "Grid", icon: "grid", group: "Live", color: COLOR.import },

@@ -24,6 +24,7 @@ import { Route as AppInsightsRouteImport } from './routes/_app/insights'
 import { Route as AppPlanRouteImport } from './routes/_app/plan'
 import { Route as AppSavingsRouteImport } from './routes/_app/savings'
 import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
+import { Route as AppSolarRouteImport } from './routes/_app/solar'
 import { Route as AppHomeDeviceRouteImport } from './routes/_app/home_.$device'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
@@ -121,6 +122,11 @@ const AppSavingsRoute = AppSavingsRouteImport.update({
 const AppSettingsRouteRoute = AppSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSolarRoute = AppSolarRouteImport.update({
+  id: '/solar',
+  path: '/solar',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHomeDeviceRoute = AppHomeDeviceRouteImport.update({
@@ -270,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/insights': typeof AppInsightsRoute
   '/plan': typeof AppPlanRoute
   '/savings': typeof AppSavingsRoute
+  '/solar': typeof AppSolarRoute
   '/home/$device': typeof AppHomeDeviceRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/alerts': typeof AppSettingsAlertsRoute
@@ -308,6 +315,7 @@ export interface FileRoutesByTo {
   '/insights': typeof AppInsightsRoute
   '/plan': typeof AppPlanRoute
   '/savings': typeof AppSavingsRoute
+  '/solar': typeof AppSolarRoute
   '/': typeof AppIndexRoute
   '/home/$device': typeof AppHomeDeviceRoute
   '/settings/account': typeof AppSettingsAccountRoute
@@ -350,6 +358,7 @@ export interface FileRoutesById {
   '/_app/insights': typeof AppInsightsRoute
   '/_app/plan': typeof AppPlanRoute
   '/_app/savings': typeof AppSavingsRoute
+  '/_app/solar': typeof AppSolarRoute
   '/_app/': typeof AppIndexRoute
   '/_app/home_/$device': typeof AppHomeDeviceRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
@@ -393,6 +402,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/plan'
     | '/savings'
+    | '/solar'
     | '/home/$device'
     | '/settings/account'
     | '/settings/alerts'
@@ -431,6 +441,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/plan'
     | '/savings'
+    | '/solar'
     | '/'
     | '/home/$device'
     | '/settings/account'
@@ -472,6 +483,7 @@ export interface FileRouteTypes {
     | '/_app/insights'
     | '/_app/plan'
     | '/_app/savings'
+    | '/_app/solar'
     | '/_app/'
     | '/_app/home_/$device'
     | '/_app/settings/account'
@@ -610,6 +622,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/solar': {
+      id: '/_app/solar'
+      path: '/solar'
+      fullPath: '/solar'
+      preLoaderRoute: typeof AppSolarRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/home_/$device': {
@@ -849,6 +868,7 @@ interface AppRouteChildren {
   AppInsightsRoute: typeof AppInsightsRoute
   AppPlanRoute: typeof AppPlanRoute
   AppSavingsRoute: typeof AppSavingsRoute
+  AppSolarRoute: typeof AppSolarRoute
   AppIndexRoute: typeof AppIndexRoute
   AppHomeDeviceRoute: typeof AppHomeDeviceRoute
   AppTeslaSetupRoute: typeof AppTeslaSetupRoute
@@ -868,6 +888,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInsightsRoute: AppInsightsRoute,
   AppPlanRoute: AppPlanRoute,
   AppSavingsRoute: AppSavingsRoute,
+  AppSolarRoute: AppSolarRoute,
   AppIndexRoute: AppIndexRoute,
   AppHomeDeviceRoute: AppHomeDeviceRoute,
   AppTeslaSetupRoute: AppTeslaSetupRoute,

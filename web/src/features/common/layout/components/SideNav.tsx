@@ -111,6 +111,7 @@ function Circuit({
   const value: Partial<Record<string, string>> = p
     ? {
         "/": kW(p.pv_power),
+        "/solar": kWh(p.daily_pv),
         "/home": kW(p.load_power),
         "/battery": pct(p.battery_soc),
         "/grid": p.grid_power == null ? undefined : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
