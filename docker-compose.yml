@@ -46,6 +46,9 @@ services:
       - "${PORT:-8080}:8080"
     volumes:
       - ./data:/data
+      # Portable batteries (Bluetti) are read over Bluetooth, through the host's BlueZ. To connect one, uncomment this
+      # (on a Linux host with a Bluetooth adapter and bluez installed), then: docker compose up -d
+      # - /run/dbus:/run/dbus:ro
     environment:
       COLLECTOR_URL: http://collector:8081
       COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}

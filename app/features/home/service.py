@@ -24,6 +24,7 @@ import sqlite3
 import threading
 import time
 from collections.abc import Callable, Iterable
+from dataclasses import asdict
 from typing import Any
 
 from app.core.config import Config
@@ -503,6 +504,7 @@ class HomeService:
                         "details": dict(r.details),
                         "info": dict(r.info),
                         "switched_on": r.switched_on,
+                        "battery": asdict(r.battery) if r.battery else None,
                     }
                     self._raw[d.id] = {"ts": ts, "properties": dict(r.raw)}
         for device_id, meter in meters.items():

@@ -10,6 +10,8 @@ dependencies = [
     "uvicorn[standard]==0.39.0",
     # The collector's encrypted dongles, and the dashboard's browser notifications (Web Push).
     "pycryptodomex==3.23.0",
+    # Portable batteries (Bluetti) read over Bluetooth.
+    "bleak==3.0.2",
 ]
 
 [project.optional-dependencies]

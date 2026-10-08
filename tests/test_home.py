@@ -338,7 +338,7 @@ def test_the_demo_is_only_offered_in_mock_mode(db: Database, config: Config) -> 
 def test_the_demo_looks_back_four_weeks_when_connected(home: HomeService, clock: Clock) -> None:
     clock.t = time.time()
     view = home.connect("demo", {})
-    assert {d["kind"] for d in view["devices"]} == {"washer", "dryer", "fridge", "plug"}
+    assert {d["kind"] for d in view["devices"]} == {"washer", "dryer", "fridge", "plug", "power_station"}
     runs = home.repo.runs(0, 2**40)
     washes = [r for r in runs if r["device"] == view["devices"][0]["id"]]
     assert 10 <= len(washes) <= 14  # three a week: Wednesdays and weekends
@@ -452,18 +452,20 @@ def test_home_through_the_api(client: TestClient) -> None:
         "shelly",
         "connectlife",
         "homeassistant",
+        "bluetti",
+        "ecoflow",
         "demo",
     ]
     assert client.post("/api/home/integrations/nothing", json={}).status_code == 404
     view = client.post("/api/home/integrations/demo", json={}).json()
     demo = next(i for i in view["integrations"] if i["id"] == "demo")
-    assert len(view["devices"]) == 4 and demo["account"]["devices"] == 4
+    assert len(view["devices"]) == 5 and demo["account"]["devices"] == 5
     washer_id = view["devices"][0]["id"]
     assert client.post("/api/home/integrations/demo", json={}).status_code == 409
     usage_ = client.get("/api/home/usage", params={"bucket": "day"}).json()
-    assert len(usage_["t"]) in (7, 8) and len(usage_["devices"]) == 4
+    assert len(usage_["t"]) in (7, 8) and len(usage_["devices"]) == 5
     assert client.get("/api/home/usage", params={"bucket": "hour", "start": 0, "end": 10 * 86400}).status_code == 422
-    assert len(client.get("/api/home/patterns").json()) == 4
+    assert len(client.get("/api/home/patterns").json()) == 5
     runs = client.get("/api/home/runs", params={"device": washer_id}).json()
     assert runs and runs[0]["start"] > runs[-1]["start"]  # newest first
     curve = client.get(f"/api/home/runs/{runs[0]['id']}/curve").json()

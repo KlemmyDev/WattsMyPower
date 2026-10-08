@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { batteryQuery, insightsQuery } from "~/features/battery/api";
+import { AllBatteries, roomBatteries } from "~/features/battery/components/AllBatteries";
 import { BatteryActivity } from "~/features/battery/components/BatteryActivity";
 import { BatteryDayChart } from "~/features/battery/components/BatteryDayChart";
 import { BatteryHealth } from "~/features/battery/components/BatteryHealth";
@@ -19,6 +20,7 @@ import { addDays, midnight } from "~/features/common/time/utils";
 import { useForecast } from "~/features/common/weather/hooks";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
+import { homeQuery } from "~/features/home/api";
 
 const FIELDS = ["battery_power", "grid_power", "pv_power", "load_power", "battery_temp"];
 
@@ -26,8 +28,8 @@ const FIELDS = ["battery_power", "grid_power", "pv_power", "load_power", "batter
  * The home battery: big and simple at the top (its level, what it's doing, what it's set to do), the controls beside
  * a day of its level with what it was set to do shaded in (and, while choosing a control, what that would do), where
  * today's charge came from and went, how long it would keep the house going without the grid, its readings, then how
- * it's holding up, the last 30 days, and whether its size suits the house. Only in the navigation when there's a
- * battery.
+ * it's holding up, the last 30 days, and whether its size suits the house. With portable batteries in rooms (Home's
+ * devices), all of them together under the panel. Only in the navigation when there's a battery.
  */
 export function BatteryPage() {
   const now = useNow(30_000);
@@ -47,14 +49,19 @@ export function BatteryPage() {
     enabled: has,
   });
   const series = day?.series;
+  const { data: home } = useQuery(homeQuery);
+  const rooms = roomBatteries(home?.devices);
   const header = <PageHeader title="Battery" sub="See what your battery is doing, and tell it what to do" />;
   if (s && !has)
     return (
       <>
         {header}
-        <EmptyState icon="battery" title="No battery found" id="h-nobat">
-          Your inverter doesn't report a battery. If it has one, set its size in Settings → System.
-        </EmptyState>
+        <div className="flex flex-col gap-5">
+          {rooms.length > 0 && <AllBatteries p={p} s={s} devices={rooms} />}
+          <EmptyState icon="battery" title="No home battery found" id="h-nobat">
+            Your inverter doesn't report a battery. If it has one, set its size in Settings → System.
+          </EmptyState>
+        </div>
       </>
     );
   return (
@@ -62,6 +69,7 @@ export function BatteryPage() {
       {header}
       <div className="flex flex-col gap-5">
         <BatteryPanel v={v} p={p} s={s} mode={mode} now={now} />
+        {rooms.length > 0 && <AllBatteries p={p} s={s} devices={rooms} />}
         {/* Two columns that grow on their own (the controls opening doesn't stretch the chart): the day and the
             battery's health on the left; the controls, what they did, and its size on the right. Narrower, one
             column: the controls first. */}

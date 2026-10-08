@@ -36,9 +36,23 @@ KINDS: dict[str, Kind] = {
     "air_conditioner": Kind("Air conditioner", running_w=50),
     "hot_water": Kind("Hot water", running_w=100),
     "pool_pump": Kind("Pool pump", running_w=50),
+    # A battery of its own in a room (a portable power station): charged from the house or its own panels, powering
+    # what's plugged into it. What it draws from the house is its use.
+    "power_station": Kind("Portable battery"),
     "plug": Kind("Smart plug"),
     "other": Kind("Other"),
 }
+
+
+@dataclass(frozen=True)
+class Battery:
+    """A device that holds charge (a portable power station): how full it is and where its power is going. Its
+    Reading's power_w is what it's drawing from the house; these are the rest."""
+
+    soc: float | None = None  # % charged
+    capacity_kwh: float | None = None  # what it holds full (None: not known)
+    solar_w: float | None = None  # coming in from its own panels, not the house
+    output_w: float | None = None  # what it's powering, from its outlets
 
 
 @dataclass(frozen=True)
@@ -61,6 +75,7 @@ class Reading:
     phase: str | None = None  # where the cycle is ("Washing", "Spinning", "Drying")
     remaining_min: float | None = None
     switched_on: bool | None = None  # for a device that can be switched (a smart plug): whether it's on
+    battery: Battery | None = None  # for a device that holds charge
     # Anything else worth showing, in words: {"Door": "Closed", "Temperature": "4 °C"}.
     details: Mapping[str, str] = field(default_factory=dict)
     # About the device itself rather than what it's doing, for its own page: {"Signal": "Good", "Firmware": "1.4.8"}.

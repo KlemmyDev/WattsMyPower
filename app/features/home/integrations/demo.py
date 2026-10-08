@@ -9,6 +9,8 @@ same, and it can look back (four weeks of history when it's connected).
 - The fridge's compressor runs 15 minutes in every 40, on a lifetime counter.
 - The TV only reports its power, through its plug: on most evenings. Its plug can be switched off and on. Every
   eleventh day a heater shares its plug for a quarter of an hour, at 950 W: a power spike.
+- A portable battery in the bedroom charges from the house at 400 W from 10:00 until it's full, and powers the bedroom
+  (70 W) from 19:00 to 07:00. Its outlets can be switched off and on.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from app.features.home.stations import Station, reading
 from app.features.home.types import Hints, Integration, IntegrationError, Reading
 
 MIN = 60
@@ -26,6 +29,13 @@ FRIDGE_PERIOD, FRIDGE_ON = 40 * MIN, 15 * MIN
 FRIDGE_ON_W, FRIDGE_OFF_W = 120.0, 4.0
 FRIDGE_START_KWH = 1234.0  # what its lifetime counter had at FRIDGE_FROM
 FRIDGE_FROM = 1_735_689_600  # 2025-01-01
+BATTERY_KWH = 1.152
+CHARGE_W, BEDROOM_W = 400.0, 70.0
+CHARGES_FROM, POWERS_FROM, POWERS_UNTIL = 10 * 3600, 19 * 3600, 7 * 3600
+LOSS = 0.9  # what's kept of each kWh, charging or discharging
+CHARGE_PCT_H = CHARGE_W * LOSS / 1000 / BATTERY_KWH * 100  # % gained an hour charging
+DRAIN_PCT_H = BEDROOM_W / LOSS / 1000 / BATTERY_KWH * 100  # % spent an hour powering the bedroom
+EMPTIEST = 100 - DRAIN_PCT_H * (24 - (POWERS_FROM - POWERS_UNTIL) / 3600)  # its charge at 07:00, after the night
 
 
 def _local(ts: float) -> time.struct_time:
@@ -66,6 +76,20 @@ def _cycle_kwh(power: Any, seconds: float) -> float:
     return round(wh / 1000, 3)
 
 
+def _battery(ts: float, outlets_on: bool) -> tuple[float, float, float]:
+    """The bedroom battery's charge (%), what it's drawing from the house and what it's powering (W). It's assumed to
+    have powered the bedroom through the night, whether its outlets are on now or not."""
+    s = ts - _midnight(ts)
+    if s < POWERS_UNTIL:  # through the night, since 19:00
+        return 100 - DRAIN_PCT_H * (s + 24 * 3600 - POWERS_FROM) / 3600, 0.0, BEDROOM_W if outlets_on else 0.0
+    if s >= POWERS_FROM:
+        return 100 - DRAIN_PCT_H * (s - POWERS_FROM) / 3600, 0.0, BEDROOM_W if outlets_on else 0.0
+    if s < CHARGES_FROM:
+        return EMPTIEST, 0.0, 0.0
+    soc = min(100.0, EMPTIEST + CHARGE_PCT_H * (s - CHARGES_FROM) / 3600)
+    return soc, CHARGE_W if soc < 100 else 0.0, 0.0
+
+
 def _cycle(ts: float, start: int | None, length: int) -> float | None:
     """How far into a cycle `ts` is, if one is under way."""
     return ts - start if start is not None and start <= ts < start + length else None
@@ -75,9 +99,12 @@ class Demo(Integration):
     id = "demo"
     name = "Demo appliances"
     via = "made-up readings"
-    about = "A washer, dryer, fridge and TV that follow the clock, for trying the Home page without an account."
+    about = (
+        "A washer, dryer, fridge, TV and a bedroom battery that follow the clock, for trying the Home page without an "
+        "account."
+    )
     icon = "flask"
-    kinds = ("washer", "dryer", "fridge", "plug")
+    kinds = ("washer", "dryer", "fridge", "plug", "power_station")
     fields = ()
     poll_seconds = 60
     demo = True
@@ -88,12 +115,12 @@ class Demo(Integration):
         return {"connected": True}
 
     def label(self) -> str:
-        return "Four simulated appliances"
+        return "Five simulated appliances"
 
     def switch(self, key: str, on: bool) -> None:
-        if key != "tv":
-            raise IntegrationError("Only the demo TV's plug can be switched.")
-        self.saved = {**self.saved, "tv_off": not on}
+        if key not in ("tv", "battery"):
+            raise IntegrationError("Only the demo TV's plug and the bedroom battery can be switched.")
+        self.saved = {**self.saved, f"{key}_off": not on}
 
     def poll(self) -> list[Reading]:
         return self.at(time.time())
@@ -121,6 +148,8 @@ class Demo(Integration):
         heater = lt.tm_yday % 11 == 0 and lt.tm_hour == 19 and lt.tm_min < 15
         weekend = lt.tm_wday >= 5
         switched_off = bool(self.saved.get("tv_off"))
+        outlets_on = not self.saved.get("battery_off")
+        soc, charging, powering = _battery(ts, outlets_on)
         return [
             Reading(
                 key="washer",
@@ -171,6 +200,21 @@ class Demo(Integration):
                 power_w=0.0 if switched_off else (950.0 if heater else 0.0) + (110.0 if tv_on else 0.8),
                 switched_on=not switched_off,
                 info={"Wi-Fi signal": "Good (−62 dBm)", "On today": "3 h 40 min", "Firmware": "1.4.8"},
+                raw={"simulated": True},
+            ),
+            reading(
+                "battery",
+                "Bedroom battery",
+                "AC180",
+                Station(
+                    soc=round(soc, 1),
+                    house_w=charging,
+                    solar_w=0.0,
+                    output_w=powering,
+                    ac_on=outlets_on,
+                    capacity_kwh=BATTERY_KWH,
+                ),
+                info={"Serial number": "2235000123456", "Register layout": "V2"},
                 raw={"simulated": True},
             ),
         ]
