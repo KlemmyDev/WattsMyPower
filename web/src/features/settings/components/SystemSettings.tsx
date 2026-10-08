@@ -14,6 +14,7 @@ import { useToast } from "~/features/common/ui/components/Toast";
 import { HouseSettings } from "~/features/settings/components/HouseSettings";
 import { OwnershipSettings } from "~/features/settings/components/OwnershipSettings";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { UpdatesCard } from "~/features/updates/components/UpdatesCard";
 
 function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
   const model = pv2.model
@@ -89,6 +90,7 @@ export function SystemSettings() {
       {live && <SystemForm system={live.system} />}
       {live && <OwnershipSettings system={live.system} />}
       {live && <HouseSettings system={live.system} />}
+      <UpdatesCard />
     </>
   );
 }

@@ -37,6 +37,7 @@ from app.features.settings.geocode import Geocoder
 from app.features.settings.store import SettingsStore
 from app.features.storage.service import StorageService
 from app.features.tariffs.store import TariffStore
+from app.features.updates.service import UpdateService
 from app.features.weather.service import WeatherService
 
 
@@ -66,6 +67,7 @@ class Services:
     live: LiveService
     alerts: AlertsService
     battery: BatteryService
+    updates: UpdateService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -120,5 +122,6 @@ def build_services(config: Config) -> Services:
             CollectorRegisters(collector) if collector else MockRegisters(source.inverter),  # type: ignore[union-attr]
             planner=ForecastPlanner(forecast, tariffs, amber.repo, settings),
         ),
+        updates=UpdateService(settings),
         source=source,
     )

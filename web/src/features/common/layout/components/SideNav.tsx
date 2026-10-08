@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
@@ -16,6 +17,7 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
+import { updatesQuery } from "~/features/updates/api";
 
 // A section's pages say for themselves which is current (a room is, on its devices' pages). Their links only count
 // themselves current on their exact page, so a link up the path ("/home") doesn't light up as well.
@@ -341,27 +343,64 @@ function LiveChip({ full }: { full: boolean }) {
   );
 }
 
-/** Which version this is, and its release ("Alpha") until it's marked stable: under the live chip, or on the rail the
- * release alone (the version in its tooltip). */
+/**
+ * Which version this is, and its release ("Alpha") until it's marked stable: under the live chip, or on the rail the
+ * release alone (the version in its tooltip). When GitHub has a newer one, a link to Settings → System → Updates says so
+ * (on the rail, a dot on the tag).
+ */
 function VersionTag({ full }: { full: boolean }) {
   const app = useLive()?.app;
+  const updates = useQuery(updatesQuery).data;
   if (!app) return null;
   const release = app.release ? app.release.charAt(0).toUpperCase() + app.release.slice(1) : null;
-  const title = `WattsMyPower ${app.version}${release ? `, ${app.release} release` : ""}`;
+  const newer = updates?.available ? updates.latest : null;
+  const title = `WattsMyPower ${app.version}${release ? `, ${app.release} release` : ""}${newer ? ". A newer version is available." : ""}`;
   const pill = release && (
     <span className="rounded-full border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-warn">
       {release}
     </span>
   );
   return full ? (
-    <div title={title} className="flex items-center justify-between px-1 text-[11px] text-ink-faint tabular-nums">
-      <span>v{app.version}</span>
-      {pill}
-    </div>
+    <>
+      {newer && (
+        <Link
+          to="/settings/system"
+          hash="updates"
+          className="flex items-center gap-2 rounded-xl border border-brand/25 bg-brand-subtle px-3 py-2 text-[12.5px] font-medium text-brand no-underline transition-colors hover:border-brand/45 hover:text-brand"
+        >
+          <span aria-hidden className="size-1.5 flex-none rounded-full bg-brand" />
+          Update available
+          <span className="ml-auto font-normal tabular-nums opacity-75">
+            {/* The same version with newer commits: how many, rather than the version it already is. */}
+            {newer.version !== app.version
+              ? `v${newer.version}`
+              : newer.changes
+                ? `${newer.changes} ${newer.changes === 1 ? "change" : "changes"}`
+                : ""}
+          </span>
+        </Link>
+      )}
+      <div title={title} className="flex items-center justify-between px-1 text-[11px] text-ink-faint tabular-nums">
+        <span>v{app.version}</span>
+        {pill}
+      </div>
+    </>
   ) : (
-    <span title={title} className="flex">
+    <Link
+      to="/settings/system"
+      hash={newer ? "updates" : undefined}
+      title={title}
+      aria-label={title}
+      className="relative flex no-underline"
+    >
       {pill || <span className="font-mono text-[9.5px] text-ink-faint">v{app.version}</span>}
-    </span>
+      {newer && (
+        <span
+          aria-hidden
+          className="absolute -top-1 -right-1 size-2 rounded-full bg-brand shadow-[0_0_0_2px_var(--color-canvas)]"
+        />
+      )}
+    </Link>
   );
 }
 

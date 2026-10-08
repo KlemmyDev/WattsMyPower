@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Config
-from app.core.version import RELEASE, VERSION
+from app.core.version import COMMIT, RELEASE, VERSION
 from app.main import create_app
 
 
@@ -29,7 +29,7 @@ def test_status_before_the_first_reading(client: TestClient) -> None:
     body = client.get("/api/live").json()
     assert body["snapshot"] is None and body["mock"] is True
     assert body["system"]["tariff"]["type"] == "flat"
-    assert body["app"] == {"version": VERSION, "release": RELEASE}
+    assert body["app"] == {"version": VERSION, "release": RELEASE, "commit": COMMIT}
     assert client.get("/healthz").json() == {"ok": True, "inverter_fresh": False, "error": None, "version": VERSION}
 
 

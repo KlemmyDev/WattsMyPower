@@ -342,7 +342,10 @@ PY
 fi
 
 say "Building and starting"
-$DC up -d --build --remove-orphans
+# The commit goes into the dashboard's image, so it can tell when GitHub has a newer version. A build argument rather
+# than the environment, which sudo would leave behind.
+$DC build --build-arg "GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || true)"
+$DC up -d --remove-orphans
 
 $DOCKER image prune -f >/dev/null 2>&1 || true  # drop the previous build's image
 wait_and_report
