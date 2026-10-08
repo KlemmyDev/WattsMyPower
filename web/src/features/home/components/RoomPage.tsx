@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { kW, kWh, money } from "~/features/common/formatting/utils/number";
+import { kWh, money } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { STORE_HOME_RANGE, store } from "~/features/common/storage/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
@@ -25,6 +25,7 @@ import {
   RANGE_WORDS,
   reading,
   type Range,
+  watts,
 } from "~/features/home/utils";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
 
@@ -64,6 +65,7 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
   const standby = found.data?.standby.devices.filter((x) => ids.includes(x.id));
   const running = members.filter((d) => d.now?.running && !d.now.stale);
   const w = members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
+  const estimated = members.some((d) => drawing(d) != null && d.now?.estimated);
   const beforeOf = (id: number) =>
     before.data && range !== "today" ? (before.data.devices.find((u) => u.id === id)?.total ?? 0) : undefined;
 
@@ -74,7 +76,7 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
         running.length
           ? `${running.map((d) => d.name).join(" and ")} ${running.length === 1 ? "is" : "are"} running`
           : w
-            ? `Using ${kW(w)} now`
+            ? `Using ${watts(w, estimated)} now`
             : "Idle now",
       ].join(" · ");
 

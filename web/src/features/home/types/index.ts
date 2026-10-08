@@ -61,7 +61,14 @@ export type DeviceNow = {
   online: boolean;
   /** Not read for a few polls: what it was doing, not what it's doing. */
   stale?: boolean;
+  /** What it's drawing (W). For an appliance that doesn't report it, while it runs with its estimate on: what its runs
+   * usually draw (`estimated`). */
   power_w: number | null;
+  /** power_w is what its runs usually draw, not a reading. */
+  estimated?: boolean;
+  /** With an estimated power_w: what the run has likely used so far, and by its end (null: it doesn't say how long is
+   * left), kWh. */
+  estimate?: { kwh_so_far: number; kwh_total: number | null };
   running: boolean;
   program: string | null;
   phase: string | null;
@@ -103,6 +110,18 @@ export type HomeDevice = {
   can_switch: boolean;
   /** Its rule for running on spare solar, if it has one. */
   rule: HomeRule | null;
+  /** For an appliance that doesn't report its power (a Hisense washer): showing what its runs usually draw while it
+   * runs. Null for one that reports it. */
+  estimate: DeviceEstimate | null;
+};
+
+export type DeviceEstimate = {
+  on: boolean;
+  /** What its runs usually draw (W): null until `needs` runs have finished with their energy. */
+  w: number | null;
+  /** How many runs it's from. */
+  runs: number;
+  needs: number;
 };
 
 /** Running a device on spare solar: on once the home sends start_w to the grid, off once it draws stop_w from it. */

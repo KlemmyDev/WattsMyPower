@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Config
 from app.core.database import Database
 from app.core.schema import ROLLUP
-from app.features.home import usage
+from app.features.home import estimate, usage
 from app.features.home.energy import GAP, QUIET, TAIL, Meter, spread, step
 from app.features.home.integrations.demo import Demo
 from app.features.home.service import BACKOFF_MAX, HomeService, HomeSetupError
@@ -343,6 +343,74 @@ def test_the_demo_looks_back_four_weeks_when_connected(home: HomeService, clock:
     washes = [r for r in runs if r["device"] == view["devices"][0]["id"]]
     assert 10 <= len(washes) <= 14  # three a week: Wednesdays and weekends
     assert all(0.6 < r["kwh"] < 0.75 and 70 * MIN <= r["end"] - r["start"] <= 80 * MIN for r in washes)
+
+
+def test_the_demo_dryer_says_what_a_cycle_used_only_once_its_done(home: HomeService, clock: Clock) -> None:
+    clock.t = time.time()
+    view = home.connect("demo", {})
+    dryer = next(d for d in view["devices"] if d["kind"] == "dryer")
+    dries = [r for r in home.repo.runs(0, 2**40) if r["device"] == dryer["id"] and r["end"]]
+    assert dries and all(1.1 < r["kwh"] < 1.3 for r in dries)  # its energy lands on the run it belongs to
+    assert dryer["estimate"] == {"on": False, "w": pytest.approx(800, abs=40), "runs": 10, "needs": 3}
+    assert next(d for d in view["devices"] if d["kind"] == "washer")["estimate"] is None  # it reports its power
+
+
+# -- estimating what's drawn while it runs ---------------------------------------------------------------
+def _run(device: int, start: int, minutes: int, kwh: float) -> dict[str, Any]:
+    return {"device": device, "start": start, "end": start + minutes * MIN, "kwh": kwh}
+
+
+def test_an_appliances_usual_draw_is_the_median_of_its_latest_runs_once_there_are_enough() -> None:
+    hour = 60
+    runs = [_run(1, T0, hour, 0.4), _run(1, T0 + 1, hour, 0.0), _run(1, T0 + 2, 2, 0.1), _run(1, T0 + 3, hour, 0.5)]
+    # Runs without their energy, and runs too short to say, don't count.
+    assert estimate.typical(runs) == {1: {"w": None, "runs": 2}}
+    runs += [_run(1, T0 + 4, 30, 0.3), _run(2, T0, 90, 1.2), {**_run(1, T0 + 5, hour, 9.0), "end": None}]
+    assert estimate.typical(runs) == {1: {"w": 500, "runs": 3}, 2: {"w": None, "runs": 1}}
+    many = [_run(1, T0 + i, hour, 2.0) for i in range(20)] + [_run(1, T0 + 99, hour, 0.4) for _ in range(10)]
+    assert estimate.typical(many)[1] == {"w": 400, "runs": 10}  # the latest ten
+
+
+def test_a_running_appliance_without_power_shows_its_usual_draw_when_its_estimate_is_on(
+    home: HomeService, clock: Clock
+) -> None:
+    home.connect("fake", FORM)
+    Fake.script = [[washer(energy_kwh=0.0, running=False)]]
+    home.poll_due()
+    (d,) = home.repo.devices()
+    with home.db.writing() as conn:
+        for k in range(3):
+            home.repo.save_run(conn, d.id, {"start": T0 - (k + 1) * 86400, "end": T0 - (k + 1) * 86400 + 3600,
+                                            "kwh": 0.4 + k * 0.1})  # fmt: skip
+    clock.t += 30 * MIN
+    Fake.script = [[washer(energy_kwh=0.0, running=True, remaining_min=30)]]
+    home.poll(d.account)
+    (view,) = home.overview()["devices"]
+    assert view["estimate"] == {"on": False, "w": 500, "runs": 3, "needs": 3}
+    assert view["now"]["power_w"] is None and "estimated" not in view["now"]
+    with pytest.raises(HomeSetupError, match="estimate"):
+        home.update_device(d.id, {"estimate": "yes"})
+    (view,) = home.update_device(d.id, {"estimate": True})["devices"]
+    assert view["estimate"]["on"] and view["now"]["power_w"] == 500 and view["now"]["estimated"]
+    clock.t += 30 * MIN
+    Fake.script = [[washer(energy_kwh=0.0, running=True, remaining_min=30)]]
+    home.poll(d.account)
+    (view,) = home.overview()["devices"]
+    assert view["now"]["estimate"] == {"kwh_so_far": 0.25, "kwh_total": 0.5}  # half an hour in, half an hour left
+    assert home.repo.energy(0, 2**40) == []  # only shown: nothing estimated is recorded
+    clock.t += 60
+    Fake.script = [[washer(energy_kwh=0.0, running=False)]]
+    home.poll(d.account)
+    (view,) = home.overview()["devices"]
+    assert view["now"]["power_w"] is None  # done
+
+
+def test_a_device_that_reports_its_power_isnt_estimated(home: HomeService) -> None:
+    home.connect("fake", FORM)
+    Fake.script = [[Reading("p", "Plug", "plug", power_w=300.0)]]
+    home.poll_due()
+    (d,) = home.repo.devices()
+    assert home.update_device(d.id, {"kind": "washer", "estimate": True})["devices"][0]["estimate"] is None
 
 
 # -- where the power went ------------------------------------------------------------------------------

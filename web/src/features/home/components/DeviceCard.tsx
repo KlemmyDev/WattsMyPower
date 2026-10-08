@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { duration, hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
-import { kW, kWh, money } from "~/features/common/formatting/utils/number";
+import { kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
@@ -14,7 +14,7 @@ import { cn } from "~/features/common/ui/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { useHomeChange } from "~/features/home/hooks";
 import type { BestTime, DevicePattern, HomeDevice, HomeUsage, Saving } from "~/features/home/types";
-import { habitLine, kindIcon, nowLine, WEEKDAY_SHORT } from "~/features/home/utils";
+import { ESTIMATED, habitLine, kindIcon, nowLine, watts, WEEKDAY_SHORT } from "~/features/home/utils";
 
 type Used = HomeUsage["devices"][number];
 
@@ -395,6 +395,7 @@ export function GroupCard({
   const word = state(members);
   const read = members.filter((d) => d.now && !d.now.stale && d.now.online && d.now.power_w != null);
   const power = read.reduce((a, d) => a + d.now!.power_w!, 0);
+  const estimated = read.some((d) => d.now!.estimated);
   const lastRun = members
     .map((d) => d.last_run)
     .filter((r) => r != null)
@@ -430,7 +431,12 @@ export function GroupCard({
           </span>
         </div>
         {read.length > 0 && power >= 2 && (
-          <span className="text-sm font-medium whitespace-nowrap tabular-nums">Using {kW(power)}</span>
+          <span
+            className="text-sm font-medium whitespace-nowrap tabular-nums"
+            title={estimated ? ESTIMATED : undefined}
+          >
+            Using {watts(power, estimated)}
+          </span>
         )}
       </div>
 

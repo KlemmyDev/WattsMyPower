@@ -43,14 +43,19 @@ class Device:
     meter: Meter
     group: str | None = None  # shown with the others in it as one on the Home page ("Study")
     rule: dict[str, Any] = field(default_factory=dict)  # running it on spare solar (app.features.home.rules)
+    estimate: bool = False  # shows what its runs usually draw while it runs (app.features.home.estimate)
 
 
-_DEVICE = "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name, rule FROM home_devices"
+_DEVICE = (
+    "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name, rule, estimate FROM home_devices"
+)
 
 
 def _device(row: tuple[Any, ...]) -> Device:
-    id, account, key, name, kind, model, hidden, position, meter, group, rule = row
-    return Device(id, account, key, name, kind, model, bool(hidden), position, _json(meter), group, _json(rule))
+    id, account, key, name, kind, model, hidden, position, meter, group, rule, estimate = row
+    return Device(
+        id, account, key, name, kind, model, bool(hidden), position, _json(meter), group, _json(rule), bool(estimate)
+    )
 
 
 class HomeRepository:
@@ -126,7 +131,14 @@ class HomeRepository:
         return Device(cur.lastrowid, account, key, name, kind, model, False, position, {})
 
     def update_device(self, conn: sqlite3.Connection, device_id: int, **changes: Any) -> None:
-        columns = {"name": "name", "kind": "kind", "hidden": "hidden", "model": "model", "group": "group_name"}
+        columns = {
+            "name": "name",
+            "kind": "kind",
+            "hidden": "hidden",
+            "model": "model",
+            "group": "group_name",
+            "estimate": "estimate",
+        }
         allowed = {columns[k]: v for k, v in changes.items() if k in columns}
         if allowed:
             sets = ", ".join(f"{k} = ?" for k in allowed)

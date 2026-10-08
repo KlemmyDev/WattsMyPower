@@ -5,7 +5,8 @@ same, and it can look back (four weeks of history when it's connected).
 
 - The washer runs a 75-minute cycle on Wednesday evenings and weekend mornings: heating, washing, then a spin.
   It counts each cycle's energy from 0, as many appliances do.
-- The dryer starts a quarter of an hour after each wash and runs a heat-pump cycle for an hour and a half.
+- The dryer starts a quarter of an hour after each wash and runs a heat-pump cycle for an hour and a half. Like a
+  Hisense dryer on ConnectLife, it doesn't report its power, and only says what a cycle used once it's finished.
 - The fridge's compressor runs 15 minutes in every 40, on a lifetime counter.
 - The TV only reports its power, through its plug: on most evenings. Its plug can be switched off and on. Every
   eleventh day a heater shares its plug for a quarter of an hour, at 950 W: a power spike.
@@ -25,6 +26,7 @@ MIN = 60
 WASH = 75 * MIN
 DRY = 90 * MIN
 DRY_AFTER = 15 * MIN
+DRY_REPORTED = 5 * MIN  # how long after the dryer finishes it says what the cycle used
 FRIDGE_PERIOD, FRIDGE_ON = 40 * MIN, 15 * MIN
 FRIDGE_ON_W, FRIDGE_OFF_W = 120.0, 4.0
 FRIDGE_START_KWH = 1234.0  # what its lifetime counter had at FRIDGE_FROM
@@ -132,9 +134,10 @@ class Demo(Integration):
     def at(self, ts: float) -> list[Reading]:
         wash_start = _wash_start(ts)
         wash = _cycle(ts, wash_start, WASH)
-        dry = _cycle(ts, wash_start + WASH + DRY_AFTER if wash_start else None, DRY)
+        dry_start = wash_start + WASH + DRY_AFTER if wash_start else None
+        dry = _cycle(ts, dry_start, DRY)
         wash_kwh = _cycle_kwh(_wash_w, wash) if wash is not None else None
-        dry_kwh = _cycle_kwh(_dry_w, dry) if dry is not None else None
+        dried = dry_start is not None and _cycle(ts, dry_start + DRY, DRY_REPORTED) is not None
 
         periods, into = divmod(ts - FRIDGE_FROM, FRIDGE_PERIOD)
         on = into < FRIDGE_ON
@@ -175,8 +178,7 @@ class Demo(Integration):
                 key="dryer",
                 name="Laundry dryer",
                 kind="dryer",
-                power_w=_dry_w(dry) if dry is not None else 0.5,
-                energy_kwh=dry_kwh if dry_kwh is not None else 0.0,
+                energy_kwh=_cycle_kwh(_dry_w, DRY) if dried else 0.0,
                 counter="cycle",
                 running=dry is not None,
                 program="Cotton dry" if dry is not None else None,

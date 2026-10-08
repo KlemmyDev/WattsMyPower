@@ -372,6 +372,12 @@ def _home_peaks(conn: sqlite3.Connection) -> None:
     )
 
 
+def _home_estimate(conn: sqlite3.Connection) -> None:
+    """An appliance that doesn't report its power can show what its runs usually draw while it runs, estimated
+    (app.features.home.estimate): `estimate` 1 when that's on for it."""
+    conn.execute("ALTER TABLE home_devices ADD COLUMN estimate INTEGER NOT NULL DEFAULT 0")
+
+
 def _battery_controls(conn: sqlite3.Connection) -> None:
     """Each battery control as it ran: `kind` standby, floor or charge; `until` the end it was set for (null: until
     stopped); `ended_at` when it ended (null while it's in effect) and `ended_by` why (time, target, full, stopped,
@@ -412,6 +418,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _battery_controls,
     _battery_states,
     _home_peaks,
+    _home_estimate,
 ]
 
 

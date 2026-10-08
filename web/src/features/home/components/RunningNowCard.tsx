@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { kW, kWh } from "~/features/common/formatting/utils/number";
+import { kWh } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { homeQuery } from "~/features/home/api";
-import { deviceColors, kindIcon } from "~/features/home/utils";
+import { deviceColors, ESTIMATED, kindIcon, watts } from "~/features/home/utils";
 
 /**
  * On the Overview, while an appliance is running: each one with where its cycle is, how long is left (and when that
- * is), what it's drawing and what the run has used so far. Nothing at all while nothing is running.
+ * is), what it's drawing and what the run has used so far (estimated, for an appliance that doesn't report its power and
+ * has its estimate on). Nothing at all while nothing is running.
  */
 export function RunningNowCard() {
   const { data } = useQuery(homeQuery);
@@ -31,6 +32,7 @@ export function RunningNowCard() {
           const n = d.now!;
           const color = colors.get(d.id) ?? "var(--color-brand)";
           const left = n.remaining_min ? Math.round(n.remaining_min) : null;
+          const so_far = n.estimate && !(n.run && n.run.kwh > 0) ? n.estimate.kwh_so_far : n.run?.kwh;
           return (
             <li key={d.id} className="flex items-center gap-3 rounded-xl bg-surface-raised px-3.5 py-3">
               <span
@@ -47,12 +49,15 @@ export function RunningNowCard() {
                 >
                   {d.name}
                 </Link>
-                <span className="truncate text-[13px] text-ink-muted tabular-nums">
+                <span
+                  className="truncate text-[13px] text-ink-muted tabular-nums"
+                  title={n.estimated ? ESTIMATED : undefined}
+                >
                   {[
                     n.phase ?? "Running",
                     left != null ? `${left} min left, done about ${hhmm(n.at + left * 60)}` : null,
-                    n.power_w != null && n.power_w >= 2 ? kW(n.power_w) : null,
-                    n.run && n.run.kwh > 0 ? `${kWh(n.run.kwh)} so far` : null,
+                    n.power_w != null && n.power_w >= 2 ? watts(n.power_w, n.estimated) : null,
+                    so_far ? `${n.estimated ? "≈" : ""}${kWh(so_far)} so far` : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
