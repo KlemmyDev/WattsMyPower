@@ -7,7 +7,8 @@ same, and it can look back (four weeks of history when it's connected).
   It counts each cycle's energy from 0, as many appliances do.
 - The dryer starts a quarter of an hour after each wash and runs a heat-pump cycle for an hour and a half.
 - The fridge's compressor runs 15 minutes in every 40, on a lifetime counter.
-- The TV only reports its power, through its plug: on most evenings. Its plug can be switched off and on.
+- The TV only reports its power, through its plug: on most evenings. Its plug can be switched off and on. Every
+  eleventh day a heater shares its plug for a quarter of an hour, at 950 W: a power spike.
 """
 
 from __future__ import annotations
@@ -117,6 +118,7 @@ class Demo(Integration):
         lt = _local(ts)
         evening = 18 <= lt.tm_hour < 22 or (lt.tm_hour == 22 and lt.tm_min < 30)
         tv_on = evening and lt.tm_wday != 1  # not Tuesdays
+        heater = lt.tm_yday % 11 == 0 and lt.tm_hour == 19 and lt.tm_min < 15
         weekend = lt.tm_wday >= 5
         switched_off = bool(self.saved.get("tv_off"))
         return [
@@ -166,8 +168,9 @@ class Demo(Integration):
                 key="tv",
                 name="TV",
                 kind="plug",
-                power_w=0.0 if switched_off else 110.0 if tv_on else 0.8,
+                power_w=0.0 if switched_off else (950.0 if heater else 0.0) + (110.0 if tv_on else 0.8),
                 switched_on=not switched_off,
+                info={"Wi-Fi signal": "Good (−62 dBm)", "On today": "3 h 40 min", "Firmware": "1.4.8"},
                 raw={"simulated": True},
             ),
         ]

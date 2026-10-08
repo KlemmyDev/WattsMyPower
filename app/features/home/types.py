@@ -63,6 +63,8 @@ class Reading:
     switched_on: bool | None = None  # for a device that can be switched (a smart plug): whether it's on
     # Anything else worth showing, in words: {"Door": "Closed", "Temperature": "4 °C"}.
     details: Mapping[str, str] = field(default_factory=dict)
+    # About the device itself rather than what it's doing, for its own page: {"Signal": "Good", "Firmware": "1.4.8"}.
+    info: Mapping[str, str] = field(default_factory=dict)
     # The device's own properties as its integration sent them, for diagnosing a mapping (never shown to others).
     raw: Mapping[str, Any] = field(default_factory=dict)
 
