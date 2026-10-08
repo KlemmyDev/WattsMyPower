@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { intAU } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -42,19 +42,24 @@ export function when(o: Outage, now: number): string {
   return `${day(o.start)}, ${hhmm(o.start)} to ${end}`;
 }
 
-/** Where each outage sits around the house: the house in the middle, rings at thirds of the radius. */
+/**
+ * Where each outage sits around the house: the house in the middle, rings at thirds of the radius. Pointing at one
+ * says what it is, and fades the rest back; one that reaches the house ripples.
+ */
 function Radar({
   list,
   radius,
   home,
+  now,
   hover,
   onHover,
 }: {
   list: Outage[];
   radius: number;
   home: { lat: number; lon: number };
+  now: number;
   hover: string | null;
-  onHover: (id: string | null) => void;
+  onHover: (id: string | null, from: "radar") => void;
 }) {
   const R = 100;
   const kmPerLat = 111.32;
@@ -67,60 +72,105 @@ function Radar({
     return { x: (dx * k * R) / radius, y: (-dy * k * R) / radius };
   };
   const size = (o: Outage) => 3 + Math.min(6, Math.sqrt(o.customers ?? 1) / 3);
+  const shown = hover ? list.find((o) => o.id === hover) : undefined;
+  const at = shown ? place(shown) : null;
   return (
-    <svg
-      viewBox="-112 -112 224 224"
-      className="aspect-square w-full max-w-[240px] flex-none"
-      role="img"
-      aria-label="Outages around your house"
-    >
-      {[1, 2, 3].map((i) => (
-        <circle
-          key={i}
-          r={(R * i) / 3}
-          fill="none"
-          style={{ stroke: alpha(COLOR.fg, i === 3 ? 0.14 : 0.07) }}
-          strokeWidth="1"
-        />
-      ))}
-      <line x1="0" y1={-R} x2="0" y2={R} style={{ stroke: alpha(COLOR.fg, 0.05) }} />
-      <line x1={-R} y1="0" x2={R} y2="0" style={{ stroke: alpha(COLOR.fg, 0.05) }} />
-      <text x="0" y={-R - 4} textAnchor="middle" className="fill-ink-faint text-[9px]">
-        N
-      </text>
-      <text x={R - 2} y="-4" textAnchor="end" className="fill-ink-faint text-[8.5px]">
-        {radius} km
-      </text>
-      {/* Planned work first, so an outage in the same place is drawn over it. */}
-      {[...list]
-        .sort((a, b) => Number(!a.planned) - Number(!b.planned))
-        .map((o) => {
-          const p = place(o);
-          const c = o.planned ? PLANNED : UNPLANNED;
-          const on = hover === o.id;
-          return (
-            <g
-              key={o.id}
-              onPointerEnter={() => onHover(o.id)}
-              onPointerLeave={() => onHover(null)}
-              className="cursor-default"
-            >
-              <title>{`${suburbsOf(o)} · ${o.distance_km} km ${o.direction}`}</title>
-              {o.affects && (
-                <circle cx={p.x} cy={p.y} r={size(o) + 4} fill="none" style={{ stroke: c }} strokeWidth="1.5" />
-              )}
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={size(o) + (on ? 1.5 : 0)}
-                style={{ fill: alpha(c, on ? 0.95 : 0.75), stroke: "var(--color-surface)" }}
-                strokeWidth="1.5"
-              />
-            </g>
-          );
-        })}
-      <circle r="5" style={{ fill: COLOR.ink, stroke: "var(--color-surface)" }} strokeWidth="2" />
-    </svg>
+    <div className="relative w-full max-w-[240px] flex-none">
+      <svg
+        viewBox="-112 -112 224 224"
+        className="aspect-square w-full"
+        role="img"
+        aria-label="Outages around your house"
+      >
+        {[1, 2, 3].map((i) => (
+          <circle
+            key={i}
+            r={(R * i) / 3}
+            fill="none"
+            style={{ stroke: alpha(COLOR.fg, i === 3 ? 0.14 : 0.07) }}
+            strokeWidth="1"
+          />
+        ))}
+        <line x1="0" y1={-R} x2="0" y2={R} style={{ stroke: alpha(COLOR.fg, 0.05) }} />
+        <line x1={-R} y1="0" x2={R} y2="0" style={{ stroke: alpha(COLOR.fg, 0.05) }} />
+        <text x="0" y={-R - 4} textAnchor="middle" className="fill-ink-faint text-[9px]">
+          N
+        </text>
+        <text x={R - 2} y="-4" textAnchor="end" className="fill-ink-faint text-[8.5px]">
+          {radius} km
+        </text>
+        {/* Planned work first, so an outage in the same place is drawn over it. */}
+        {[...list]
+          .sort((a, b) => Number(!a.planned) - Number(!b.planned))
+          .map((o) => {
+            const p = place(o);
+            const c = o.planned ? PLANNED : UNPLANNED;
+            const on = hover === o.id;
+            return (
+              <g
+                key={o.id}
+                onPointerEnter={() => onHover(o.id, "radar")}
+                onPointerLeave={() => onHover(null, "radar")}
+                className={cn("cursor-default transition-opacity duration-200", hover && !on && "opacity-35")}
+              >
+                {o.affects && (
+                  <>
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={size(o) + 4}
+                      className="radar-ripple"
+                      style={{ fill: alpha(c, 0.35) }}
+                    />
+                    <circle cx={p.x} cy={p.y} r={size(o) + 4} fill="none" style={{ stroke: c }} strokeWidth="1.5" />
+                  </>
+                )}
+                {/* A wider target than the dot, so a small one is easy to point at. */}
+                <circle cx={p.x} cy={p.y} r={Math.max(9, size(o) + 4)} fill="transparent" />
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={size(o) + (on ? 2 : 0)}
+                  className="transition-[r] duration-200 ease-out-soft"
+                  style={{ fill: alpha(c, on ? 1 : 0.75), stroke: "var(--color-surface)" }}
+                  strokeWidth="1.5"
+                />
+              </g>
+            );
+          })}
+        <circle r="5" style={{ fill: COLOR.ink, stroke: "var(--color-surface)" }} strokeWidth="2" />
+      </svg>
+      {shown && at && (
+        <div
+          className="pointer-events-none absolute z-2 flex w-[200px] animate-pop flex-col gap-1 rounded-xl border border-line bg-popover px-3.5 py-3 text-[12.5px] leading-[18px] shadow-pop"
+          style={{
+            top: `${((at.y + 112) / 224) * 100}%`,
+            ...(at.x > 0
+              ? { right: `${((112 - at.x) / 224) * 100}%`, marginRight: 14 }
+              : { left: `${((at.x + 112) / 224) * 100}%`, marginLeft: 14 }),
+            transform: "translateY(-50%)",
+          }}
+        >
+          <span className="flex items-center gap-1.5 font-medium text-ink">
+            <i
+              aria-hidden
+              className="size-2 flex-none rounded-full"
+              style={{ background: shown.planned ? PLANNED : UNPLANNED }}
+            />
+            <span className="truncate">{suburbsOf(shown)}</span>
+          </span>
+          <span className="text-ink-muted">{when(shown, now)}</span>
+          <span className="text-ink-faint tabular-nums">
+            {shown.affects
+              ? shown.affects === "street"
+                ? "Your street"
+                : "Your area"
+              : `${shown.distance_km} km ${shown.direction}`}
+            {shown.customers ? ` · ${intAU(shown.customers)} ${shown.customers === 1 ? "home" : "homes"}` : ""}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -133,13 +183,14 @@ function Row({
   o: Outage;
   now: number;
   hover: boolean;
-  onHover: (id: string | null) => void;
+  onHover: (id: string | null, from: "row") => void;
 }) {
   const c = o.planned ? PLANNED : UNPLANNED;
   return (
     <li
-      onPointerEnter={() => onHover(o.id)}
-      onPointerLeave={() => onHover(null)}
+      data-outage={o.id}
+      onPointerEnter={() => onHover(o.id, "row")}
+      onPointerLeave={() => onHover(null, "row")}
       className={cn("flex items-start gap-3 rounded-xl px-2.5 py-2 transition-colors", hover && "bg-fg/5")}
     >
       <span aria-hidden className="mt-1.5 size-2 flex-none rounded-full" style={{ background: c }} />
@@ -185,7 +236,19 @@ export function OutagesCard({
   const [tab, setTab] = useState<"now" | "planned">(() =>
     view.now.length || !view.planned.some((o) => o.affects) ? "now" : "planned",
   );
-  const [hover, setHover] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ id: string; from: "radar" | "row" } | null>(null);
+  const onHover = (id: string | null, from: "radar" | "row") => setHover(id ? { id, from } : null);
+  const rows = useRef<HTMLUListElement>(null);
+  // Pointing at a dot on the radar brings its row into view in the list, without moving the page.
+  useEffect(() => {
+    const ul = rows.current;
+    if (hover?.from !== "radar" || !ul) return;
+    const li = ul.querySelector<HTMLElement>(`[data-outage="${CSS.escape(hover.id)}"]`);
+    if (!li) return;
+    const top = li.offsetTop; // from the list's top: it's positioned
+    if (top < ul.scrollTop || top + li.offsetHeight > ul.scrollTop + ul.clientHeight)
+      ul.scrollTo({ top: top - ul.clientHeight / 2 + li.offsetHeight / 2, behavior: "smooth" });
+  }, [hover]);
   const save = useSaveSettings();
   // The radius just chosen, until the page has the outages for it.
   const radius = save.isPending ? (save.variables?.outage_radius_km ?? view.radius_km) : view.radius_km;
@@ -243,12 +306,17 @@ export function OutagesCard({
       </div>
       {net ? (
         <div className="flex items-start gap-6 max-md:flex-col max-md:items-center">
-          {home && <Radar list={list} radius={radius} home={home} hover={hover} onHover={setHover} />}
+          {home && (
+            <Radar list={list} radius={radius} home={home} now={now} hover={hover?.id ?? null} onHover={onHover} />
+          )}
           <div className="flex min-w-0 flex-1 flex-col gap-2 self-stretch">
             {list.length ? (
-              <ul className="-mx-2.5 grid max-h-[280px] grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] content-start gap-x-4 overflow-y-auto">
+              <ul
+                ref={rows}
+                className="relative -mx-2.5 grid max-h-[280px] grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] content-start gap-x-4 overflow-y-auto"
+              >
                 {list.map((o) => (
-                  <Row key={o.id} o={o} now={now} hover={hover === o.id} onHover={setHover} />
+                  <Row key={o.id} o={o} now={now} hover={hover?.id === o.id} onHover={onHover} />
                 ))}
               </ul>
             ) : (

@@ -568,12 +568,12 @@ function NoticeRow({ n }: { n: MarketNotice }) {
     !n.active || n.level === "info" ? alpha(COLOR.fg, 0.25) : n.level === "critical" ? COLOR.danger : COLOR.warn;
   const when = new Date(n.at * 1000).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" });
   return (
-    <li className="border-b border-line-subtle py-2.5 last:border-0">
+    <li className="border-b border-line-subtle py-1 last:border-0">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-start gap-2.5 text-left"
+        className="group -mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-fg/4"
       >
         <span aria-hidden className="mt-1.5 size-2 flex-none rounded-full" style={{ background: color }} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -586,11 +586,14 @@ function NoticeRow({ n }: { n: MarketNotice }) {
         <Icon
           name="chevD"
           size={14}
-          className={cn("mt-1 flex-none text-ink-faint transition-transform", open && "rotate-180")}
+          className={cn(
+            "mt-1 flex-none text-ink-faint transition-[transform,color] group-hover:text-ink",
+            open && "rotate-180",
+          )}
         />
       </button>
       {open && (
-        <div className="flex flex-col gap-2 pt-2 pl-[18px] text-[12.5px] leading-[18px] text-ink-muted">
+        <div className="flex flex-col gap-2 pt-1 pb-1.5 pl-[18px] text-[12.5px] leading-[18px] text-ink-muted">
           <span className="text-ink-soft">{NOTICE_HELP[n.kind]}</span>
           <pre className="max-h-64 overflow-auto font-sans whitespace-pre-wrap">{n.body}</pre>
         </div>
