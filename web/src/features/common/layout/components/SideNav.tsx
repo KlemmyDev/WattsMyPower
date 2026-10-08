@@ -169,13 +169,27 @@ function Circuit({
               <span className="circuit-lit" style={{ top: wire.litTop, height: wire.lit }} />
             </span>
           )}
-          {NAV_GROUPS.map((g, gi) => (
+          {items
+            .filter((i) => !i.group)
+            .map((i) => (
+              <CircuitLink
+                key={i.to}
+                to={i.to}
+                icon={i.icon}
+                label={i.label}
+                value={value[i.to]}
+                color={i.color}
+                full={full}
+                on={current === i.to}
+                lit={at >= 0 && items.indexOf(i) <= at}
+              />
+            ))}
+          {NAV_GROUPS.map((g) => (
             <Fragment key={g}>
               <div
                 className={cn(
                   "text-[11px] font-semibold tracking-[0.08em] text-ink-faint uppercase",
-                  full ? "pb-1.5 pl-[38px]" : "h-2",
-                  full && (gi ? "pt-4" : "pt-0.5"),
+                  full ? "pt-4 pb-1.5 pl-[38px]" : "h-2",
                 )}
               >
                 {full ? g : <span className="sr-only">{g}</span>}

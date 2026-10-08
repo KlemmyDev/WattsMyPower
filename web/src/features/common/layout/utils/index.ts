@@ -8,12 +8,15 @@ export type Section = "/" | "/solar" | "/home" | "/grid" | "/history" | "/plan" 
 export type NavGroup = "Live" | "Over time";
 export const NAV_GROUPS: NavGroup[] = ["Live", "Over time"];
 
-/** `color`: the section's own colour, its node's glow once the wire's power reaches it. */
-export type NavItem = { to: Section; label: string; icon: IconName; group: NavGroup; color: string };
+/**
+ * `color`: the section's own colour, its node's glow once the wire's power reaches it. `group`: none for Overview,
+ * which sits on its own at the top, above the groups.
+ */
+export type NavItem = { to: Section; label: string; icon: IconName; group?: NavGroup; color: string };
 
-/** The main sections, group by group, in the order the navigation shows them. Settings sits apart, at the end. */
+/** The main sections, Overview then group by group, in the order the navigation shows them. Settings sits apart, at the end. */
 export const NAV: NavItem[] = [
-  { to: "/", label: "Overview", icon: "layout", group: "Live", color: COLOR.solar },
+  { to: "/", label: "Overview", icon: "layout", color: COLOR.solar },
   { to: "/solar", label: "Solar", icon: "sun", group: "Live", color: COLOR.solar },
   { to: "/home", label: "Home", icon: "home", group: "Live", color: COLOR.teal },
   { to: "/battery", label: "Battery", icon: "battery", group: "Live", color: COLOR.battery },
