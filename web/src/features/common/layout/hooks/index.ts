@@ -7,6 +7,7 @@ import { kW } from "~/features/common/formatting/utils/number";
 import { NAV, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
+import { useIntegrationNavPages } from "~/features/integrations/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
 
@@ -99,9 +100,10 @@ export function useMedia(query: string): boolean {
 /** Where the side nav docks in full (the `xl` breakpoint); below it, it's a rail, or a menu on a phone. */
 export const NAV_DOCKED = "(min-width: 1000px)";
 
-/** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills…). */
+/** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills, System…). */
 export function useSectionPages(section: string): SectionPages | null {
   const home = useHomeNavPages(section === "/home");
+  const integrations = useIntegrationNavPages(section === "/integrations");
   const load = useSnapshot()?.load_power;
   const path = useRouterState({ select: (s) => s.location.pathname });
   if (section === "/home" && home.length)
@@ -110,6 +112,13 @@ export function useSectionPages(section: string): SectionPages | null {
       sub: load != null && load > 0 ? `Using ${kW(load)} now` : "Where your home's power goes",
       root: { link: { to: "/home" }, label: "Whole home", active: path === "/home" },
       pages: home,
+    };
+  if (section === "/integrations")
+    return {
+      title: "Integrations",
+      sub: "Your inverters, smart home, cars, and the services the dashboard reads",
+      root: { link: { to: "/integrations" }, label: "All", active: path === "/integrations" },
+      pages: integrations,
     };
   return null;
 }

@@ -31,7 +31,7 @@ export const NAV_GROUPS: NavGroup[] = ["Live", "Over time", "Manage"];
  * which sits on its own at the top, above the groups.
  */
 /** Manage's colour: quiet, as it powers nothing. */
-const MANAGE_COLOR = COLOR.gridSoft;
+export const MANAGE_COLOR = COLOR.gridSoft;
 
 export type NavItem = { to: Section; label: string; icon: IconName; group?: NavGroup; color: string };
 
