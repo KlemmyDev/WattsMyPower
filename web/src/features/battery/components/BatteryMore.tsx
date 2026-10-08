@@ -68,7 +68,7 @@ function Split({
             tabIndex={0}
             {...bar(x.key)}
             className={cn(
-              "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none transition-[background-color,opacity] duration-200",
+              "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-[background-color,opacity] duration-200 outline-none",
               hover === x.key && "bg-fg/5 text-ink",
               !lit(x.key) && "opacity-55",
             )}
