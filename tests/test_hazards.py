@@ -187,3 +187,23 @@ def test_outside_queensland_and_turned_off(settings: SettingsStore) -> None:
     settings.save({"hazard_warnings": 0})
     v = _service(settings).view()
     assert not v["enabled"] and v["weather"] == [] and v["fires"] == []
+
+
+def test_each_source_says_whether_it_answered(settings: SettingsStore) -> None:
+    class Down:
+        def files(self, folder: str, match: Callable[[str], bool]) -> dict[str, bytes]:
+            raise OSError("FTP refused")
+
+    fires = [f for f in (qfd.fire(x) for x in FIRES) if f]
+    svc = HazardService(settings, lambda: "QLD1", ftp=Down(), fires=lambda: fires, clock=lambda: NOW)  # type: ignore[arg-type]
+    assert svc.view()["fetched_at"] is None  # not asked yet: checking
+    svc.refresh()
+    v = svc.view()
+    # The Fire Department answered and the Bureau didn't: "couldn't ask", not "no warnings".
+    assert v["sources"]["qfd"] == {"at": NOW, "error": None}
+    assert v["sources"]["bom"]["at"] is None and "couldn't be reached" in v["sources"]["bom"]["error"]
+    assert v["fetched_at"] is None and v["weather"] == [] and v["fires"]
+    svc.ftp = Ftp()  # type: ignore[assignment]
+    svc.refresh()
+    v = svc.view()
+    assert v["fetched_at"] == NOW and v["error"] is None and v["sources"]["bom"]["error"] is None
