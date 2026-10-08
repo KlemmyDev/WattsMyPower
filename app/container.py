@@ -8,6 +8,7 @@ module-level state, so each feature can be built, replaced or tested on its own.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.core.config import Config
 from app.core.database import Database
@@ -122,6 +123,6 @@ def build_services(config: Config) -> Services:
             CollectorRegisters(collector) if collector else MockRegisters(source.inverter),  # type: ignore[union-attr]
             planner=ForecastPlanner(forecast, tariffs, amber.repo, settings),
         ),
-        updates=UpdateService(settings),
+        updates=UpdateService(settings, Path(config.db_path).parent / "update"),
         source=source,
     )

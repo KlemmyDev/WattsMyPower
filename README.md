@@ -136,9 +136,12 @@ Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `
 | `docker compose stop` | stop it |
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
+| `bash install.sh --no-dashboard-updates` | update, and stop updating from the dashboard (removes the cron job below) |
 | `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `TZ=Australia/Perth bash install.sh --yes`. On a first install, `PV_KW=10` sets the array size and `INVERTER_HOST=192.168.1.20` connects the inverter, without the dashboard. |
 
 **Updating** pulls the latest version, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
+
+**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version (**Settings → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Settings says why and shows the command to run instead.
 
 **Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
@@ -444,6 +447,7 @@ app/
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
+updater.sh              run every minute by cron: updates when the dashboard asks (Settings → System → Updates)
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
 ```

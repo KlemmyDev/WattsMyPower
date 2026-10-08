@@ -21,4 +21,24 @@ export type UpdateStatus = {
   error: string | null;
   repo: string;
   branch: string;
+  /** Updating from here, by updater.sh on the machine it's installed on. */
+  install: Installer;
+};
+
+/**
+ * updater.sh: whether it's there and can update (`ready`, else `why`), and how an update is going. `state`: idle;
+ * requested (it starts within a minute); running; done, failed or expired (asked for while it wasn't running), for a
+ * while after. `log`: the end of install.sh's output while it runs, or when it failed.
+ */
+export type Installer = {
+  ready: boolean;
+  why: string | null;
+  state: "idle" | "requested" | "running" | "done" | "failed" | "expired";
+  started_at: number | null;
+  finished_at: number | null;
+  /** The commits before and after. */
+  from: string | null;
+  to: string | null;
+  error: string | null;
+  log: string[];
 };
