@@ -7,7 +7,7 @@ export type Settings = {
   bill_day: number;
   bill_anchor: number;
   /**
-   * What comes off each bill (Manage → Bills & rates): the retailer's discount (%) off usage, or off usage and the supply
+   * What comes off each bill (Bills → Rates & settings): the retailer's discount (%) off usage, or off usage and the supply
    * charge; credits a year in dollars (concessions, government rebates), spread over the days; and a budget a bill in
    * dollars, for the Bills page and its alert. 0 = none.
    */

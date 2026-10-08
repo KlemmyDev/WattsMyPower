@@ -9,7 +9,6 @@ import pytest
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.alerts.rules import BY_ID, Facts, RuleState
 from app.features.grid.outages.energyq import outage, qld_time
 from app.features.grid.outages.service import OutageService, bearing, distance_km, inside, street_key
 from app.features.settings.store import SettingsStore
@@ -162,41 +161,3 @@ def test_reasons_for_the_outlook(settings: SettingsStore) -> None:
     assert kinds["planned_here"]["level"] == "warning"  # tomorrow
     assert kinds["planned_here"]["title"] == "Planned outage at your street tomorrow"
     assert "outages_nearby" not in kinds  # the only unplanned one within the radius is ours
-
-
-# -- alerts --------------------------------------------------------------------------------------
-def _facts(reasons: list[dict[str, Any]], soc: float = 55.0) -> Facts:
-    return Facts(
-        now=NOW,
-        snapshot={"ts": NOW, "battery_soc": soc},
-        hybrid_connected=True,
-        last_success=NOW,
-        error=None,
-        poll_interval=60,
-        pv2=None,
-        reserve=5.0,
-        sun=30.0,
-        daylight_since=NOW - 4 * 3600,
-        grid=lambda: {"level": "watch", "reasons": reasons},
-    )
-
-
-def test_outage_alerts(settings: SettingsStore) -> None:
-    reasons = _service(settings).reasons()
-    out = BY_ID["power_outage"].check(_facts(reasons), {}, RuleState("power_outage"))
-    assert out.state == "bad" and out.title == "Power outage at your street"
-    assert BY_ID["power_outage"].check(_facts([]), {}, RuleState("power_outage")).state == "ok"
-
-    rule = BY_ID["planned_outage"]
-    told = rule.check(_facts(reasons), rule.values(), RuleState("planned_outage"))
-    assert told.state == "report" and "charge it from the grid" in told.message
-    again = rule.check(_facts(reasons), rule.values(), RuleState("planned_outage", data=told.data or {}))
-    assert again.state == "unknown"  # told once
-    assert rule.check(_facts(reasons), {"hours": 6}, RuleState("planned_outage")).state == "unknown"  # not yet
-
-    nearby = [
-        {"kind": "outages_nearby", "level": "watch", "title": "4 power outages within 15 km", "detail": "x", "count": 4}
-    ]
-    rule = BY_ID["outages_nearby"]
-    assert rule.check(_facts(nearby), rule.values(), RuleState("outages_nearby")).state == "bad"
-    assert rule.check(_facts(nearby), {"count": 5}, RuleState("outages_nearby")).state == "unknown"

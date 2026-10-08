@@ -28,7 +28,7 @@ export function SectionPagesStrip() {
     <nav
       ref={row}
       aria-label={`${pages.title} pages`}
-      className="relative flex max-w-full [scrollbar-width:none] items-center gap-0.5 self-start overflow-x-auto overscroll-x-contain rounded-full border border-chip-line bg-chip p-1 xl:hidden [&::-webkit-scrollbar]:hidden"
+      className="relative flex max-w-full [scrollbar-width:none] items-center gap-0.5 self-start overflow-x-auto overscroll-x-contain rounded-full border border-chip-line bg-chip p-1 md:max-w-[calc(100%-16rem)] xl:hidden [&::-webkit-scrollbar]:hidden"
     >
       <span
         aria-hidden

@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { billsQuery } from "~/features/bills/api";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { ButtonLink } from "~/features/common/ui/components/Button";
+import { Icon } from "~/features/common/ui/components/Icon";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { TitleBlock } from "~/features/common/ui/components/Card";
 import { BillsOverTime } from "~/features/bills/components/BillsOverTime";
@@ -25,6 +27,13 @@ export function BillsPage() {
       <PageHeader
         title="Bills"
         sub="This billing period: what it's costing, which days drove it, and how to pay less"
+        action={
+          // Below xl the row of pills over the page has it.
+          <ButtonLink to="/bills/rates" variant="chip" className="flex-none gap-2 px-3.5 py-1.5 max-xl:hidden">
+            <Icon name="tag" size={15} />
+            Rates & settings
+          </ButtonLink>
+        }
       />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] items-stretch gap-5">
         <CurrentBill bills={bills} failed={isError} />

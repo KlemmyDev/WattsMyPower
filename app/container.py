@@ -12,7 +12,6 @@ from pathlib import Path
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.alerts.service import AlertsService
 from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.battery.service import BatteryService, CollectorRegisters, ForecastPlanner
@@ -69,7 +68,6 @@ class Services:
     storage: StorageService
     onboarding: OnboardingService
     live: LiveService
-    alerts: AlertsService
     battery: BatteryService
     updates: UpdateService
     grid: GridService
@@ -125,9 +123,6 @@ def build_services(config: Config) -> Services:
         storage=StorageService(config, db, collector),
         onboarding=OnboardingService(config, db, integrations),
         live=live,
-        alerts=AlertsService(
-            db, live, settings, readings, tariffs, insights, prices=amber.repo, bills=bills, grid=grid.outlook
-        ),
         battery=BatteryService(
             db,
             live,

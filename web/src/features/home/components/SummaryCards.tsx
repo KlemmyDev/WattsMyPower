@@ -112,7 +112,7 @@ export function ChangesCard({ changes }: { changes: HomeInsights["changes"] | un
 }
 
 /**
- * The current bill against its budget (Manage → Bills & rates: the same budget, set here or there), and what's always on
+ * The current bill against its budget (Bills → Rates & settings: the same budget, set here or there), and what's always on
  * against a target. Each can be set here.
  */
 export function GoalsCard({ standbyW }: { standbyW: number | null | undefined }) {

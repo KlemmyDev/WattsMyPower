@@ -112,7 +112,7 @@ export function Dock() {
 }
 
 /**
- * The same power flow, always in the side nav above its live chip, opening Overview. In full, solar → home ← grid on a
+ * The same power flow, always at the foot of the side nav, opening Overview. In full, solar → home ← grid on a
  * row, with the battery under them; on the rail, a column of each reading under its icon.
  */
 export function NavPower({ full }: { full: boolean }) {

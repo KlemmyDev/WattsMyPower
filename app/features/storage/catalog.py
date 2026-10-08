@@ -20,7 +20,7 @@ GROUPS: dict[str, tuple[str, str]] = {
     "readings": ("Readings", "Your inverters' figures, decoded: power, energy counters, battery, temperatures."),
     "weather": ("Weather and forecast", "Hourly weather from Open-Meteo, and the day-ahead solar forecast."),
     "prices": ("Electricity prices", "Amber's prices for each interval, when a tariff follows them."),
-    "meter": ("Smart meter", "Interval readings from smart-meter (NEM12) files imported in Manage → Bills & rates."),
+    "meter": ("Smart meter", "Interval readings from smart-meter (NEM12) files imported in Bills → Rates & settings."),
     "imports": ("Imported history", "History imported from files, and the recorded readings an import replaced."),
     "cars": ("Electric cars", "The cars connected, their planned charges, and battery levels given."),
     "home": (

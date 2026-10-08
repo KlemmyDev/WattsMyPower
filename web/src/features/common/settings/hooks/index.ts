@@ -32,8 +32,6 @@ export function useSaveSettings() {
         qc.invalidateQueries({ queryKey: ["weather"] });
       }
       if (BILL_SETTINGS.some((k) => k in changes)) qc.invalidateQueries({ queryKey: ["bills"] });
-      // The bill alert says whether it has a budget to watch.
-      if ("bill_budget" in changes) qc.invalidateQueries({ queryKey: ["alerts"] });
       if (SYSTEM_SETTINGS.some((k) => k in changes)) {
         // The capacity and reserve in use also depend on what the inverter reports: fetch them afresh.
         qc.invalidateQueries({ queryKey: liveQuery.queryKey });

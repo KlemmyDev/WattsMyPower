@@ -1,4 +1,4 @@
-"""The grid (app.features.grid): AEMO's market data and notices, made up here, and the outlook and alerts from them."""
+"""The grid (app.features.grid): AEMO's market data and notices, made up here, and the outlook from them."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import pytest
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.alerts.rules import BY_ID, Facts, RuleState
 from app.features.grid.aemo import AemoClient, AemoError, nem_time, notice
 from app.features.grid.service import GridService, region_at
 from app.features.settings.store import SettingsStore
@@ -193,49 +192,6 @@ def test_the_inverter_and_the_weather_count_too(settings: SettingsStore) -> None
     assert high["level"] == "watch" and high["reasons"][0]["kind"] == "voltage_high"
     calm = _grid(settings, {"ts": NOW, "running_state": 0, "grid_voltage": 241.0, "grid_freq": 50.01}).outlook()
     assert calm == {"level": "normal", "reasons": []}
-
-
-# -- alerts --------------------------------------------------------------------------------
-def _facts(snap: dict[str, Any], grid: dict[str, Any] | None = None) -> Facts:
-    return Facts(
-        now=NOW,
-        snapshot={"ts": NOW, **snap},
-        hybrid_connected=True,
-        last_success=NOW,
-        error=None,
-        poll_interval=60,
-        pv2=None,
-        reserve=5.0,
-        sun=10.0,
-        daylight_since=NOW - 8 * 3600,
-        grid=lambda: grid,
-    )
-
-
-def test_grid_down_alert() -> None:
-    rule = BY_ID["grid_down"]
-    v = rule.values()
-    down = rule.check(_facts({"running_state": 0x1000, "battery_soc": 72.0}), v, RuleState("grid_down"))
-    assert down.state == "bad" and "72%" in down.message
-    assert rule.check(_facts({"running_state": 0}), v, RuleState("grid_down")).state == "ok"
-
-
-def test_blackout_risk_alert(settings: SettingsStore) -> None:
-    rule = BY_ID["grid_warning"]
-    grid = _grid(settings)
-    grid.refresh()
-    bad = rule.check(_facts({"battery_soc": 45.0}, grid.outlook()), {}, RuleState("grid_warning"))
-    assert bad.state == "bad" and bad.title == "Low reserve warning" and "charging it from the grid" in bad.message
-    calm = {"level": "watch", "reasons": [{"kind": "spike", "level": "watch", "title": "x", "detail": "y"}]}
-    assert rule.check(_facts({}, calm), {}, RuleState("grid_warning")).state == "ok"  # a price spike alone isn't one
-
-
-def test_high_voltage_alert() -> None:
-    rule = BY_ID["grid_voltage"]
-    v = rule.values()
-    assert rule.check(_facts({"grid_voltage": 258.0}), v, RuleState("grid_voltage")).state == "bad"
-    assert rule.check(_facts({"grid_voltage": 249.0}), v, RuleState("grid_voltage")).state == "ok"
-    assert rule.check(_facts({"grid_voltage": 0.0}), v, RuleState("grid_voltage")).state == "unknown"
 
 
 def test_api(settings: SettingsStore, config: Config) -> None:
