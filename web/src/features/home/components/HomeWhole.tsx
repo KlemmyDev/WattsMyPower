@@ -8,11 +8,13 @@ import { costsQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
+import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
-import { TooltipRow } from "~/features/common/ui/components/ChartHover";
+import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
+import { cn } from "~/features/common/ui/utils";
 import type { Forecast } from "~/features/common/weather/types";
 import { dailyQuery } from "~/features/history/api";
 import { buildDays, hasData, type DataDay } from "~/features/history/utils/year";
@@ -284,29 +286,7 @@ export function HomeSourcesCard({
         )}
       </div>
       {home > 0 ? (
-        <>
-          <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
-            {parts
-              .filter((x) => x.kwh > 0.005)
-              .map((x) => (
-                <span
-                  key={x.key}
-                  className="h-full transition-[flex-grow] duration-700 ease-out-soft first:rounded-l-full last:rounded-r-full"
-                  style={{ flexGrow: x.kwh, background: x.color } as CSSProperties}
-                />
-              ))}
-          </div>
-          <ul className="flex flex-col gap-2">
-            {parts.map((x) => (
-              <li key={x.key} className="flex items-center gap-2.5 text-[13.5px]">
-                <i aria-hidden className="size-2 rounded-full" style={{ background: x.color }} />
-                <span className="flex-1 text-ink-soft">{x.label}</span>
-                <span className="text-ink-faint tabular-nums">{pct((x.kwh / home) * 100)}</span>
-                <span className="w-16 text-right text-ink tabular-nums">{kWh(x.kwh)}</span>
-              </li>
-            ))}
-          </ul>
-        </>
+        <Breakdown parts={parts} total={home} />
       ) : (
         <div className="text-[13px] text-ink-faint">No home use recorded yet today.</div>
       )}
@@ -325,6 +305,7 @@ export function HomeSourcesCard({
  */
 export function HomeDaysCard({ days }: { days: DataDay[] }) {
   const whole = days.filter((d) => !d.partial);
+  const { hover: h, width, plot, bar } = useBarHover();
   if (!whole.length) return null;
   const top = Math.max(1, ...whole.map((d) => d.home)) * 1.05;
   const avg = (list: DataDay[]) => (list.length ? list.reduce((a, d) => a + d.home, 0) / list.length : null);
@@ -355,27 +336,51 @@ export function HomeDaysCard({ days }: { days: DataDay[] }) {
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="flex h-32 items-end gap-1 max-sm:gap-0.5">
+        <div className="relative flex h-32 items-end gap-1 max-sm:gap-0.5" {...plot}>
           {whole.map((d, i) => (
-            <div
+            // The day's column, the full height of the chart, so a small day is as easy to point at as a big one.
+            <button
               key={d.key}
-              className="bar-grow flex min-w-0 flex-1 flex-col-reverse overflow-hidden rounded-[4px_4px_2px_2px]"
-              style={{ height: `${(d.home / top) * 100}%`, "--i": i } as CSSProperties}
-              title={`${shortDay.format(parseYmd(d.key))}: ${kWh(d.home)} (solar ${kWh(d.direct)}, battery ${kWh(d.battery)}, grid ${kWh(d.imp)})`}
+              type="button"
+              {...bar(i)}
+              aria-label={`${shortDay.format(parseYmd(d.key))}: ${kWh(d.home)} (solar ${kWh(d.direct)}, battery ${kWh(d.battery)}, grid ${kWh(d.imp)})`}
+              className={cn(
+                "flex h-full min-w-0 flex-1 cursor-default items-end border-0 bg-transparent p-0 transition-opacity duration-200",
+                h != null && h !== i && "opacity-45",
+              )}
             >
-              {[
-                [d.direct, SOURCES.solar],
-                [d.battery, SOURCES.battery],
-                [Math.max(0, d.home - d.direct - d.battery), SOURCES.grid],
-              ].map(([v, c], k) => (
-                <i
-                  key={k}
-                  className="block w-full flex-none"
-                  style={{ height: `${d.home ? ((v as number) / d.home) * 100 : 0}%`, background: c as string }}
-                />
-              ))}
-            </div>
+              <span
+                className="bar-grow flex w-full flex-col-reverse overflow-hidden rounded-[4px_4px_2px_2px]"
+                style={{ height: `${(d.home / top) * 100}%`, "--i": i } as CSSProperties}
+              >
+                {[
+                  [d.direct, SOURCES.solar],
+                  [d.battery, SOURCES.battery],
+                  [Math.max(0, d.home - d.direct - d.battery), SOURCES.grid],
+                ].map(([v, c], k) => (
+                  <i
+                    key={k}
+                    className="block w-full flex-none"
+                    style={{ height: `${d.home ? ((v as number) / d.home) * 100 : 0}%`, background: c as string }}
+                  />
+                ))}
+              </span>
+            </button>
           ))}
+          {h != null && (
+            <ChartTooltip left={((h + 0.5) / whole.length) * 100} flip={h > whole.length / 2} width={width}>
+              <span className="font-medium text-ink">{shortDay.format(parseYmd(whole[h].key))}</span>
+              <TooltipRow label="Solar" value={kWh(whole[h].direct)} color={SOURCES.solar} />
+              <TooltipRow label="Battery" value={kWh(whole[h].battery)} color={SOURCES.battery} />
+              <TooltipRow
+                label="Grid"
+                value={kWh(Math.max(0, whole[h].home - whole[h].direct - whole[h].battery))}
+                color={SOURCES.grid}
+              />
+              <TooltipRow label="Home used" value={kWh(whole[h].home)} />
+              <TooltipRow label="Self-powered" value={pct(whole[h].ss * 100)} />
+            </ChartTooltip>
+          )}
         </div>
         <div className="flex justify-between font-mono text-[11px] text-ink-faint">
           {[whole[0], whole[whole.length - 1]].map((d) => (

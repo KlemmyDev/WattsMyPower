@@ -195,6 +195,14 @@ DASHBOARD: dict[str, Table] = {
         Spec("ts", _DEVICE.format("home_energy")),
         grows=True,
     ),
+    "home_peaks": Table(
+        "home",
+        "Device peaks",
+        "The most each device drew in every 5 minutes, for the power spikes on its page and its room's.",
+        "Kept for good",
+        Spec("ts", _DEVICE.format("home_peaks")),
+        grows=True,
+    ),
     "home_runs": Table(
         "home",
         "Appliance runs",
