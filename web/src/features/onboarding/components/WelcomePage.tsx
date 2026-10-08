@@ -39,7 +39,7 @@ export function WelcomePage({ step }: { step: StepId | undefined }) {
   const current = step ?? resumeAt(onboarding);
   const index = STEPS.findIndex((s) => s.id === current);
   const last = index === STEPS.length - 1;
-  // Opened again from Settings after it was finished: leaving it just goes back.
+  // Opened again from System after it was finished: leaving it just goes back.
   const finished = !!onboarding?.complete;
 
   const go = (to: StepId) => navigate({ to: "/welcome", search: { step: to } });
@@ -47,7 +47,7 @@ export function WelcomePage({ step }: { step: StepId | undefined }) {
   const leave = () => {
     if (!finished) {
       mark.mutate({ dismissed: true });
-      toast("No problem. The set-up guide is in Settings whenever you want it.");
+      toast("No problem. The set-up guide is in Manage → System whenever you want it.");
     }
     navigate({ to: "/" });
   };
@@ -94,7 +94,7 @@ export function WelcomePage({ step }: { step: StepId | undefined }) {
           </h1>
           <p className="m-0 text-[15px] leading-6 text-pretty text-ink-muted">
             Five quick steps to get your dashboard showing your system, your costs and your forecast. Skip anything
-            you'd rather do later: it's all in Settings too.
+            you'd rather do later: it's all under Manage too.
           </p>
         </div>
         <Progress current={current} steps={onboarding?.steps ?? {}} onJump={go} />

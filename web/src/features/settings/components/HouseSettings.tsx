@@ -77,7 +77,7 @@ function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFl
 }
 
 /**
- * Settings → System → Your house: how the Overview draws the house. Storeys, a garage, and where each inverter and
+ * Manage → System → Your house: how the Overview draws the house. Storeys, a garage, and where each inverter and
  * battery is (as many as are connected), with the drawing updating as they're chosen.
  */
 export function HouseSettings({ system }: { system: SystemInfo }) {

@@ -8,7 +8,7 @@ export function useForecast() {
   return q.isError ? null : q.data;
 }
 
-/** Whether temperatures show in °F (Settings → Integrations → Weather). */
+/** Whether temperatures show in °F (Manage → Integrations → Weather). */
 export function useFahrenheit() {
   return !!useLive()?.system.temp_unit_f;
 }

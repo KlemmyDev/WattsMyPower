@@ -52,7 +52,7 @@ function ConnectPrompt() {
           home's use shows here, with when it usually runs.
         </span>
       </div>
-      <ButtonLink to="/settings/integrations" hash="smart-home" variant="primary">
+      <ButtonLink to="/integrations" hash="smart-home" variant="primary">
         Connect an appliance
       </ButtonLink>
     </Card>
@@ -133,12 +133,7 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
           <span>
             {i.name}: {i.account!.error}
           </span>
-          <ButtonLink
-            to="/settings/integrations/home/$integration"
-            params={{ integration: i.id }}
-            size="sm"
-            variant="outline"
-          >
+          <ButtonLink to="/integrations/home/$integration" params={{ integration: i.id }} size="sm" variant="outline">
             {i.account!.signed_out ? "Sign in again" : "Check it"}
           </ButtonLink>
         </Notice>

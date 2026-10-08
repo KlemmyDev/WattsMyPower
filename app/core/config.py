@@ -14,7 +14,7 @@ class Config:
     collector_url: str = "http://collector:8081"
     collector_token: str = ""
     # Whether this dashboard may change what the collector reads (connect, remove or scan for inverters
-    # in Settings → Integrations). Set false for a dashboard following another server's collector,
+    # in Manage → Integrations). Set false for a dashboard following another server's collector,
     # e.g. while developing, so trying the UI can't disconnect the live system's inverters.
     collector_writes: bool = True
 
@@ -35,7 +35,7 @@ class Config:
     raw_retention_days: int = 90
 
     # --- system: only read once, to move an older install's values into the database (see
-    # SettingsStore.seed_system). They're changed in the dashboard (Settings → System) after that.
+    # SettingsStore.seed_system). They're changed in the dashboard (Manage → System) after that.
     # Solar array size (kW of panels). The inverter doesn't report this.
     pv_kw: float = 6.6
     # Battery capacity in kWh. 0 = read it from the inverter (register 5639).

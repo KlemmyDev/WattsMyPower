@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    # The inverters are connected in the dashboard (Settings → Integrations) and stored in the
+    # The inverters are connected in the dashboard (Manage → Integrations) and stored in the
     # database. These settings are only read the first time the collector starts with a database
     # from before that, to move an existing install's inverters into it (Store.seed_devices).
     # Which reader to use for each inverter (see devices/drivers.py).

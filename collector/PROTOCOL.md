@@ -13,7 +13,7 @@ second, AC-coupled solar inverter (optional). Each is read by a driver; a driver
 `<brand>.<model family>`, and the API needs a decoder with the same id.
 
 The devices are stored in the collector's database (table `devices`, one per role) and connected from
-the dashboard (Settings → Integrations) through the `/v1/devices` endpoints below. A collector that
+the dashboard (Manage → Integrations) through the `/v1/devices` endpoints below. A collector that
 starts with a database from before that copies `INVERTER_HOST` / `PV2_HOST` (with their `_DRIVER`,
 `_PORT`, `_UNIT` and `PV2_BEHIND_METER`) into it, once; after that the environment's devices are no
 longer read. Changes take effect from the next poll, without a restart.
@@ -87,7 +87,7 @@ transaction, with the same `ts`, so readers never see half a poll.
   "driver", "input", "connected"?}]}`. `found` lists every address with Modbus TCP port 502 open: `driver`
   is the first reader whose probe recognised it (null if none did), with the words its probe read; addresses
   of connected devices are marked `connected` and not probed.
-- `GET /v1/storage`: the database measured, for the dashboard's Settings → Database. Reads every page, so it
+- `GET /v1/storage`: the database measured, for the dashboard's Manage → Data. Reads every page, so it
   can take a few seconds on a large database. `{"path", "files": {"database", "wal", "shm"}, "page_size",
   "pages", "free_pages", "schema_version", "sqlite_version", "journal_mode", "measured", "retention_days",
   "tables": [{"name", "rows", "data_bytes", "index_bytes", "payload_bytes", "unused_bytes", "pages", "oldest",

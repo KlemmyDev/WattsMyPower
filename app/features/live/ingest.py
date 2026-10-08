@@ -25,7 +25,7 @@ from app.features.readings.repository import ReadingsRepository
 log = logging.getLogger(__name__)
 
 CURSOR_KEY = "collector_cursor"
-NO_INVERTER = "No inverter connected yet. Connect one in Settings → Integrations."
+NO_INVERTER = "No inverter connected yet. Connect one in Manage → Integrations."
 BATCH = 2000  # rows per request while catching up
 WAIT = 30  # seconds to hold a request open for the next poll once caught up
 

@@ -8,13 +8,13 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 
 const amberLink = (text: ReactNode) => (
-  <Link to="/settings/integrations/amber" className="text-link hover:text-link-hover">
+  <Link to="/integrations/amber" className="text-link hover:text-link-hover">
     {text}
   </Link>
 );
 
 /**
- * Settings → Bills: a line about Amber Electric. Connected, it switches the rates to Amber's prices;
+ * Manage → Bills & rates: a line about Amber Electric. Connected, it switches the rates to Amber's prices;
  * not, it says where to connect it.
  */
 export function AmberTariffRow({ onUse }: { onUse: () => void }) {

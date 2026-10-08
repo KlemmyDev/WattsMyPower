@@ -7,7 +7,7 @@ Results are cached.
 Names are kept at suburb level ("Paddington, QLD") even when an exact address was
 searched, so a home address isn't stored or shown anywhere. The one exception is opt-in:
 the street's name (never its number) and suburb, saved for matching the electricity
-network's outages (Settings → Integrations → Electricity network).
+network's outages (Manage → Integrations → Electricity network).
 """
 
 from __future__ import annotations

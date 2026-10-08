@@ -6,13 +6,13 @@ import { DataRow } from "~/features/common/ui/components/DataRow";
 import { longDate, monthYearLong, parseYmd } from "~/features/common/formatting/utils/date";
 import { dollars, money } from "~/features/common/formatting/utils/number";
 
-/** What the system has saved so far and a year, and when it pays for itself, from Settings → System. */
+/** What the system has saved so far and a year, and when it pays for itself, from Manage → System. */
 export function Payback() {
   const { data: p } = useQuery(paybackQuery);
   if (!p) return null;
   const settings = (
-    <Link to="/settings/system" className="text-link">
-      Settings → System
+    <Link to="/system" className="text-link">
+      Manage → System
     </Link>
   );
   return (

@@ -7,7 +7,7 @@ performance and yesterday's totals) and answers with a Check: "bad" (the problem
 alert out stays out, and a problem just noticed has to be seen afresh). The service turns those
 answers into notifications, with each rule's debounce and cooldown (see service.py).
 
-Thresholds are switched and set in Settings → Alerts; each Setting below is one of them.
+Thresholds are switched and set in Manage → Alerts; each Setting below is one of them.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ class Facts:
     # On an Amber tariff, the price now: {"import": $/kWh, "feed_in": $/kWh (what exporting earns), "until": the
     # interval's end}. None on another tariff, or with no price for now.
     price: Callable[[], dict[str, Any] | None] = lambda: None
-    # The current bill against the budget set in Settings → Bills: {"start", "end" (YYYY-MM-DD), "day" (of the
+    # The current bill against the budget set in Manage → Bills & rates: {"start", "end" (YYYY-MM-DD), "day" (of the
     # period), "expected" ($, or None without an estimate yet), "budget" ($)}. None with no budget set.
     bill: Callable[[], dict[str, Any] | None] = lambda: None
     # How the grid's holding up (app.features.grid): {"level", "reasons": [{kind, level, title, detail, alert?}]}.
@@ -115,7 +115,7 @@ class Rule:
     # After an alert, the least time before the same rule sends another. None for a scheduled message.
     cooldown: float | None = HOUR
     urgent: bool = False
-    # Which group it's listed under in Settings → Alerts (CATEGORIES).
+    # Which group it's listed under in Manage → Alerts (CATEGORIES).
     category: str = "system"
     # Where a tap on its notification goes.
     page: str = "/health"
@@ -731,7 +731,7 @@ RULES: tuple[Rule, ...] = (
     Rule(
         "bill_budget",
         "Bill over budget",
-        "The current bill is on course to cost more than the budget set in Settings → Bills, going by what it has "
+        "The current bill is on course to cost more than the budget set in Manage → Bills & rates, going by what it has "
         "cost so far and what the rest of the period is expected to. Checked from the fifth day of each period.",
         bill_budget,
         cooldown=7 * DAY,
@@ -837,7 +837,7 @@ RULES: tuple[Rule, ...] = (
     Rule(
         "power_outage",
         "Outage at your street",
-        "Your electricity network reports an outage at your street (Settings → Integrations → Electricity network). "
+        "Your electricity network reports an outage at your street (Manage → Integrations → Electricity network). "
         "You'll hear when it's over.",
         power_outage,
         cooldown=0,

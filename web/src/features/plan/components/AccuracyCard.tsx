@@ -64,7 +64,7 @@ export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null |
         title="How close the forecast has been"
         id="h-acc"
         action={
-          <ButtonLink to="/settings/integrations/weather" variant="link">
+          <ButtonLink to="/integrations/weather" variant="link">
             Forecast settings
           </ButtonLink>
         }

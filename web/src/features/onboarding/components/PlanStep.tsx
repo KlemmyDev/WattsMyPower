@@ -12,7 +12,7 @@ const SAVE = "Save and continue";
 
 /**
  * Step 3: the electricity plan, from Energy Made Easy or typed in. The same search and rates form as
- * Settings → Bills, but the rates only appear once a plan is loaded (or asked for), and the step's own
+ * Manage → Bills & rates, but the rates only appear once a plan is loaded (or asked for), and the step's own
  * button saves them.
  */
 export function PlanStep({ nav }: StepProps) {

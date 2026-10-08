@@ -20,7 +20,7 @@ export function useBatteryChange() {
   };
 }
 
-/** Whether the system has a home battery: its size, as the inverter reports it or as set in Settings → System. */
+/** Whether the system has a home battery: its size, as the inverter reports it or as set in Manage → System. */
 export function useHasBattery(): boolean {
   return (useLive()?.system.battery_kwh ?? 0) > 0;
 }

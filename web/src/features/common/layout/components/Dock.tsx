@@ -129,7 +129,7 @@ export function NavPower({ full }: { full: boolean }) {
         aria-label={f.label}
         title={f.label}
         aria-current={onOverview ? "page" : undefined}
-        className={cn(box, "w-12 flex-col items-center gap-2.5 py-2.5 [@media(max-height:860px)]:hidden")}
+        className={cn(box, "w-12 flex-col items-center gap-2.5 py-2.5 [@media(max-height:1040px)]:hidden")}
       >
         <RailItem icon="sun" color={COLOR.solar} v={f.solar} />
         <RailItem icon="home" color={COLOR.ink} v={f.home} />

@@ -1,4 +1,4 @@
-/** Inverters connected from Settings → Integrations (GET /api/integrations). Times are unix seconds. */
+/** Inverters connected from Manage → Integrations (GET /api/integrations). Times are unix seconds. */
 
 export type InverterRole = "hybrid" | "pv2";
 

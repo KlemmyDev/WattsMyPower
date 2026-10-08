@@ -4,7 +4,7 @@ devices it reads.
 
     readings  (ts, device) -> driver, input words, holding words (NULL when none were read)
     devices   role -> driver, host, port, unit, settings (JSON): the connected inverters, set up
-              from the dashboard (Settings → Integrations)
+              from the dashboard (Manage → Integrations)
     kv        small text values, e.g. whether the devices were seeded from the environment
 
 Each poll's rows go in one transaction with a shared `ts`, so a reader sees all of a poll or none

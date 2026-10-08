@@ -182,7 +182,7 @@ function ConnectCar({ view, onDone }: { view?: CarView; onDone?: (car: CarView) 
   );
 }
 
-/** Settings → Integrations → Electric vehicle: the cars connected, each opening to its own page, and adding one. */
+/** Manage → Integrations → Electric vehicle: the cars connected, each opening to its own page, and adding one. */
 export function CarSettings() {
   const { data: cars, error } = useQuery(carsQuery);
   const navigate = useNavigate();
@@ -191,7 +191,7 @@ export function CarSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-car"
         title="Electric vehicles"
         sub="Tell the dashboard about your cars, and Plan suggests when to charge each one: from spare solar where it can, and at the cheapest times where it can't."
@@ -202,7 +202,7 @@ export function CarSettings() {
           {cars.map((v) => (
             <IntegrationLink
               key={v.id}
-              to="/settings/integrations/car/$carId"
+              to="/integrations/car/$carId"
               params={{ carId: String(v.id) }}
               icon="car"
               name={
@@ -225,7 +225,7 @@ export function CarSettings() {
         <ConnectCar
           onDone={(car) => {
             setAdding(false);
-            void navigate({ to: "/settings/integrations/car/$carId", params: { carId: String(car.id) } });
+            void navigate({ to: "/integrations/car/$carId", params: { carId: String(car.id) } });
           }}
         />
       )}
@@ -256,7 +256,7 @@ function ControlNote() {
   );
 }
 
-/** Settings → Integrations → Electric vehicle → a car: what it is, changing or disconnecting it, and its details. */
+/** Manage → Integrations → Electric vehicle → a car: what it is, changing or disconnecting it, and its details. */
 export function CarPage({ carId }: { carId: number }) {
   const { data: cars, error, isPending } = useQuery(carsQuery);
   const view = cars?.find((c) => c.id === carId);
@@ -265,7 +265,7 @@ export function CarPage({ carId }: { carId: number }) {
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [changing, setChanging] = useState(false);
-  const back = <BackLink to="/settings/integrations/car">Electric vehicles</BackLink>;
+  const back = <BackLink to="/integrations/car">Electric vehicles</BackLink>;
   if (!view)
     return (
       <>
@@ -298,7 +298,7 @@ export function CarPage({ carId }: { carId: number }) {
                         remove.mutate(view.id, {
                           onSuccess: () => {
                             toast(`${carName(view)} disconnected.`);
-                            void navigate({ to: "/settings/integrations/car" });
+                            void navigate({ to: "/integrations/car" });
                           },
                         })
                       }

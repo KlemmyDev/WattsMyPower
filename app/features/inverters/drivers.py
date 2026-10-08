@@ -32,7 +32,7 @@ DEFAULT_SOLAR = "sungrow.sg_d"
 
 @dataclass(frozen=True)
 class Kind:
-    """How a driver is shown when connecting an inverter (Settings → Integrations)."""
+    """How a driver is shown when connecting an inverter (Manage → Integrations)."""
 
     role: str  # "hybrid" or "pv2"
     brand: str

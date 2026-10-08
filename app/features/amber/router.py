@@ -1,4 +1,4 @@
-"""Amber Electric (Settings → Bills): connect an account, choose its site, and today's prices."""
+"""Amber Electric (Manage → Bills & rates): connect an account, choose its site, and today's prices."""
 
 from __future__ import annotations
 

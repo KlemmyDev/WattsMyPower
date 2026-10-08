@@ -140,7 +140,7 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
         </>
       ) : (
         <div className="text-[13px] text-ink-muted">
-          <Link to="/settings/integrations/grid" className="text-brand no-underline hover:underline">
+          <Link to="/integrations/grid" className="text-brand no-underline hover:underline">
             Turn them on
           </Link>{" "}
           for severe weather and bushfire warnings near you.

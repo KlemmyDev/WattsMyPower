@@ -33,9 +33,9 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
         ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"),
         "best_match",
     ),
-    # What a bill's discount comes off (Settings → Bills): usage alone, or usage and the supply charge.
+    # What a bill's discount comes off (Manage → Bills & rates): usage alone, or usage and the supply charge.
     "bill_discount_on": (("usage", "usage_supply"), "usage"),
-    # How the Overview draws the house (Settings → System → Your house).
+    # How the Overview draws the house (Manage → System → Your house).
     "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
     # The NEM region whose wholesale prices and notices the Grid page follows (from AEMO): worked out from the
     # location ("auto"), one region, or none (outside the NEM, or not wanted: then nothing is asked of AEMO).
@@ -56,7 +56,7 @@ WHOLE = {
     "house_storeys", "garage_spaces", "system_installed", "battery_installed", "home_standby_goal", "update_check",
     "hazard_warnings",
 }  # fmt: skip
-# The system details (Settings → System): key -> (name in messages, unit). Their range errors are
+# The system details (Manage → System): key -> (name in messages, unit). Their range errors are
 # written as sentences, since the dashboard shows them as they are.
 SYSTEM: dict[str, tuple[str, str]] = {
     "pv_kw": ("Solar array size", " kW"),
@@ -64,7 +64,7 @@ SYSTEM: dict[str, tuple[str, str]] = {
     "battery_reserve_fallback": ("Backup reserve", "%"),
     "battery_max_kw": ("Maximum charge and discharge rate", " kW"),
 }
-# What the system cost, when it went in, and the battery's warranty (Settings → System): named the same
+# What the system cost, when it went in, and the battery's warranty (Manage → System): named the same
 # way, but only ever entered from the dashboard, never seeded from the environment.
 OWNERSHIP: dict[str, tuple[str, str]] = {
     "system_cost": ("What the system cost", ""),
@@ -73,7 +73,7 @@ OWNERSHIP: dict[str, tuple[str, str]] = {
     "battery_warranty_years": ("Battery warranty", " years"),
     "battery_warranty_mwh": ("Battery warranty energy", " MWh"),
 }
-# Discounts, credits and the budget (Settings → Bills), named the same way.
+# Discounts, credits and the budget (Manage → Bills & rates), named the same way.
 BILLS: dict[str, tuple[str, str]] = {
     "bill_discount_pct": ("The discount", "%"),
     "bill_credits_year": ("Credits a year", ""),
@@ -114,21 +114,21 @@ class SettingsStore:
             "battery_reserve_fallback": (0, 100, config.battery_reserve),
             # The battery's max charge/discharge rate in kW, for the forecast.
             "battery_max_kw": (0.1, 50, config.battery_max_kw),
-            # Weather (Settings → Integrations → Weather). Temperatures in °F (1) rather than °C (0).
+            # Weather (Manage → Integrations → Weather). Temperatures in °F (1) rather than °C (0).
             "temp_unit_f": (0, 1, 0),
             # How the panels sit: tilt from flat (0 = flat, or not known), and the compass bearing they face.
             "panel_tilt": (0, 90, 0),
             "panel_bearing": (0, 359, 0),
             # Let the forecast use what it has learned from weather history when that's more accurate (1).
             "forecast_learning": (0, 1, 1),
-            # Ask GitHub every few hours whether there's a newer version (Settings → System → Updates).
+            # Ask GitHub every few hours whether there's a newer version (Manage → System → Updates).
             "update_check": (0, 1, 1),
             # How far around the house (km) the network's outages, and fires, are shown (the Grid page).
             "outage_radius_km": (1, 100, 15),
             # Follow the Bureau of Meteorology's warnings and Queensland Fire Department's for the house (the Grid
             # page's outlook and its alerts).
             "hazard_warnings": (0, 1, 1),
-            # The house as the Overview draws it (Settings → System → Your house): storeys, and car spaces in
+            # The house as the Overview draws it (Manage → System → Your house): storeys, and car spaces in
             # the garage (0 = none).
             "house_storeys": (1, 2, 1),
             "garage_spaces": (0, 2, 0),

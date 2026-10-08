@@ -14,7 +14,7 @@ lowest fifth of its 5-minute rollups, what the house draws anyway). Two ways:
   three-phase charger draws more than anything else in a home for that long; on a single phase (1.4 kW at 6 A) it
   can't be told from other loads, so only planned charges count.
 
-Only with a car connected (Settings → Integrations → Electric vehicle).
+Only with a car connected (Manage → Integrations → Electric vehicle).
 """
 
 from __future__ import annotations

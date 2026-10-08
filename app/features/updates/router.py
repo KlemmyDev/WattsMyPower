@@ -1,4 +1,4 @@
-"""Updates (Settings → System): whether a newer version is on GitHub."""
+"""Updates (Manage → System): whether a newer version is on GitHub."""
 
 from __future__ import annotations
 
@@ -20,13 +20,13 @@ async def update_status(svc: ServicesDep):
 
 @router.post("/check")
 async def check_now(svc: ServicesDep):
-    """Check GitHub now (Settings → System → Check now), whether or not checking is turned on."""
+    """Check GitHub now (Manage → System → Check now), whether or not checking is turned on."""
     return await asyncio.to_thread(svc.updates.check)
 
 
 @router.post("/install")
 async def install(svc: ServicesDep):
-    """Update now: ask updater.sh, on the host, to run install.sh (Settings → System → Update now)."""
+    """Update now: ask updater.sh, on the host, to run install.sh (Manage → System → Update now)."""
     try:
         return await asyncio.to_thread(svc.updates.install)
     except UpdateRefused as e:

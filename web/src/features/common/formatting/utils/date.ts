@@ -1,6 +1,6 @@
 import { savedDisplay } from "~/features/common/display/utils";
 
-/** Date, time and duration formatting (en-AU; times on the clock chosen in Settings → Account, 24-hour unless set to 12). */
+/** Date, time and duration formatting (en-AU; times on the clock chosen in Manage → Account, 24-hour unless set to 12). */
 
 type Fmt = { format: (d: Date) => string };
 // The design uses three-letter months and no commas; en-AU writes "Sept" and adds commas.
@@ -17,7 +17,7 @@ const tidy = (opts: Intl.DateTimeFormatOptions): Fmt => {
 
 const time24 = new Intl.DateTimeFormat("en-AU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const time12 = new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", hour12: true });
-/** Times on a 12-hour clock: this browser's choice (Settings → Account → Appearance). */
+/** Times on a 12-hour clock: this browser's choice (Manage → Account → Appearance). */
 const twelve = () => savedDisplay().clock === "12";
 /** "7 am", "12 pm": an hour on a 12-hour clock, midnight at either end of the day "12 am". */
 const ampm = (h: number, m?: number) => {

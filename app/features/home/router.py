@@ -1,4 +1,4 @@
-"""Smart-home devices (the Home page, Settings → Integrations → Smart home): connect accounts, the devices they bring,
+"""Smart-home devices (the Home page, Manage → Integrations → Smart home): connect accounts, the devices they bring,
 and where the home's power went."""
 
 from __future__ import annotations

@@ -18,7 +18,7 @@ import { sky as drawSky } from "~/features/overview/utils/house/sky";
  * Isometric house for the Power flow card, ported from the design's houseSvg.
  *   flows holds values in kW: pv, grid (+ importing), bat (+ charging), soc (0..1), tesla, conn, and
  *     optionally each inverter's share of the solar (pvEach)
- *   house is how it's built (Settings → System → Your house): storeys, garage, batteries and inverters
+ *   house is how it's built (Manage → System → Your house): storeys, garage, batteries and inverters
  *   sky is the weather: "sunny" | "cloudy" | "rain" | "storm" | "night"
  *   cover is the weather at night: "clear" | "cloudy" | "rain" | "storm"
  *   cars are the connected cars, in the order house.cars gives where each would rather park: each one's shape and
@@ -308,7 +308,7 @@ function SpotLinks({
         {l.spots.map((sp, k) => {
           const c = cars[k];
           const label = c ? c.label : anyCar ? "Connect another EV" : "Connect an EV";
-          const href = c ? c.href : "/settings/integrations/car";
+          const href = c ? c.href : "/integrations/car";
           const lit = on === k;
           const [tx, ty] = spotTop(sp);
           const w = label.length * 6.6 + 34;

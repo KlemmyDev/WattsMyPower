@@ -3,7 +3,7 @@ Amber Electric: connecting an account, and keeping its prices in the database fo
 tariff type (see app.features.tariffs.costs).
 
 Optional: nothing here calls Amber, and no cost uses its prices, until the household pastes an API
-key in Settings → Bills and chooses Amber as their rate type. Once a key and site are set, a
+key in Manage → Bills & rates and chooses Amber as their rate type. Once a key and site are set, a
 background loop runs just after every 5-minute price update and:
 
   1. fetches yesterday to tomorrow in one request: today's prices so far, the forecast, and

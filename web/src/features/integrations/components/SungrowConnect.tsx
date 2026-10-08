@@ -7,7 +7,7 @@ import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInvert
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-/** Settings → Integrations → Sungrow → connecting an inverter, then on to its page. */
+/** Manage → Integrations → Sungrow → connecting an inverter, then on to its page. */
 export function SungrowConnect() {
   const navigate = useNavigate();
   const { data, isPending, error } = useQuery(integrationsQuery);
@@ -16,7 +16,7 @@ export function SungrowConnect() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations/sungrow">Sungrow</BackLink>}
+        back={<BackLink to="/integrations/sungrow">Sungrow</BackLink>}
         id="h-connect"
         title={hasHybrid ? "Add an inverter" : "Connect your inverter"}
         sub={
@@ -33,9 +33,7 @@ export function SungrowConnect() {
         {data?.available && !data.read_only && (
           <ConnectInverter
             overview={data}
-            onConnected={(device) =>
-              navigate({ to: "/settings/integrations/sungrow/$role", params: { role: device.role } })
-            }
+            onConnected={(device) => navigate({ to: "/integrations/sungrow/$role", params: { role: device.role } })}
           />
         )}
       </SettingsCard>

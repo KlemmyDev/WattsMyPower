@@ -344,13 +344,13 @@ function Market() {
   );
 }
 
-/** Settings → Integrations → Grid: the electricity network's outages, the street they're matched to, and AEMO. */
+/** Manage → Integrations → Grid: the electricity network's outages, the street they're matched to, and AEMO. */
 export function GridSettings() {
   const system = useLive()?.system;
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/settings/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-grid"
         title="Grid"
         sub="Power outages around your house from your electricity network, weather and fire warnings, and the wholesale market from AEMO, for the Grid page and its alerts."

@@ -60,11 +60,11 @@ class LiveService:
         return model
 
     def battery_kwh(self) -> float:
-        """The capacity set in Settings → System, or else what the inverter reports."""
+        """The capacity set in Manage → System, or else what the inverter reports."""
         return self.settings.get("battery_kwh_override") or self.info.get("battery_kwh") or 0.0
 
     def reserve(self) -> float:
-        """The backup reserve (%) the inverter reports, or else the one set in Settings → System."""
+        """The backup reserve (%) the inverter reports, or else the one set in Manage → System."""
         r: float | None = self.info.get("reserve")
         return r if r is not None else self.settings.get("battery_reserve_fallback")
 
@@ -80,7 +80,7 @@ class LiveService:
             "battery_kwh": self.battery_kwh(),
             "battery_reserve": self.reserve(),
             "battery_max_kw": settings.get("battery_max_kw"),
-            # What the inverter itself reports, so Settings → System can say whether its settings apply.
+            # What the inverter itself reports, so Manage → System can say whether its settings apply.
             "inverter_battery_kwh": info.get("battery_kwh"),
             "inverter_reserve": info.get("reserve"),
             "forecast": cfg.forecast,

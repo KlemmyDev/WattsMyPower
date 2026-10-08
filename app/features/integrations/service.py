@@ -1,5 +1,5 @@
 """
-Connecting inverters (Settings → Integrations): what's connected, finding inverters on the network,
+Connecting inverters (Manage → Integrations): what's connected, finding inverters on the network,
 and connecting or removing them.
 
 The collector stores the devices and runs the scan (it's the only thing that talks to the

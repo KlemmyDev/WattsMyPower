@@ -1,4 +1,4 @@
-"""Settings → Alerts: where alerts go (with a test send), browsers notified, which rules are on, and what was sent."""
+"""Manage → Alerts: where alerts go (with a test send), browsers notified, which rules are on, and what was sent."""
 
 from __future__ import annotations
 

@@ -14,7 +14,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                  and the Amber connection
     users        the household account
     sessions     signed-in browsers (only a hash of each token is stored)
-    meter_imports    smart-meter (NEM12) files imported from Settings → Bills
+    meter_imports    smart-meter (NEM12) files imported from Manage → Bills & rates
     meter_intervals  their readings: grid import or export per meter interval, in kWh
     alert_channels   where alerts are sent (ntfy, a webhook, Pushover), one row per kind, with its secrets
     alert_rules      alert rules switched on or off, or with changed thresholds (defaults aren't stored)

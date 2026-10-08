@@ -457,4 +457,4 @@ class AlertsService:
 def _page(msg: Message) -> str:
     """Where tapping a notification goes: the page its rule is about."""
     rule = BY_ID.get(msg.rule or "")
-    return rule.page if rule else "/settings/alerts"
+    return rule.page if rule else "/alerts"

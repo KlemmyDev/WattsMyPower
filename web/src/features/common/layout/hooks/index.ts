@@ -4,10 +4,10 @@ import { useHasBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
-import { NAV, SETTINGS_COLOR, type SectionPages } from "~/features/common/layout/utils";
+import { NAV, type SectionPages } from "~/features/common/layout/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
-import { SETTINGS_SUB, SETTINGS_TABS } from "~/features/settings/utils";
+import { useIntegrationNavPages } from "~/features/integrations/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
 
@@ -56,7 +56,7 @@ export function usePillIndicator(
   return ind;
 }
 
-/** The sections to offer: Tesla once a car's connected (until then it's reached from Overview and Settings), Battery
+/** The sections to offer: Tesla once a car's connected (until then it's reached from Overview and Integrations), Battery
  * when there is one. */
 export function useNavItems() {
   const teslaConnected = !!useLive()?.system.tesla_connected;
@@ -100,9 +100,10 @@ export function useMedia(query: string): boolean {
 /** Where the side nav docks in full (the `xl` breakpoint); below it, it's a rail, or a menu on a phone. */
 export const NAV_DOCKED = "(min-width: 1000px)";
 
-/** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills…). */
+/** The pages within a section, for the navigation to list; null for a section without any (Overview, Bills, System…). */
 export function useSectionPages(section: string): SectionPages | null {
   const home = useHomeNavPages(section === "/home");
+  const integrations = useIntegrationNavPages(section === "/integrations");
   const load = useSnapshot()?.load_power;
   const path = useRouterState({ select: (s) => s.location.pathname });
   if (section === "/home" && home.length)
@@ -112,18 +113,12 @@ export function useSectionPages(section: string): SectionPages | null {
       root: { link: { to: "/home" }, label: "Whole home", active: path === "/home" },
       pages: home,
     };
-  if (section === "/settings")
+  if (section === "/integrations")
     return {
-      title: "Settings",
-      sub: SETTINGS_SUB,
-      pages: SETTINGS_TABS.map((t) => ({
-        key: t.to,
-        label: t.label,
-        icon: t.icon,
-        color: SETTINGS_COLOR,
-        link: { to: t.to },
-        active: path === t.to || path.startsWith(`${t.to}/`),
-      })),
+      title: "Integrations",
+      sub: "Your inverters, smart home, cars, and the services the dashboard reads",
+      root: { link: { to: "/integrations" }, label: "All", active: path === "/integrations" },
+      pages: integrations,
     };
   return null;
 }

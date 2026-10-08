@@ -1,5 +1,5 @@
 """
-Finding inverters on the home network, for connecting them in the dashboard (Settings → Integrations).
+Finding inverters on the home network, for connecting them in the dashboard (Manage → Integrations).
 
 A scan checks every address in a private network (a /22 or smaller) for an open Modbus TCP port,
 then asks each address that answers what it is, with every reader's probe in turn (drivers.READERS).
