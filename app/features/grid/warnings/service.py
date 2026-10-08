@@ -81,8 +81,11 @@ class HazardService:
         self._place_for: tuple[float, float] | None = None
         self._weather: list[dict[str, Any]] = []
         self._fire: list[dict[str, Any]] = []
-        self._fetched_at: float | None = None
-        self._error: str | None = None
+        # When each source last answered, and why it didn't the last time it was asked (None when it did).
+        self._status: dict[str, dict[str, Any]] = {
+            "bom": {"at": None, "error": None},
+            "qfd": {"at": None, "error": None},
+        }
         self._task: asyncio.Task[None] | None = None
         self._wake: asyncio.Event | None = None
 
@@ -106,7 +109,7 @@ class HazardService:
             self._wake.set()
 
     async def _run(self) -> None:
-        await asyncio.sleep(8)
+        await asyncio.sleep(2)  # just after start-up, so the page has warnings within moments
         while True:
             if self.enabled():
                 try:
@@ -137,7 +140,22 @@ class HazardService:
             return self._place
 
     def refresh(self) -> None:
-        errors = []
+        """Fetch both, each on its own: the Fire Department's first (one quick file), then the Bureau's (the house's
+        districts, looked up once a day, and the warnings in force). Each keeps when it last answered and why it
+        didn't, so the page can tell "no warnings" from "couldn't ask"."""
+        if self.region() == "QLD1":
+            try:
+                fires = self.fires()
+                with self._lock:
+                    self._fire = fires
+                    self._status["qfd"] = {"at": self.clock(), "error": None}
+            except qfd.FireFeedError as e:
+                log.warning("Queensland Fire Department warnings: %s", e)
+                with self._lock:
+                    self._status["qfd"] = {**self._status["qfd"], "error": str(e)}
+        else:
+            with self._lock:
+                self._fire = []
         try:
             place = self.place()
             prefix = bom.PREFIX.get((place or {}).get("state") or "")
@@ -147,21 +165,14 @@ class HazardService:
                 weather = [w for w in (bom.parse_cap(b.decode("utf-8", "replace")) for b in files.values()) if w]
             with self._lock:
                 self._weather = weather
+                self._status["bom"] = {"at": self.clock(), "error": None}
         except Exception as e:  # FTP and parsing errors alike: keep what was there
             log.warning("Bureau of Meteorology warnings: %s", e)
-            errors.append("The Bureau of Meteorology's warnings couldn't be fetched right now.")
-        if self.region() == "QLD1":
-            try:
-                fires = self.fires()
-                with self._lock:
-                    self._fire = fires
-            except qfd.FireFeedError as e:
-                errors.append(str(e))
-        else:
             with self._lock:
-                self._fire = []
-        with self._lock:
-            self._fetched_at, self._error = self.clock(), " ".join(errors) or None
+                self._status["bom"] = {
+                    **self._status["bom"],
+                    "error": "The Bureau of Meteorology's data service couldn't be reached.",
+                }
 
     # ------------------------------------------------------------------ around the house
     def around(self, now: float | None = None) -> dict[str, Any]:
@@ -208,16 +219,22 @@ class HazardService:
 
     def view(self) -> dict[str, Any]:
         around = self.around()
+        fires = self.region() == "QLD1"
         with self._lock:
-            place, fetched_at, error = self._place, self._fetched_at, self._error
+            place = self._place
+            status = {k: dict(v) for k, v in self._status.items()}
+        sources = {"bom": status["bom"], **({"qfd": status["qfd"]} if fires else {})}
+        answered = [s["at"] for s in sources.values() if s["at"] is not None]
         return {
             "enabled": self.enabled(),
             "town": (place or {}).get("town"),
-            "fires_followed": self.region() == "QLD1",
+            "fires_followed": fires,
             "radius_km": self.settings.get("outage_radius_km"),
             **around,
-            "fetched_at": fetched_at,
-            "error": error if self.enabled() else None,
+            "sources": sources if self.enabled() else {},
+            # When every source followed has answered at least once (None until then).
+            "fetched_at": min(answered) if len(answered) == len(sources) else None,
+            "error": " ".join(s["error"] for s in sources.values() if s["error"]) or None if self.enabled() else None,
         }
 
     def reasons(self, now: float | None = None) -> list[dict[str, Any]]:

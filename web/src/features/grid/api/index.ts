@@ -9,7 +9,12 @@ export const gridQuery = queryOptions({
   queryKey: ["grid"],
   queryFn: ({ signal }) => apiGet<GridView>("grid", undefined, { signal }),
   staleTime: MIN,
-  refetchInterval: MIN,
+  // Every few seconds until the weather and fire warnings have first answered (just after start-up), then each minute.
+  refetchInterval: (q) => {
+    const h = q.state.data?.hazards;
+    const waiting = h?.enabled && Object.values(h.sources).some((s) => s && s.at == null && !s.error);
+    return waiting ? 4000 : MIN;
+  },
 });
 
 /** Fetch from AEMO now (after a failed fetch). */

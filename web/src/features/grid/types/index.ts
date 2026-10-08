@@ -126,6 +126,9 @@ export type HazardsView = {
   radius_km: number;
   weather: WeatherWarning[];
   fires: FireWarning[];
+  /** Each source followed: when it last answered, and why it didn't the last time it was asked. */
+  sources: Partial<Record<"bom" | "qfd", { at: number | null; error: string | null }>>;
+  /** When every source followed has answered at least once (null until then). */
   fetched_at: number | null;
   error: string | null;
 };
