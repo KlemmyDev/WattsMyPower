@@ -29,7 +29,7 @@ from typing import Any
 from app.core.config import Config
 from app.core.database import Database
 from app.features.home import rules
-from app.features.home.energy import Meter, step
+from app.features.home.energy import MAX_W, Meter, step
 from app.features.home.registry import INTEGRATIONS
 from app.features.home.repository import Account, Device, HomeRepository
 from app.features.home.types import KINDS, Hints, Integration, IntegrationError, Reading
@@ -484,6 +484,8 @@ class HomeService:
                 s = step(meters[d.id], r, ts, d.kind)
                 if s.energy:
                     self.repo.add_energy(conn, d.id, s.energy)
+                if r.online and r.power_w is not None and 0 < r.power_w <= MAX_W:
+                    self.repo.add_peak(conn, d.id, ts, r.power_w)
                 for run in s.runs:  # before the meter's saved: a new run's id is set on it here
                     self.repo.save_run(conn, d.id, run)
                 meters[d.id] = s.meter
@@ -499,6 +501,7 @@ class HomeService:
                         "remaining_min": r.remaining_min if current else None,
                         "run": {"start": current["start"], "kwh": current["kwh"]} if current else None,
                         "details": dict(r.details),
+                        "info": dict(r.info),
                         "switched_on": r.switched_on,
                     }
                     self._raw[d.id] = {"ts": ts, "properties": dict(r.raw)}

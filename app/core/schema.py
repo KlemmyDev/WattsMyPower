@@ -363,6 +363,15 @@ def _home_rules(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE home_devices ADD COLUMN rule TEXT NOT NULL DEFAULT '{}'")
 
 
+def _home_peaks(conn: sqlite3.Connection) -> None:
+    """The most each device was read drawing in each 5 minutes (W), at `ts`, the start of the bucket: home_energy's
+    averages smooth a kettle's minute at 2 kW away, and the Home pages look for power spikes in these."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS home_peaks (ts INTEGER NOT NULL, device INTEGER NOT NULL, w REAL NOT NULL,"
+        " PRIMARY KEY (ts, device)) WITHOUT ROWID"
+    )
+
+
 def _battery_controls(conn: sqlite3.Connection) -> None:
     """Each battery control as it ran: `kind` standby, floor or charge; `until` the end it was set for (null: until
     stopped); `ended_at` when it ended (null while it's in effect) and `ended_by` why (time, target, full, stopped,
@@ -402,6 +411,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _home_rules,
     _battery_controls,
     _battery_states,
+    _home_peaks,
 ]
 
 

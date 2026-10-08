@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.database import Database
+from app.core.schema import ROLLUP
 from app.features.home.energy import Meter, Run
 
 
@@ -95,6 +96,7 @@ class HomeRepository:
         devices = "SELECT id FROM home_devices WHERE account = ?"
         conn.execute(f"DELETE FROM home_energy WHERE device IN ({devices})", (account_id,))
         conn.execute(f"DELETE FROM home_runs WHERE device IN ({devices})", (account_id,))
+        conn.execute(f"DELETE FROM home_peaks WHERE device IN ({devices})", (account_id,))
         conn.execute("DELETE FROM home_devices WHERE account = ?", (account_id,))
         return conn.execute("DELETE FROM home_accounts WHERE id = ?", (account_id,)).rowcount > 0
 
@@ -144,6 +146,14 @@ class HomeRepository:
             [(ts, device_id, kwh) for ts, kwh in rows],
         )
 
+    def add_peak(self, conn: sqlite3.Connection, device_id: int, ts: int, w: float) -> None:
+        """A power reading, kept if it's the most the device has drawn in its 5 minutes so far."""
+        conn.execute(
+            "INSERT INTO home_peaks (ts, device, w) VALUES (?, ?, ?)"
+            " ON CONFLICT (ts, device) DO UPDATE SET w = MAX(w, excluded.w)",
+            (ts - ts % ROLLUP, device_id, w),
+        )
+
     def save_run(self, conn: sqlite3.Connection, device_id: int, run: Run) -> None:
         """Record a run, or bring a recorded one up to date. A new run's id is set on `run` itself, so the meter
         holding it (app.features.home.energy) knows it next time."""
@@ -166,6 +176,18 @@ class HomeRepository:
         with self.db.reading() as conn:
             return conn.execute(
                 f"SELECT ts, device, kwh FROM home_energy WHERE ts >= ? AND ts < ?{where} ORDER BY ts", args
+            ).fetchall()
+
+    def peaks(self, start: int, end: int, devices: Iterable[int]) -> list[tuple[int, int, float]]:
+        """(bucket start, device, most W read in it) for every bucket in [start, end) of these devices, oldest first."""
+        ids = list(devices)
+        if not ids:
+            return []
+        with self.db.reading() as conn:
+            return conn.execute(
+                f"SELECT ts, device, w FROM home_peaks WHERE ts >= ? AND ts < ? AND device IN ({','.join('?' * len(ids))})"
+                " ORDER BY ts",
+                (start, end, *ids),
             ).fetchall()
 
     def run(self, run_id: int) -> dict[str, Any] | None:
