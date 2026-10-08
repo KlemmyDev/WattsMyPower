@@ -4,7 +4,8 @@ import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { intAU } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
-import { Notice } from "~/features/common/ui/components/Notice";
+import { Select } from "~/features/common/ui/components/Field";
+import { useSaveSettings } from "~/features/common/settings/hooks";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
@@ -15,6 +16,9 @@ export const UNPLANNED = COLOR.warn;
 export const PLANNED = COLOR.lilac;
 
 const title = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** The distances the radius can be set to (Settings → Integrations → Grid has the same). */
+export const RADII = [5, 10, 15, 20, 30, 50];
 
 export const suburbsOf = (o: Outage) => {
   const names = o.suburbs.map(title);
@@ -182,10 +186,16 @@ export function OutagesCard({
     view.now.length || !view.planned.some((o) => o.affects) ? "now" : "planned",
   );
   const [hover, setHover] = useState<string | null>(null);
+  const save = useSaveSettings();
+  // The radius just chosen, until the page has the outages for it.
+  const radius = save.isPending ? (save.variables?.outage_radius_km ?? view.radius_km) : view.radius_km;
   const list = tab === "now" ? view.now : view.planned;
   const net = view.network;
   const s = view.summary;
   const underway = view.now.filter((o) => o.planned).length;
+  // Nothing's come from the network's map yet (it can refuse the dashboard): nothing to show, rather than "no
+  // outages". Settings → Integrations → Grid says why. Once something has come, it's shown as it last was.
+  if (net && view.fetched_at == null) return null;
   const sub = !net
     ? ""
     : [
@@ -202,18 +212,33 @@ export function OutagesCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <TitleBlock title="Outages near you" sub={sub} />
         {net && (
-          <Segmented
-            label="Which outages"
-            options={[
-              { value: "now", label: `Now${view.now.length ? ` ${view.now.length}` : ""}` },
-              { value: "planned", label: `Planned${view.planned.length ? ` ${view.planned.length}` : ""}` },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              aria-label="How far around"
+              value={String(radius)}
+              onChange={(e) => save.mutate({ outage_radius_km: +e.target.value })}
+              className="h-9 rounded-full px-3 text-[13px]"
+            >
+              {[...new Set([...RADII, view.radius_km])]
+                .sort((a, b) => a - b)
+                .map((r) => (
+                  <option key={r} value={r}>
+                    Within {r} km
+                  </option>
+                ))}
+            </Select>
+            <Segmented
+              label="Which outages"
+              options={[
+                { value: "now", label: `Now${view.now.length ? ` ${view.now.length}` : ""}` },
+                { value: "planned", label: `Planned${view.planned.length ? ` ${view.planned.length}` : ""}` },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
+          </div>
         )}
       </div>
-      {view.error && <Notice tone="warn">{view.error} Showing what it last had.</Notice>}
       {net ? (
         <div className="flex items-start gap-6 max-md:flex-col max-md:items-center">
           {home && <Radar list={list} radius={view.radius_km} home={home} hover={hover} onHover={setHover} />}

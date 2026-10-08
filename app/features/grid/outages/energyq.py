@@ -135,7 +135,9 @@ class EnergyQueensland:
         try:
             return get(f"{self.site}/static/PRD/{self.prefix}_map_{name}.geojson")
         except urllib.error.HTTPError as e:
-            raise OutageFeedError(f"{self.name}'s outage map answered {e.code}.") from e
+            if e.code in (401, 403, 429):  # its site's protection (Cloudflare) turns some servers away
+                raise OutageFeedError(f"{self.name}'s outage map isn't letting the dashboard in right now.") from e
+            raise OutageFeedError(f"{self.name}'s outage map isn't answering right now.") from e
         except (urllib.error.URLError, OSError) as e:
             raise OutageFeedError(f"Couldn't reach {self.name}'s outage map.") from e
         except (ValueError, json.JSONDecodeError) as e:

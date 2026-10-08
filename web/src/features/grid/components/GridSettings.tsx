@@ -12,6 +12,7 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { gridQuery } from "~/features/grid/api";
+import { RADII } from "~/features/grid/components/OutagesCard";
 import { REGIONS } from "~/features/grid/utils";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
@@ -21,8 +22,6 @@ const NETWORKS = [
   { id: "energex", name: "Energex", area: "South East Queensland" },
   { id: "ergon", name: "Ergon Energy", area: "regional Queensland" },
 ] as const;
-
-const RADII = [5, 10, 15, 20, 30, 50] as const;
 
 function CardTitle({ id, title, sub, aside }: { id: string; title: string; sub: ReactNode; aside?: ReactNode }) {
   return (
@@ -93,7 +92,12 @@ function Network() {
           </Select>
         }
       />
-      {out?.error && <Notice tone="warn">{out.error}</Notice>}
+      {out?.error && (
+        <HelpText>
+          {out.error} It tries again every 15 minutes
+          {out.fetched_at ? `, and shows the outages as they were at ${hhmm(out.fetched_at)} meanwhile.` : "."}
+        </HelpText>
+      )}
       {value === "auto" && !out?.network && (
         <HelpText>
           No supported network found for {locationLabel(system)}. Only Queensland's networks (Energex and Ergon Energy)
@@ -245,7 +249,7 @@ function Radius() {
           <Segmented
             label="Outage radius"
             options={RADII.map((r) => ({ value: String(r), label: `${r} km` }))}
-            value={String(RADII.includes(value as never) ? value : 15)}
+            value={String(RADII.includes(value) ? value : 15)}
             onChange={(v) => save.now({ outage_radius_km: +v }, `Outages within ${v} km are shown.`)}
           />
         }

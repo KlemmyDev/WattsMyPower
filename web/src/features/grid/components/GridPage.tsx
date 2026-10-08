@@ -26,7 +26,7 @@ import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
 import { OutagesCard } from "~/features/grid/components/OutagesCard";
-import { TimeLine, type LinePoint } from "~/features/grid/components/TimeLine";
+import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import type { GridView, MarketNotice, OutlookReason } from "~/features/grid/types";
 import { EXPORT, IMPORT, LEVEL, NOTICE_HELP, perMWh, REGIONS, wholesaleCents } from "~/features/grid/utils";
 
