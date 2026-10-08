@@ -11,6 +11,7 @@ import {
   useSectionPages,
 } from "~/features/common/layout/hooks";
 import { NAV_GROUPS, SETTINGS_COLOR, sectionOf, type NavPage, type SectionPages } from "~/features/common/layout/utils";
+import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
@@ -224,7 +225,10 @@ function Circuit({
           </div>
         </div>
       </div>
-      <LiveChip full={full} />
+      <div className={cn("flex flex-none flex-col gap-2", !full && "items-center")}>
+        <LiveChip full={full} />
+        <VersionTag full={full} />
+      </div>
     </div>
   );
 }
@@ -333,6 +337,30 @@ function LiveChip({ full }: { full: boolean }) {
     >
       <span className="live-dot" data-state={state} />
       {hhmm(now)}
+    </span>
+  );
+}
+
+/** Which version this is, and its release ("Alpha") until it's marked stable: under the live chip, or on the rail the
+ * release alone (the version in its tooltip). */
+function VersionTag({ full }: { full: boolean }) {
+  const app = useLive()?.app;
+  if (!app) return null;
+  const release = app.release ? app.release.charAt(0).toUpperCase() + app.release.slice(1) : null;
+  const title = `WattsMyPower ${app.version}${release ? `, ${app.release} release` : ""}`;
+  const pill = release && (
+    <span className="rounded-full border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-warn">
+      {release}
+    </span>
+  );
+  return full ? (
+    <div title={title} className="flex items-center justify-between px-1 text-[11px] text-ink-faint tabular-nums">
+      <span>v{app.version}</span>
+      {pill}
+    </div>
+  ) : (
+    <span title={title} className="flex">
+      {pill || <span className="font-mono text-[9.5px] text-ink-faint">v{app.version}</span>}
     </span>
   );
 }
