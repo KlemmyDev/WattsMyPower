@@ -16,7 +16,9 @@ import type { DetailGroup, EvDetailGroups, EvDetails as Details, SoftwareUpdate 
 
 const yes = (v: boolean | null | undefined, on = "Yes", off = "No") => (v == null ? "—" : v ? on : off);
 const temp = (c: number | null | undefined) => (c == null ? "—" : `${c.toFixed(1)} °C`);
-const bar = (b: number | null | undefined) => (b == null ? "—" : `${b.toFixed(1)} bar`);
+const PSI_PER_BAR = 14.5038;
+/** A tyre's pressure (the car gives bar) in PSI, whole, as on the car's screen. */
+const psi = (b: number | null | undefined) => (b == null ? "—" : `${Math.round(b * PSI_PER_BAR)} PSI`);
 const list = (items: string[] | undefined, none: string) => (items?.length ? items.join(", ") : none);
 const TYRES = [
   ["fl", "Front left"],
@@ -189,7 +191,7 @@ function Groups({ d, now }: { d: Details; now: number }) {
             {TYRES.map(([k, label]) => (
               <DataRow key={k} label={label}>
                 <span className={cn(t.warnings.includes(k) && "text-warn")}>
-                  {bar(t[k])}
+                  {psi(t[k])}
                   {t.warnings.includes(k) && " · check"}
                 </span>
               </DataRow>

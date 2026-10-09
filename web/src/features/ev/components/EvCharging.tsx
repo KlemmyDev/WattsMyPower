@@ -13,16 +13,26 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
 import { useEvChange } from "~/features/ev/hooks";
-import type { EvMode, EvVehicle } from "~/features/ev/types";
+import type { EvFirst, EvMode, EvVehicle } from "~/features/ev/types";
 
 const MODES: { mode: EvMode; icon: IconName; title: string; about: string }[] = [
-  { mode: "off", icon: "pause", title: "Off", about: "You charge it, as usual. The dashboard only shows the car." },
+  {
+    mode: "off",
+    icon: "pause",
+    title: "Manual",
+    about: "You choose when it charges. The dashboard just keeps an eye on it.",
+  },
   {
     mode: "solar",
     icon: "sun",
-    title: "Spare solar",
-    about: "Starts with enough sun, and follows it an amp at a time.",
+    title: "Solar only",
+    about: "Charges when you've got sun to spare, speeding up and slowing down with it.",
   },
+];
+const FIRST: { value: EvFirst; icon: IconName; label: string }[] = [
+  { value: "battery", icon: "battery", label: "Battery" },
+  { value: "shared", icon: "sun", label: "Share" },
+  { value: "car", icon: "car", label: "Car" },
 ];
 const MAX_SHORT_BY = 3000;
 // The home's flows, in the colours the rest of the dashboard gives them.
@@ -43,10 +53,10 @@ function Section({ title, aside, children }: { title: string; aside?: ReactNode;
   );
 }
 
-/** Off or spare solar, as two tiles: what each does, the chosen one outlined. */
-function ModeTiles({ value, disabled, onChange }: { value: EvMode; disabled: boolean; onChange: (m: EvMode) => void }) {
+/** Manual or solar only, as two tiles: what each does, the chosen one outlined. */
+function ModeTiles({ value, onChange }: { value: EvMode; onChange: (m: EvMode) => void }) {
   return (
-    <div role="radiogroup" aria-label="How the dashboard charges the car" className="grid grid-cols-2 gap-3">
+    <div role="radiogroup" aria-label="How your car charges" className="grid grid-cols-2 gap-3">
       {MODES.map((m) => {
         const on = m.mode === value;
         const tint = m.mode === "solar" ? COLOR.solar : COLOR.inkMuted;
@@ -56,8 +66,7 @@ function ModeTiles({ value, disabled, onChange }: { value: EvMode; disabled: boo
             type="button"
             role="radio"
             aria-checked={on}
-            disabled={disabled}
-            onClick={() => onChange(m.mode)}
+            onClick={() => !on && onChange(m.mode)}
             className={cn(
               "flex flex-col gap-2 rounded-2xl border bg-surface p-4 text-left transition-[border-color,box-shadow] duration-200",
               on ? "border-ink shadow-[0_0_0_1px_var(--color-ink)]" : "border-line-subtle hover:border-line",
@@ -82,28 +91,28 @@ function ModeTiles({ value, disabled, onChange }: { value: EvMode; disabled: boo
 
 /**
  * Where the sun's power is going now, in the order it's shared out: the home first, then the home battery and the car
- * in the order chosen, and what's left to the grid. So "home battery first" is something you can see.
+ * in the order chosen (the battery first when they share), and what's left to the grid. So who gets the sun first is
+ * something you can see.
  */
-function SunShare({ carW, batteryFirst }: { carW: number; batteryFirst: boolean }) {
+function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
   const p = useSnapshot();
   const hasBattery = useHasBattery();
   if (!p) return null;
   const solar = Math.max(0, p.pv_power ?? 0);
   if (solar < 50)
     return (
-      <p className="m-0 text-[13px] text-ink-muted">
-        No sun right now: charging from spare solar waits for the morning.
-      </p>
+      <p className="m-0 text-[13px] text-ink-muted">No sun right now. Charging picks up again once the sun's up.</p>
     );
   const home = Math.max(0, (p.load_power ?? 0) - carW);
   const battery = hasBattery ? Math.max(0, -(p.battery_power ?? 0)) : 0;
   const exported = Math.max(0, -(p.grid_power ?? 0));
   const car = { key: "car", label: "Car", w: carW, color: CAR };
   const homeBattery = { key: "battery", label: "Home battery", w: battery, color: HOME_BATTERY };
+  const batteryFirst = first !== "car";
   const parts = [
     { key: "home", label: "Home", w: home, color: HOME },
     ...(hasBattery ? (batteryFirst ? [homeBattery, car] : [car, homeBattery]) : [car]),
-    { key: "grid", label: "To the grid", w: exported, color: EXPORT },
+    { key: "grid", label: "Exported", w: exported, color: EXPORT },
   ];
   const total = Math.max(
     1,
@@ -114,7 +123,7 @@ function SunShare({ carW, batteryFirst }: { carW: number; batteryFirst: boolean 
       <div
         className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-track"
         role="img"
-        aria-label={`Where the sun's going: ${parts.map((x) => `${x.label} ${kW(x.w)}`).join(", ")}`}
+        aria-label={`Where your solar is going: ${parts.map((x) => `${x.label} ${kW(x.w)}`).join(", ")}`}
       >
         {parts
           .filter((x) => x.w > 0)
@@ -151,7 +160,11 @@ function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   const s = v.state;
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
   if (!perAmp || v.min_amps == null || v.max_amps == null || v.min_w == null)
-    return <p className="m-0 text-[13px] text-ink-muted">Tie the Tesla to a car (Integrations → Tesla) to see this.</p>;
+    return (
+      <p className="m-0 text-[13px] text-ink-muted">
+        Link this Tesla to one of your cars (Integrations → Tesla) to see this.
+      </p>
+    );
   const lowest = v.min_amps;
   const top = v.max_amps * perAmp;
   const at = (w: number) => `${Math.max(0, Math.min(100, (w / top) * 100))}%`;
@@ -161,10 +174,10 @@ function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   const amps = Array.from({ length: Math.max(0, v.max_amps - lowest + 1) }, (_, i) => lowest + i);
   const caption =
     spare == null
-      ? "Working out the spare solar…"
+      ? "Working out how much is spare…"
       : v.solar_amps
-        ? `Enough for ${v.solar_amps} A (${kW(v.solar_amps * perAmp)})`
-        : `${kW(v.min_w - spare)} short of starting`;
+        ? `Enough to charge at ${v.solar_amps} A (${kW(v.solar_amps * perAmp)})`
+        : `Needs ${kW(v.min_w - spare)} more to start`;
   return (
     <div className="flex flex-col gap-2">
       <div className="relative pt-5 pb-6">
@@ -175,7 +188,7 @@ function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
           Starts at {kW(v.min_w)}
         </span>
         <div className="relative h-3 rounded-full bg-track">
-          {/* How far short it may run once it's going: striped, below where it starts. */}
+          {/* How much it may borrow once it's going: striped, below where it starts. */}
           {shortBy > 0 && (
             <span
               className="absolute inset-y-0 transition-[left,width] duration-300"
@@ -234,10 +247,10 @@ function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
       {draw != null && (
         <span className="flex items-center gap-1.5 text-[13px]">
           <span className="size-2 rounded-full" style={{ background: CAR }} />
-          <span className="text-ink-muted">Drawing</span>
+          <span className="text-ink-muted">Charging at</span>
           <span className="tabular-nums">
             {kW(draw)}
-            {s?.amps != null ? ` at ${s.amps} A` : ""}
+            {s?.amps != null ? ` · ${s.amps} A` : ""}
           </span>
         </span>
       )}
@@ -245,8 +258,9 @@ function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   );
 }
 
-/** How far short it may run (W), as a slider: shown on the scale while it moves, saved once it's let go. */
-function useShortBy(v: EvVehicle, onSave: (w: number) => void, disabled: boolean) {
+/** How much it may borrow through a cloud (W), as a slider: shown on the scale while it moves, saved once it's let
+ * go. */
+function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
   const [moving, setMoving] = useState<number | null>(null);
   const value = moving ?? v.control.grid_w;
   const save = () => {
@@ -256,13 +270,12 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void, disabled: boolean
   const input = (
     <input
       type="range"
-      aria-label="Keep charging when short by"
-      aria-valuetext={value ? `Up to ${kW(value)} short` : "Not at all"}
+      aria-label="Borrow up to"
+      aria-valuetext={value ? `Up to ${kW(value)}` : "Nothing: stops straight away"}
       min={0}
       max={MAX_SHORT_BY}
       step={100}
       value={value}
-      disabled={disabled}
       onChange={(e) => setMoving(Number(e.target.value))}
       onPointerUp={save}
       onKeyUp={save}
@@ -274,9 +287,9 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void, disabled: boolean
 }
 
 /**
- * How the dashboard charges the car: off, or from spare solar. With spare solar, where the sun's going now, the car's
- * share of it on a scale of what it can draw, who gets the sun first, and how far short it may run through a cloud.
- * Then starting, stopping and the current, now.
+ * How the car charges at home: by hand, or from solar only. With solar only, where the sun's going now, the car's
+ * share of it on a scale of what it can draw, who gets the sun first, and how much it may borrow through a cloud.
+ * Then starting, stopping and its speed, now.
  */
 export function EvCharging({ v, className }: { v: EvVehicle; className?: string }) {
   const { configure, command } = useEvChange();
@@ -284,102 +297,102 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
   const s = v.state;
   const set = (body: Parameters<typeof configure.mutate>[0]) => configure.mutate(body);
   const busy = command.isPending;
-  // While the dashboard follows the sun it sets the current itself; by hand only when it's off or on hold.
+  // While the dashboard follows the sun it sets the speed itself; by hand only when it's manual or paused.
   const auto = c.mode !== "off" && !v.hold;
   const amps = s?.amps ?? null;
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
   const step = (d: number) =>
     amps != null &&
     command.mutate({ vin: v.vin, action: "amps", amps: Math.max(1, Math.min(v.max_amps ?? 32, amps + d)) });
-  const shortBy = useShortBy(v, (w) => set({ vin: v.vin, grid_w: w }), configure.isPending);
+  const shortBy = useShortBy(v, (w) => set({ vin: v.vin, grid_w: w }));
   const carW = s?.charging ? (s.power_kw ?? 0) * 1000 : 0;
   const ampsText = amps != null ? `${amps} A${perAmp ? ` · ${kW(amps * perAmp)}` : ""}` : "—";
   const [status, tone] =
     c.mode === "off"
-      ? ["You're in charge", COLOR.inkMuted]
+      ? ["Manual", COLOR.inkMuted]
       : v.hold
-        ? ["On hold", COLOR.warn]
+        ? ["Paused", COLOR.warn]
         : s?.charging
-          ? ["Following the sun", COLOR.solar]
+          ? ["Charging on solar", COLOR.solar]
           : v.follow === "ready"
-            ? ["Ready for the sun", COLOR.solar]
-            : ["Waiting for the sun", COLOR.inkMuted];
+            ? ["Ready to go", COLOR.solar]
+            : ["Waiting for sun", COLOR.inkMuted];
+  const share = v.share;
+  const firstAbout =
+    c.first === "battery"
+      ? "Your home battery fills up first. The car gets whatever's left after that."
+      : c.first === "car"
+        ? "The car charges first. Your home battery fills up from whatever's left."
+        : !share
+          ? "Your home battery gets just enough to be full by sunset, and the car gets the rest."
+          : share.battery <= 0
+            ? "Your home battery's full, so the car gets all the spare sun."
+            : share.battery >= 1
+              ? "Your home battery isn't sure to be full by sunset yet, so it comes first for now. The car gets the rest."
+              : `Your home battery needs about ${share.need_kwh} kWh more to be full by sunset, so it gets about ${Math.round(share.battery * 100)}% of what it could take. The car gets the rest.`;
 
   return (
     <Card aria-labelledby={`h-tc-${v.vin}`} className={cn("gap-4", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <TitleBlock id={`h-tc-${v.vin}`} title="Charging" sub="How the dashboard charges the car at home" />
+        <TitleBlock id={`h-tc-${v.vin}`} title="Charging" sub="How your car charges at home" />
         <span className="flex items-center gap-1.5 rounded-full border border-chip-line bg-chip px-2.5 py-1 text-xs font-semibold">
           <span className="size-2 rounded-full" style={{ background: tone }} />
           {status}
         </span>
       </div>
-      <ModeTiles value={c.mode} disabled={configure.isPending} onChange={(mode) => set({ vin: v.vin, mode })} />
+      <ModeTiles value={c.mode} onChange={(mode) => set({ vin: v.vin, mode })} />
 
       {c.mode === "solar" && (
         <>
-          <Section title="Where the sun's going now">
-            <SunShare carW={carW} batteryFirst={c.battery_first} />
+          <Section title="Your solar right now">
+            <SunShare carW={carW} first={c.first} />
           </Section>
           <Section
-            title="The car's share"
+            title="Solar for the car"
             aside={
               !s?.charging && v.solar_from
-                ? `Spare solar expected from ${hhmm(v.solar_from)}`
+                ? `Spare sun expected from ${hhmm(v.solar_from)}`
                 : perAmp && v.phases
-                  ? `${v.phases === 1 ? "One phase" : `${v.phases} phases`} · ${kW(perAmp)} an amp`
+                  ? `${v.phases === 1 ? "Single-phase" : `${v.phases}-phase`} · ${kW(perAmp)} per amp`
                   : undefined
             }
           >
             <CarShare v={v} shortBy={shortBy.value} />
           </Section>
-          <Section title="Who gets the sun first">
+          <Section title="Who gets solar first">
             <Segmented
-              label="Who gets the sun first"
-              options={[
-                {
-                  value: "battery",
-                  label: (
-                    <>
-                      <Icon name="battery" size={15} /> Home battery
-                    </>
-                  ),
-                },
-                {
-                  value: "car",
-                  label: (
-                    <>
-                      <Icon name="car" size={15} /> Car
-                    </>
-                  ),
-                },
-              ]}
-              value={c.battery_first ? "battery" : "car"}
-              onChange={(who) => set({ vin: v.vin, battery_first: who === "battery" })}
+              label="Who gets solar first"
+              options={FIRST.map((f) => ({
+                value: f.value,
+                label: (
+                  <>
+                    <Icon name={f.icon} size={15} /> {f.label}
+                  </>
+                ),
+              }))}
+              value={c.first}
+              onChange={(first) => set({ vin: v.vin, first })}
               buttonClassName="flex-1 justify-center"
             />
-            <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-              {c.battery_first
-                ? "The car gets what's left once the home battery is charging at its full rate, or is full."
-                : "The car gets spare solar before the home battery does."}
-            </span>
+            <span className="text-[13px] leading-5 text-pretty text-ink-muted">{firstAbout}</span>
           </Section>
           <Section
-            title="Ride through clouds"
-            aside={shortBy.value ? `Up to ${kW(shortBy.value)} short` : "Stops as soon as it's short"}
+            title="When a cloud passes"
+            aside={shortBy.value ? `Borrows up to ${kW(shortBy.value)}` : "Stops straight away"}
           >
             {shortBy.input}
             <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-              Once it's charging, it keeps going while it's this far short, drawing the difference from the grid or the
-              home battery{v.min_w ? `; it needs ${kW(v.min_w)} at its lowest current` : ""}. Striped on the scale
+              Once it's charging, it keeps going through a passing cloud by borrowing up to this much from the grid or
+              your home battery, rather than stopping straight away.
+              {v.min_w ? ` The car needs at least ${kW(v.min_w)} to charge at all.` : ""} Shown striped on the bar
               above.
             </span>
           </Section>
           {s?.at_home === false && s.in_range == null && s.plugged && (
             <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
-              <span>Charging here isn't controlled: the car isn't at home. Is this home?</span>
+              <span>The car doesn't seem to be at home, so it won't charge from solar here. Is this your home?</span>
               <Button size="sm" variant="outline" onClick={() => set({ vin: v.vin, home: "here" })}>
-                This is home
+                Set as home
               </Button>
             </Notice>
           )}
@@ -387,7 +400,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
       )}
       {configure.isError && <HelpText tone="bad">{errorMessage(configure.error)}</HelpText>}
 
-      <Section title="Now" aside={auto ? "The current follows the sun" : undefined}>
+      <Section title="Right now" aside={auto ? "The sun sets the speed" : undefined}>
         <div className="flex flex-wrap items-center gap-3">
           {s?.charging ? (
             <Button variant="outline" disabled={busy} onClick={() => command.mutate({ vin: v.vin, action: "stop" })}>
@@ -398,7 +411,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
               disabled={busy || !s?.plugged || s.charging_state === "Complete"}
               onClick={() => command.mutate({ vin: v.vin, action: "start" })}
             >
-              <Icon name="bolt" size={16} /> Charge now
+              <Icon name="bolt" size={16} /> Start charging
             </Button>
           )}
           {auto ? (
@@ -407,12 +420,12 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
             <div
               className="flex items-center gap-1 rounded-full border border-chip-line bg-canvas p-1"
               role="group"
-              aria-label="Charging current"
+              aria-label="Charging speed"
             >
               <Button
                 size="sm"
                 variant="chip"
-                aria-label="Less current"
+                aria-label="Charge slower"
                 disabled={busy || amps == null || amps <= 1}
                 onClick={() => step(-1)}
               >
@@ -422,7 +435,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
               <Button
                 size="sm"
                 variant="chip"
-                aria-label="More current"
+                aria-label="Charge faster"
                 disabled={busy || amps == null || amps >= (v.max_amps ?? 32)}
                 onClick={() => step(1)}
               >
@@ -433,11 +446,11 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
         </div>
         <HelpText tone={command.isError ? "bad" : undefined}>
           {command.isPending
-            ? "Sending to the car…"
+            ? "Sending to your car…"
             : command.isError
               ? errorMessage(command.error)
               : c.mode !== "off"
-                ? "Starting, stopping or changing the current here or in the car's app puts it on hold until it's unplugged."
+                ? "Starting, stopping or changing the speed here or in the Tesla app pauses solar charging until you unplug."
                 : ""}
         </HelpText>
       </Section>

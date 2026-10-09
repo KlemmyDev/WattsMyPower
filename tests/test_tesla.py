@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import io
 import json
+import threading
+import time
 import urllib.error
 from email.message import Message
 from typing import Any
@@ -21,7 +23,7 @@ from app.features.tesla import control, details
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
-from app.features.tesla.service import TeslaService, TeslaSetupError, guess_model
+from app.features.tesla.service import POLL_IDLE, TeslaService, TeslaSetupError, guess_model
 from app.features.tesla.tessie import TessieClient
 from app.main import create_app
 
@@ -104,25 +106,25 @@ def test_a_cars_state_is_read_from_tessie() -> None:
 def test_spare_power_with_the_home_battery_first() -> None:
     # Exporting 4 kW while the battery charges at its full 5 kW: 4 kW is spare.
     r = {"grid_power": -4000, "battery_power": -5000}
-    assert control.spare_w(r, 0, battery_first=True, home_soc=60, battery_max_w=5000) == 4000
+    assert control.spare_w(r, 0, first="battery", home_soc=60, battery_max_w=5000) == 4000
     # The car took 3.45 kW of it; the battery still gets its 5 kW: still 4 kW for the car.
     r = {"grid_power": -550, "battery_power": -5000}
-    assert control.spare_w(r, 3450, battery_first=True, home_soc=60, battery_max_w=5000) == 4000
+    assert control.spare_w(r, 3450, first="battery", home_soc=60, battery_max_w=5000) == 4000
     # The battery charging at 2 kW when it could take 5: nothing for the car.
     r = {"grid_power": 0, "battery_power": -2000}
-    assert control.spare_w(r, 0, battery_first=True, home_soc=60, battery_max_w=5000) == -3000
+    assert control.spare_w(r, 0, first="battery", home_soc=60, battery_max_w=5000) == -3000
     # Full: what would be exported is the car's.
     r = {"grid_power": -2500, "battery_power": 0}
-    assert control.spare_w(r, 0, battery_first=True, home_soc=99, battery_max_w=5000) == 2500
+    assert control.spare_w(r, 0, first="battery", home_soc=99, battery_max_w=5000) == 2500
 
 
 def test_spare_power_with_the_car_first() -> None:
     # What the battery is charging with is the car's too; what it gives isn't.
-    assert control.spare_w({"grid_power": -500, "battery_power": -3000}, 0, battery_first=False, home_soc=40,
+    assert control.spare_w({"grid_power": -500, "battery_power": -3000}, 0, first="car", home_soc=40,
                            battery_max_w=5000) == 3500  # fmt: skip
-    assert control.spare_w({"grid_power": 0, "battery_power": 1200}, 3450, battery_first=False, home_soc=40,
+    assert control.spare_w({"grid_power": 0, "battery_power": 1200}, 3450, first="car", home_soc=40,
                            battery_max_w=5000) == 2250  # fmt: skip
-    assert control.spare_w({"battery_power": 0}, 0, battery_first=False, home_soc=40, battery_max_w=0) is None
+    assert control.spare_w({"battery_power": 0}, 0, first="car", home_soc=40, battery_max_w=0) is None
 
 
 # -- deciding ----------------------------------------------------------------------------------------------
@@ -210,9 +212,16 @@ def test_the_household_taking_over_is_noticed() -> None:
 
 def test_settings_are_checked() -> None:
     assert control.clean({"mode": "solar"})["mode"] == "solar"
-    for bad in ({"mode": "turbo"}, {"grid_w": -1}, {"grid_w": True}, {"battery_first": "yes"}):
+    for bad in ({"mode": "turbo"}, {"grid_w": -1}, {"grid_w": True}, {"first": "yes"}):
         with pytest.raises(ValueError):
             control.clean(bad)
+
+
+def test_settings_kept_before_sharing_carry_on() -> None:
+    assert control.clean({}, {"mode": "solar", "battery_first": False, "grid_w": 300}) == {
+        "mode": "solar", "first": "car", "grid_w": 300}  # fmt: skip
+    assert control.clean({}, {"battery_first": True})["first"] == "battery"
+    assert control.clean({"first": "shared"}, {"battery_first": True})["first"] == "shared"
 
 
 def test_models_are_guessed_from_teslas_names() -> None:
@@ -679,9 +688,15 @@ def test_a_command_from_the_page_holds_and_resume_lets_go(svc: TeslaService, pro
     svc.configure(VIN, {"mode": "solar"})
     v = svc.command(VIN, {"action": "start"})["vehicles"][0]
     assert tessie.commands == [("start_charging", {})] and v["hold"] == "Charging now, started here"
+    assert v["make"] == "Tesla"
     assert svc.command(VIN, {"action": "resume"})["vehicles"][0]["hold"] is None
+    svc.read()
     svc.command(VIN, {"action": "limit", "percent": 90})
     assert tessie.commands[-1] == ("set_charge_limit", {"percent": 90})
+    # What the car took shows at once, before it's next read: the page steps on from it.
+    v = svc.command(VIN, {"action": "amps", "amps": 6})["vehicles"][0]
+    assert (v["state"]["amps"], v["state"]["limit"]) == (6, 90)
+    assert svc.command(VIN, {"action": "amps", "amps": 7})["vehicles"][0]["state"]["amps"] == 7
     for bad in ({"action": "amps", "amps": 40}, {"action": "limit", "percent": 20}, {"action": "honk"}):
         with pytest.raises(TeslaSetupError):
             svc.command(VIN, bad)
@@ -728,14 +743,34 @@ def steps(start: float, hours: list[tuple[float, float]]) -> list[dict[str, Any]
 
 def test_with_the_home_battery_first_the_car_waits_for_it_to_fill() -> None:
     morning = steps(0, [(0, 0.5), (3, 0.5), (8, 0.5), (8, 0.5)])
-    car_first = control.spare_ahead(morning, battery_first=False, soc=0.5, cap=10, reserve=0.1, max_kw=5)
+    car_first = control.spare_ahead(morning, first="car", soc=0.5, cap=10, reserve=0.1, max_kw=5)
     assert control.next_chance(car_first, 0, 3450) == 7200  # 7.5 kW over in the third hour
-    first = control.spare_ahead(morning, battery_first=True, soc=0.2, cap=10, reserve=0.1, max_kw=5)
+    first = control.spare_ahead(morning, first="battery", soc=0.2, cap=10, reserve=0.1, max_kw=5)
     # The battery (at 40% by then) takes 5 kW of the third hour and the last 1 kWh of the fourth: the car's chance
     # is the fourth.
     assert [round(w) for _, _, w in first] == [0, 0, 2500, 6500]
     assert control.next_chance(first, 0, 3450) == 10800
     assert control.next_chance(first, 0, 9000) is None
+
+
+def test_shared_the_home_battery_keeps_just_what_it_needs_to_be_full_by_the_end_of_the_day() -> None:
+    # Night, then 2.5, 7.5 and 7.5 kW over the home's use, then night again and the next day's sun.
+    day = steps(0, [(0, 0.5), (3, 0.5), (8, 0.5), (8, 0.5), (0, 0.5), (5, 0.5)])
+    # At 80% of 10 kWh it needs 2.2 kWh (with the margin), of the 12.5 kWh it could take before the sun's gone
+    # (at most 5 kW an hour): 17.6% of the sun it could take is kept for it, the rest is the car's.
+    share, need = control.battery_share(day, 0, soc=0.8, cap=10, max_kw=5)
+    assert (round(share, 3), round(need, 1)) == (0.176, 2.2)
+    ahead = control.spare_ahead(day, first="shared", soc=0.8, cap=10, reserve=0.1, max_kw=5, share=share)
+    assert [round(w) for _, _, w in ahead][1:4] == [2060, 6620, 6620]
+    # Not enough sun to fill it: it's all the battery's, as with the battery first. Full, or no battery: none.
+    assert control.battery_share(day, 0, soc=0.0, cap=20, max_kw=5)[0] == 1
+    assert control.battery_share([], 0, soc=0.5, cap=10, max_kw=5)[0] == 1
+    assert control.battery_share(day, 0, soc=0.99, cap=10, max_kw=5)[0] == 0
+    assert control.battery_share(day, 0, soc=0.5, cap=0, max_kw=5)[0] == 0
+    # Now: 5 kW over (2 kW exported, 3 kW into the battery), a fifth of what the battery could take kept for it.
+    r = {"grid_power": -2000, "battery_power": -3000}
+    assert control.spare_w(r, 0, first="shared", home_soc=50, battery_max_w=5000, share=0.2) == 4000
+    assert control.spare_w(r, 0, first="shared", home_soc=50, battery_max_w=5000, share=1) == 0
 
 
 def test_readiness() -> None:
@@ -764,7 +799,7 @@ def ble(svc: TeslaService, radio: FakeRadio, tessie: FakeTessie, live: FakeLive,
     """Paired over Bluetooth, plugged in and not charging, in solar mode, at night."""
     connect(svc, "bluetooth")
     svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 3, "car_min_amps": 5, "car_amps": 16})
-    svc.configure(VIN, {"mode": "solar", "battery_first": False})
+    svc.configure(VIN, {"mode": "solar", "first": "car"})
     live.reading(grid=500)
     clock.t += 1
     svc.tick()
@@ -975,5 +1010,42 @@ def test_charging_at_home_is_counted_with_its_grid_share(svc: TeslaService, prov
 def test_a_command_to_a_sleeping_car_counts_as_a_wake(ble: TeslaService, radio: FakeRadio, live: FakeLive,
                                                       clock: Clock) -> None:  # fmt: skip
     minutes(ble, live, clock, 6, grid=500)  # read again: asleep
-    ble.command(VIN, {"action": "limit", "percent": 90})
+    v = ble.command(VIN, {"action": "limit", "percent": 90})["vehicles"][0]
     assert [w["reason"] for w in ble.history.wakes(VIN, 0, 2**40)] == ["command"]
+    # It's awake now: another command before it's next read doesn't count as waking it again.
+    assert v["state"]["asleep"] is False and ble.details(VIN)["refresh_wakes"] is False
+    ble.command(VIN, {"action": "amps", "amps": 6})
+    assert len(ble.history.wakes(VIN, 0, 2**40)) == 1
+
+
+def test_a_change_from_the_page_doesnt_wait_on_a_read(ble: TeslaService, radio: FakeRadio, live: FakeLive,
+                                                      clock: Clock) -> None:  # fmt: skip
+    # Over Bluetooth a read takes seconds (finding the car, talking to it): the page's changes go ahead meanwhile.
+    reading, done = threading.Event(), threading.Event()
+    read = radio.read
+
+    def slow(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        reading.set()
+        done.wait(5)
+        return read(*args, **kwargs)
+
+    radio.read = slow  # type: ignore[method-assign]
+    clock.t += POLL_IDLE
+    loop = threading.Thread(target=ble.tick)
+    loop.start()
+    assert reading.wait(5)
+    t = time.monotonic()
+    assert ble.configure(VIN, {"first": "shared"})["vehicles"][0]["control"]["first"] == "shared"
+    assert time.monotonic() - t < 1
+    done.set()
+    loop.join(5)
+    assert not loop.is_alive() and ble.status()["vehicles"][0]["control"]["first"] == "shared"
+
+
+def test_shared_says_what_the_home_battery_keeps(svc: TeslaService, tessie: FakeTessie, live: FakeLive) -> None:
+    connect(svc, "tessie")
+    assert svc.status()["vehicles"][0]["share"] is None  # the home battery first: nothing to share
+    live.reading(grid=0, soc=60)
+    v = svc.configure(VIN, {"mode": "solar", "first": "shared"})["vehicles"][0]
+    # Without a forecast there's no knowing it'd be full in time: the sun's all the battery's until it is.
+    assert v["control"]["first"] == "shared" and v["share"] == {"battery": 1.0, "need_kwh": 4.4}

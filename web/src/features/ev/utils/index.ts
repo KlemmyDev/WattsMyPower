@@ -19,6 +19,12 @@ export const STATUS_LABEL: Record<EvStatus, string> = {
   unknown: "Not read yet",
 };
 
+/** What the EV section's called: the make of the cars connected ("Tesla"), or EV with none, or a mix. */
+export function evTitle(cars: { make?: string | null }[] | null | undefined): string {
+  const makes = new Set(cars?.map((c) => c.make).filter(Boolean));
+  return makes.size === 1 ? [...makes][0]! : "EV";
+}
+
 /** The colour of what the car's doing: solar while it's charging from the sun, battery-blue when charged. */
 export function statusColor(status: EvStatus, mode: EvMode): string {
   if (status === "charging") return mode === "off" ? COLOR.battery : COLOR.solar;

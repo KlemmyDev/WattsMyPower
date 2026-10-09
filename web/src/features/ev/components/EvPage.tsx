@@ -16,6 +16,7 @@ import { EvLevelChart } from "~/features/ev/components/EvLevelChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
 import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { ProviderChip } from "~/features/ev/components/ProviderChip";
+import { evTitle } from "~/features/ev/utils";
 
 /** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), how it charges
  * beside what the dashboard did with it, its in and out, and everything else it says about itself. */
@@ -77,13 +78,13 @@ export function EvPage({ vin }: { vin?: string } = {}) {
   if (vin && cars.length === 0)
     return (
       <>
-        <PageHeader title="EV" sub={sub} />
+        <PageHeader title={evTitle(data.vehicles)} sub={sub} />
         <Notice tone="plain">That car isn't connected any more.</Notice>
       </>
     );
   return (
     <>
-      <PageHeader title={vin ? (cars[0].name ?? "EV") : "EV"} sub={sub} />
+      <PageHeader title={vin ? (cars[0].name ?? cars[0].make) : evTitle(cars)} sub={sub} />
       <div className="flex flex-col gap-10">
         {data.error && <Notice tone="bad">{data.error}</Notice>}
         {cars.map((v) => (

@@ -54,6 +54,7 @@ from app.features.tesla.tessie import TOKEN, TessieClient
 log = logging.getLogger(__name__)
 
 PROVIDERS = ("tessie", "bluetooth")
+MAKE = "Tesla"  # every car here is one: the page names its section after the make of the cars connected
 CONN_KEY = "tesla"  # kv: how the cars are reached (provider, token) and each car's link and control settings (JSON)
 KEY_KEY = "tesla_key"  # kv: this server's Bluetooth key (PEM), kept across disconnecting so a car needn't re-pair
 MEMORY_KEY = "tesla_memory"  # kv: what the dashboard last did with each car (JSON)
@@ -143,7 +144,7 @@ class TeslaService:
         self._read_at: float | None = None
         self._next_read = 0.0
         self._pairing: dict[str, Any] | None = None  # {vin, step (looking, tap, done, failed), error, at}
-        self._ahead: tuple[int, list[dict[str, Any]], dict[bool, list[tuple[int, int, float]]]] | None = None
+        self._ahead: tuple[int, list[dict[str, Any]], dict[str, Any]] | None = None
         self._details: dict[str, dict[str, Any]] | None = None  # vin -> group -> entry (DETAILS_KEY), once loaded
         self._seen: dict[str, int] = {}  # vin -> when it was last read (heard, over Bluetooth)
         self.history = History(db)  # each car's in and out (app.features.tesla.history)
@@ -183,7 +184,8 @@ class TeslaService:
 
     def _conn(self) -> dict[str, Any]:
         c: dict[str, Any] = self._kv(CONN_KEY) or {}
-        c.setdefault("vehicles", {})
+        for v in c.setdefault("vehicles", {}).values():
+            v["control"] = control.clean({}, v.get("control"))  # as kept by an earlier version, made current
         return c
 
     def _memory(self, vin: str) -> Memory:
@@ -497,6 +499,7 @@ class TeslaService:
                 text += ": on hold from spare solar until it's unplugged"
             if name == "set_charging_amps":
                 mem.amps, mem.amps_at = params["amps"], now
+            self._took(vin, name, params)
             self._samples.pop(vin, None)
             self._remember(vin, mem)
             self._note(vin, text, "manual")
@@ -533,6 +536,22 @@ class TeslaService:
             last = {**last, "display_name": v["name"]}
         return control.parse(vin, last, self._home_of(v), raw.get("in_range"))
 
+    def _took(self, vin: str, name: str, params: dict[str, Any]) -> None:
+        """The car took a command from the page: what's known of it says so until it's next read (AFTER_COMMAND), so
+        the page shows it at once and the next step goes from there. It's awake (a command wakes it), and a current or
+        a limit is what was set. Its reading keeps its own time, so the dashboard doesn't take it as the car's word."""
+        v = self._conn()["vehicles"].get(vin)
+        if v is None or vin not in self._raw:
+            return
+        last = self._raw[vin]["last_state"]
+        cs = dict(last.get("charge_state") or {})
+        if name == "set_charging_amps":
+            cs["charge_current_request"] = params["amps"]
+        elif name == "set_charge_limit":
+            cs["charge_limit_soc"] = params["percent"]
+        self._raw[vin]["last_state"] = {**last, "state": "online", "charge_state": cs}
+        self._refresh(vin)
+
     def _refresh(self, vin: str) -> None:
         """Re-read a car's state from its last raw state (after its home changed)."""
         v = self._conn()["vehicles"].get(vin)
@@ -540,24 +559,37 @@ class TeslaService:
             self._states[vin] = self._parse(vin, v)
 
     def read(self) -> None:
-        """Read every car. Blocking."""
-        c = self._conn()
-        if not self._is_connected(c):
-            return
-        want = {vin: self._follow(vin, v)[0] for vin, v in c["vehicles"].items()}
+        """Read every car. Blocking: over Bluetooth, finding and talking to a car takes seconds, so that's done without
+        holding the lock, and changes from the page don't wait on it."""
+        with self._lock:
+            c = self._conn()
+            if not self._is_connected(c):
+                return
+            want = {vin: self._follow(vin, v)[0] for vin, v in c["vehicles"].items()}
+            try:
+                client = self._client(c)
+            except TeslaError as e:
+                return self._read_failed(e)
         try:
-            found = self._client(c).vehicles(want)
+            found = client.vehicles(want)
         except TeslaError as e:
-            self._error = str(e)
-            self._next_read = self.clock() + (POLL_IDLE if e.refused else POLL_ACTIVE)
-            log.warning("Tesla: %s", e)
-            return
-        self._error = None
-        self._read_at = self.clock()
-        for row in found:
-            if row["vin"] in c["vehicles"]:
-                self._take(row, c)
-        self._next_read = self.clock() + self._poll_after(c)
+            with self._lock:
+                return self._read_failed(e)
+        with self._lock:
+            c = self._conn()  # as it is now: the page may have changed it meanwhile
+            if not self._is_connected(c):
+                return
+            self._error = None
+            self._read_at = self.clock()
+            for row in found:
+                if row["vin"] in c["vehicles"]:
+                    self._take(row, c)
+            self._next_read = self.clock() + self._poll_after(c)
+
+    def _read_failed(self, e: TeslaError) -> None:
+        self._error = str(e)
+        self._next_read = self.clock() + (POLL_IDLE if e.refused else POLL_ACTIVE)
+        log.warning("Tesla: %s", e)
 
     def _take(self, row: dict[str, Any], c: dict[str, Any]) -> None:
         """What was read of a car (as Client.vehicles gives it): its state, level, supply, details."""
@@ -647,9 +679,9 @@ class TeslaService:
         return self.details(vin)
 
     # -- how closely each car is followed ----------------------------------------------------------
-    def _spare_ahead(self, battery_first: bool) -> list[tuple[int, int, float]]:
-        """The forecast's spare solar for a car, step by step (control.spare_ahead); kept for AHEAD_EVERY seconds.
-        Empty without a forecast."""
+    def _ahead_now(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """The forecast's steps, and what's been worked out from them; kept for AHEAD_EVERY seconds. No steps
+        without a forecast."""
         now = int(self.clock())
         if self._ahead is None or now - self._ahead[0] >= AHEAD_EVERY:
             steps: list[dict[str, Any]] | None = None
@@ -659,19 +691,47 @@ class TeslaService:
                 except Exception:  # no location or weather yet: only spare solar now makes a car ready
                     log.debug("No forecast for the Teslas", exc_info=True)
             self._ahead = (now, steps or [], {})
-        _, steps, made = self._ahead
-        if battery_first not in made:
-            latest = self.live.latest or {}
-            soc = latest.get("battery_soc")
-            made[battery_first] = control.spare_ahead(
+        return self._ahead[1], self._ahead[2]
+
+    def _home_soc(self) -> float | None:
+        soc = (self.live.latest or {}).get("battery_soc")
+        return soc / 100 if soc is not None else None
+
+    def _share(self) -> tuple[float, float]:
+        """Shared: the home battery's share of the sun it could take, and what it needs (control.battery_share)."""
+        steps, made = self._ahead_now()
+        if "share" not in made:
+            made["share"] = control.battery_share(
                 steps,
-                battery_first=battery_first,
-                soc=soc / 100 if soc is not None else None,
+                int(self.clock()),
+                soc=self._home_soc(),
+                cap=self.live.battery_kwh(),
+                max_kw=self.settings.get("battery_max_kw"),
+            )
+        share: tuple[float, float] = made["share"]
+        return share
+
+    def _share_brief(self) -> dict[str, float] | None:
+        if self.live.battery_kwh() <= 0:
+            return None
+        f, need = self._share()
+        return {"battery": round(f, 2), "need_kwh": round(need, 1)}
+
+    def _spare_ahead(self, first: str) -> list[tuple[int, int, float]]:
+        """The forecast's spare solar for a car, step by step (control.spare_ahead). Empty without a forecast."""
+        steps, made = self._ahead_now()
+        if first not in made:
+            made[first] = control.spare_ahead(
+                steps,
+                first=first,
+                soc=self._home_soc(),
                 cap=self.live.battery_kwh(),
                 reserve=self.live.reserve() / 100,
                 max_kw=self.settings.get("battery_max_kw"),
+                share=self._share()[0] if first == "shared" else 0.0,
             )
-        return made[battery_first]
+        ahead: list[tuple[int, int, float]] = made[first]
+        return ahead
 
     def _recent_spare(self, vin: str) -> float | None:
         """The power there's been for the car lately (W), averaged; None until known."""
@@ -689,7 +749,7 @@ class TeslaService:
         now = int(self.clock())
         chance = None
         if need is not None and cfg["mode"] == "solar":
-            chance = control.next_chance(self._spare_ahead(bool(cfg["battery_first"])), now, need)
+            chance = control.next_chance(self._spare_ahead(cfg["first"]), now, need)
         held = self._memory(vin).hold is not None
         follow = control.readiness(s, cfg["mode"], held, chance, self._recent_spare(vin), need, now)
         wake_at = None
@@ -765,9 +825,10 @@ class TeslaService:
                 spare = control.spare_w(
                     reading,
                     car_w,
-                    battery_first=bool(cfg["battery_first"]),
+                    first=cfg["first"],
                     home_soc=reading.get("battery_soc") if has_battery else None,
                     battery_max_w=self.settings.get("battery_max_kw") * 1000 if has_battery else 0,
+                    share=self._share()[0] if cfg["first"] == "shared" else 0.0,
                 )
                 if spare is not None:
                     samples.append((ts, spare))
@@ -807,6 +868,7 @@ class TeslaService:
             mem.command, mem.command_at = "start", now  # it started by itself on plugging in: it's the dashboard's now
         if d.amps is not None:
             mem.amps, mem.amps_at = d.amps, now
+        self._took(vin, "set_charging_amps" if d.amps is not None else d.action, {"amps": d.amps})
         text = {
             "start": f"Started charging at {d.amps} A: {d.why}",
             "stop": f"Stopped charging: {d.why}",
@@ -852,16 +914,20 @@ class TeslaService:
             self._remember(vin, mem)
 
     def tick(self) -> None:
-        """One turn of the loop: read the cars when it's time, then steer each. Blocking."""
+        """One turn of the loop: read the cars when it's time (without holding the lock), then steer each. Blocking."""
         with self._lock:
             c = self._conn()
             if not self._is_connected(c):
                 return
             if c.get("provider") == "bluetooth" and self._pairing and self._pairing["step"] in ("looking", "tap"):
                 return  # the radio is busy pairing, for a couple of minutes at most
-            if self.clock() >= self._next_read:
-                self.read()
-                c = self._conn()
+            due = self.clock() >= self._next_read
+        if due:
+            self.read()
+        with self._lock:
+            c = self._conn()
+            if not self._is_connected(c):
+                return
             if self._error is not None and not self._states:
                 return
             try:
@@ -1077,6 +1143,7 @@ class TeslaService:
         status, doing = self._doing(s, v, mem, spec) if s else ("unknown", "Not read yet")
         return {
             "vin": vin,
+            "make": MAKE,
             "name": v.get("name") or (s.name if s else None),
             "car": v.get("car"),
             "control": v["control"],
@@ -1094,6 +1161,9 @@ class TeslaService:
             "follow": follow,
             "solar_from": chance,
             "wake_at": wake_at,
+            # Shared: the home battery's share of the sun it could take, and what it still needs (kWh), to be full
+            # by the end of the day's sun.
+            "share": self._share_brief() if v["control"]["first"] == "shared" else None,
             "min_w": round(spec.watts(spec.min_amps)) if spec else None,
             "max_amps": min(spec.max_amps, s.max_amps or spec.max_amps)
             if spec and s
@@ -1159,7 +1229,7 @@ class TeslaService:
         for vin, v in c["vehicles"].items():
             full = self.vehicle(vin, v)
             st = full["state"] or {}
-            out.append({k: full[k] for k in ("vin", "name", "car", "status", "doing")} | {
+            out.append({k: full[k] for k in ("vin", "make", "name", "car", "status", "doing")} | {
                 "mode": v["control"]["mode"], "soc": st.get("soc"), "limit": st.get("limit"),
                 "power_kw": st.get("power_kw"), "amps": st.get("amps"),
             })  # fmt: skip

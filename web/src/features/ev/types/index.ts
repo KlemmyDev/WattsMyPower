@@ -1,10 +1,13 @@
 /** How the dashboard charges an EV (app.features.tesla.control): off (shows it only), or from spare solar. */
 export type EvMode = "off" | "solar";
 
+export type EvFirst = "battery" | "shared" | "car";
+
 export type EvControl = {
   mode: EvMode;
-  /** The home battery fills at its full rate before the car gets spare solar. */
-  battery_first: boolean;
+  /** Who gets the sun first: the home battery (filling at its full rate before the car gets any), the car, or
+   * shared (the battery keeps just what it needs to be full by the end of the day's sun; the car gets the rest). */
+  first: EvFirst;
   /** How far short (W) the car may run, from the grid or the home battery, before it's stopped. */
   grid_w: number;
 };
@@ -36,6 +39,8 @@ export type EvStatus = "charging" | "waiting" | "stopped" | "complete" | "unplug
 
 export type EvVehicle = {
   vin: string;
+  /** Who made it ("Tesla"). */
+  make: string;
   name: string | null;
   /** The dashboard car it's tied to (app.features.car). */
   car: number | null;
@@ -61,6 +66,9 @@ export type EvVehicle = {
   solar_from: number | null;
   /** While it's quiet: when it'll be made ready for that spare solar. */
   wake_at: number | null;
+  /** Shared: the home battery's share (0 to 1) of the sun it could take, and what it still needs (kWh), to be full
+   * by the end of the day's sun; null otherwise, or with no home battery. */
+  share: { battery: number; need_kwh: number } | null;
   /** Its lowest charging power (W). */
   min_w: number | null;
   min_amps: number | null;
@@ -110,7 +118,7 @@ export type EvEvent = {
 };
 
 /** Each EV in brief, in the live status. */
-export type EvBrief = Pick<EvVehicle, "vin" | "name" | "car" | "status" | "doing"> & {
+export type EvBrief = Pick<EvVehicle, "vin" | "make" | "name" | "car" | "status" | "doing"> & {
   mode: EvMode;
   soc: number | null;
   limit: number | null;
