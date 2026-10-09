@@ -9,9 +9,18 @@ import {
   refreshDetails,
   removeEv,
 } from "~/features/ev/api";
-import type { EvControl, EvDetails, TeslaStatus } from "~/features/ev/types";
+import type { EvControl, EvDetails, EvTimingKey, TeslaStatus } from "~/features/ev/types";
 
 const CONFIGURE = ["tesla", "configure"];
+const TIMING_KEYS: EvTimingKey[] = [
+  "start_after",
+  "stop_after",
+  "min_switch",
+  "amps_every",
+  "average",
+  "lead",
+  "battery_full",
+];
 
 /** Connect through Tessie or pair over Bluetooth, change how a car charges, or command it: the answer is the new
  * status, so it's shown at once; the cars (whose levels and details it changes), the activity and whether a car's
@@ -41,6 +50,10 @@ export function useEvChange() {
         if (body.mode !== undefined) control.mode = body.mode;
         if (body.first !== undefined) control.first = body.first;
         if (body.grid_w !== undefined) control.grid_w = body.grid_w;
+        for (const key of TIMING_KEYS) {
+          const value = body[key];
+          if (value !== undefined) control[key] = value ?? before?.timing[key].default; // null: its default
+        }
         if (before)
           qc.setQueryData<TeslaStatus>(["tesla"], {
             ...before,

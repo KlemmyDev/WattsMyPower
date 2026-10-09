@@ -131,7 +131,8 @@ Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `
 
 | Command | What it does |
 |---|---|
-| `bash install.sh` | update to the latest version (backs up both databases first) |
+| `bash install.sh` | update to the latest version on your release channel (backs up both databases first) |
+| `bash install.sh --channel stable` | follow another release channel (`nightly`, `beta` or `stable`) from now on, and install its version, newer or older |
 | `bash install.sh --configure` | change your settings (time zone, port) and restart. Inverters are changed in **Manage → Integrations**, and the array size and battery in **Manage → System**. |
 | `bash start.sh` | start it, and Docker (or Docker Desktop on a Mac) if needed, without updating or rebuilding |
 | `docker compose stop` | stop it |
@@ -140,9 +141,19 @@ Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `
 | `bash install.sh --no-dashboard-updates` | update, and stop updating from the dashboard (removes the cron job below) |
 | `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `TZ=Australia/Perth bash install.sh --yes`. On a first install, `PV_KW=10` sets the array size and `INVERTER_HOST=192.168.1.20` connects the inverter, without the dashboard. |
 
-**Updating** pulls the latest version, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
+**Release channels.** An install follows one of three, chosen in **Manage → System → Updates** or with `--channel`:
 
-**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version (**Manage → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Settings says why and shows the command to run instead.
+| Channel | What it gets |
+|---|---|
+| Nightly (the default) | every change as soon as it's merged to `main` |
+| Beta | pre-releases (tags like `v2026.10.10-beta`, `-alpha`, `-rc.2`) and every stable release, whichever is newer |
+| Stable | stable releases only (tags like `v2026.10.10`) |
+
+An update installs the channel's version, so moving to a channel behind the one you're on (Nightly to Stable) goes back to its older version: the dashboard offers **Go back** rather than **Update now**, and `install.sh` lists the changes it leaves out. The databases are backed up first, as on any update; tables and columns a newer version added are left as they are and used again when it's updated. The channel is kept in `data/update/channel`, where the dashboard and `install.sh` both read it.
+
+**Updating** pulls the latest version on the channel, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
+
+**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version on its channel (**Manage → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Settings says why and shows the command to run instead.
 
 **Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
@@ -394,6 +405,18 @@ Then open `http://localhost:5174`. `/api` is proxied to `API_TARGET`, and edits 
 
 **Working on just the dashboard against your running instance.** To try frontend changes with live data, without a second copy of the app polling your inverters (they cope badly with two clients), set `API_TARGET=http://<server IP>:8080` and sign in with your usual account. API and backend changes still need a deploy. While `API_TARGET` isn't a local address, saving rates, location or system cost is refused unless you also set `API_ALLOW_WRITES=1`, which saves to the live service.
 
+### Releasing
+
+Nightly is `main`, so merging is releasing it. Beta and stable are release tags, made with `scripts/release.sh` (it needs push access, and `gh` for the GitHub release page):
+
+```bash
+scripts/release.sh beta                     # the latest on main, as v<version>-beta (then -beta.2, -beta.3…)
+scripts/release.sh stable v2026.10.10-beta  # promote a beta that's been tried
+scripts/release.sh stable                   # or the latest on main, straight to stable
+```
+
+The version is the commit's own, from `pyproject.toml`, so bump it (and merge that) before a stable release of new changes: each stable tag is used once. It shows what's changed since the channel's last release and asks before pushing the tag. Installs on the channel find it at their next check. Releases are only made from commits on `main`. Deleting a tag on GitHub takes a release back: installs on its channel move to the one before at their next update.
+
 ## Layout
 
 ```
@@ -436,4 +459,5 @@ install.sh              install or update with Docker (see above)
 updater.sh              run every minute by cron: updates when the dashboard asks (Manage → System → Updates)
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
+scripts/release.sh      publish a beta or stable release (see Releasing)
 ```

@@ -3,9 +3,10 @@
 #
 # install.sh sets this up to run every minute (cron). Each time, it leaves a note that it's here and whether it can
 # update (data/update/updater.json). When the dashboard has asked for an update (data/update/request), it runs this
-# folder's install.sh --yes, as you would by hand: the latest from GitHub, the databases backed up, rebuilt and
-# restarted. Its output goes to data/update/update.log and how it went to data/update/status.json, which the dashboard
-# shows. The dashboard can only ask: what runs is install.sh, and nothing in the request is read but when it was made.
+# folder's install.sh --yes, as you would by hand: the release channel's version from GitHub (data/update/channel,
+# newer or older), the databases backed up, rebuilt and restarted. Its output goes to data/update/update.log and how it
+# went to data/update/status.json, which the dashboard shows. The dashboard can only ask: what runs is install.sh, and
+# nothing in the request is read but when it was made.
 #
 # Remove it with: crontab -l | grep -v 'WattsMyPower: updates from the dashboard' | crontab -
 set -uo pipefail

@@ -9,6 +9,9 @@ Each car is set to one of two modes (EV page):
     solar   charge only from spare solar: start once there's been enough for the car's lowest current for a few
             minutes, follow it up and down an amp at a time, and stop once it's been short for a while
 
+How long each of those waits is, how long the spare power is averaged over, how early the car's made ready and when
+the home battery counts as full are each car's to set (TIMING), else their defaults.
+
 Spare power is worked out from the grid meter and the home battery, not from the solar forecast: what the car is
 drawing now, plus what's going to the grid, less anything the home battery is giving. Who gets the sun first
 (`first`): with the home battery (the default), the car only gets what's left once the battery is charging at its
@@ -37,16 +40,28 @@ from dataclasses import dataclass
 from typing import Any
 
 MODES = ("off", "solar")
-START_AFTER = 180  # seconds there must have been enough spare power before starting
-STOP_AFTER = 300  # seconds it must have been short before stopping
-MIN_SWITCH = 300  # seconds between starting and stopping (each wakes the car and wears the charge port's contactor)
-AMPS_EVERY = 60  # seconds between changes of current
+# How a car's solar charging is timed, each the household may change per car (EV page → Charging → Timing): its
+# default, lowest and highest, and what it is, in words (for an error).
+TIMING: dict[str, tuple[int, int, int, str]] = {
+    # seconds there must have been enough spare power before starting
+    "start_after": (180, 0, 1800, "The wait before starting must be 0 to 30 minutes."),
+    # seconds it must have been short before stopping
+    "stop_after": (300, 0, 3600, "The wait before stopping must be 0 to 60 minutes."),
+    # seconds between starting and stopping (each wakes the car and wears the charge port's contactor)
+    "min_switch": (300, 60, 3600, "The least time between starting and stopping must be 1 to 60 minutes."),
+    # seconds between changes of current
+    "amps_every": (60, 10, 600, "The time between changes of speed must be 10 seconds to 10 minutes."),
+    # seconds of readings averaged into the spare power
+    "average": (150, 20, 900, "The spare power must be averaged over 20 seconds to 15 minutes."),
+    # seconds before spare solar is expected for a car that it's made ready (woken and read each minute)
+    "lead": (1800, 0, 7200, "How early the car's made ready must be 0 to 2 hours."),
+    # the home battery counts as full from here (%), with the home battery first
+    "battery_full": (98, 50, 100, "The home battery's full level must be 50 to 100%."),
+}
+START_AFTER, STOP_AFTER, MIN_SWITCH, AMPS_EVERY, AVERAGE, LEAD, FULL_SOC = (t[0] for t in TIMING.values())
 GRACE = 180  # seconds for the car (and Tessie's copy of its state) to show a command before it counts as changed
-AVERAGE = 150  # seconds of readings averaged into the spare power
-FULL_SOC = 98  # the home battery counts as full from here (%)
 HOME_RADIUS_M = 500  # a car within this of home is at home
 MAX_GRID_W = 5000
-LEAD = 1800  # seconds before spare solar is expected for a car that it's made ready (woken and read each minute)
 QUIET_READ = 3600  # a car with no chance of charging soon has its charge read at most this often, never woken for it
 READINESS = ("active", "ready", "quiet")
 FIRST = ("battery", "shared", "car")  # who gets the sun first
@@ -65,8 +80,26 @@ MODEL_NAMES = {
 YEARS = {ch: 2010 + i for i, ch in enumerate("ABCDEFGHJKLMNPRSTVWXY123456789")}
 
 
+@dataclass(frozen=True)
+class Timing:
+    """How a car's solar charging is timed (TIMING): its settings, or the defaults."""
+
+    start_after: int = START_AFTER
+    stop_after: int = STOP_AFTER
+    min_switch: int = MIN_SWITCH
+    amps_every: int = AMPS_EVERY
+    average: int = AVERAGE
+    lead: int = LEAD
+    battery_full: int = FULL_SOC
+
+    @classmethod
+    def of(cls, cfg: dict[str, Any]) -> Timing:
+        return cls(**{k: int(cfg[k]) for k in TIMING if cfg.get(k) is not None})
+
+
 def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[str, Any]:
-    """A car's control settings with the changes in `body`, checked. Raises ValueError, in words."""
+    """A car's control settings with the changes in `body`, checked. A timing (TIMING) given as null goes back to its
+    default. Raises ValueError, in words."""
     current = dict(current or {})
     if "first" not in current and "battery_first" in current:  # kept before sharing was a choice
         current["first"] = "battery" if current["battery_first"] else "car"
@@ -85,6 +118,16 @@ def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[s
         if isinstance(v, bool) or not isinstance(v, int | float) or not 0 <= v <= MAX_GRID_W:
             raise ValueError(f"How far short the car may run must be 0 to {MAX_GRID_W:,} W.")
         out["grid_w"] = round(float(v))
+    for key, (_, lo, hi, words) in TIMING.items():
+        if key not in body:
+            continue
+        v = body[key]
+        if v is None:
+            out.pop(key, None)  # its default
+        elif isinstance(v, bool) or not isinstance(v, int | float) or not lo <= v <= hi:
+            raise ValueError(words)
+        else:
+            out[key] = round(float(v))
     return out
 
 
@@ -242,9 +285,11 @@ def spare_w(
     home_soc: float | None,
     battery_max_w: float,
     share: float = 0.0,
+    battery_full: float = FULL_SOC,
 ) -> float | None:
     """Power there is for the car (W, including what it's drawing): what it draws now, plus what's going to the
-    grid, less what the home battery gives; with the home battery first, less what the battery could still take;
+    grid, less what the home battery gives; with the home battery first, less what the battery could still take
+    (until it's `battery_full`, %);
     shared, less the battery's `share` (battery_share) of what it could take. None without a grid reading."""
     grid = _num(reading.get("grid_power"))
     if grid is None:
@@ -252,7 +297,7 @@ def spare_w(
     battery = _num(reading.get("battery_power")) or 0.0  # + discharging, - charging
     out = car_w - grid - battery  # what the battery's charging with is spare too; what it's giving isn't
     if first == "battery":
-        if home_soc is not None and home_soc < FULL_SOC:
+        if home_soc is not None and home_soc < battery_full:
             out -= battery_max_w  # the battery's to fill at its full rate first
     elif first == "shared":
         out -= share * min(max(out, 0.0), battery_max_w)
@@ -351,9 +396,11 @@ def decide(
     grid_w: float,
     mem: Memory,
     now: int,
+    timing: Timing | None = None,
 ) -> Decision | None:
     """What to tell a car plugged in at home, not on hold, in `mode`: None to leave it. `spare` is the power there is
-    for it (spare_w, averaged). Updates `mem`'s timers."""
+    for it (spare_w, averaged). Updates `mem`'s timers. `timing`: the car's (else the defaults)."""
+    t = timing or Timing()
     if mode != "solar" or car.full or spare is None:
         return None
     if mem.command == "stop" and car.charging:
@@ -370,20 +417,20 @@ def decide(
     switched = now - mem.command_at if mem.command else 10**9
 
     if not car.charging:
-        if enough and now - (mem.enough_since or now) >= START_AFTER and switched >= MIN_SWITCH:
+        if enough and now - (mem.enough_since or now) >= t.start_after and switched >= t.min_switch:
             return Decision("start", "spare solar", min(sun, hi))
         return None
 
     # Charging. Stop once it's been short a while; else follow the sun.
     if not keeps:
-        if now - (mem.short_since or now) >= STOP_AFTER and switched >= MIN_SWITCH:
+        if now - (mem.short_since or now) >= t.stop_after and switched >= t.min_switch:
             return Decision("stop", "not enough spare solar")
-        if mem.command is None and switched >= MIN_SWITCH and not enough:
+        if mem.command is None and switched >= t.min_switch and not enough:
             # It started on its own when plugged in, with nothing spare: stop it now rather than wait.
             return Decision("stop", "not enough spare solar")
     target = max(lo, min(sun, hi))
     current = mem.amps if mem.amps is not None else car.request_amps
-    if target != current and now - mem.amps_at >= AMPS_EVERY:
+    if target != current and now - mem.amps_at >= t.amps_every:
         return Decision("amps", "following the sun", target)
     return None
 
@@ -438,6 +485,7 @@ def readiness(
     spare_now: float | None,
     need_w: float | None,
     now: int,
+    lead: int = LEAD,
 ) -> str:
     """How closely to follow a car (see the module's docstring): "active" while it's charging (read often),
     "ready" when it could start soon (read each minute, kept awake), else "quiet" (left to sleep)."""
@@ -449,6 +497,6 @@ def readiness(
         return "quiet"
     if need_w is not None and spare_now is not None and spare_now >= need_w:
         return "ready"
-    if chance_at is not None and chance_at - now <= LEAD:
+    if chance_at is not None and chance_at - now <= lead:
         return "ready"
     return "quiet"
