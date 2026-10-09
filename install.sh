@@ -24,6 +24,8 @@
 #                        don't set up updating from the dashboard (Settings → System → Updates).
 #                        Otherwise a cron job runs updater.sh every minute, which updates when the
 #                        dashboard asks (it runs this script, as you would).
+#           Bluetooth (portable batteries, Teslas) is connected through to the dashboard when this machine has an
+#           adapter with BlueZ running: run this again after adding one. BLUETOOTH=off in .env turns that off.
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
 #                        passed in, e.g. TZ=Australia/Perth bash install.sh --yes, and on a first
 #                        install PV_KW=10 or INVERTER_HOST=... to set up without the dashboard
@@ -234,9 +236,44 @@ wait_and_report() {
   fi
 }
 
+# ---------------------------------------------------------------- Bluetooth
+# Portable batteries and Teslas can be reached over this machine's Bluetooth. The dashboard talks to the host's BlueZ
+# over its D-Bus socket, which docker-compose.bluetooth.yml mounts: it's added (COMPOSE_FILE in .env, so a plain
+# 'docker compose' uses it too) when there's an adapter and BlueZ is running. BLUETOOTH in .env: auto (the default),
+# on (add it without checking) or off. A COMPOSE_FILE of the household's own is left alone.
+BT_FILES="docker-compose.yml:docker-compose.bluetooth.yml"
+unset_env() { local tmp; tmp="$(mktemp)"; grep -v "^$1=" .env >"$tmp" || true; cat "$tmp" >.env; rm -f "$tmp"; }
+bluetooth_setup() {
+  [ -f .env ] || return 0
+  local want files on=0
+  want="$(get_env BLUETOOTH)"; want="${want:-auto}"
+  files="$(get_env COMPOSE_FILE)"
+  [ -z "$files" ] || [ "$files" = "$BT_FILES" ] || return 0
+  if [ "$want" = on ]; then
+    on=1
+  elif [ "$want" != off ] && [ "$OS" = linux ] && ls -d /sys/class/bluetooth/hci* >/dev/null 2>&1; then
+    if [ ! -S /run/dbus/system_bus_socket ] || ! { pgrep -x bluetoothd >/dev/null 2>&1 || systemctl is-active --quiet bluetooth 2>/dev/null; }; then
+      warn "This machine has a Bluetooth adapter, but BlueZ isn't running, so the dashboard can't use it. Install and start it (sudo apt install bluez && sudo systemctl enable --now bluetooth), then run this again."
+    else
+      on=1
+      if command -v bluetoothctl >/dev/null 2>&1 && timeout 5 bluetoothctl show 2>/dev/null | grep -q "Powered: no"; then
+        warn "The Bluetooth adapter is switched off. Switch it on (bluetoothctl power on; if it's blocked, rfkill unblock bluetooth)."
+      fi
+    fi
+  fi
+  if [ "$on" = 1 ] && [ "$files" != "$BT_FILES" ]; then
+    set_env COMPOSE_FILE "$BT_FILES"
+    info "Bluetooth: connected through to the dashboard (docker-compose.bluetooth.yml). BLUETOOTH=off in .env turns it off."
+  elif [ "$on" = 0 ] && [ "$files" = "$BT_FILES" ]; then
+    unset_env COMPOSE_FILE
+    info "Bluetooth: no longer connected through to the dashboard."
+  fi
+}
+
 if [ "$START" = 1 ]; then
   [ -f .env ] || die "WattsMyPower isn't installed in this folder yet: run bash install.sh first."
   say "Starting WattsMyPower"
+  bluetooth_setup
   $DC up -d
   wait_and_report
   exit 0
@@ -367,6 +404,7 @@ elif crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; then
 fi
 
 say "Building and starting"
+bluetooth_setup
 # The commit goes into the dashboard's image, so it can tell when GitHub has a newer version. A build argument rather
 # than the environment, which sudo would leave behind.
 $DC build --build-arg "GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || true)"
