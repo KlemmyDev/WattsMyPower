@@ -405,6 +405,18 @@ Then open `http://localhost:5174`. `/api` is proxied to `API_TARGET`, and edits 
 
 **Working on just the dashboard against your running instance.** To try frontend changes with live data, without a second copy of the app polling your inverters (they cope badly with two clients), set `API_TARGET=http://<server IP>:8080` and sign in with your usual account. API and backend changes still need a deploy. While `API_TARGET` isn't a local address, saving rates, location or system cost is refused unless you also set `API_ALLOW_WRITES=1`, which saves to the live service.
 
+### Releasing
+
+Nightly is `main`, so merging is releasing it. Beta and stable are release tags, made with `scripts/release.sh` (it needs push access, and `gh` for the GitHub release page):
+
+```bash
+scripts/release.sh beta                     # the latest on main, as v<version>-beta (then -beta.2, -beta.3…)
+scripts/release.sh stable v2026.10.10-beta  # promote a beta that's been tried
+scripts/release.sh stable                   # or the latest on main, straight to stable
+```
+
+The version is the commit's own, from `pyproject.toml`, so bump it (and merge that) before a stable release of new changes: each stable tag is used once. It shows what's changed since the channel's last release and asks before pushing the tag. Installs on the channel find it at their next check. Releases are only made from commits on `main`. Deleting a tag on GitHub takes a release back: installs on its channel move to the one before at their next update.
+
 ## Layout
 
 ```
@@ -447,4 +459,5 @@ install.sh              install or update with Docker (see above)
 updater.sh              run every minute by cron: updates when the dashboard asks (Manage → System → Updates)
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
+scripts/release.sh      publish a beta or stable release (see Releasing)
 ```

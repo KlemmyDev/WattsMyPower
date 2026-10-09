@@ -280,8 +280,8 @@ def test_install_script_follows_the_channel_both_ways(tmp_path: Path) -> None:
         (origin / "app" / "x.txt").write_text(name)
         subprocess.run([*git, "add", "."], cwd=origin, check=True)
         subprocess.run([*git, "commit", "-qm", name], cwd=origin, check=True)
-        if tag:
-            subprocess.run([*git, "tag", tag], cwd=origin, check=True)
+        if tag:  # annotated, as scripts/release.sh makes them
+            subprocess.run([*git, "tag", "-a", tag, "-m", tag], cwd=origin, check=True)
         return subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin, capture_output=True, text=True).stdout.strip()
 
     stable = commit("one", "v2026.10.1")
@@ -318,3 +318,50 @@ def test_install_script_follows_the_channel_both_ways(tmp_path: Path) -> None:
     subprocess.run([*git, "tag", "-d", "v2026.10.2", "v2026.10.2-beta"], cwd=origin, check=True, capture_output=True)
     install()
     assert head() == stable
+
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_release_script_tags_each_channel(tmp_path: Path) -> None:
+    """scripts/release.sh in a clone, pushing to a repository of its own (without a GitHub release)."""
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=main"]
+    origin = tmp_path / "origin.git"
+    subprocess.run([*git, "init", "-q", "--bare", str(origin)], check=True)
+    work = tmp_path / "work"
+    subprocess.run([*git, "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+    (work / "scripts").mkdir()
+    shutil.copy(ROOT / "scripts" / "release.sh", work / "scripts" / "release.sh")
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}  # fmt: skip
+
+    def commit(version: str, push: bool = True) -> None:
+        (work / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "{version}"\n')
+        (work / "change.txt").write_text(str(time.time()))
+        subprocess.run([*git, "add", "."], cwd=work, check=True)
+        subprocess.run([*git, "commit", "-qm", version], cwd=work, check=True)
+        if push:
+            subprocess.run(["git", "push", "-q", "origin", "main"], cwd=work, check=True, capture_output=True)
+
+    def release(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", "scripts/release.sh", *args, "--yes", "--tag-only"], cwd=work, env=env, capture_output=True,
+            text=True,
+        )  # fmt: skip
+
+    def tags() -> list[str]:
+        out = subprocess.run(["git", "tag", "-l"], cwd=origin, capture_output=True, text=True).stdout
+        return sorted(out.split())
+
+    commit("2026.10.10")
+    assert release("beta").returncode == 0
+    assert "already this commit" in release("beta").stderr
+    commit("2026.10.10")  # another change, the same version
+    assert release("beta").returncode == 0
+    assert tags() == ["v2026.10.10-beta", "v2026.10.10-beta.2"]
+    assert release("stable", "v2026.10.10-beta").returncode == 0  # the first beta, promoted
+    assert "bump the version" in release("stable").stderr  # v2026.10.10 is taken, by another commit
+    commit("2026.10.11")
+    assert release("stable").returncode == 0
+    assert tags() == ["v2026.10.10", "v2026.10.10-beta", "v2026.10.10-beta.2", "v2026.10.11"]
+    commit("2026.10.12", push=False)  # not merged
+    assert "isn't on main" in release("stable", "HEAD").stderr
+    assert "no 'nightly' channel" in release("nightly").stderr
