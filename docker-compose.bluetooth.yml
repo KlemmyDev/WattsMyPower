@@ -4,8 +4,12 @@
 # install.sh adds this file (COMPOSE_FILE in .env) when it finds a Bluetooth adapter with BlueZ running, so updates
 # keep it. BLUETOOTH=off in .env leaves it out; BLUETOOTH=on adds it without checking.
 #
+# BLUETOOTH_DBUS is the folder with the D-Bus socket BlueZ is on: this machine's (/run/dbus) unless it's a Proxmox
+# LXC, where Bluetooth only works on the Proxmox host, and the host's D-Bus is mounted into the LXC (install.sh finds
+# it at /mnt/host-dbus by itself; see the README).
+#
 # Note: the dashboard's container runs as root, so it can use anything on the host's system bus, not only BlueZ.
 services:
   wattsmypower:
     volumes:
-      - /run/dbus:/run/dbus:ro
+      - ${BLUETOOTH_DBUS:-/run/dbus}:/run/dbus:ro
