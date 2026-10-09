@@ -39,8 +39,10 @@ export type EvStatus = "charging" | "waiting" | "stopped" | "complete" | "unplug
 
 export type EvVehicle = {
   vin: string;
-  /** Who made it ("Tesla"). */
+  /** Who made it ("Tesla"), which model ("Model Y") and its model year (from the VIN). */
   make: string;
+  model: string | null;
+  year: number | null;
   name: string | null;
   /** The dashboard car it's tied to (app.features.car). */
   car: number | null;
@@ -106,6 +108,12 @@ export type TeslaStatus = {
   };
   error: string | null;
   read_at: number | null;
+  /** When the cars are next read (after a failed read, tried again), unix seconds; null until connected. */
+  next_read: number | null;
+  /** A read is under way now (over Bluetooth it takes seconds). */
+  reading: boolean;
+  /** Seconds between the server's checks: a read that's due starts within this. */
+  tick: number;
   home: [number, number];
   vehicles: EvVehicle[];
 };
@@ -118,12 +126,14 @@ export type EvEvent = {
 };
 
 /** Each EV in brief, in the live status. */
-export type EvBrief = Pick<EvVehicle, "vin" | "make" | "name" | "car" | "status" | "doing"> & {
+export type EvBrief = Pick<EvVehicle, "vin" | "make" | "model" | "year" | "name" | "car" | "status" | "doing"> & {
   mode: EvMode;
   soc: number | null;
   limit: number | null;
   power_kw: number | null;
   amps: number | null;
+  /** Null when where it is isn't known. */
+  at_home: boolean | null;
 };
 
 export type EvCommand =

@@ -23,7 +23,7 @@ from app.features.tesla import control, details
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
-from app.features.tesla.service import POLL_IDLE, TeslaService, TeslaSetupError, guess_model
+from app.features.tesla.service import POLL_ACTIVE, POLL_IDLE, TeslaService, TeslaSetupError, guess_model
 from app.features.tesla.tessie import TessieClient
 from app.main import create_app
 
@@ -215,6 +215,13 @@ def test_settings_are_checked() -> None:
     for bad in ({"mode": "turbo"}, {"grid_w": -1}, {"grid_w": True}, {"first": "yes"}):
         with pytest.raises(ValueError):
             control.clean(bad)
+
+
+def test_the_model_year_is_read_from_the_vin() -> None:
+    assert control.model_year("7SAYGDEF2NF000001") == 2022  # N
+    assert control.model_year("5YJ3E1EA1JF000001") == 2018  # J
+    assert control.model_year("7SAYGDEF1TA000001") == 2026  # T
+    assert control.model_year("nope") is None
 
 
 def test_settings_kept_before_sharing_carry_on() -> None:
@@ -416,6 +423,8 @@ class FakeRadio:
     ) -> dict[str, Any]:
         self.asked.append((charge, wake))
         self.extras_asked.append(extras)
+        if self.fail:
+            raise self.fail
         if not self._home():
             return {"heard": False}
         if key not in self.keys:
@@ -688,7 +697,7 @@ def test_a_command_from_the_page_holds_and_resume_lets_go(svc: TeslaService, pro
     svc.configure(VIN, {"mode": "solar"})
     v = svc.command(VIN, {"action": "start"})["vehicles"][0]
     assert tessie.commands == [("start_charging", {})] and v["hold"] == "Charging now, started here"
-    assert v["make"] == "Tesla"
+    assert (v["make"], v["model"], v["year"]) == ("Tesla", "Model Y", 2023)  # 7SAY…P…: a 2023 Model Y
     assert svc.command(VIN, {"action": "resume"})["vehicles"][0]["hold"] is None
     svc.read()
     svc.command(VIN, {"action": "limit", "percent": 90})
@@ -1049,3 +1058,14 @@ def test_shared_says_what_the_home_battery_keeps(svc: TeslaService, tessie: Fake
     v = svc.configure(VIN, {"mode": "solar", "first": "shared"})["vehicles"][0]
     # Without a forecast there's no knowing it'd be full in time: the sun's all the battery's until it is.
     assert v["control"]["first"] == "shared" and v["share"] == {"battery": 1.0, "need_kwh": 4.4}
+
+
+def test_the_page_knows_when_the_car_is_next_read(ble: TeslaService, radio: FakeRadio, clock: Clock) -> None:
+    status = ble.status()
+    assert status["next_read"] >= int(clock()) and status["reading"] is False
+    # The car didn't answer: the page says so, and when it's tried again.
+    radio.fail = TeslaError("The car didn't answer over Bluetooth in time.")
+    clock.t += POLL_IDLE
+    ble.tick()
+    status = ble.status()
+    assert status["error"] and status["next_read"] == int(clock()) + POLL_ACTIVE

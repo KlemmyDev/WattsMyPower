@@ -4,7 +4,16 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { carsQuery } from "~/features/car/api";
 import { carName, paintOf } from "~/features/car/utils";
 import { homeQuery } from "~/features/home/api";
-import { deviceColors, ESTIMATED, liveBreakdown, OTHER_COLOR, watts, type LivePart } from "~/features/home/utils";
+import {
+  CAR_COLOR,
+  deviceColors,
+  ESTIMATED,
+  liveBreakdown,
+  OTHER_COLOR,
+  watts,
+  type LivePart,
+} from "~/features/home/utils";
+import { useHomeCharging } from "~/features/ev/hooks";
 import { forecastQuery } from "~/features/common/weather/api";
 import type { Forecast, ForecastHour, WeatherTiming } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
@@ -68,13 +77,14 @@ function Scene({
 }) {
   const wx = liveWeather(p, f, now, !!s?.temp_unit_f);
   const { data: cars } = useQuery(carsQuery);
+  const carW = useHomeCharging();
   const flows = {
     pv: (p.pv_power || 0) / 1000,
     grid: (p.grid_power || 0) / 1000,
     bat: -(p.battery_power || 0) / 1000,
     soc: (p.battery_soc || 0) / 100,
-    tesla: 0,
-    conn: false,
+    tesla: carW / 1000,
+    conn: carW > 0,
     // With a second inverter, each one's own share, so each gets its own line from the roof.
     pvEach: p.pv2_power != null ? [(p.pv1_power ?? 0) / 1000, p.pv2_power / 1000] : undefined,
   };
@@ -564,7 +574,8 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
   const [pv, grid, use] = [parts(tween.pv), parts(tween.g), parts(tween.l)];
   const st = batteryState(b);
   const devices = home?.devices ?? [];
-  const split = liveBreakdown(devices, l);
+  const carW = useHomeCharging();
+  const split = liveBreakdown(devices, l, { carW });
   const colors = deviceColors(devices);
 
   // The last two hours behind each figure. The window follows the latest reading, so it moves (and is fetched) once a
@@ -742,8 +753,8 @@ type Split = NonNullable<ReturnType<typeof liveBreakdown>>;
  * palette borrows a colour none of the others shown has, and past those they share the hatch.
  */
 function HomeSplit({ split, colors }: { split: Split; colors: Map<number, string> }) {
-  const { parts, measured, other } = split;
-  const total = measured + other;
+  const { parts, measured, car, other } = split;
+  const total = measured + car + other;
   const shown = parts.slice(0, SHOWN);
   const rest = parts.slice(SHOWN);
   const restW = rest.reduce((a, x) => a + x.w, 0);
@@ -758,6 +769,7 @@ function HomeSplit({ split, colors }: { split: Split; colors: Map<number, string
   const bar = [
     ...shown.map((x) => ({ key: String(x.id), name: x.name, w: x.w, bg: color.get(x.id)!, estimated: x.estimated })),
     { key: "rest", name: `${rest.length} more`, w: restW, bg: REST_BG },
+    { key: "car", name: "Car charging", w: car, bg: CAR_COLOR },
     { key: "other", name: "Everything else", w: other, bg: OTHER_COLOR },
   ].filter((x) => x.w > 0);
   const listed = parts.slice(0, LISTED);
@@ -791,6 +803,15 @@ function HomeSplit({ split, colors }: { split: Split; colors: Map<number, string
             <b className="ml-auto pl-1 font-semibold whitespace-nowrap text-ink tabular-nums">
               {kW(unlisted.reduce((a, x) => a + x.w, 0))}
             </b>
+          </li>
+        )}
+        {car > 0 && (
+          <li className="col-span-full flex min-w-0 items-center gap-2" title="What the car says it's drawing">
+            <span className="size-2 flex-none rounded-full" style={{ background: CAR_COLOR }} />
+            <Link to="/ev" className="truncate text-ink-sub no-underline transition-colors hover:text-ink">
+              Car charging
+            </Link>
+            <b className="ml-auto pl-1 font-semibold whitespace-nowrap text-ink tabular-nums">{kW(car)}</b>
           </li>
         )}
         {other > 0 && (
