@@ -19,7 +19,7 @@ from app.core.config import Config
 from app.core.database import Database
 from app.features.car.service import CarService
 from app.features.settings.store import SettingsStore
-from app.features.tesla import control, details
+from app.features.tesla import bluetooth, control, details
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
@@ -1069,3 +1069,28 @@ def test_the_page_knows_when_the_car_is_next_read(ble: TeslaService, radio: Fake
     ble.tick()
     status = ble.status()
     assert status["error"] and status["next_read"] == int(clock()) + POLL_ACTIVE
+
+
+def test_a_bluetooth_timeout_says_where_it_failed_and_how_strong_the_car_was_heard() -> None:
+    from tesla_fleet_api.exceptions import BluetoothTimeout
+
+    async def weak() -> None:
+        bluetooth._TALK.get()["rssi"] = -91
+        bluetooth._step("reading its charge")
+        raise BluetoothTimeout()
+
+    with pytest.raises(TeslaError) as e:
+        bluetooth._converse(weak)
+    assert str(e.value).startswith("The car didn't answer over Bluetooth in time while reading its charge. Its signal was"
+                                   " weak (−91 dBm): the server's Bluetooth adapter may be too far")  # fmt: skip
+
+    async def strong() -> None:
+        bluetooth._TALK.get()["rssi"] = -60
+        bluetooth._step("setting its charging current")
+        raise BluetoothTimeout()
+
+    with pytest.raises(TeslaError) as e:
+        bluetooth._converse(strong)
+    assert str(e.value) == ("The car didn't answer over Bluetooth in time while setting its charging current. Its "
+                            "signal was strong (−60 dBm).")  # fmt: skip
+    assert bluetooth.signal(None) == "unknown" and bluetooth.signal(-78) == "fair (−78 dBm)"

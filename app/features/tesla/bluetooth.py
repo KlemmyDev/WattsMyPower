@@ -28,6 +28,7 @@ on the radio (app.core.bluetooth). Everything here is blocking.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import logging
 import time
@@ -42,6 +43,12 @@ from app.features.tesla.control import QUIET_READ
 log = logging.getLogger(__name__)
 
 SCAN_SECONDS = 12  # to hear the car's broadcast
+# How long the car gets to answer each message (tesla-fleet-api waits 5 s for a reading and 2 s for a command's
+# acknowledgement): longer, as the server may be some way from the car, through walls.
+REPLY_SECONDS = 12
+ACK_SECONDS = 8
+WEAK_RSSI = -85  # dBm: a signal below this is weak (the car at the edge of range)
+FAIR_RSSI = -72
 PAIR_SECONDS = 150  # to get in the car and tap the key card
 DETAILS_EVERY = 900  # seconds between reads of a car's details (app.features.tesla.details) while it's awake
 DETAILS_ACTIVE = 300  # while it's charging or ready to (awake anyway)
@@ -235,8 +242,43 @@ class BluetoothClient:
 # -- the real radio ---------------------------------------------------------------------------------------------------
 
 
-def _explain(e: BaseException) -> TeslaError:
-    """A TeslaError, in words, for whatever went wrong talking to the car."""
+# The conversation under way: what it's doing ("reading its charge") and how strongly the car was heard (dBm), so a
+# failure can say where it failed and whether the car's at the edge of range.
+_TALK: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar("tesla_talk")
+
+
+def _step(text: str) -> None:
+    if (t := _TALK.get(None)) is not None:
+        t["step"] = text
+
+
+def signal(rssi: int | None) -> str:
+    """How strongly the car was heard, in words: "strong (−64 dBm)"."""
+    if rssi is None:
+        return "unknown"
+    word = "weak" if rssi < WEAK_RSSI else "fair" if rssi < FAIR_RSSI else "strong"
+    return f"{word} ({rssi} dBm)".replace("-", "−")
+
+
+def _where(talk: dict[str, Any] | None) -> str:
+    """Where a conversation failed, and the car's signal, for its error: " while reading its charge. Its signal was
+    weak (−91 dBm): …"."""
+    if not talk:
+        return "."
+    out = f" while {talk['step']}." if talk.get("step") else "."
+    rssi = talk.get("rssi")
+    if rssi is not None:
+        out += f" Its signal was {signal(rssi)}"
+        out += (
+            ": the server's Bluetooth adapter may be too far from the car (a USB extension lead helps)."
+            if rssi < WEAK_RSSI
+            else "."
+        )
+    return out
+
+
+def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError:
+    """A TeslaError, in words, for whatever went wrong talking to the car (`talk`: where, and its signal)."""
     from bleak.exc import BleakError
     from tesla_fleet_api import exceptions as x
 
@@ -260,9 +302,9 @@ def _explain(e: BaseException) -> TeslaError:
     if named("TeslaFleetMessageFaultInsufficientPrivileges"):
         return TeslaError("The car won't let this server's key do that.")
     if named("BluetoothTransportError"):
-        return TeslaError("The car couldn't be connected to over Bluetooth. It may be at the edge of range.")
-    if named("BluetoothTimeout"):
-        return TeslaError("The car didn't answer over Bluetooth in time. It may be at the edge of range.")
+        return TeslaError(f"The car couldn't be reached over Bluetooth{_where(talk)}")
+    if named("BluetoothTimeout") or isinstance(e, TimeoutError):
+        return TeslaError(f"The car didn't answer over Bluetooth in time{_where(talk)}")
     if named("TeslaFleetError"):
         return TeslaError(f"The car turned it down ({type(e).__name__}).")
     if isinstance(e, BleakError | OSError):
@@ -271,10 +313,19 @@ def _explain(e: BaseException) -> TeslaError:
 
 
 async def _find(vin: str) -> Any:
-    """The car's Bluetooth device, or None when it isn't heard."""
+    """The car's Bluetooth device, or None when it isn't heard; how strongly it was heard goes in the conversation."""
     from bleak import BleakScanner
 
-    return await BleakScanner.find_device_by_name(ble_name(vin), timeout=SCAN_SECONDS)
+    name = ble_name(vin)
+
+    def match(device: Any, adv: Any) -> bool:
+        if (adv.local_name or device.name) != name:
+            return False
+        if (t := _TALK.get(None)) is not None:
+            t["rssi"] = adv.rssi
+        return True
+
+    return await BleakScanner.find_device_by_filter(match, timeout=SCAN_SECONDS)
 
 
 async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -> Any:
@@ -282,9 +333,11 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
     from cryptography.hazmat.primitives import serialization
     from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 
+    _step("listening for the car")
     device = await _find(vin)
     if device is None:
         return None
+    _step("connecting")
     car = TeslaBluetooth().vehicles.create(
         vin,
         serialization.load_pem_private_key(key.encode(), None),  # type: ignore[arg-type]
@@ -292,6 +345,7 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
         keepalive_interval=None,  # one conversation, then let it sleep
         wake_if_asleep=wake,
     )
+    car._default_timeout, car._actuation_timeout = REPLY_SECONDS, ACK_SECONDS
     await car.connect()
     try:
         return await then(car)
@@ -302,12 +356,17 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
 def _converse(coro: Callable[[], Any]) -> Any:
     """Run one conversation in an event loop of its own, every failure turned into a TeslaError (which, unlike
     tesla-fleet-api's, pickles, for a Mac's process of its own)."""
+    talk: dict[str, Any] = {"step": None, "rssi": None}
+    token = _TALK.set(talk)
     try:
         return asyncio.run(coro())
     except BaseException as e:  # tesla-fleet-api's errors are BaseExceptions
         if isinstance(e, KeyboardInterrupt | SystemExit):
             raise
-        raise _explain(e) from None
+        log.info("Tesla over Bluetooth: %s while %s (signal %s)", type(e).__name__, talk["step"], signal(talk["rssi"]))
+        raise _explain(e, talk) from None
+    finally:
+        _TALK.reset(token)
 
 
 CLOSURES = {"frontDriverDoor": "Driver door", "frontPassengerDoor": "Passenger door", "rearDriverDoor": "Rear left door",
@@ -373,6 +432,7 @@ def _read_now(
     from tesla_protocol.command.vcsec_pb2 import ClosureState_E, VehicleSleepStatus_E
 
     async def then(car: Any) -> dict[str, Any]:
+        _step("asking whether it's asleep")
         status = await car.vehicle_state()  # the security computer: answers without waking the car
         asleep = status.vehicleSleepStatus == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
         port = status.closureStatuses.chargePort if status.HasField("closureStatuses") else None
@@ -382,11 +442,13 @@ def _read_now(
         out: dict[str, Any] = {"heard": True, "asleep": asleep, "port_open": port_open, "status": _status(status),
                                "charge_state": None, "extras": {}, "refused": {}}  # fmt: skip
         if asleep and wake_for_extras:  # asked for: a refresh the household said may wake it
+            _step("waking it")
             await car.wake_up(wait=True)
             asleep = out["asleep"] = False
             out["woke"] = True
         moved = port_open is not None and plugged is not None and port_open != plugged  # plugged in or out since
         if (not asleep and (charge or moved)) or (asleep and wake and port_open is not False):
+            _step("waking it to read its charge" if asleep else "reading its charge")
             cs = await car.charge_state()
             state = MessageToDict(cs, preserving_proto_field_name=True)
             state["charging_state"] = cs.charging_state.WhichOneof("type") or ""
@@ -395,14 +457,20 @@ def _read_now(
                 out["woke"] = True  # it was asleep: reading its charge woke it
             asleep = False
         if extras and not asleep:
+            _step("reading its details")
             out["extras"], out["refused"] = await _extras(car, extras)
         return out
 
     return _converse(lambda: _talk(vin, key, then, wake=wake)) or {"heard": False}
 
 
+STEPS = {"start_charging": "starting it charging", "stop_charging": "stopping its charging",
+         "set_charging_amps": "setting its charging current", "set_charge_limit": "setting its charge limit"}  # fmt: skip
+
+
 def _command_now(vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
     async def then(car: Any) -> bool:
+        _step(STEPS.get(name, "sending it a command"))
         if name == "start_charging":
             r = await car.charge_start()
         elif name == "stop_charging":
