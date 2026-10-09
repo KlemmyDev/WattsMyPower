@@ -11,6 +11,7 @@ import threading
 import time
 import urllib.error
 from email.message import Message
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -1173,6 +1174,60 @@ def test_a_link_that_fails_is_tried_again_and_its_error_says_what_bluetooth_said
     assert str(e.value) == ("The car was heard, but wouldn't take a Bluetooth connection (tried 2 times) while "
                             "connecting. Its signal was strong (−62 dBm). (Bluetooth said: "
                             "le-connection-abort-by-local)")  # fmt: skip
+
+
+def test_the_scan_runs_until_the_conversation_is_over(monkeypatch: pytest.MonkeyPatch) -> None:
+    # BlueZ forgets a car heard only in passing once scanning stops: so it isn't stopped before connecting.
+    import bleak
+    import tesla_fleet_api.tesla.bluetooth as tb
+
+    said: list[str] = []
+    scanning: list[bool] = []
+
+    class Scanner:
+        def __init__(self, hear: Any) -> None:
+            self.hear = hear
+
+        async def start(self) -> None:
+            said.append("scan")
+            scanning.append(True)
+            dev = SimpleNamespace(name=None)
+            self.hear(dev, SimpleNamespace(local_name="someone else", rssi=-50))
+            if heard:
+                self.hear(dev, SimpleNamespace(local_name=bluetooth.ble_name(VIN), rssi=-63))
+
+        async def stop(self) -> None:
+            said.append("stop")
+            scanning.append(False)
+
+    class Car:
+        async def connect(self) -> None:
+            said.append(f"connect while scanning={scanning[-1]}")
+
+        async def disconnect(self) -> None:
+            said.append(f"disconnect while scanning={scanning[-1]}")
+
+    car = Car()
+    monkeypatch.setattr(bleak, "BleakScanner", Scanner)
+    monkeypatch.setattr(
+        tb, "TeslaBluetooth", lambda: SimpleNamespace(vehicles=SimpleNamespace(create=lambda *a, **k: car))
+    )
+    monkeypatch.setattr(bluetooth, "SCAN_SECONDS", 0.05)
+    key = bluetooth.new_key()
+
+    async def then(c: Any) -> str:
+        said.append(f"talk while scanning={scanning[-1]}")
+        return "read"
+
+    heard = True
+    assert bluetooth._converse(lambda: bluetooth._talk(VIN, key, then, wake=False)) == "read"
+    assert said == ["scan", "connect while scanning=True", "talk while scanning=True",
+                    "disconnect while scanning=True", "stop"]  # fmt: skip
+    # Not heard: nothing to talk to, and the scan's stopped all the same.
+    heard = False
+    said.clear()
+    assert bluetooth._converse(lambda: bluetooth._talk(VIN, key, then, wake=False)) is None
+    assert said == ["scan", "stop"]
 
 
 def test_a_car_that_doesnt_wake_is_left_asleep_for_a_while(ble: TeslaService, radio: FakeRadio, live: FakeLive,
