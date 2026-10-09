@@ -191,6 +191,15 @@ DASHBOARD: dict[str, Table] = {
         Spec("ts"),
         grows=True,
     ),
+    "ev_events": Table(
+        "cars",
+        "Activity",
+        "What the dashboard did with a connected Tesla and what it saw done (charging started from solar, a change in "
+        "the car's app, each charge's total), for its day-by-day chart on the EV page.",
+        "Kept for good",
+        Spec("ts"),
+        grows=True,
+    ),
     "home_accounts": Table(
         "home",
         "Connected accounts",

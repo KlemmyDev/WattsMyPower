@@ -31,19 +31,22 @@ COMMANDS = ("start_charging", "stop_charging", "set_charging_amps", "set_charge_
 class TeslaError(Exception):
     """A request the car (or the service in between) refused, or that didn't get through. `status` is the HTTP status
     a cloud service answered with, if it did. `refused`: the credentials were turned down (Tessie's access token, or
-    this server's key, which the car doesn't know), so trying again won't help until they're set up again."""
+    this server's key, which the car doesn't know), so trying again won't help until they're set up again. `busy`:
+    over Bluetooth, the car was heard but is taking no more connections (its few are held by phones with its key),
+    which clears on its own once one of them is out of range: tried again, but not so soon."""
 
-    def __init__(self, message: str, status: int | None = None, *, refused: bool = False):
+    def __init__(self, message: str, status: int | None = None, *, refused: bool = False, busy: bool = False):
         super().__init__(message)
         self.status = status
         self.refused = refused or status in (401, 403)
+        self.busy = busy
 
     def __reduce__(self) -> tuple[Any, ...]:  # so it comes back from a process of its own as it was (bluetooth)
-        return _tesla_error, (str(self), self.status, self.refused)
+        return _tesla_error, (str(self), self.status, self.refused, self.busy)
 
 
-def _tesla_error(message: str, status: int | None, refused: bool) -> TeslaError:
-    return TeslaError(message, status, refused=refused)
+def _tesla_error(message: str, status: int | None, refused: bool, busy: bool = False) -> TeslaError:
+    return TeslaError(message, status, refused=refused, busy=busy)
 
 
 class CarAsleep(TeslaError):

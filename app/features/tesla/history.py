@@ -43,6 +43,21 @@ class History:
                 (vin, rollup(ts), wh, grid_wh),
             )
 
+    def power(self, vin: str, start: int, end: int) -> list[dict[str, Any]]:
+        """What the car drew from the house in each 5-minute rollup of [start, end) it charged in, as average W, and
+        of that what came from the grid: [{t, w, grid_w}]."""
+        with self.db.reading() as conn:
+            rows = conn.execute(
+                "SELECT ts, wh, grid_wh FROM ev_energy WHERE vin = ? AND ts >= ? AND ts < ? ORDER BY ts",
+                (vin, start, end),
+            ).fetchall()
+        k = 3600 / ROLLUP
+        return [
+            {"t": int(ts), "w": round(wh * k), "grid_w": round(min(wh, grid_wh or 0) * k)}
+            for ts, wh, grid_wh in rows
+            if wh > 0
+        ]
+
     def charged_w(self, start: int, end: int) -> dict[int, float]:
         """What the cars drew from the house in each 5-minute rollup of [start, end) they charged in, as average W."""
         with self.db.reading() as conn:
@@ -63,6 +78,21 @@ class History:
                 "SELECT ts, reason FROM ev_wakes WHERE vin = ? AND ts >= ? AND ts < ? ORDER BY ts", (vin, start, end)
             ).fetchall()
         return [{"t": int(ts), "reason": reason} for ts, reason in rows]
+
+    # -- events ---------------------------------------------------------------------------------
+    def add_event(self, vin: str, ts: float, text: str, kind: str | None) -> None:
+        """What the dashboard did with the car, or saw done (the activity), kept for its day's chart."""
+        with self.db.writing() as conn:
+            conn.execute("INSERT INTO ev_events (vin, ts, text, kind) VALUES (?, ?, ?, ?)", (vin, int(ts), text, kind))
+
+    def events(self, vin: str, start: int, end: int) -> list[dict[str, Any]]:
+        """The car's activity through [start, end), oldest first."""
+        with self.db.reading() as conn:
+            rows = conn.execute(
+                "SELECT ts, text, kind FROM ev_events WHERE vin = ? AND ts >= ? AND ts < ? ORDER BY ts, id",
+                (vin, start, end),
+            ).fetchall()
+        return [{"ts": int(ts), "vin": vin, "text": text, "kind": kind} for ts, text, kind in rows]
 
     # -- sessions -------------------------------------------------------------------------------
     def _row(self, row: tuple[Any, ...]) -> dict[str, Any]:
@@ -123,7 +153,7 @@ class History:
     def forget(self, vin: str | None = None) -> None:
         """Drop a car's history (or every car's)."""
         with self.db.writing() as conn:
-            for table in ("ev_energy", "ev_sessions", "ev_wakes"):
+            for table in ("ev_energy", "ev_sessions", "ev_wakes", "ev_events"):
                 if vin is None:
                     conn.execute(f"DELETE FROM {table}")
                 else:

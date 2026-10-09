@@ -39,6 +39,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     ev_energy    what each connected Tesla drew from the house while charging at home, Wh per 5 minutes (and of it
                  from the grid), as the car measured it: the Home page's car line (app.features.tesla)
     ev_wakes     each time the dashboard woke a Tesla, and why (to see it isn't woken too often, at night)
+    ev_events    what the dashboard did with each Tesla and what it saw done (the activity), for its day's chart
     ev_sessions  each Tesla's time away (its level and odometer leaving and coming back) and each charge at home
                  (levels, energy from the house and from the grid), for the EV page's in and out
     battery_controls each battery control from the dashboard (standby, a floor, a charge from the grid), and each
@@ -426,6 +427,17 @@ def _ev_wakes(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ev_events(conn: sqlite3.Connection) -> None:
+    """What the dashboard did with a Tesla and what it saw done (started charging from solar, a change in the car's
+    app, a charge's total, an error), kept for good so each day's chart on the EV page can show them (the kv log
+    only keeps the latest few hundred)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ev_events (id INTEGER PRIMARY KEY AUTOINCREMENT, vin TEXT NOT NULL,"
+        " ts INTEGER NOT NULL, text TEXT NOT NULL, kind TEXT)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS ev_events_by_ts ON ev_events (vin, ts)")
+
+
 def _drop_car_charges(conn: sqlite3.Connection) -> None:
     """Car charges are no longer planned on the dashboard (a Tesla is charged from spare solar
     instead): the charges planned ahead go."""
@@ -458,6 +470,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _drop_car_charges,
     _ev_history,
     _ev_wakes,
+    _ev_events,
 ]
 
 

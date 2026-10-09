@@ -94,7 +94,14 @@ function ConnectionRow({ status }: { status: TeslaStatus }) {
 function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) {
   const { data: cars } = useQuery(carsQuery);
   const { configure, remove } = useEvChange();
-  const reach = provider === "bluetooth" && v.state ? (v.state.in_range ? "in range" : "not heard") : null;
+  const reach =
+    provider === "bluetooth" && v.state
+      ? v.state.in_range
+        ? v.linked
+          ? "connected, the link held open"
+          : "in range"
+        : "not heard"
+      : null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle px-6 py-5 last:border-b-0">
       <div className="flex min-w-0 flex-col gap-0.5">
@@ -212,6 +219,15 @@ export function TeslaSettings() {
               </Button>
             </div>
           )}
+        </SettingsCard>
+      )}
+      {provider === "bluetooth" && (
+        <SettingsCard padded aria-labelledby="h-tesla-slots">
+          <SettingsTitle
+            id="h-tesla-slots"
+            title="A Tesla takes only a few Bluetooth connections"
+            sub="About three at once: each phone or watch with its key holds one while it's near the car, and with them all taken the car won't take the dashboard's. So while the car's plugged in at home by day (or charging), the dashboard keeps its connection open after each read, to keep its place; at night, and once the car's unplugged, it lets go so the car can sleep. When the dashboard can't get in, the EV page says so and tries again every few minutes. Keys you don't use are best removed in the car, under Controls → Locks."
+          />
         </SettingsCard>
       )}
       {provider && (

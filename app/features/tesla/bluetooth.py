@@ -32,19 +32,30 @@ WAKE_BACKOFF seconds: until then it's only checked without waking it, and its ch
 Each read or command is one conversation: find the car, connect, talk, disconnect; one at a time with anything else
 on the radio (app.core.bluetooth). One whose link couldn't be made, or dropped before anything reached the car, is had
 again once from the start (ATTEMPTS). Everything here is blocking.
+
+A Tesla takes only a few Bluetooth connections at once (about three), and each phone or watch with its key holds one
+while it's near the car. With them all taken the car still broadcasts, but won't take another: connecting waits its
+full time for an offer that never comes (the car is *busy*, TeslaError.busy), and the service eases off trying. So
+while a car is plugged in at home by day (or charging), the link is held open after a read (`hold`): the dashboard
+keeps its place, each read is quick (no finding and connecting first), and a phone that comes in range is the one
+left out. The car lets go of an idle link after a while even with the keepalive, so it's made again at the next read.
+Every conversation runs on one event loop in a thread of its own (so a held link outlives the conversation that made
+it); on a Mac each conversation is a process of its own, so nothing is held there.
 """
 
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import contextvars
 import hashlib
 import itertools
 import logging
 import re
+import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Coroutine, Iterator
 from typing import Any, Protocol
 
 from app.core.bluetooth import run_alone, unavailable
@@ -63,6 +74,14 @@ ACK_SECONDS = 8
 # last one) is tried again, after a pause: nothing reached the car, so a command can't happen twice.
 ATTEMPTS = 2
 RETRY_PAUSE = 3.0
+# While a link is held open: a trivial read this often, so the car doesn't drop it as idle (it does after ~40 s).
+KEEPALIVE_SECONDS = 20.0
+# bleak-retry-connector's word for a connect that waited its full time: the car offered no connection.
+BUSY = "timed out"
+BUSY_MESSAGE = (
+    "The car isn't taking Bluetooth connections right now. A Tesla takes about three at once, and each phone or watch "
+    "with its key holds one while it's near the car; once one of them is out of range, the dashboard gets in."
+)
 HANG_UP_SECONDS = 5.0  # to disconnect once done: what was read stands whether or not it went cleanly
 WAKE_BACKOFF = 1800  # seconds the car isn't woken again after it didn't wake (the key may not be allowed to wake it)
 WEAK_RSSI = -85  # dBm: a signal below this is weak (the car at the edge of range)
@@ -134,13 +153,16 @@ class Radio(Protocol):
         plugged: bool | None,
         extras: tuple[str, ...] = (),
         wake_for_extras: bool = False,
+        hold: bool | None = None,
     ) -> dict[str, Any]:
-        """{heard, asleep, port_open, status, charge_state, extras, refused}: whether it was heard; whether it's asleep
+        """{heard, asleep, port_open, status, charge_state, extras, refused, held}: whether it was heard; whether it's asleep
         and its charge port is open (None when unknown); its security computer's status, in words (details' status
         group); its charge (Tesla's charge_state) when it's awake and either `charge` or its port no longer says
         what `plugged` (what was last known) does, or with `wake`, when it's asleep with the port not closed (waking
         it); and the details groups in `extras` ({group: {field: message as a dict}}), read only while it's awake,
-        unless `wake_for_extras` (then it's woken), with those its key may not read in `refused` ({group: why})."""
+        unless `wake_for_extras` (then it's woken), with those its key may not read in `refused` ({group: why}).
+        `hold`: keep the link open after (`held` says it was), if the car's plugged in; False hangs up one that's
+        held; None leaves it as it is."""
         ...
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool: ...
@@ -187,6 +209,7 @@ class BluetoothClient:
         self._gone: set[str] = set()  # cars not heard last time: back in range, their charge is read at once
         self._no_wake: dict[str, float] = {}  # vin -> until when it isn't woken (it didn't wake last time)
         self._stale: set[str] = set()  # cars sent a command since their charge was read: read it at the next read
+        self._linked: set[str] = set()  # cars whose link was held open after their last read
 
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]:
         return [self._vehicle(vin, (want or {}).get(vin, "quiet")) for vin in self.vins()]
@@ -220,7 +243,14 @@ class BluetoothClient:
             extras = self._due(vin, DETAILS_ACTIVE if want == "active" else DETAILS_EVERY)[:EXTRAS_PER_READ]
         if wake and now < self._no_wake.get(vin, 0):
             wake = False  # it didn't wake last time: left asleep, its charge read once it's awake anyway
-        r = self.radio.read(vin, self.key, read, wake, plugged, extras)
+        # By day (or while it's charging), plugged in or not known to be unplugged: the link's held open after, so
+        # the dashboard keeps its place among the few connections the car takes (see the module's docstring).
+        hold = want != "night" and plugged is not False
+        r = self.radio.read(vin, self.key, read, wake, plugged, extras, hold=hold)
+        if r.get("held"):
+            self._linked.add(vin)
+        else:
+            self._linked.discard(vin)
         if r.get("wake_failed"):
             self._no_wake[vin] = now + WAKE_BACKOFF
         elif r.get("charge_state") is not None:
@@ -269,7 +299,8 @@ class BluetoothClient:
             self._extras.get(vin, {}),
             self._refused.get(vin, {}),
         )
-        row = {"vin": vin, "last_state": last, "in_range": bool(r.get("heard")), "details": found}
+        row = {"vin": vin, "last_state": last, "in_range": bool(r.get("heard")), "details": found,
+               "linked": vin in self._linked}  # fmt: skip
         if r.get("woke") and why:
             row["woke"] = why
         if r.get("wake_failed"):
@@ -404,6 +435,8 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
             "The car is asleep and didn't wake up for the dashboard's key. A charging-only key can't wake it: pair it "
             "again as a driver (Manage → Integrations → Tesla), or wake it in the Tesla app, then try again."
         )
+    if named("BluetoothTransportError") and _busy(talk):
+        return TeslaError(BUSY_MESSAGE, busy=True)
     if named("BluetoothTransportError"):
         # Heard, but the link to it couldn't be made, or dropped: not range, when its signal was good.
         connecting = (talk or {}).get("step") == "connecting"
@@ -418,8 +451,76 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
     return TeslaError(f"Bluetooth went wrong ({type(e).__name__}: {e}).")
 
 
-async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -> Any:
-    """Find the car, connect, `await then(car)`, and disconnect. None when it isn't heard.
+def _busy(talk: dict[str, Any] | None) -> bool:
+    """Whether the car was heard but offered no connection: connecting waited its full time (BUSY) at the first try.
+    That's a car with all its connections taken (see the module's docstring), not a link that failed."""
+    tries = (talk or {}).get("tries") or []
+    return bool(tries) and tries[0] == BUSY and (talk or {}).get("step") == "connecting"
+
+
+_LOOP: asyncio.AbstractEventLoop | None = None
+_LOOP_LOCK = threading.Lock()
+_HELD: dict[str, tuple[str, Any]] = {}  # vin -> (key, the car whose link is held open); touched only on the loop
+
+
+def _loop() -> asyncio.AbstractEventLoop:
+    """The event loop every conversation runs on, in a thread of its own, so a link held open outlives the
+    conversation that made it."""
+    global _LOOP
+    with _LOOP_LOCK:
+        if _LOOP is None or _LOOP.is_closed():
+            loop = asyncio.new_event_loop()
+            threading.Thread(target=loop.run_forever, name="tesla-bluetooth", daemon=True).start()
+            _LOOP = loop
+        return _LOOP
+
+
+def _run(make: Callable[[], Coroutine[Any, Any, Any]]) -> Any:
+    """`make()`, run on the loop and waited for here, in this thread's context (so _TALK is this conversation's)."""
+    loop = _loop()
+    ctx = contextvars.copy_context()
+    done: concurrent.futures.Future[Any] = concurrent.futures.Future()
+
+    def finish(t: asyncio.Task[Any]) -> None:
+        if t.cancelled():
+            done.cancel()
+        elif (e := t.exception()) is not None:
+            done.set_exception(e)
+        else:
+            done.set_result(t.result())
+
+    def start() -> None:
+        try:
+            loop.create_task(make(), context=ctx).add_done_callback(finish)
+        except BaseException as e:  # whatever it was, the caller gets it
+            done.set_exception(e)
+
+    loop.call_soon_threadsafe(start)
+    return done.result()
+
+
+def linked(vin: str) -> bool:
+    """Whether a link to the car is held open now (as last known: the car may have let go since)."""
+    return vin in _HELD
+
+
+async def _hang_up(vin: str, car: Any) -> None:
+    """Let go of a held link (or one that's dropped): what was read stands whether or not it goes cleanly."""
+    _HELD.pop(vin, None)
+    try:
+        async with asyncio.timeout(HANG_UP_SECONDS):
+            await car.disconnect()
+    except Exception as e:  # the car's already gone, say
+        log.info("Tesla over Bluetooth: disconnecting went wrong (%s: %s)", type(e).__name__, e)
+
+
+async def _talk(
+    vin: str, key: str, then: Callable[[Any], Any], *, wake: bool, hold: Callable[[Any], bool] | None = None
+) -> Any:
+    """Find the car, connect, `await then(car)`, and disconnect. None when it isn't heard. With `hold`, the link is
+    kept open after when `hold(what then gave)` says so (and what it gave, a dict, has `held`), and the next
+    conversation talks over it without finding and connecting first; without `hold`, a held link is used and left
+    held. A held link that's dropped (the car lets go of an idle one after a while) is made afresh.
 
     The scan runs until the conversation's over. BlueZ forgets a car it's only heard in passing as soon as scanning
     stops, unless the last broadcast it heard said it takes connections; a Tesla also sends ones that don't (its
@@ -430,6 +531,24 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
 
     name = ble_name(vin)
     talk = _TALK.get(None)
+    if (held := _HELD.get(vin)) is not None:
+        hkey, car = held
+        if hkey == key and car.client is not None and car.client.is_connected:
+            _step("talking over the link held open")
+            if talk is not None:
+                talk["via"] = "held link"
+            try:
+                out = await then(car)
+            except BaseException:  # dropped, or went wrong: the next conversation starts afresh
+                await _hang_up(vin, car)
+                raise
+            if hold is None or hold(out):
+                if isinstance(out, dict):
+                    out["held"] = True
+            else:
+                await _hang_up(vin, car)
+            return out
+        await _hang_up(vin, car)  # the car's let go of it (or the key's changed): afresh
     heard: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
 
     def hear(device: Any, adv: Any) -> None:
@@ -456,20 +575,24 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
             vin,
             serialization.load_pem_private_key(key.encode(), None),  # type: ignore[arg-type]
             device,
-            keepalive_interval=None,  # one conversation, then let it sleep
+            keepalive_interval=KEEPALIVE_SECONDS if hold is not None else None,  # else one conversation, then let go
             wake_if_asleep=wake,
         )
         car._default_timeout, car._actuation_timeout = REPLY_SECONDS, ACK_SECONDS
         with _connect_tries(talk):
             await car.connect()
+        keep = False
         try:
-            return await then(car)
+            out = await then(car)
+            keep = hold is not None and bool(hold(out))
+            if keep and isinstance(out, dict):
+                out["held"] = True
+            return out
         finally:
-            try:
-                async with asyncio.timeout(HANG_UP_SECONDS):
-                    await car.disconnect()
-            except Exception as e:  # the car's already gone, say: what it said still counts
-                log.info("Tesla over Bluetooth: disconnecting went wrong (%s: %s)", type(e).__name__, e)
+            if keep:
+                _HELD[vin] = (key, car)
+            else:
+                await _hang_up(vin, car)
     finally:
         try:
             await scanner.stop()
@@ -531,7 +654,7 @@ def _converse(coro: Callable[[], Any], sleep: Callable[[float], None] = time.sle
         token = _TALK.set(talk)
         start = time.monotonic()
         try:
-            out = asyncio.run(coro())
+            out = _run(coro)
             log.info("Tesla over Bluetooth: done in %.1f s (%s; signal %s)", time.monotonic() - start,
                      _timings(talk), signal(talk["rssi"]))  # fmt: skip
             return out
@@ -541,8 +664,8 @@ def _converse(coro: Callable[[], Any], sleep: Callable[[float], None] = time.sle
             log.info("Tesla over Bluetooth: %s after %.1f s (%s; signal %s; %s)%s", type(e).__name__,
                      time.monotonic() - start, _timings(talk), signal(talk["rssi"]), talk.get("via") or "adapter unknown",
                      _cause(e, talk))  # fmt: skip
-            if isinstance(e, BluetoothTransportError) and attempt < ATTEMPTS:
-                sleep(RETRY_PAUSE)
+            if isinstance(e, BluetoothTransportError) and attempt < ATTEMPTS and not _busy(talk):
+                sleep(RETRY_PAUSE)  # (a busy car won't take the next try either: not had)
                 continue
             raise _explain(e, talk) from None
         finally:
@@ -608,6 +731,7 @@ def _read_now(
     plugged: bool | None,
     extras: tuple[str, ...] = (),
     wake_for_extras: bool = False,
+    hold: bool | None = None,
 ) -> dict[str, Any]:
     from google.protobuf.json_format import MessageToDict
     from tesla_fleet_api import exceptions as x
@@ -649,7 +773,9 @@ def _read_now(
             out["extras"], out["refused"] = await _extras(car, extras)
         return out
 
-    return _converse(lambda: _talk(vin, key, then, wake=wake)) or {"heard": False}
+    # Held only while it's plugged in (its port not closed): unplugged, it's let go to sleep in peace.
+    keep = None if hold is None else (lambda out: bool(hold) and out.get("port_open") is not False)
+    return _converse(lambda: _talk(vin, key, then, wake=wake, hold=keep)) or {"heard": False}
 
 
 STEPS = {"start_charging": "starting it charging", "stop_charging": "stopping its charging",
@@ -736,8 +862,9 @@ class Bleak:
         plugged: bool | None,
         extras: tuple[str, ...] = (),
         wake_for_extras: bool = False,
+        hold: bool | None = None,
     ) -> dict[str, Any]:
-        return run_alone(_read_now, vin, key, charge, wake, plugged, extras, wake_for_extras, refused=TeslaError)
+        return run_alone(_read_now, vin, key, charge, wake, plugged, extras, wake_for_extras, hold, refused=TeslaError)
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
         return run_alone(_command_now, vin, key, name, params, refused=TeslaError)

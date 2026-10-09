@@ -21,7 +21,7 @@ from app.core.config import Config
 from app.core.database import Database
 from app.features.car.service import CarService
 from app.features.settings.store import SettingsStore
-from app.features.tesla import bluetooth, control, details
+from app.features.tesla import bluetooth, control, details, history
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
@@ -262,6 +262,7 @@ class ScriptedRadio:
     def __init__(self, *answers: dict[str, Any]) -> None:
         self.answers = list(answers)
         self.asked: list[tuple[bool, bool, bool | None]] = []
+        self.holds: list[bool | None] = []
 
     def read(
         self,
@@ -272,8 +273,10 @@ class ScriptedRadio:
         plugged: bool | None,
         extras: tuple[str, ...] = (),
         wake_for_extras: bool = False,
+        hold: bool | None = None,
     ) -> dict[str, Any]:
         self.asked.append((charge, wake, plugged))
+        self.holds.append(hold)
         return self.answers.pop(0)
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
@@ -419,6 +422,7 @@ class FakeRadio:
         self.asked: list[tuple[bool, bool]] = []
         self.extras_asked: list[tuple[str, ...]] = []
         self.refuse: set[str] = set()  # groups the key may not read
+        self.holds: list[bool | None] = []  # whether each read asked for the link to be held open after
 
     def _home(self) -> bool:
         ds = self.car.state.get("drive_state") or {}
@@ -433,9 +437,11 @@ class FakeRadio:
         plugged: bool | None,
         extras: tuple[str, ...] = (),
         wake_for_extras: bool = False,
+        hold: bool | None = None,
     ) -> dict[str, Any]:
         self.asked.append((charge, wake))
         self.extras_asked.append(extras)
+        self.holds.append(hold)
         if self.fail:
             raise self.fail
         if not self._home():
@@ -1433,3 +1439,221 @@ def test_after_a_first_restart_the_logged_level_shows_even_if_the_car_isnt_heard
     after = restarted(ble)
     minutes(after, live, clock, 2, grid=500)
     assert after.status()["vehicles"][0]["state"]["soc"] == soc
+
+
+def test_a_busy_car_is_not_tried_again_and_the_error_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Heard well, but connecting waited its full time: the car's taking no more connections (phones with its key
+    # near it). Trying again at once won't help, so it isn't, and the error says what's going on.
+    import logging
+
+    import bleak
+    import tesla_fleet_api.tesla.bluetooth as tb
+    from bleak.exc import BleakError
+    from tesla_fleet_api.exceptions import BluetoothTransportError
+
+    retry_log = logging.getLogger("bleak_retry_connector")
+    connects: list[int] = []
+
+    class Scanner:
+        def __init__(self, hear: Any) -> None:
+            self.hear = hear
+
+        async def start(self) -> None:
+            dev = SimpleNamespace(name=None, details={"path": "/org/bluez/hci0/dev_30", "props": {}})
+            self.hear(dev, SimpleNamespace(local_name=bluetooth.ble_name(VIN), rssi=-62))
+
+        async def stop(self) -> None: ...
+
+    class Car:
+        client = None
+
+        async def connect(self) -> None:
+            connects.append(1)
+            retry_log.debug("%s - %s: Timed out trying to connect (attempt: %s)", VIN, "30:AF", 1)
+            retry_log.debug("%s - %s: Failed to connect: %s, device_missing: %s, backing off: %s (attempt: %s)",
+                            VIN, "30:AF", "device 'dev_30' not found", True, 4.0, 2)  # fmt: skip
+            raise BluetoothTransportError() from BleakError("device 'dev_30' not found")
+
+        async def disconnect(self) -> None: ...
+
+    monkeypatch.setattr(bleak, "BleakScanner", Scanner)
+    monkeypatch.setattr(
+        tb, "TeslaBluetooth", lambda: SimpleNamespace(vehicles=SimpleNamespace(create=lambda *a, **k: Car()))
+    )
+    pauses: list[float] = []
+
+    async def then(c: Any) -> None: ...
+
+    with pytest.raises(TeslaError) as e:
+        bluetooth._converse(lambda: bluetooth._talk(VIN, bluetooth.new_key(), then, wake=False), pauses.append)
+    assert e.value.busy and str(e.value) == bluetooth.BUSY_MESSAGE
+    assert connects == [1] and pauses == []  # once: a busy car won't take the next try either
+    assert TeslaError("x", busy=True).__reduce__()[1][-1] is True  # survives a process of its own (a Mac)
+
+
+def test_the_link_is_held_open_while_the_car_is_plugged_in_by_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    import bleak
+    import tesla_fleet_api.tesla.bluetooth as tb
+
+    said: list[str] = []
+    made: list[dict[str, Any]] = []
+
+    class Scanner:
+        def __init__(self, hear: Any) -> None:
+            self.hear = hear
+
+        async def start(self) -> None:
+            said.append("scan")
+            self.hear(SimpleNamespace(name=None), SimpleNamespace(local_name=bluetooth.ble_name(VIN), rssi=-60))
+
+        async def stop(self) -> None:
+            said.append("stop")
+
+    class Car:
+        def __init__(self) -> None:
+            self.client = SimpleNamespace(is_connected=False)
+
+        async def connect(self) -> None:
+            said.append("connect")
+            self.client.is_connected = True
+
+        async def disconnect(self) -> None:
+            said.append("disconnect")
+            self.client.is_connected = False
+
+    def create(*a: Any, **k: Any) -> Car:
+        made.append(k)
+        return Car()
+
+    monkeypatch.setattr(bleak, "BleakScanner", Scanner)
+    monkeypatch.setattr(tb, "TeslaBluetooth", lambda: SimpleNamespace(vehicles=SimpleNamespace(create=create)))
+    monkeypatch.setattr(bluetooth, "_HELD", {})
+    key = bluetooth.new_key()
+
+    async def plugged(c: Any) -> dict[str, Any]:
+        said.append("talk")
+        return {"heard": True, "port_open": True}
+
+    async def unplugged(c: Any) -> dict[str, Any]:
+        said.append("talk")
+        return {"heard": True, "port_open": False}
+
+    talk = bluetooth._talk
+
+    def have(then: Any, hold: bool | None) -> Any:
+        keep = None if hold is None else (lambda out: bool(hold) and out.get("port_open") is not False)
+        return bluetooth._run(lambda: talk(VIN, key, then, wake=False, hold=keep))
+
+    # Plugged in, held: found, connected (with the keepalive), read, and kept: no hanging up, and the scan's stopped.
+    out = have(plugged, True)
+    assert out["held"] and bluetooth.linked(VIN) and made[-1]["keepalive_interval"] == bluetooth.KEEPALIVE_SECONDS
+    assert said == ["scan", "connect", "talk", "stop"]
+    # The next read talks over it: no finding, no connecting. A command (hold None) does too, and leaves it held.
+    said.clear()
+    assert have(plugged, True)["held"] and said == ["talk"]
+    assert have(lambda c: plugged(c), None)["held"] and said == ["talk", "talk"] and bluetooth.linked(VIN)
+    # Unplugged: hung up after the read, so the car can sleep in peace.
+    said.clear()
+    assert not have(unplugged, True).get("held") and said == ["talk", "disconnect"] and not bluetooth.linked(VIN)
+    # Held, then the car let go of it (idle too long): found and connected afresh.
+    said.clear()
+    have(plugged, True)
+    bluetooth._HELD[VIN][1].client.is_connected = False
+    said.clear()
+    assert have(plugged, True)["held"] and said == ["disconnect", "scan", "connect", "talk", "stop"]
+    # Not to be held (night): hung up as before.
+    said.clear()
+    assert not have(plugged, False).get("held") and said == ["talk", "disconnect"]
+    said.clear()
+    have(plugged, None)
+    assert said == ["scan", "connect", "talk", "disconnect", "stop"] and made[-1]["keepalive_interval"] is None
+
+
+def test_the_client_asks_for_the_link_to_be_held_by_day_while_plugged_in() -> None:
+    clock = Clock()
+    plugged = last_state(charging_state="Stopped")["charge_state"]
+    radio = ScriptedRadio(
+        {"heard": True, "asleep": False, "port_open": True, "charge_state": plugged, "held": True},
+        {"heard": True, "asleep": True, "port_open": True, "charge_state": None, "held": True},
+        {"heard": True, "asleep": True, "port_open": True, "charge_state": None},
+        {
+            "heard": True,
+            "asleep": False,
+            "port_open": False,
+            "charge_state": {**plugged, "charging_state": "Disconnected"},
+        },
+        {"heard": True, "asleep": True, "port_open": False, "charge_state": None},
+    )
+    client = BluetoothClient("key", lambda: [VIN], radio, clock)  # type: ignore[arg-type]
+    assert client.vehicles({VIN: "ready"})[0]["linked"]  # nothing known yet: held, and it was
+    clock.t += 60
+    assert client.vehicles({VIN: "quiet"})[0]["linked"]  # plugged in, by day: held
+    clock.t += 60
+    assert not client.vehicles({VIN: "night"})[0]["linked"]  # at night: let go
+    clock.t += 60
+    client.vehicles({VIN: "active"})  # read: unplugged
+    clock.t += 60
+    client.vehicles({VIN: "quiet"})
+    assert radio.holds == [True, True, False, True, False]  # unplugged: not asked to hold any more
+
+
+def test_reads_ease_off_while_the_car_is_busy_and_the_page_says_why(ble: TeslaService, radio: FakeRadio,
+                                                                     live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    radio.fail = TeslaError(bluetooth.BUSY_MESSAGE, busy=True)
+    waits = []
+    for _ in range(4):
+        ble._next_read = 0
+        ble.read()
+        waits.append(ble.status()["next_read"] - int(clock.t))
+    status = ble.status()
+    assert waits == [120, 300, 600, 600] and status["error"] == bluetooth.BUSY_MESSAGE
+    assert status["error_kind"] == "busy"
+    assert [e["kind"] for e in ble.log(1)] == ["error"] and "taking no more connections" in ble.log(1)[0]["text"]
+    # Through: back to normal, and the page's told.
+    radio.fail = None
+    ble._next_read = 0
+    ble.read()
+    status = ble.status()
+    assert status["error"] is None and status["error_kind"] is None
+    assert ble.log(1)[0]["text"] == "Reached over Bluetooth again"
+    # Any other failure: tried again in a minute, as before.
+    radio.fail = TeslaError("The car didn't answer over Bluetooth in time.")
+    ble._next_read = 0
+    ble.read()
+    assert ble.status()["next_read"] - int(clock.t) == 60 and ble.status()["error_kind"] is None
+
+
+def test_the_days_chart_has_what_the_car_drew_and_what_the_dashboard_did(ble: TeslaService, radio: FakeRadio,
+                                                                          live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    start = int(clock.t) // 86400 * 86400
+    ble.history.add_energy(VIN, clock.t, 300.0, 100.0)  # 300 Wh in five minutes: 3.6 kW, a third from the grid
+    ble.history.add_energy(VIN, clock.t + 300, 150.0, 0.0)
+    ble._note(VIN, "Started charging at 5 A: enough spare solar", "solar")
+    day = ble.car_levels(VIN, start, start + 86400)
+    assert day["power"] == [{"t": history.rollup(clock.t), "w": 3600, "grid_w": 1200},
+                            {"t": history.rollup(clock.t) + 300, "w": 1800, "grid_w": 0}]  # fmt: skip
+    assert day["events"][-1]["text"] == "Started charging at 5 A: enough spare solar"
+    assert day["events"][-1]["kind"] == "solar" and day["events"][-1]["ts"] == int(clock.t)
+    assert all(e["ts"] >= start for e in day["events"]) and day["events"] == sorted(
+        day["events"], key=lambda e: e["ts"]
+    )
+    # Kept for good, beyond the latest activity's few hundred.
+    ble._put("tesla_log", None)
+    assert ble.car_levels(VIN, start, start + 86400)["events"][-1]["text"].startswith("Started charging")
+    assert ble.log(1) == []
+
+
+def test_the_spare_power_shows_without_waiting_a_turn_of_the_loop(svc: TeslaService, tessie: FakeTessie,
+                                                                   live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    connect(svc, "tessie")
+    svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 3, "car_min_amps": 5, "car_amps": 16})
+    tessie.state["charge_state"].update(charging_state="Stopped")
+    live.reading(grid=-4000)
+    clock.t += 1
+    svc.tick()
+    assert svc.status()["vehicles"][0]["spare_w"] is None  # manual: not worked out
+    # Switched to solar: the page's told at once what's spare, from the latest reading, not a turn of the loop later.
+    status = svc.configure(VIN, {"mode": "solar", "first": "car"})
+    assert status["vehicles"][0]["spare_w"] == 4000
+    # And changing who gets the sun first starts the average afresh, with a figure straight away too.
+    assert svc.configure(VIN, {"first": "battery"})["vehicles"][0]["spare_w"] is not None

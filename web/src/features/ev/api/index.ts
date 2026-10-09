@@ -1,15 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type {
-  EvCommand,
-  EvControl,
-  EvDetails,
-  EvEvent,
-  EvHistory,
-  EvLevels,
-  KeyRole,
-  TeslaStatus,
-} from "~/features/ev/types";
+import type { EvCommand, EvControl, EvDetails, EvHistory, EvLevels, KeyRole, TeslaStatus } from "~/features/ev/types";
 
 /** How the Teslas are reached, and each car. Refreshed every 30 seconds while shown (the car changes as it charges),
  * every 2 while a car is being paired, and just after each read of the cars (so what it found shows at once). */
@@ -31,15 +22,6 @@ export const teslaQuery = queryOptions({
 /** Whether a car is being paired over Bluetooth now. */
 export const pairing = (s: TeslaStatus | undefined) =>
   s?.bluetooth.pairing?.step === "looking" || s?.bluetooth.pairing?.step === "tap";
-
-/** What the dashboard did with the cars, newest first. */
-export const teslaLogQuery = (limit: number) =>
-  queryOptions({
-    queryKey: ["tesla", "log", limit],
-    queryFn: ({ signal }) => apiGet<{ events: EvEvent[] }>("tesla/log", { limit }, { signal }),
-    staleTime: 15_000,
-    refetchInterval: 30_000,
-  });
 
 export const connectTessie = (token: string) => apiSend<TeslaStatus>("PUT", "tesla/tessie", { token });
 
