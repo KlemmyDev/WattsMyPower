@@ -439,7 +439,7 @@ def readiness(
     need_w: float | None,
     now: int,
 ) -> str:
-    """How closely to follow a car (see the module's docstring): "active" while it's charging (read each minute),
+    """How closely to follow a car (see the module's docstring): "active" while it's charging (read often),
     "ready" when it could start soon (read each minute, kept awake), else "quiet" (left to sleep)."""
     if car is None:
         return "quiet"

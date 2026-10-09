@@ -23,7 +23,7 @@ from app.features.tesla import bluetooth, control, details
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
-from app.features.tesla.service import POLL_ACTIVE, POLL_IDLE, TeslaService, TeslaSetupError, guess_model
+from app.features.tesla.service import POLL_ACTIVE, POLL_CHARGING, POLL_IDLE, TeslaService, TeslaSetupError, guess_model
 from app.features.tesla.tessie import TessieClient
 from app.main import create_app
 
@@ -403,6 +403,9 @@ class FakeRadio:
         self.taps = 0
         self.fail: TeslaError | None = None
         self.asleep = False  # it stays so until it's woken, or a command wakes it
+        self.wakes = True  # whether the key can wake it (a charging manager's may not)
+        self.roles: dict[str, str] = {}  # key -> its role in the car
+        self.tap_fails: TeslaError | None = None
         self.asked: list[tuple[bool, bool]] = []
         self.extras_asked: list[tuple[str, ...]] = []
         self.refuse: set[str] = set()  # groups the key may not read
@@ -432,6 +435,9 @@ class FakeRadio:
         cs = json.loads(json.dumps(self.car.state["charge_state"]))
         port = cs["charging_state"] != "Disconnected"
         status = {"locked": True, "open": ["Charge port"] if port else [], "user_present": False, "gear": "P"}
+        if self.asleep and wake and port and not self.wakes:  # it was asked to wake, and didn't
+            return {"heard": True, "asleep": True, "port_open": port, "status": status, "charge_state": None,
+                    "wake_failed": True}  # fmt: skip
         woke = self.asleep and ((wake and port) or wake_for_extras)
         if woke:
             self.asleep = False
@@ -451,9 +457,12 @@ class FakeRadio:
             raise self.fail
         return key in self.keys
 
-    def pair(self, vin: str, key: str, seconds: float) -> str | None:
+    def pair(self, vin: str, key: str, seconds: float, role: str = "charging_manager") -> str | None:
+        if self.tap_fails:
+            raise self.tap_fails
         self.taps += 1
         self.keys.add(key)
+        self.roles[key] = role
         return "Zappy"
 
 
@@ -595,6 +604,32 @@ def test_pairing_takes_a_tap_once(svc: TeslaService, radio: FakeRadio) -> None:
     svc.disconnect()
     connect(svc, "bluetooth")  # the car still has the key: no tap
     assert radio.taps == 1
+
+
+def test_the_key_can_be_paired_again_as_a_driver_to_wake_the_car(svc: TeslaService, radio: FakeRadio) -> None:
+    connect(svc, "bluetooth")
+    first = svc._key()
+    assert svc.status()["bluetooth"]["role"] == "charging_manager" and radio.roles[first] == "charging_manager"
+    # Another role takes a new key: until the card's tapped, the old one is the one used.
+    radio.tap_fails = TeslaError("The key card wasn't tapped in time.")
+    svc.pair(VIN, "driver")
+    assert svc.status()["bluetooth"]["pairing"]["step"] == "failed" and svc._key() == first
+    radio.tap_fails = None
+    svc.pair(VIN, "driver")
+    status = svc.status()
+    assert status["bluetooth"]["pairing"]["step"] == "done" and status["bluetooth"]["role"] == "driver"
+    assert svc._key() != first and radio.roles[svc._key()] == "driver" and radio.taps == 2
+    assert "as a driver" in svc.log()[0]["text"]
+    # Pairing again in the same role needs no tap: the car knows the key.
+    svc.pair(VIN)
+    assert radio.taps == 2 and svc.status()["bluetooth"]["role"] == "driver"
+    with pytest.raises(TeslaSetupError):
+        svc.pair(VIN, "owner")
+
+
+def test_a_key_kept_before_there_was_a_choice_is_a_charging_manager(svc: TeslaService) -> None:
+    svc._put("tesla_key", {"pem": bluetooth.new_key(), "made_at": 1})
+    assert svc.status()["bluetooth"]["role"] == "charging_manager"
 
 
 def test_a_failed_pairing_says_why(svc: TeslaService, radio: FakeRadio) -> None:
@@ -1094,3 +1129,65 @@ def test_a_bluetooth_timeout_says_where_it_failed_and_how_strong_the_car_was_hea
     assert str(e.value) == ("The car didn't answer over Bluetooth in time while setting its charging current. Its "
                             "signal was strong (−60 dBm).")  # fmt: skip
     assert bluetooth.signal(None) == "unknown" and bluetooth.signal(-78) == "fair (−78 dBm)"
+
+
+def test_a_car_that_doesnt_wake_is_left_asleep_for_a_while(ble: TeslaService, radio: FakeRadio, live: FakeLive,
+                                                           clock: Clock) -> None:  # fmt: skip
+    # The key can't wake it: the dashboard's just started (its charge unknown), so it's woken to be read, and doesn't.
+    radio.wakes = False
+    radio.asleep = True
+    ble._bluetooth._charge.clear()  # type: ignore[union-attr]
+    radio.asked.clear()
+    minutes(ble, live, clock, 6, grid=500)
+    v = ble.status()["vehicles"][0]
+    assert ble.status()["error"] is None and v["state"]["asleep"] is True  # asleep, not an error
+    assert v["no_wake_until"] == pytest.approx(clock() + bluetooth.WAKE_BACKOFF, abs=180)
+    assert "didn't wake up" in ble.log()[0]["text"]
+    # Until then it isn't asked to wake again, only checked without waking it.
+    tries = sum(1 for _, wake in radio.asked if wake)
+    minutes(ble, live, clock, 20, grid=500)
+    assert sum(1 for _, wake in radio.asked if wake) == tries
+    # Once it's awake (woken from the Tesla app), its charge is read and it can be woken again.
+    radio.asleep = False
+    minutes(ble, live, clock, 15, grid=500)
+    assert ble.status()["vehicles"][0]["no_wake_until"] is None
+
+
+def test_a_command_that_doesnt_wake_the_car_says_so() -> None:
+    from tesla_fleet_api.exceptions import BluetoothCommandFailed
+
+    async def asleep() -> None:
+        bluetooth._step("waking it first")
+        raise BluetoothCommandFailed()
+
+    with pytest.raises(TeslaError) as e:
+        bluetooth._converse(asleep)
+    assert str(e.value).startswith("The car is asleep and didn't wake up for the dashboard's key")
+
+
+def test_after_a_command_the_car_keeps_what_was_read_until_its_read_again(ble: TeslaService, radio: FakeRadio,
+                                                                           live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    ble.command(VIN, {"action": "amps", "amps": 7})
+    radio.asleep, radio.wakes = True, False  # it's gone back to sleep before the next read, and won't wake
+    radio.asked.clear()
+    minutes(ble, live, clock, 2, grid=500)
+    v = ble.status()["vehicles"][0]
+    # Still its level and what it's set to, not blank: and it was read again without waking it.
+    assert v["state"]["soc"] is not None and v["state"]["amps"] == 7 and v["state"]["plugged"] is True
+    assert radio.asked and not any(wake for _, wake in radio.asked)
+
+
+@pytest.mark.parametrize("provider", ["tessie", "bluetooth"])
+def test_a_car_charging_at_home_is_read_as_often_as_it_can_be(svc: TeslaService, provider: str, tessie: FakeTessie,
+                                                              live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    connect(svc, provider)
+    tessie.charge(charging_state="Charging", charger_actual_current=8, charge_current_request=8, charger_power=5)
+    live.reading(grid=0)
+    clock.t += POLL_IDLE
+    svc.tick()
+    assert svc.status()["next_read"] == int(clock()) + POLL_CHARGING[provider]
+    # Not charging: back to every five minutes.
+    tessie.charge(charging_state="Stopped")
+    clock.t += POLL_CHARGING[provider]
+    svc.tick()
+    assert svc.status()["next_read"] == int(clock()) + POLL_IDLE

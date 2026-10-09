@@ -51,6 +51,8 @@ export type EvVehicle = {
   home: [number, number] | null;
   /** Over Bluetooth: when it was paired (unix seconds). */
   paired_at: number | null;
+  /** Over Bluetooth, after it didn't wake for the dashboard's key: until when it isn't woken again (unix seconds). */
+  no_wake_until: number | null;
   /** When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of. */
   seen_at: number | null;
   status: EvStatus;
@@ -86,11 +88,16 @@ export type EvVehicle = {
 export type TeslaProvider = "tessie" | "bluetooth";
 
 /** A car being paired over Bluetooth: looking for it, waiting for the key card's tap, done, or failed (`error`). */
+/** The Bluetooth key's role in the car: charging only (it can't wake the car), or a driver's (it can, and could
+ * also unlock and drive it). */
+export type KeyRole = "charging_manager" | "driver";
+
 export type TeslaPairing = {
   vin: string;
   step: "looking" | "tap" | "done" | "failed";
   error: string | null;
   at: number;
+  role?: KeyRole;
 };
 
 export type TeslaStatus = {
@@ -102,6 +109,8 @@ export type TeslaStatus = {
   bluetooth: {
     /** This server's key, by a short fingerprint; null until a car's been paired. */
     key: string | null;
+    /** Its role in the cars; null until a car's been paired. */
+    role: KeyRole | null;
     pairing: TeslaPairing | null;
     /** Mock mode: the made-up car's VIN, to pair. */
     mock_vin: string | null;

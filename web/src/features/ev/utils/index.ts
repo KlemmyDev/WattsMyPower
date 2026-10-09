@@ -1,5 +1,8 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
-import type { EvEvent, EvMode, EvStatus, TeslaProvider } from "~/features/ev/types";
+import type { EvEvent, EvMode, EvStatus, KeyRole, TeslaProvider } from "~/features/ev/types";
+
+/** The key's role in words: what it lets the dashboard do. */
+export const ROLE_LABEL: Record<KeyRole, string> = { charging_manager: "Charging only", driver: "Driver" };
 
 export const PROVIDER_LABEL: Record<TeslaProvider, string> = { bluetooth: "Bluetooth", tessie: "Tessie" };
 

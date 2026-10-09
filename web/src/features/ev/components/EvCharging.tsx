@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
@@ -258,6 +258,46 @@ function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   );
 }
 
+const AMPS_SETTLE = 700; // ms after the last tap of − or + before the current's sent
+
+/**
+ * The charging current by hand: each tap of − or + shows at once, and once the taps stop the last is sent to the car
+ * as one command (over Bluetooth each is a conversation of its own, seconds long). A tap while one's on its way is
+ * sent after it.
+ */
+function useAmps(v: EvVehicle, command: ReturnType<typeof useEvChange>["command"]) {
+  const [target, setTarget] = useState<number | null>(null);
+  const latest = useRef<number | null>(null);
+  const sending = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const send = (amps: number) => {
+    sending.current = true;
+    command.mutate(
+      { vin: v.vin, action: "amps", amps },
+      {
+        onSettled: (_data, error) => {
+          sending.current = false;
+          if (!error && latest.current != null && latest.current !== amps) return send(latest.current);
+          latest.current = null;
+          setTarget(null); // what the car took (or, on an error, what it was) shows from the answer
+        },
+      },
+    );
+  };
+  const amps = target ?? v.state?.amps ?? null;
+  const step = (d: number) => {
+    const from = latest.current ?? amps; // from the last tap, even before it's shown
+    if (from == null) return;
+    const next = Math.max(1, Math.min(v.max_amps ?? 32, from + d));
+    latest.current = next;
+    setTarget(next);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => !sending.current && send(next), AMPS_SETTLE);
+  };
+  return { amps, step, waiting: target != null && !command.isPending };
+}
+
 /** How much it may borrow through a cloud (W), as a slider: shown on the scale while it moves, saved once it's let
  * go. */
 function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
@@ -299,11 +339,8 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
   const busy = command.isPending;
   // While the dashboard follows the sun it sets the speed itself; by hand only when it's manual or paused.
   const auto = c.mode !== "off" && !v.hold;
-  const amps = s?.amps ?? null;
+  const { amps, step, waiting } = useAmps(v, command);
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
-  const step = (d: number) =>
-    amps != null &&
-    command.mutate({ vin: v.vin, action: "amps", amps: Math.max(1, Math.min(v.max_amps ?? 32, amps + d)) });
   const shortBy = useShortBy(v, (w) => set({ vin: v.vin, grid_w: w }));
   const carW = s?.charging ? (s.power_kw ?? 0) * 1000 : 0;
   const ampsText = amps != null ? `${amps} A${perAmp ? ` · ${kW(amps * perAmp)}` : ""}` : "—";
@@ -426,7 +463,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
                 size="sm"
                 variant="chip"
                 aria-label="Charge slower"
-                disabled={busy || amps == null || amps <= 1}
+                disabled={amps == null || amps <= 1}
                 onClick={() => step(-1)}
               >
                 −
@@ -436,7 +473,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
                 size="sm"
                 variant="chip"
                 aria-label="Charge faster"
-                disabled={busy || amps == null || amps >= (v.max_amps ?? 32)}
+                disabled={amps == null || amps >= (v.max_amps ?? 32)}
                 onClick={() => step(1)}
               >
                 +
@@ -445,13 +482,15 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
           )}
         </div>
         <HelpText tone={command.isError ? "bad" : undefined}>
-          {command.isPending
-            ? "Sending to your car…"
-            : command.isError
-              ? errorMessage(command.error)
-              : c.mode !== "off"
-                ? "Starting, stopping or changing the speed here or in the Tesla app pauses solar charging until you unplug."
-                : ""}
+          {waiting
+            ? `Setting to ${amps} A…`
+            : command.isPending
+              ? "Sending to your car…"
+              : command.isError
+                ? errorMessage(command.error)
+                : c.mode !== "off"
+                  ? "Starting, stopping or changing the speed here or in the Tesla app pauses solar charging until you unplug."
+                  : ""}
         </HelpText>
       </Section>
     </Card>

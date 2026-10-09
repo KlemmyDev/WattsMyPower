@@ -71,7 +71,10 @@ WAKE_WHY = {
 TRACK_KEY = "tesla_track"  # kv: each car's last level and odometer at home, and since when it's been gone
 LOG_KEPT = 200
 TICK = 20  # seconds between the loop's turns
-POLL_ACTIVE = 60  # seconds between reads of the cars while one is being charged from solar
+POLL_ACTIVE = 60  # seconds between reads of the cars while one could start charging soon (ready)
+# While one's charging at home (awake anyway): as often as each way of reaching it allows. Over Bluetooth a read is a
+# conversation of a few seconds on a radio others share; Tessie's own copy of the car changes no faster than this.
+POLL_CHARGING = {"bluetooth": 15, "tessie": 30}
 POLL_IDLE = 300  # otherwise
 AFTER_COMMAND = 25  # read the cars again this soon after a command, to see it take
 AHEAD_EVERY = 300  # seconds the forecast's spare solar is kept before it's worked out again
@@ -149,6 +152,7 @@ class TeslaService:
         self._ahead: tuple[int, list[dict[str, Any]], dict[str, Any]] | None = None
         self._details: dict[str, dict[str, Any]] | None = None  # vin -> group -> entry (DETAILS_KEY), once loaded
         self._seen: dict[str, int] = {}  # vin -> when it was last read (heard, over Bluetooth)
+        self._no_wake: dict[str, int] = {}  # vin -> until when it's left asleep: it didn't wake (over Bluetooth)
         self.history = History(db)  # each car's in and out (app.features.tesla.history)
         self._tracks: dict[str, dict[str, Any]] | None = None  # TRACK_KEY, once loaded
         self._charge_tick: dict[str, float] = {}  # vin -> when its charging was last counted
@@ -212,13 +216,15 @@ class TeslaService:
         events: list[dict[str, Any]] = self._kv(LOG_KEY) or []
         return list(reversed(events))[: max(1, min(limit, LOG_KEPT))]
 
-    def _key(self, make: bool = False) -> str | None:
-        """This server's Bluetooth key (PEM), made the first time it's needed."""
-        k = (self._kv(KEY_KEY) or {}).get("pem")
-        if k is None and make:
-            k = bluetooth.new_key()
-            self._put(KEY_KEY, {"pem": k, "made_at": int(self.clock())})
+    def _key(self) -> str | None:
+        """This server's Bluetooth key (PEM), once a car's been paired."""
+        k: str | None = (self._kv(KEY_KEY) or {}).get("pem")
         return k
+
+    def _key_role(self) -> str | None:
+        """The key's role in the cars (bluetooth.ROLES): keys made before there was a choice are charging managers."""
+        kept = self._kv(KEY_KEY) or {}
+        return (kept.get("role") or "charging_manager") if kept.get("pem") else None
 
     @staticmethod
     def _is_connected(c: dict[str, Any]) -> bool:
@@ -296,27 +302,31 @@ class TeslaService:
         self.wake()
         return self.status()
 
-    def pair(self, vin: Any) -> dict[str, Any]:
-        """Start pairing a car over Bluetooth, by its VIN: find it, and (unless it already knows this server's key)
-        ask it to add the key, which takes a tap of a key card in the car. Runs in the background: status()'s
-        `bluetooth.pairing` follows it. Raises TeslaSetupError."""
+    def pair(self, vin: Any, role: Any = None) -> dict[str, Any]:
+        """Start pairing a car over Bluetooth, by its VIN, in `role` (bluetooth.ROLES; by default the key's own): find
+        it, and (unless it already knows this server's key) ask it to add the key, which takes a tap of a key card in
+        the car. Another role takes a new key, kept only once the car's taken it (until then the old one still
+        works). Runs in the background: status()'s `bluetooth.pairing` follows it. Raises TeslaSetupError."""
         vin = str(vin or "").strip().upper()
         if not VIN.match(vin):
             raise TeslaSetupError("Enter the car's VIN: 17 letters and numbers, as on the car's screen (Controls → "
                                   "Software) or the Tesla app.")  # fmt: skip
+        role = role or self._key_role() or "charging_manager"
+        if role not in bluetooth.ROLES:
+            raise TeslaSetupError("Pair the key as a charging manager (charging_manager) or a driver (driver).")
         with self._lock:
             if self._pairing and self._pairing["step"] in ("looking", "tap"):
                 raise TeslaSetupError("A car is already being paired. Wait for it to finish.", 409)
             c = self._conn()
             if c.get("provider") == "bluetooth" and vin not in c["vehicles"] and len(c["vehicles"]) >= MAX_CARS:
                 raise TeslaSetupError(f"Up to {MAX_CARS} cars can be paired.")
-            key = self._key(make=True)
-            assert key is not None
-            self._pairing = {"vin": vin, "step": "looking", "error": None, "at": int(self.clock())}
-        self._spawn(lambda: self._pair(vin, key))
+            key = self._key() if role == self._key_role() else None
+            key = key or bluetooth.new_key()
+            self._pairing = {"vin": vin, "step": "looking", "error": None, "at": int(self.clock()), "role": role}
+        self._spawn(lambda: self._pair(vin, key, role))
         return self.status()
 
-    def _pair(self, vin: str, key: str) -> None:
+    def _pair(self, vin: str, key: str, role: str = "charging_manager") -> None:
         """Pairing, in the background (see pair)."""
         try:
             name = None
@@ -324,7 +334,7 @@ class TeslaService:
                 with self._lock:
                     if self._pairing:
                         self._pairing["step"] = "tap"
-                name = self.radio.pair(vin, key, bluetooth.PAIR_SECONDS)
+                name = self.radio.pair(vin, key, bluetooth.PAIR_SECONDS, role)
         except TeslaError as e:
             with self._lock:
                 self._pairing = {"vin": vin, "step": "failed", "error": str(e), "at": int(self.clock())}
@@ -336,6 +346,8 @@ class TeslaService:
                                  "at": int(self.clock())}  # fmt: skip
             return
         with self._lock:
+            if key != self._key():  # a new key (the first, or in another role): the one used from now on
+                self._put(KEY_KEY, {"pem": key, "role": role, "made_at": int(self.clock())})
             c = self._conn()
             vins = [*c["vehicles"], vin] if c.get("provider") == "bluetooth" else [vin]
             c = self._switch(c, "bluetooth", vins)
@@ -347,7 +359,9 @@ class TeslaService:
             if self._bluetooth is not None and name:
                 self._bluetooth.names[vin] = name
             self._next_read = 0
-            self._note(vin, "Paired over Bluetooth", "mode")
+            self._note(
+                vin, f"Paired over Bluetooth, as a {'driver' if role == 'driver' else 'charging manager'}", "mode"
+            )
         self.wake()
 
     def _claim(self, vin: str, last: dict[str, Any], claimed: set[Any]) -> int | None:
@@ -608,6 +622,14 @@ class TeslaService:
         self._merge_details(vin, row.get("details") or {})
         if row.get("woke"):
             self._woke(vin, str(row["woke"]))
+        if row.get("wake_failed"):
+            self._no_wake[vin] = int(row["wake_failed"])
+            self._note(vin, "The car didn't wake up for the dashboard's key: it's left asleep for half an hour, and its "
+                            "charge is read once it's awake (charging, in use, or woken from the Tesla app)"
+                            + (". A charging-only key can't wake it: pair it again as a driver to let it"
+                               if self._key_role() == "charging_manager" else ""), "error")  # fmt: skip
+        elif self._states[vin].asleep is False:
+            self._no_wake.pop(vin, None)
 
     def _woke(self, vin: str, why: str) -> None:
         """The dashboard woke the car (or sent it something while it slept, which wakes it): kept, to see that it isn't
@@ -765,15 +787,19 @@ class TeslaService:
         return follow, chance, wake_at
 
     def _poll_after(self, c: dict[str, Any]) -> float:
-        """Seconds until the cars should next be read: each minute while one is charging or ready, else every five,
-        and in time to make a car ready before spare solar is expected for it."""
+        """Seconds until the cars should next be read: as often as it can be while one is charging at home
+        (POLL_CHARGING), each minute while one is charging elsewhere or ready, else every five, and in time to make a
+        car ready before spare solar is expected for it."""
         now = self.clock()
         after = float(POLL_IDLE)
         for vin, v in c["vehicles"].items():
             follow, _, wake_at = self._follow(vin, v)
-            if follow != "quiet":
-                return POLL_ACTIVE
-            if wake_at is not None:
+            s = self._states.get(vin)
+            if follow == "active" and s is not None and s.at_home:
+                after = min(after, POLL_CHARGING.get(c.get("provider") or "", POLL_ACTIVE))
+            elif follow != "quiet":
+                after = min(after, POLL_ACTIVE)
+            elif wake_at is not None:
                 after = min(after, max(1.0, wake_at - now))
         return after
 
@@ -1159,6 +1185,8 @@ class TeslaService:
             "paired_at": v.get("paired_at"),
             # When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of.
             "seen_at": self._seen.get(vin),
+            # Over Bluetooth, after it didn't wake: until when it isn't woken again (unix seconds).
+            "no_wake_until": u if (u := self._no_wake.get(vin)) and u > self.clock() else None,
             "status": status,
             "doing": doing,
             "hold": mem.hold if v["control"]["mode"] != "off" else None,
@@ -1219,6 +1247,7 @@ class TeslaService:
             "token": mask(token) if token else None,
             "bluetooth": {
                 "key": bluetooth.fingerprint(key) if key else None,
+                "role": self._key_role(),  # charging_manager (can't wake the car) or driver
                 "pairing": self._pairing,
                 "mock_vin": DEMO_VIN if self.config.mock else None,  # the made-up car to pair in mock mode
             },
@@ -1278,5 +1307,7 @@ class TeslaService:
             except Exception:
                 log.exception("Checking the Teslas failed")
             self._wake.clear()
+            # Every TICK, or sooner when the next read's due sooner (every few seconds while a car charges at home).
+            due = self._next_read - self.clock()
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._wake.wait(), TICK)
+                await asyncio.wait_for(self._wake.wait(), min(TICK, due) if due > 0 else TICK)

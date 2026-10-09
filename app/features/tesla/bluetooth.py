@@ -2,9 +2,11 @@
 A Tesla over this server's Bluetooth: read and commanded locally, with no account or cloud in between. The car's own
 vehicle-command protocol (signed and encrypted sessions over BLE), through tesla-fleet-api.
 
-Pairing: the dashboard makes a key of its own (kept in the database, never shown), and asks the car to add it as a
-*charging manager*, which can read the car's charge and start, stop and set charging, and nothing else (no unlocking,
-no driving). The car only takes it once someone sitting in the car taps a key card on the console. A car is found by
+Pairing: the dashboard makes a key of its own (kept in the database, never shown), and asks the car to add it in one
+of two roles (ROLES): a *charging manager*, which can read the car's charge and start, stop and set charging, and
+nothing else (no unlocking, no driving), but can't wake the car; or a *driver*, as a phone key is, which can wake it
+(so charging from solar can start a car that's fallen asleep plugged in), and could also unlock and drive it. The car
+only takes it once someone sitting in the car taps a key card on the console. A car is found by
 the name it broadcasts, worked out from its VIN, so the VIN is all there is to type.
 
 Its security computer always answers without waking it (whether it's asleep, and whether its charge port is open);
@@ -19,7 +21,9 @@ closely the service follows the car (app.features.tesla.control.readiness):
 
 Asleep, its last charge reading stands, and a closed charge port says it's unplugged. A car with no charge reading
 yet (the dashboard has just started) is woken once to be read, unless its port is closed. A command wakes the car
-first. A car that isn't heard is out of range: not at home, or too far from the server.
+first. A car that doesn't wake (a charging manager's key may not be allowed to wake it) isn't woken again for
+WAKE_BACKOFF seconds: until then it's only checked without waking it, and its charge is read once it's awake anyway
+(charging, in use, or woken from the Tesla app). A car that isn't heard is out of range: not at home, or too far from the server.
 
 Each read or command is one conversation: find the car, connect, talk, disconnect; one at a time with anything else
 on the radio (app.core.bluetooth). Everything here is blocking.
@@ -30,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import hashlib
+import itertools
 import logging
 import time
 from collections.abc import Callable
@@ -47,11 +52,16 @@ SCAN_SECONDS = 12  # to hear the car's broadcast
 # acknowledgement): longer, as the server may be some way from the car, through walls.
 REPLY_SECONDS = 12
 ACK_SECONDS = 8
+WAKE_BACKOFF = 1800  # seconds the car isn't woken again after it didn't wake (the key may not be allowed to wake it)
 WEAK_RSSI = -85  # dBm: a signal below this is weak (the car at the edge of range)
 FAIR_RSSI = -72
 PAIR_SECONDS = 150  # to get in the car and tap the key card
+ROLES = ("charging_manager", "driver")  # the key's role in the car (see the module's docstring)
 DETAILS_EVERY = 900  # seconds between reads of a car's details (app.features.tesla.details) while it's awake
 DETAILS_ACTIVE = 300  # while it's charging or ready to (awake anyway)
+EXTRAS_PER_READ = 2  # groups of details read at most with each read, so a command never waits long behind one
+# What a command the car took changes in its charge reading, kept until it's read again: the field, and the param.
+TOOK = {"set_charging_amps": ("charge_current_request", "amps"), "set_charge_limit": ("charge_limit_soc", "percent")}
 REFUSED_RETRY = 86400  # a group the key may not read is asked for again after this
 # Each group of details over Bluetooth: the car's own vehicle-data requests, one at a time (two at once can be more
 # than a Bluetooth message holds), and where each answer is.
@@ -127,8 +137,9 @@ class Radio(Protocol):
         """Whether the car already knows the key. Raises TeslaError when it isn't heard."""
         ...
 
-    def pair(self, vin: str, key: str, seconds: float) -> str | None:
-        """Ask the car to add the key, and wait for the key card to be tapped: the car's name, if it says."""
+    def pair(self, vin: str, key: str, seconds: float, role: str = "charging_manager") -> str | None:
+        """Ask the car to add the key in `role` (ROLES), and wait for the key card to be tapped: the car's name, if it
+        says."""
         ...
 
 
@@ -149,6 +160,8 @@ class BluetoothClient:
         self._extras: dict[str, dict[str, tuple[int, dict[str, Any]]]] = {}  # vin -> group -> (when, raw)
         self._refused: dict[str, dict[str, tuple[int, str]]] = {}  # vin -> group -> (when, why)
         self._gone: set[str] = set()  # cars not heard last time: back in range, their charge is read at once
+        self._no_wake: dict[str, float] = {}  # vin -> until when it isn't woken (it didn't wake last time)
+        self._stale: set[str] = set()  # cars sent a command since their charge was read: read it at the next read
 
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]:
         return [self._vehicle(vin, (want or {}).get(vin, "quiet")) for vin in self.vins()]
@@ -170,12 +183,19 @@ class BluetoothClient:
         at, charge = self._charge.get(vin, (0.0, None))
         plugged = None if charge is None else charge.get("charging_state") not in ("", "Disconnected")
         if want == "quiet":
-            read, wake = charge is None or now - at >= QUIET_READ or vin in self._gone, charge is None
+            read = charge is None or now - at >= QUIET_READ or vin in self._gone or vin in self._stale
+            wake = charge is None
             extras = self._due(vin, 0) if read else ()  # along with the hourly read, never on their own
         else:
             read, wake = True, want == "ready" or charge is None
-            extras = self._due(vin, DETAILS_ACTIVE if want == "active" else DETAILS_EVERY)
+            extras = self._due(vin, DETAILS_ACTIVE if want == "active" else DETAILS_EVERY)[:EXTRAS_PER_READ]
+        if wake and now < self._no_wake.get(vin, 0):
+            wake = False  # it didn't wake last time: left asleep, its charge read once it's awake anyway
         r = self.radio.read(vin, self.key, read, wake, plugged, extras)
+        if r.get("wake_failed"):
+            self._no_wake[vin] = now + WAKE_BACKOFF
+        elif r.get("charge_state") is not None:
+            self._no_wake.pop(vin, None)
         return self._row(vin, r, "ready" if want == "ready" else "first")
 
     def _row(self, vin: str, r: dict[str, Any], why: str | None = None) -> dict[str, Any]:
@@ -189,6 +209,7 @@ class BluetoothClient:
             at, charge = now, r["charge_state"]
             self._charge[vin] = (at, charge)
             self._gone.discard(vin)
+            self._stale.discard(vin)
         if r.get("status"):
             self._status[vin] = (now, r["status"])
         for g, raw in (r.get("extras") or {}).items():
@@ -219,6 +240,8 @@ class BluetoothClient:
         row = {"vin": vin, "last_state": last, "in_range": bool(r.get("heard")), "details": found}
         if r.get("woke") and why:
             row["woke"] = why
+        if r.get("wake_failed"):
+            row["wake_failed"] = int(self._no_wake.get(vin, now))  # until when it's left asleep
         return row
 
     def refresh_details(self, vin: str, wake: bool) -> dict[str, Any]:
@@ -235,7 +258,13 @@ class BluetoothClient:
             raise ValueError(f"Unknown command: {name}")
         ok = self.radio.command(vin, self.key, name, params)
         if ok:
-            self._charge.pop(vin, None)  # what it was doing before isn't what it's doing now: read it again
+            # What it was doing before isn't what it's doing now: read again at the next read. Until then, what was
+            # read stands (so the page keeps showing it), with what the command set; its time stays the reading's.
+            self._stale.add(vin)
+            if vin in self._charge and name in TOOK:
+                at, charge = self._charge[vin]
+                field, param = TOOK[name]
+                self._charge[vin] = (at, {**charge, field: params[param]})
         return ok
 
 
@@ -250,6 +279,13 @@ _TALK: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar("tesla_ta
 def _step(text: str) -> None:
     if (t := _TALK.get(None)) is not None:
         t["step"] = text
+        t["steps"].append((text, time.monotonic()))
+
+
+def _timings(talk: dict[str, Any]) -> str:
+    """How long each step of a conversation took: "listening for the car 1.2 s, connecting 3.4 s, …"."""
+    marks = [*talk["steps"], ("", time.monotonic())]
+    return ", ".join(f"{a} {b_t - a_t:.1f} s" for (a, a_t), (_, b_t) in itertools.pairwise(marks))
 
 
 def signal(rssi: int | None) -> str:
@@ -301,6 +337,12 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
         return TeslaError(f"The car didn't add the key ({type(e).__name__.removeprefix('WhitelistOperation')}).")
     if named("TeslaFleetMessageFaultInsufficientPrivileges"):
         return TeslaError("The car won't let this server's key do that.")
+    waking = str((talk or {}).get("step") or "").startswith("waking")
+    if waking and (named("BluetoothTimeout", "BluetoothCommandFailed") or isinstance(e, TimeoutError)):
+        return TeslaError(
+            "The car is asleep and didn't wake up for the dashboard's key. A charging-only key can't wake it: pair it "
+            "again as a driver (Manage → Integrations → Tesla), or wake it in the Tesla app, then try again."
+        )
     if named("BluetoothTransportError"):
         return TeslaError(f"The car couldn't be reached over Bluetooth{_where(talk)}")
     if named("BluetoothTimeout") or isinstance(e, TimeoutError):
@@ -356,14 +398,19 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
 def _converse(coro: Callable[[], Any]) -> Any:
     """Run one conversation in an event loop of its own, every failure turned into a TeslaError (which, unlike
     tesla-fleet-api's, pickles, for a Mac's process of its own)."""
-    talk: dict[str, Any] = {"step": None, "rssi": None}
+    talk: dict[str, Any] = {"step": None, "rssi": None, "steps": []}
     token = _TALK.set(talk)
+    start = time.monotonic()
     try:
-        return asyncio.run(coro())
+        out = asyncio.run(coro())
+        log.info("Tesla over Bluetooth: done in %.1f s (%s; signal %s)", time.monotonic() - start, _timings(talk),
+                 signal(talk["rssi"]))  # fmt: skip
+        return out
     except BaseException as e:  # tesla-fleet-api's errors are BaseExceptions
         if isinstance(e, KeyboardInterrupt | SystemExit):
             raise
-        log.info("Tesla over Bluetooth: %s while %s (signal %s)", type(e).__name__, talk["step"], signal(talk["rssi"]))
+        log.info("Tesla over Bluetooth: %s after %.1f s (%s; signal %s)", type(e).__name__, time.monotonic() - start,
+                 _timings(talk), signal(talk["rssi"]))  # fmt: skip
         raise _explain(e, talk) from None
     finally:
         _TALK.reset(token)
@@ -429,6 +476,7 @@ def _read_now(
     wake_for_extras: bool = False,
 ) -> dict[str, Any]:
     from google.protobuf.json_format import MessageToDict
+    from tesla_fleet_api import exceptions as x
     from tesla_protocol.command.vcsec_pb2 import ClosureState_E, VehicleSleepStatus_E
 
     async def then(car: Any) -> dict[str, Any]:
@@ -449,7 +497,13 @@ def _read_now(
         moved = port_open is not None and plugged is not None and port_open != plugged  # plugged in or out since
         if (not asleep and (charge or moved)) or (asleep and wake and port_open is not False):
             _step("waking it to read its charge" if asleep else "reading its charge")
-            cs = await car.charge_state()
+            try:
+                cs = await car.charge_state()
+            except (x.BluetoothTimeout, x.BluetoothCommandFailed):
+                if not asleep:
+                    raise
+                out["wake_failed"] = True  # it didn't wake: what its security computer said still counts
+                return out
             state = MessageToDict(cs, preserving_proto_field_name=True)
             state["charging_state"] = cs.charging_state.WhichOneof("type") or ""
             out["charge_state"] = state
@@ -469,8 +523,13 @@ STEPS = {"start_charging": "starting it charging", "stop_charging": "stopping it
 
 
 def _command_now(vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
+    from tesla_protocol.command.vcsec_pb2 import VehicleSleepStatus_E
+
     async def then(car: Any) -> bool:
-        _step(STEPS.get(name, "sending it a command"))
+        _step("asking whether it's asleep")
+        status = await car.vehicle_state()
+        asleep = status.vehicleSleepStatus == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
+        _step("waking it first" if asleep else STEPS.get(name, "sending it a command"))
         if name == "start_charging":
             r = await car.charge_start()
         elif name == "stop_charging":
@@ -506,13 +565,13 @@ def _probe_now(vin: str, key: str) -> bool:
     return bool(out)
 
 
-def _pair_now(vin: str, key: str, seconds: float) -> str | None:
+def _pair_now(vin: str, key: str, seconds: float, role: str = "charging_manager") -> str | None:
     from tesla_fleet_api import exceptions as x
     from tesla_protocol.command.keys_pb2 import Role
 
     async def then(car: Any) -> dict[str, Any]:
         try:
-            await car.pair(Role.ROLE_CHARGING_MANAGER, timeout=seconds)
+            await car.pair(Role.ROLE_DRIVER if role == "driver" else Role.ROLE_CHARGING_MANAGER, timeout=seconds)
         except x.WhitelistOperationAttemptingToAddExistingKey:
             pass  # it has it already
         except x.BluetoothTimeout as e:  # neither the car's answer nor the key working came in time
@@ -552,5 +611,5 @@ class Bleak:
     def probe(self, vin: str, key: str) -> bool:
         return run_alone(_probe_now, vin, key, refused=TeslaError)
 
-    def pair(self, vin: str, key: str, seconds: float) -> str | None:
-        return run_alone(_pair_now, vin, key, seconds, refused=TeslaError)
+    def pair(self, vin: str, key: str, seconds: float, role: str = "charging_manager") -> str | None:
+        return run_alone(_pair_now, vin, key, seconds, role, refused=TeslaError)

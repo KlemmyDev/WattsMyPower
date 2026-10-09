@@ -40,9 +40,10 @@ async def tesla_connect_tessie(svc: ServicesDep, body: JsonBody):
 
 @router.post("/bluetooth")
 async def tesla_pair(svc: ServicesDep, body: JsonBody):
-    """Pair a car over Bluetooth by its VIN ({"vin"}). Answers at once; the pairing (a tap of a key card in the car)
-    goes on in the background, followed by GET's `bluetooth.pairing`. Switches from Tessie once it's paired."""
-    return await _change(svc, svc.tesla.pair, body.get("vin"))
+    """Pair a car over Bluetooth by its VIN ({"vin", "role"}: charging_manager, which can't wake the car, or driver).
+    Answers at once; the pairing (a tap of a key card in the car) goes on in the background, followed by GET's
+    `bluetooth.pairing`. Switches from Tessie once it's paired."""
+    return await _change(svc, svc.tesla.pair, body.get("vin"), body.get("role"))
 
 
 @router.delete("")

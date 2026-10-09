@@ -6,11 +6,20 @@ import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { cn } from "~/features/common/ui/utils";
+import { Segmented } from "~/features/common/ui/components/Segmented";
 import { pairing, teslaQuery } from "~/features/ev/api";
 import { useEvChange } from "~/features/ev/hooks";
-import type { TeslaStatus } from "~/features/ev/types";
+import type { KeyRole, TeslaStatus } from "~/features/ev/types";
+import { ROLE_LABEL } from "~/features/ev/utils";
 
 const VIN = /^[A-HJ-NPR-Z0-9]{17}$/;
+
+const ROLE_ABOUT: Record<KeyRole, string> = {
+  charging_manager:
+    "It can start, stop and set charging, and can't unlock or drive the car. It can't wake the car either: once the car's asleep, charging from solar waits until it wakes (as you use it, or from the Tesla app).",
+  driver:
+    "It can wake the car, as your phone key does, so charging from solar can start the car even after it's fallen asleep plugged in. Like a phone key, it could also unlock and drive the car.",
+};
 
 const STEPS = [
   "Park the car near the server: Bluetooth reaches about 10 m, less through walls.",
@@ -19,14 +28,26 @@ const STEPS = [
 ];
 
 /**
- * Pairing a Tesla over this server's Bluetooth, by its VIN. The server asks the car to add a key of its own as a
- * charging manager (charging only: it can't unlock or drive the car), which takes a tap of a key card in the car.
- * Follows the pairing as it goes: looking for the car, waiting for the tap, then paired or why not.
+ * Pairing a Tesla over this server's Bluetooth, by its VIN. The server asks the car to add a key of its own, charging
+ * only or as a driver (which can wake the car), which takes a tap of a key card in the car. Follows the pairing as it
+ * goes: looking for the car, waiting for the tap, then paired or why not. `vin` and `role` start it filled in (pairing
+ * a car again as a driver).
  */
-export function BluetoothPair({ className, onPaired }: { className?: string; onPaired?: (s: TeslaStatus) => void }) {
+export function BluetoothPair({
+  className,
+  onPaired,
+  vin: givenVin = "",
+  role: givenRole,
+}: {
+  className?: string;
+  onPaired?: (s: TeslaStatus) => void;
+  vin?: string;
+  role?: KeyRole;
+}) {
   const { data: status } = useQuery(teslaQuery);
   const { pair } = useEvChange();
-  const [vin, setVin] = useState("");
+  const [vin, setVin] = useState(givenVin);
+  const [role, setRole] = useState<KeyRole>(givenRole ?? status?.bluetooth.role ?? "charging_manager");
   const [asked, setAsked] = useState<string | null>(null);
   const p = status?.bluetooth.pairing;
   // The pairing asked for here, or one under way (asked for before the page was opened, or elsewhere).
@@ -46,7 +67,7 @@ export function BluetoothPair({ className, onPaired }: { className?: string; onP
     e.preventDefault();
     if (!VIN.test(clean)) return;
     setAsked(clean);
-    pair.mutate(clean);
+    pair.mutate({ vin: clean, role });
   };
 
   return (
@@ -92,6 +113,23 @@ export function BluetoothPair({ className, onPaired }: { className?: string; onP
           invalid={pair.isError || (clean.length === 17 && !VIN.test(clean))}
         />
       </Field>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">The dashboard's key</span>
+        <Segmented
+          label="The dashboard's key"
+          options={(["charging_manager", "driver"] as const).map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+          value={role}
+          onChange={setRole}
+          buttonClassName="flex-1 justify-center"
+        />
+        <span className="text-[13px] leading-5 text-pretty text-ink-muted">{ROLE_ABOUT[role]}</span>
+        {status?.bluetooth.role && role !== status.bluetooth.role && (
+          <span className="text-[13px] leading-5 text-pretty text-ink-muted">
+            This makes the server a new key, used once the car's taken it. Any other car paired over Bluetooth needs
+            pairing again too, and you can remove the old key in the car (Controls → Locks).
+          </span>
+        )}
+      </div>
       {pair.isError && <HelpText tone="bad">{errorMessage(pair.error)}</HelpText>}
       {mine?.step === "looking" && (
         <Notice tone="plain" className="flex items-center gap-3">
