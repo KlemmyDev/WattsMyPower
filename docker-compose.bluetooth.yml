@@ -1,0 +1,11 @@
+# This machine's Bluetooth, for the dashboard: portable batteries (Bluetti) and Teslas are reached over it, through the
+# host's BlueZ, which the dashboard talks to over the host's D-Bus socket.
+#
+# install.sh adds this file (COMPOSE_FILE in .env) when it finds a Bluetooth adapter with BlueZ running, so updates
+# keep it. BLUETOOTH=off in .env leaves it out; BLUETOOTH=on adds it without checking.
+#
+# Note: the dashboard's container runs as root, so it can use anything on the host's system bus, not only BlueZ.
+services:
+  wattsmypower:
+    volumes:
+      - /run/dbus:/run/dbus:ro
