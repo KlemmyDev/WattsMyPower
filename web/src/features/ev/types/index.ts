@@ -301,8 +301,9 @@ export type EvLevels = {
   vin: string;
   start: number;
   end: number;
-  /** As recorded: each change of a percent, and every 15 minutes it's read; with the readings either side. */
-  points: { t: number; soc: number }[];
+  /** As recorded: each change of a percent, every 15 minutes it's read, and every half hour while it's asleep (the
+   * level it holds, `asleep`: not read, so as not to wake it); with the readings either side. */
+  points: { t: number; soc: number; asleep?: boolean }[];
   away: { start: number; end: number }[];
   charging: { start: number; end: number }[];
   /** Each time the dashboard woke the car, and why. */

@@ -25,6 +25,10 @@ const WHY: Record<string, string> = {
   command: "for a command",
   solar: "to charge from solar",
 };
+/** When it slept: from each level logged while asleep back to the point before it. */
+const asleepSpans = (points: EvLevels["points"]) =>
+  points.flatMap((p, i) => (p.asleep && i > 0 ? [{ start: points[i - 1].t, end: p.t }] : []));
+
 /** Night, when the car should sleep: 10 pm to 6 am. */
 const atNight = (t: number) => {
   const h = new Date(t * 1000).getHours();
@@ -32,14 +36,15 @@ const atNight = (t: number) => {
 };
 
 /**
- * The line: each reading, and across a gap (away, or asleep and not read) a straight line from the reading before to
- * the one after, marked estimated (dashed), with a point every few minutes along it.
+ * The line: each reading, and across a gap (away, or not read) a straight line from the reading before to the one
+ * after, marked estimated (dashed), with a point every few minutes along it. While the car's asleep its level holds,
+ * logged every half hour: a level line, as known, not a gap.
  */
 function line(points: EvLevels["points"]): LinePoint[] {
   const out: LinePoint[] = [];
   points.forEach((p, i) => {
     const prev = points[i - 1];
-    if (prev && p.t - prev.t > GAP) {
+    if (prev && p.t - prev.t > GAP && !p.asleep) {
       out.push({ t: prev.t, v: prev.soc, forecast: true });
       for (let t = prev.t + STEP; t < p.t; t += STEP)
         out.push({ t, v: prev.soc + ((p.soc - prev.soc) * (t - prev.t)) / (p.t - prev.t), forecast: true });
@@ -89,6 +94,7 @@ export function EvLevelChart({ vin, now, className }: { vin: string; now: number
   ];
   const within = (t: number, list: { start: number; end: number }[] | undefined) =>
     (list ?? []).some((s) => s.start <= t && t <= s.end);
+  const slept = data && data.start === start ? asleepSpans(data.points) : [];
   const wakes = data && data.start === start ? data.wakes : [];
   const night = wakes.filter((w) => atNight(w.t)).length;
   const wokeNear = (t: number) => wakes.find((w) => Math.abs(w.t - t) <= NEAR);
@@ -139,7 +145,7 @@ export function EvLevelChart({ vin, now, className }: { vin: string; now: number
               <span className="text-ink-muted">
                 {" "}
                 · {hhmm(p.t)}
-                {p.forecast ? " · estimated" : ""}
+                {p.forecast ? " · estimated" : within(p.t, slept) ? " · asleep, held since its last reading" : ""}
                 {within(p.t, data?.away) ? " · away" : within(p.t, data?.charging) ? " · charging" : ""}
                 {(() => {
                   const w = wokeNear(p.t);

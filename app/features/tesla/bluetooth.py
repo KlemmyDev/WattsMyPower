@@ -153,13 +153,26 @@ class BluetoothClient:
     only while the car is awake: every DETAILS_ACTIVE seconds while it's charging or ready to, else with the quiet
     hourly read, so they never keep it awake on their own."""
 
-    def __init__(self, key: str, vins: Callable[[], list[str]], radio: Radio, clock: Callable[[], float] = time.time):
+    def __init__(
+        self,
+        key: str,
+        vins: Callable[[], list[str]],
+        radio: Radio,
+        clock: Callable[[], float] = time.time,
+        kept: dict[str, Any] | None = None,
+        keep: Callable[[dict[str, Any]], None] | None = None,
+    ):
+        """`kept`: each car's last charge reading, as `keep` was last given it ({vin: [when, charge_state]}), so after
+        a restart the car's level, limit and current still show (an asleep car isn't woken to read them)."""
         self.key = key
         self.vins = vins
         self.radio = radio
         self.clock = clock
+        self.keep = keep
         self.names: dict[str, str] = {}
-        self._charge: dict[str, tuple[float, dict[str, Any]]] = {}  # vin -> (when, charge_state)
+        self._charge: dict[str, tuple[float, dict[str, Any]]] = {  # vin -> (when, charge_state)
+            vin: (float(at), dict(charge)) for vin, (at, charge) in (kept or {}).items()
+        }
         self._status: dict[str, tuple[float, dict[str, Any]]] = {}  # vin -> (when, the security computer's status)
         self._extras: dict[str, dict[str, tuple[int, dict[str, Any]]]] = {}  # vin -> group -> (when, raw)
         self._refused: dict[str, dict[str, tuple[int, str]]] = {}  # vin -> group -> (when, why)
@@ -216,6 +229,7 @@ class BluetoothClient:
         if r.get("charge_state") is not None:
             at, charge = now, r["charge_state"]
             self._charge[vin] = (at, charge)
+            self._kept()
             self._gone.discard(vin)
             self._stale.discard(vin)
         if r.get("status"):
@@ -230,6 +244,8 @@ class BluetoothClient:
             state["timestamp"] = int(at * 1000)
         if r.get("port_open") is False:
             state["charging_state"] = "Disconnected"  # a closed charge port: nothing's plugged in
+        elif r.get("port_open") and not state.get("charging_state"):
+            state["charging_state"] = "Stopped"  # its charge not read yet, but its port's open: plugged in
         last: dict[str, Any] = {
             "display_name": self.names.get(vin),
             "state": "asleep" if r.get("asleep") else "online",
@@ -273,7 +289,13 @@ class BluetoothClient:
                 at, charge = self._charge[vin]
                 field, param = TOOK[name]
                 self._charge[vin] = (at, {**charge, field: params[param]})
+                self._kept()
         return ok
+
+    def _kept(self) -> None:
+        """Keep each car's last charge reading (see __init__)."""
+        if self.keep is not None:
+            self.keep({vin: [at, charge] for vin, (at, charge) in self._charge.items()})
 
 
 # -- the real radio ---------------------------------------------------------------------------------------------------
