@@ -6,7 +6,7 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { NAV, type NavPage, type SectionPages } from "~/features/common/layout/utils";
-import { statusColor } from "~/features/ev/utils";
+import { evTitle, statusColor } from "~/features/ev/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -57,12 +57,16 @@ export function usePillIndicator(
   return ind;
 }
 
-/** The sections to offer: EV once a car's connected (until then it's reached from Overview and Integrations), Battery
- * when there is one. */
+/** The sections to offer: EV once a car's connected (until then it's reached from Overview and Integrations), named
+ * after the cars' make, and Battery when there is one. */
 export function useNavItems() {
-  const evConnected = !!useLive()?.system.ev_connected;
+  const live = useLive();
+  const evConnected = !!live?.system.ev_connected;
   const hasBattery = useHasBattery();
-  return NAV.filter((i) => (i.to !== "/ev" || evConnected) && (i.to !== "/battery" || hasBattery));
+  const ev = evTitle(live?.ev);
+  return NAV.filter((i) => (i.to !== "/ev" || evConnected) && (i.to !== "/battery" || hasBattery)).map((i) =>
+    i.to === "/ev" ? { ...i, label: ev } : i,
+  );
 }
 
 export type LiveState = "live" | "stale" | "error";
@@ -117,14 +121,14 @@ export function useSectionPages(section: string): SectionPages | null {
   if (section === "/ev" && ev?.length) {
     const charging = ev.filter((c) => c.status === "charging" && c.power_kw);
     return {
-      title: "EV",
+      title: evTitle(ev),
       sub: charging.length
         ? `Charging at ${kW(charging.reduce((a, c) => a + (c.power_kw ?? 0), 0) * 1000)}`
         : "Your cars, and charging them from spare solar",
       root: ev.length > 1 ? { link: { to: "/ev" }, label: "All cars", active: path === "/ev" } : undefined,
       pages: ev.map((c): NavPage => ({
         key: c.vin,
-        label: c.name ?? "Tesla",
+        label: c.name ?? c.make,
         icon: "car",
         link: { to: "/ev/$vin", params: { vin: c.vin } },
         value: c.soc != null ? `${Math.round(c.soc)}%` : "—",

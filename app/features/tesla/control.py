@@ -10,9 +10,11 @@ Each car is set to one of two modes (EV page):
             minutes, follow it up and down an amp at a time, and stop once it's been short for a while
 
 Spare power is worked out from the grid meter and the home battery, not from the solar forecast: what the car is
-drawing now, plus what's going to the grid, less anything the home battery is giving. With the home battery first
-(the default), the car only gets what's left once the battery is charging at its full rate (or is full); with the
-car first, what the battery is charging with counts as spare too. `grid_w` is how far short the car may run, drawing
+drawing now, plus what's going to the grid, less anything the home battery is giving. Who gets the sun first
+(`first`): with the home battery (the default), the car only gets what's left once the battery is charging at its
+full rate (or is full); with the car, what the battery is charging with counts as spare too; shared, the battery
+keeps just the share of the sun it needs to be full by the end of the day's sun, as the forecast has it (battery_share,
+worked out again as the day goes, so a cloudier afternoon gives it more), and the car gets the rest. `grid_w` is how far short the car may run, drawing
 from the grid or the home battery, before it's stopped: with three phases its lowest current is a lot of power
 (5 A × 230 V × 3 ≈ 3.5 kW), so a passing cloud would otherwise stop it.
 
@@ -47,21 +49,28 @@ MAX_GRID_W = 5000
 LEAD = 1800  # seconds before spare solar is expected for a car that it's made ready (woken and read each minute)
 QUIET_READ = 3600  # a car with no chance of charging soon has its charge read at most this often, never woken for it
 READINESS = ("active", "ready", "quiet")
+FIRST = ("battery", "shared", "car")  # who gets the sun first
+SHARE_MARGIN = 1.1  # shared: the home battery is kept this much more than it needs, to be full in time
+SUN_KW = 0.05  # forecast solar below this is night, for where the day's sun ends
 
-DEFAULTS: dict[str, Any] = {"mode": "off", "battery_first": True, "grid_w": 300}
+DEFAULTS: dict[str, Any] = {"mode": "off", "first": "battery", "grid_w": 300}
 
 
 def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[str, Any]:
     """A car's control settings with the changes in `body`, checked. Raises ValueError, in words."""
-    out = {**DEFAULTS, **(current or {})}
+    current = dict(current or {})
+    if "first" not in current and "battery_first" in current:  # kept before sharing was a choice
+        current["first"] = "battery" if current["battery_first"] else "car"
+    current.pop("battery_first", None)
+    out = {**DEFAULTS, **current}
     if "mode" in body:
         if body["mode"] not in MODES:
             raise ValueError(f"The charging mode must be one of {', '.join(MODES)}.")
         out["mode"] = body["mode"]
-    if "battery_first" in body:
-        if not isinstance(body["battery_first"], bool):
-            raise ValueError("Say whether the home battery fills first.")
-        out["battery_first"] = body["battery_first"]
+    if "first" in body:
+        if body["first"] not in FIRST:
+            raise ValueError(f"Who gets the sun first must be one of {', '.join(FIRST)}.")
+        out["first"] = body["first"]
     if "grid_w" in body:
         v = body["grid_w"]
         if isinstance(v, bool) or not isinstance(v, int | float) or not 0 <= v <= MAX_GRID_W:
@@ -212,23 +221,55 @@ def car_watts(car: CarState, charger: Charger) -> float:
 
 
 def spare_w(
-    reading: dict[str, Any], car_w: float, *, battery_first: bool, home_soc: float | None, battery_max_w: float
+    reading: dict[str, Any],
+    car_w: float,
+    *,
+    first: str,
+    home_soc: float | None,
+    battery_max_w: float,
+    share: float = 0.0,
 ) -> float | None:
     """Power there is for the car (W, including what it's drawing): what it draws now, plus what's going to the
-    grid, less what the home battery gives, and (with the home battery first) less what the battery could still
-    take. None without a grid reading."""
+    grid, less what the home battery gives; with the home battery first, less what the battery could still take;
+    shared, less the battery's `share` (battery_share) of what it could take. None without a grid reading."""
     grid = _num(reading.get("grid_power"))
     if grid is None:
         return None
     battery = _num(reading.get("battery_power")) or 0.0  # + discharging, - charging
-    out = car_w - grid
-    if battery_first:
-        out -= battery
+    out = car_w - grid - battery  # what the battery's charging with is spare too; what it's giving isn't
+    if first == "battery":
         if home_soc is not None and home_soc < FULL_SOC:
             out -= battery_max_w  # the battery's to fill at its full rate first
-    else:
-        out -= battery  # what it's charging with is spare too; what it's giving isn't
+    elif first == "shared":
+        out -= share * min(max(out, 0.0), battery_max_w)
     return out
+
+
+def battery_share(
+    steps: list[dict[str, Any]], now: int, *, soc: float | None, cap: float, max_kw: float
+) -> tuple[float, float]:
+    """Shared: the share (0 to 1) of what the home battery could take of the spare sun that it needs, to be full by
+    the end of the day's sun (tomorrow's, at night), and how much it needs (kWh, with SHARE_MARGIN). All of it when
+    the forecast's sun won't fill it (or there's no forecast); none once it's full, or with no battery. `steps` are
+    the forecast's (app.features.forecast.service.ForecastService.steps); `soc` 0 to 1."""
+    if cap <= 0:
+        return 0.0, 0.0
+    if soc is None:
+        return 1.0, 0.0
+    if soc * 100 >= FULL_SOC:
+        return 0.0, 0.0
+    need = (1 - soc) * cap * SHARE_MARGIN
+    takes, sun = 0.0, False
+    for s in steps:
+        start, end = int(s["start"]), int(s["start"] + s["dur"])
+        if end <= now:
+            continue
+        if s["pv_kw"] >= SUN_KW:
+            sun = True
+        elif sun:
+            break  # the day's sun is over
+        takes += min(max(0.0, s["pv_kw"] - s["load_kw"]), max_kw) * (end - max(start, now)) / 3600
+    return (min(1.0, need / takes) if takes > 0 else 1.0), need
 
 
 @dataclass
@@ -334,15 +375,30 @@ def decide(
 
 
 def spare_ahead(
-    steps: list[dict[str, Any]], *, battery_first: bool, soc: float | None, cap: float, reserve: float, max_kw: float
+    steps: list[dict[str, Any]],
+    *,
+    first: str,
+    soc: float | None,
+    cap: float,
+    reserve: float,
+    max_kw: float,
+    share: float = 0.0,
 ) -> list[tuple[int, int, float]]:
-    """The forecast's spare power for a car (W), step by step, as (start, end, W): solar over the usual home use, and
+    """The forecast's spare power for a car (W), step by step, as (start, end, W): solar over the usual home use;
     with the home battery first, only what's left once the forecast's battery (filling from `soc`, 0 to 1) has taken
-    what it can, as spare_w has it. `steps` are the forecast's (app.features.forecast.service.ForecastService.steps)."""
+    what it can; shared, less the battery's `share` of what it could take, as spare_w has it. `steps` are the
+    forecast's (app.features.forecast.service.ForecastService.steps)."""
     from app.features.forecast.service import simulate
 
     rows = [dict(s) for s in steps]
-    if battery_first and cap > 0 and soc is not None:
+    if first == "shared" and cap > 0:
+        out = []
+        for s in rows:
+            if s["dur"] > 0:
+                over = max(0.0, s["pv_kw"] - s["load_kw"])
+                out.append((int(s["start"]), int(s["start"] + s["dur"]), (over - share * min(over, max_kw)) * 1000))
+        return out
+    if first == "battery" and cap > 0 and soc is not None:
         simulate(rows, soc, cap, reserve, max_kw)
         return [
             (int(s["start"]), int(s["start"] + s["dur"]), max(0.0, -s["grid_kwh"]) * 3600 / s["dur"] * 1000)

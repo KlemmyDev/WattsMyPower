@@ -53,7 +53,8 @@ async def tesla_disconnect(svc: ServicesDep):
 
 @router.put("/vehicles/{vin}")
 async def tesla_configure(svc: ServicesDep, vin: str, body: JsonBody):
-    """How a car charges: {mode (off, solar), battery_first, grid_w, car, home ("here" or null)}."""
+    """How a car charges: {mode (off, solar), first (battery, shared, car: who gets the sun first), grid_w, car, home
+    ("here" or null)}."""
     return await _change(svc, svc.tesla.configure, vin, body)
 
 
