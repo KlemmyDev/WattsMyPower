@@ -54,6 +54,15 @@ SHARE_MARGIN = 1.1  # shared: the home battery is kept this much more than it ne
 SUN_KW = 0.05  # forecast solar below this is night, for where the day's sun ends
 
 DEFAULTS: dict[str, Any] = {"mode": "off", "first": "battery", "grid_w": 300}
+MODEL_NAMES = {
+    "model3": "Model 3",
+    "modely": "Model Y",
+    "models": "Model S",
+    "modelx": "Model X",
+    "cybertruck": "Cybertruck",
+}
+# The VIN's 10th character: its model year, 2010 to 2039 (I, O, Q, U and Z aren't used).
+YEARS = {ch: 2010 + i for i, ch in enumerate("ABCDEFGHJKLMNPRSTVWXY123456789")}
 
 
 def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -77,6 +86,11 @@ def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[s
             raise ValueError(f"How far short the car may run must be 0 to {MAX_GRID_W:,} W.")
         out["grid_w"] = round(float(v))
     return out
+
+
+def model_year(vin: str) -> int | None:
+    """The car's model year, from its VIN (a 2022 Model Y's 10th character is N)."""
+    return YEARS.get(vin[9].upper()) if len(vin) == 17 else None
 
 
 def distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:

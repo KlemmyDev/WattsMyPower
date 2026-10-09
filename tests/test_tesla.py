@@ -217,6 +217,13 @@ def test_settings_are_checked() -> None:
             control.clean(bad)
 
 
+def test_the_model_year_is_read_from_the_vin() -> None:
+    assert control.model_year("7SAYGDEF2NF000001") == 2022  # N
+    assert control.model_year("5YJ3E1EA1JF000001") == 2018  # J
+    assert control.model_year("7SAYGDEF1TA000001") == 2026  # T
+    assert control.model_year("nope") is None
+
+
 def test_settings_kept_before_sharing_carry_on() -> None:
     assert control.clean({}, {"mode": "solar", "battery_first": False, "grid_w": 300}) == {
         "mode": "solar", "first": "car", "grid_w": 300}  # fmt: skip
@@ -688,7 +695,7 @@ def test_a_command_from_the_page_holds_and_resume_lets_go(svc: TeslaService, pro
     svc.configure(VIN, {"mode": "solar"})
     v = svc.command(VIN, {"action": "start"})["vehicles"][0]
     assert tessie.commands == [("start_charging", {})] and v["hold"] == "Charging now, started here"
-    assert v["make"] == "Tesla"
+    assert (v["make"], v["model"], v["year"]) == ("Tesla", "Model Y", 2023)  # 7SAY…P…: a 2023 Model Y
     assert svc.command(VIN, {"action": "resume"})["vehicles"][0]["hold"] is None
     svc.read()
     svc.command(VIN, {"action": "limit", "percent": 90})

@@ -1144,6 +1144,9 @@ class TeslaService:
         return {
             "vin": vin,
             "make": MAKE,
+            # Which model and its model year: what Tesla calls it, else from the VIN (as is the year).
+            "model": control.MODEL_NAMES.get((s.model if s else None) or bluetooth.car_type(vin) or ""),
+            "year": control.model_year(vin),
             "name": v.get("name") or (s.name if s else None),
             "car": v.get("car"),
             "control": v["control"],
@@ -1229,7 +1232,7 @@ class TeslaService:
         for vin, v in c["vehicles"].items():
             full = self.vehicle(vin, v)
             st = full["state"] or {}
-            out.append({k: full[k] for k in ("vin", "make", "name", "car", "status", "doing")} | {
+            out.append({k: full[k] for k in ("vin", "make", "model", "year", "name", "car", "status", "doing")} | {
                 "mode": v["control"]["mode"], "soc": st.get("soc"), "limit": st.get("limit"),
                 "power_kw": st.get("power_kw"), "amps": st.get("amps"),
             })  # fmt: skip

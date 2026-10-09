@@ -39,8 +39,10 @@ export type EvStatus = "charging" | "waiting" | "stopped" | "complete" | "unplug
 
 export type EvVehicle = {
   vin: string;
-  /** Who made it ("Tesla"). */
+  /** Who made it ("Tesla"), which model ("Model Y") and its model year (from the VIN). */
   make: string;
+  model: string | null;
+  year: number | null;
   name: string | null;
   /** The dashboard car it's tied to (app.features.car). */
   car: number | null;
@@ -118,7 +120,7 @@ export type EvEvent = {
 };
 
 /** Each EV in brief, in the live status. */
-export type EvBrief = Pick<EvVehicle, "vin" | "make" | "name" | "car" | "status" | "doing"> & {
+export type EvBrief = Pick<EvVehicle, "vin" | "make" | "model" | "year" | "name" | "car" | "status" | "doing"> & {
   mode: EvMode;
   soc: number | null;
   limit: number | null;

@@ -25,6 +25,9 @@ export function evTitle(cars: { make?: string | null }[] | null | undefined): st
   return makes.size === 1 ? [...makes][0]! : "EV";
 }
 
+/** What a car is: its make and model ("Tesla Model Y"). */
+export const carTitle = (v: { make: string; model: string | null }) => (v.model ? `${v.make} ${v.model}` : v.make);
+
 /** The colour of what the car's doing: solar while it's charging from the sun, battery-blue when charged. */
 export function statusColor(status: EvStatus, mode: EvMode): string {
   if (status === "charging") return mode === "off" ? COLOR.battery : COLOR.solar;

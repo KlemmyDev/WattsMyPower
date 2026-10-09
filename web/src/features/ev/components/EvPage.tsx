@@ -16,7 +16,7 @@ import { EvLevelChart } from "~/features/ev/components/EvLevelChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
 import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { ProviderChip } from "~/features/ev/components/ProviderChip";
-import { evTitle } from "~/features/ev/utils";
+import { carTitle, evTitle } from "~/features/ev/utils";
 
 /** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), how it charges
  * beside what the dashboard did with it, its in and out, and everything else it says about itself. */
@@ -69,8 +69,11 @@ export function EvPage({ vin }: { vin?: string } = {}) {
       </>
     );
   const cars = vin ? data.vehicles.filter((v) => v.vin === vin) : data.vehicles;
+  // One car shown: it's named for what it is (its own name is on its panel), with its model year.
+  const one = cars.length === 1 ? cars[0] : null;
   const sub = (
     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+      {one?.year && <span className="text-sm font-normal text-ink-muted tabular-nums">{one.year}</span>}
       {data.provider && <ProviderChip provider={data.provider} />}
       {data.read_at && <span className="text-sm font-normal text-ink-muted">Read {hhmm(data.read_at)}</span>}
     </span>
@@ -84,7 +87,7 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     );
   return (
     <>
-      <PageHeader title={vin ? (cars[0].name ?? cars[0].make) : evTitle(cars)} sub={sub} />
+      <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />
       <div className="flex flex-col gap-10">
         {data.error && <Notice tone="bad">{data.error}</Notice>}
         {cars.map((v) => (

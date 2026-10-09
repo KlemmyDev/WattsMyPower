@@ -6,7 +6,7 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { NAV, type NavPage, type SectionPages } from "~/features/common/layout/utils";
-import { evTitle, statusColor } from "~/features/ev/utils";
+import { carTitle, evTitle, statusColor } from "~/features/ev/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -128,7 +128,7 @@ export function useSectionPages(section: string): SectionPages | null {
       root: ev.length > 1 ? { link: { to: "/ev" }, label: "All cars", active: path === "/ev" } : undefined,
       pages: ev.map((c): NavPage => ({
         key: c.vin,
-        label: c.name ?? c.make,
+        label: c.name ?? carTitle(c),
         icon: "car",
         link: { to: "/ev/$vin", params: { vin: c.vin } },
         value: c.soc != null ? `${Math.round(c.soc)}%` : "—",
