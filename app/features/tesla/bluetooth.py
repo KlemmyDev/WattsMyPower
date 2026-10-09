@@ -30,7 +30,8 @@ WAKE_BACKOFF seconds: until then it's only checked without waking it, and its ch
 (charging, in use, or woken from the Tesla app). A car that isn't heard is out of range: not at home, or too far from the server.
 
 Each read or command is one conversation: find the car, connect, talk, disconnect; one at a time with anything else
-on the radio (app.core.bluetooth). Everything here is blocking.
+on the radio (app.core.bluetooth). One whose link couldn't be made, or dropped before anything reached the car, is had
+again once from the start (ATTEMPTS). Everything here is blocking.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ import contextvars
 import hashlib
 import itertools
 import logging
+import re
 import time
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -56,6 +58,11 @@ SCAN_SECONDS = 12  # to hear the car's broadcast
 # acknowledgement): longer, as the server may be some way from the car, through walls.
 REPLY_SECONDS = 12
 ACK_SECONDS = 8
+# A link that couldn't be made or dropped (the car heard, but busy, or the server's Bluetooth still letting go of the
+# last one) is tried again, after a pause: nothing reached the car, so a command can't happen twice.
+ATTEMPTS = 2
+RETRY_PAUSE = 3.0
+HANG_UP_SECONDS = 5.0  # to disconnect once done: what was read stands whether or not it went cleanly
 WAKE_BACKOFF = 1800  # seconds the car isn't woken again after it didn't wake (the key may not be allowed to wake it)
 WEAK_RSSI = -85  # dBm: a signal below this is weak (the car at the edge of range)
 FAIR_RSSI = -72
@@ -343,6 +350,21 @@ def _where(talk: dict[str, Any] | None) -> str:
     return out
 
 
+def _cause(e: BaseException) -> str:
+    """What Bluetooth itself said, underneath tesla-fleet-api's error, for the error's end: " (Bluetooth said:
+    le-connection-abort-by-local)"; "" when it said nothing."""
+    said = ""
+    seen: set[int] = set()
+    while (e := e.__cause__ or e.__context__) is not None and id(e) not in seen:  # type: ignore[assignment]
+        seen.add(id(e))
+        if text := str(e).strip():
+            said = text
+    if not said:
+        return ""
+    said = re.sub(r"^\[org\.bluez[^]]*\]\s*", "", said)  # "[org.bluez.Error.Failed] le-connection-abort-by-local"
+    return f" (Bluetooth said: {said[:120]})"
+
+
 def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError:
     """A TeslaError, in words, for whatever went wrong talking to the car (`talk`: where, and its signal)."""
     from bleak.exc import BleakError
@@ -374,7 +396,10 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
             "again as a driver (Manage → Integrations → Tesla), or wake it in the Tesla app, then try again."
         )
     if named("BluetoothTransportError"):
-        return TeslaError(f"The car couldn't be reached over Bluetooth{_where(talk)}")
+        # Heard, but the link to it couldn't be made, or dropped: not range, when its signal was good.
+        connecting = (talk or {}).get("step") == "connecting"
+        what = "wouldn't take a Bluetooth connection" if connecting else "dropped the Bluetooth connection"
+        return TeslaError(f"The car was heard, but {what} (tried {ATTEMPTS} times){_where(talk)}{_cause(e)}")
     if named("BluetoothTimeout") or isinstance(e, TimeoutError):
         return TeslaError(f"The car didn't answer over Bluetooth in time{_where(talk)}")
     if named("TeslaFleetError"):
@@ -422,28 +447,40 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
     try:
         return await then(car)
     finally:
-        await car.disconnect()
+        try:
+            async with asyncio.timeout(HANG_UP_SECONDS):
+                await car.disconnect()
+        except Exception as e:  # the car's already gone, say: what it said still counts
+            log.info("Tesla over Bluetooth: disconnecting went wrong (%s: %s)", type(e).__name__, e)
 
 
-def _converse(coro: Callable[[], Any]) -> Any:
+def _converse(coro: Callable[[], Any], sleep: Callable[[float], None] = time.sleep) -> Any:
     """Run one conversation in an event loop of its own, every failure turned into a TeslaError (which, unlike
-    tesla-fleet-api's, pickles, for a Mac's process of its own)."""
-    talk: dict[str, Any] = {"step": None, "rssi": None, "steps": []}
-    token = _TALK.set(talk)
-    start = time.monotonic()
-    try:
-        out = asyncio.run(coro())
-        log.info("Tesla over Bluetooth: done in %.1f s (%s; signal %s)", time.monotonic() - start, _timings(talk),
-                 signal(talk["rssi"]))  # fmt: skip
-        return out
-    except BaseException as e:  # tesla-fleet-api's errors are BaseExceptions
-        if isinstance(e, KeyboardInterrupt | SystemExit):
-            raise
-        log.info("Tesla over Bluetooth: %s after %.1f s (%s; signal %s)", type(e).__name__, time.monotonic() - start,
-                 _timings(talk), signal(talk["rssi"]))  # fmt: skip
-        raise _explain(e, talk) from None
-    finally:
-        _TALK.reset(token)
+    tesla-fleet-api's, pickles, for a Mac's process of its own). One whose link couldn't be made or dropped is had
+    again from the start (ATTEMPTS)."""
+    from tesla_fleet_api.exceptions import BluetoothTransportError
+
+    for attempt in range(1, ATTEMPTS + 1):
+        talk: dict[str, Any] = {"step": None, "rssi": None, "steps": []}
+        token = _TALK.set(talk)
+        start = time.monotonic()
+        try:
+            out = asyncio.run(coro())
+            log.info("Tesla over Bluetooth: done in %.1f s (%s; signal %s)", time.monotonic() - start,
+                     _timings(talk), signal(talk["rssi"]))  # fmt: skip
+            return out
+        except BaseException as e:  # tesla-fleet-api's errors are BaseExceptions
+            if isinstance(e, KeyboardInterrupt | SystemExit):
+                raise
+            log.info("Tesla over Bluetooth: %s after %.1f s (%s; signal %s)%s", type(e).__name__,
+                     time.monotonic() - start, _timings(talk), signal(talk["rssi"]), _cause(e))  # fmt: skip
+            if isinstance(e, BluetoothTransportError) and attempt < ATTEMPTS:
+                sleep(RETRY_PAUSE)
+                continue
+            raise _explain(e, talk) from None
+        finally:
+            _TALK.reset(token)
+    raise AssertionError("unreachable")
 
 
 CLOSURES = {"frontDriverDoor": "Driver door", "frontPassengerDoor": "Passenger door", "rearDriverDoor": "Rear left door",
