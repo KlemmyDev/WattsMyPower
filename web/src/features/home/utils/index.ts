@@ -245,16 +245,17 @@ export type LivePart = { id: number; name: string; kind: DeviceKind; w: number; 
 
 /**
  * What the home is drawing now, as far as the plugs and appliances say: each visible device, and each group as one,
- * drawing at least `min` W, most first; what they add up to; and what none of them measures. Null when no device has
- * a fresh reading of its power (nothing connected, or all offline), or the home's own reading isn't a draw.
+ * drawing at least `min` W, most first; what they add up to; what a car charging at home draws (`carW`, as the car
+ * says); and what none of them measures. Null when neither a device nor a car has a fresh reading of its power
+ * (nothing connected, or all offline), or the home's own reading isn't a draw.
  */
 export function liveBreakdown(
   devices: HomeDevice[],
   homeW: number | null | undefined,
-  min = 2,
-): { parts: LivePart[]; measured: number; other: number } | null {
+  { carW = 0, min = 2 }: { carW?: number; min?: number } = {},
+): { parts: LivePart[]; measured: number; car: number; other: number } | null {
   const live = (d: HomeDevice) => (d.now && d.now.online && !d.now.stale ? d.now.power_w : null);
-  if (homeW == null || homeW <= 0 || !devices.some((d) => !d.hidden && live(d) != null)) return null;
+  if (homeW == null || homeW <= 0 || (carW <= 0 && !devices.some((d) => !d.hidden && live(d) != null))) return null;
   const parts = homeItems(devices)
     .map((item) => {
       const w = item.members.reduce((a, d) => a + (live(d) ?? 0), 0);
@@ -265,8 +266,10 @@ export function liveBreakdown(
     .filter((p) => p.w >= min)
     .sort((a, b) => b.w - a.w);
   const measured = parts.reduce((a, p) => a + p.w, 0);
-  // The plugs are read every 15 seconds and the inverter every minute, so they can add up to a little more than the home.
-  return { parts, measured, other: Math.max(homeW - measured, 0) };
+  // The plugs are read every 15 seconds and the inverter every minute, so they can add up to a little more than the home;
+  // the car (read less often still) is held to what the home's drawing.
+  const car = Math.min(Math.max(carW, 0), homeW);
+  return { parts, measured, car, other: Math.max(homeW - measured - car, 0) };
 }
 
 export type Range = "today" | "week" | "month";

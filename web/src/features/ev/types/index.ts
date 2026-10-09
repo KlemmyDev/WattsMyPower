@@ -108,6 +108,12 @@ export type TeslaStatus = {
   };
   error: string | null;
   read_at: number | null;
+  /** When the cars are next read (after a failed read, tried again), unix seconds; null until connected. */
+  next_read: number | null;
+  /** A read is under way now (over Bluetooth it takes seconds). */
+  reading: boolean;
+  /** Seconds between the server's checks: a read that's due starts within this. */
+  tick: number;
   home: [number, number];
   vehicles: EvVehicle[];
 };
@@ -126,6 +132,8 @@ export type EvBrief = Pick<EvVehicle, "vin" | "make" | "model" | "year" | "name"
   limit: number | null;
   power_kw: number | null;
   amps: number | null;
+  /** Null when where it is isn't known. */
+  at_home: boolean | null;
 };
 
 export type EvCommand =

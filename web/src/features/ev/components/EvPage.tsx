@@ -14,6 +14,7 @@ import { EvDetails } from "~/features/ev/components/EvDetails";
 import { EvInOut } from "~/features/ev/components/EvInOut";
 import { EvLevelChart } from "~/features/ev/components/EvLevelChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
+import { NextRead } from "~/features/ev/components/NextRead";
 import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { ProviderChip } from "~/features/ev/components/ProviderChip";
 import { carTitle, evTitle } from "~/features/ev/utils";
@@ -76,6 +77,7 @@ export function EvPage({ vin }: { vin?: string } = {}) {
       {one?.year && <span className="text-sm font-normal text-ink-muted tabular-nums">{one.year}</span>}
       {data.provider && <ProviderChip provider={data.provider} />}
       {data.read_at && <span className="text-sm font-normal text-ink-muted">Read {hhmm(data.read_at)}</span>}
+      {!data.error && <NextRead status={data} />}
     </span>
   );
   if (vin && cars.length === 0)
@@ -89,7 +91,12 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     <>
       <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />
       <div className="flex flex-col gap-10">
-        {data.error && <Notice tone="bad">{data.error}</Notice>}
+        {data.error && (
+          <Notice tone="bad" className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span>{data.error}</span>
+            <NextRead status={data} className="text-inherit" />
+          </Notice>
+        )}
         {cars.map((v) => (
           <Car key={v.vin} v={v} provider={data.provider} now={now} />
         ))}

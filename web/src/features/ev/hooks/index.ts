@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLive } from "~/features/common/live/hooks/useLive";
 import {
   commandEv,
   configureEv,
@@ -71,4 +72,12 @@ export function useRefreshDetails() {
       void qc.invalidateQueries({ queryKey: ["tesla", "history", d.vin] });
     },
   });
+}
+
+/** What the cars charging at home are drawing from the house now (W): 0 with none. A car charging elsewhere isn't. */
+export function useHomeCharging(): number {
+  const ev = useLive()?.ev;
+  return (ev ?? [])
+    .filter((c) => c.status === "charging" && c.at_home !== false && c.power_kw)
+    .reduce((a, c) => a + (c.power_kw ?? 0) * 1000, 0);
 }

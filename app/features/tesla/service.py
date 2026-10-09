@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import math
 import threading
 import time
 from collections import deque
@@ -143,6 +144,7 @@ class TeslaService:
         self._error: str | None = None
         self._read_at: float | None = None
         self._next_read = 0.0
+        self._reading = False  # a read is under way (over Bluetooth, seconds)
         self._pairing: dict[str, Any] | None = None  # {vin, step (looking, tap, done, failed), error, at}
         self._ahead: tuple[int, list[dict[str, Any]], dict[str, Any]] | None = None
         self._details: dict[str, dict[str, Any]] | None = None  # vin -> group -> entry (DETAILS_KEY), once loaded
@@ -570,11 +572,14 @@ class TeslaService:
                 client = self._client(c)
             except TeslaError as e:
                 return self._read_failed(e)
+        self._reading = True
         try:
             found = client.vehicles(want)
         except TeslaError as e:
             with self._lock:
                 return self._read_failed(e)
+        finally:
+            self._reading = False
         with self._lock:
             c = self._conn()  # as it is now: the page may have changed it meanwhile
             if not self._is_connected(c):
@@ -1219,6 +1224,11 @@ class TeslaService:
             },
             "error": self._error,
             "read_at": self._read_at,
+            # When the cars are next read (after a failed read: tried again), unix seconds; and whether a read is
+            # under way now. The loop turns every TICK seconds, so it's up to that much later.
+            "next_read": max(math.ceil(self._next_read), int(self.clock())) if connected else None,
+            "reading": self._reading,
+            "tick": TICK,
             "home": list(self.home()),
             "vehicles": [self.vehicle(vin, v) for vin, v in c["vehicles"].items()] if connected else [],
         }
@@ -1234,7 +1244,7 @@ class TeslaService:
             st = full["state"] or {}
             out.append({k: full[k] for k in ("vin", "make", "model", "year", "name", "car", "status", "doing")} | {
                 "mode": v["control"]["mode"], "soc": st.get("soc"), "limit": st.get("limit"),
-                "power_kw": st.get("power_kw"), "amps": st.get("amps"),
+                "power_kw": st.get("power_kw"), "amps": st.get("amps"), "at_home": st.get("at_home"),
             })  # fmt: skip
         return out
 

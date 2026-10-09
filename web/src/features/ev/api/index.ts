@@ -3,12 +3,20 @@ import { apiGet, apiSend } from "~/features/common/api/utils";
 import type { EvCommand, EvControl, EvDetails, EvEvent, EvHistory, EvLevels, TeslaStatus } from "~/features/ev/types";
 
 /** How the Teslas are reached, and each car. Refreshed every 30 seconds while shown (the car changes as it charges),
- * and every 2 while a car is being paired. */
+ * every 2 while a car is being paired, and just after each read of the cars (so what it found shows at once). */
 export const teslaQuery = queryOptions({
   queryKey: ["tesla"],
   queryFn: ({ signal }) => apiGet<TeslaStatus>("tesla", undefined, { signal }),
   staleTime: 15_000,
-  refetchInterval: (q) => (pairing(q.state.data) ? 2_000 : 30_000),
+  refetchInterval: (q) => {
+    const s = q.state.data;
+    if (pairing(s)) return 2_000;
+    if (s?.reading) return 3_000;
+    if (s?.next_read == null) return 30_000;
+    // Once it's due, the server starts the read within a tick of its loop.
+    const due = (s.next_read - Date.now() / 1000 + 3) * 1000;
+    return Math.min(30_000, Math.max(3_000, due));
+  },
 });
 
 /** Whether a car is being paired over Bluetooth now. */
