@@ -6,7 +6,7 @@ import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import { EvChargeBar } from "~/features/ev/components/EvChargeBar";
-import { useEvChange } from "~/features/ev/hooks";
+import { useEvChange, useRefreshDetails } from "~/features/ev/hooks";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { STATUS_LABEL, statusColor } from "~/features/ev/utils";
@@ -17,6 +17,8 @@ import { STATUS_LABEL, statusColor } from "~/features/ev/utils";
  */
 /** While it waits for spare solar: how closely it's followed, so it's clear why it's (not) being kept awake. */
 function readiness(v: EvVehicle, provider: TeslaProvider | null): string | null {
+  if (v.night && v.status !== "charging")
+    return "Left to sleep overnight: checked every half hour without waking it. Wake it to read it now.";
   if (v.status !== "waiting") return null;
   const bt = provider === "bluetooth";
   if (v.follow === "ready")
@@ -45,6 +47,33 @@ function freshness(v: EvVehicle, provider: TeslaProvider | null): string {
   ].filter(Boolean) as string[];
   const text = parts.join(" · ");
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Waking the car, by hand: its charge and details are read now (and it then stays awake a while). Over Bluetooth it's
+ * otherwise only woken for spare solar by day, or when something's sent to it, never in the background at night.
+ */
+function WakeButton({ v }: { v: EvVehicle }) {
+  const wake = useRefreshDetails();
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={wake.isPending}
+        onClick={() => wake.mutate({ vin: v.vin, wake: true })}
+      >
+        {wake.isPending ? "Waking the car…" : "Wake car"}
+      </Button>
+      <HelpText tone={wake.isError ? "bad" : undefined}>
+        {wake.isError
+          ? errorMessage(wake.error)
+          : wake.isSuccess
+            ? "Woken and read. It stays awake for a while, then sleeps again."
+            : "Reads it now. It stays awake for a while after."}
+      </HelpText>
+    </div>
+  );
 }
 
 export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: TeslaProvider | null }) {
@@ -83,6 +112,7 @@ export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: Tesla
           {readiness(v, provider) && (
             <span className="-mt-1 text-[13px] text-pretty text-ink-muted">{readiness(v, provider)}</span>
           )}
+          {s?.asleep && s.in_range !== false && <WakeButton v={v} />}
           {v.hold && v.control.mode !== "off" && (
             <Button
               size="sm"

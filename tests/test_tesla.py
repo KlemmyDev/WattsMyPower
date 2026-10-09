@@ -865,7 +865,8 @@ def test_with_no_chance_of_charging_the_car_is_left_to_sleep(ble: TeslaService, 
 
 def test_the_car_is_woken_ahead_of_spare_solar(ble: TeslaService, radio: FakeRadio, tessie: FakeTessie,
                                                live: FakeLive, clock: Clock) -> None:  # fmt: skip
-    ble.forecast = FakeForecast(clock, [(0, 0.5)] * 3 + [(6, 0.5)] * 3)  # spare from three hours on
+    clock.t += 9.5 * 3600  # 3:30 in the morning in Brisbane, in January: the sun's up a little after five
+    ble.forecast = FakeForecast(clock, [(0, 0.5)] * 3 + [(6, 0.5)] * 3)  # spare from three hours on (6:30)
     ble._ahead = None
     sun = int(clock.t) + 3 * 3600  # the fourth hour
     v = ble.status()["vehicles"][0]
@@ -874,7 +875,7 @@ def test_the_car_is_woken_ahead_of_spare_solar(ble: TeslaService, radio: FakeRad
     minutes(ble, live, clock, 155, grid=500)  # to five minutes after it's due to be woken (2½ hours on)
     woken = [i for i, (_, wake) in enumerate(radio.asked) if wake]
     assert woken and not radio.asleep
-    assert len(radio.asked[: woken[0]]) <= 30  # left alone until then, read every five minutes
+    assert len(radio.asked[: woken[0]]) <= 30  # left alone until then: every half hour at night, then every five
     assert ble.status()["vehicles"][0]["follow"] == "ready"
     [wake] = ble.history.wakes(VIN, 0, 2**40)
     assert wake["reason"] == "ready" and "Woke the car ready for spare solar" in [e["text"] for e in ble.log()]
@@ -1191,3 +1192,31 @@ def test_a_car_charging_at_home_is_read_as_often_as_it_can_be(svc: TeslaService,
     clock.t += POLL_CHARGING[provider]
     svc.tick()
     assert svc.status()["next_read"] == int(clock()) + POLL_IDLE
+
+
+def test_at_night_the_car_is_only_checked_now_and_then_and_never_woken(ble: TeslaService, radio: FakeRadio,
+                                                                       live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    from app.features.tesla.service import POLL_NIGHT
+
+    clock.t += 4 * 3600  # 10 at night in Brisbane
+    ble._bluetooth._charge.clear()  # type: ignore[union-attr]  # just started: its charge isn't known
+    radio.asked.clear()
+    minutes(ble, live, clock, 120, grid=500)
+    # Checked whether it's asleep every half hour, never woken, and its charge not read.
+    assert 3 <= len(radio.asked) <= 5 and not any(wake for _, wake in radio.asked)
+    assert radio.asleep and ble.history.wakes(VIN, 0, 2**40) == []
+    assert ble.status()["next_read"] - int(clock()) <= POLL_NIGHT
+    # Woken from the EV page, it's read, and says so.
+    d = ble.refresh_details(VIN, True)
+    assert d["asleep"] is False and [w["reason"] for w in ble.history.wakes(VIN, 0, 2**40)] == ["refresh"]
+
+
+def test_at_night_a_car_charging_at_home_is_still_read_often(ble: TeslaService, tessie: FakeTessie, radio: FakeRadio,
+                                                              live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    clock.t += 4 * 3600
+    ble.configure(VIN, {"mode": "off"})  # charging by hand (or on the car's own schedule): the dashboard leaves it be
+    radio.asleep = False
+    tessie.charge(charging_state="Charging", charger_actual_current=16, charge_current_request=16, charger_power=11)
+    minutes(ble, live, clock, 31, grid=11000)  # seen at the next half-hourly check: awake and plugged in, so read
+    assert ble.status()["vehicles"][0]["follow"] == "active"
+    assert ble.status()["next_read"] - int(clock()) <= POLL_CHARGING["bluetooth"]
