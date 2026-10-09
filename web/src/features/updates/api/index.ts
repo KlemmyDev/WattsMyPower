@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type { UpdateStatus } from "~/features/updates/types";
+import type { Channel, UpdateStatus } from "~/features/updates/types";
 
 const MIN = 60_000;
 
@@ -15,5 +15,9 @@ export const updatesQuery = queryOptions({
 /** Check GitHub now. */
 export const checkForUpdates = () => apiSend<UpdateStatus>("POST", "updates/check");
 
-/** Update now: ask the updater on the machine it's installed on to run install.sh. It starts within a minute. */
+/** Follow another release channel, and check it now. */
+export const setChannel = (channel: Channel) => apiSend<UpdateStatus>("PUT", "updates/channel", { channel });
+
+/** Update now: ask the updater on the machine it's installed on to run install.sh, which installs the
+ * channel's version, newer or older. It starts within a minute. */
 export const installUpdate = () => apiSend<UpdateStatus>("POST", "updates/install");

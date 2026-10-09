@@ -1,10 +1,18 @@
 """
 Whether a newer version is on GitHub (Manage → System → Updates, and the version at the foot of the navigation).
 
-Every few hours, and when asked, the latest commit on the repository's main branch is compared with the commit this was
-built from (app.core.version.COMMIT): one that's different is an update, and GitHub's compare counts the commits since.
-Its version is read from that commit's pyproject.toml. Without a commit to compare (an image built without install.sh),
-or one GitHub doesn't know (a local build), the versions are compared instead.
+It follows a release channel (Manage → System → Updates), each a commit on GitHub:
+- nightly: the latest commit on main, so every change as it's merged;
+- beta: the newest release tag, a pre-release (v2026.10.9-beta, -alpha, -rc.2…) or a stable one, whichever is newer;
+- stable: the newest stable release tag (v2026.10.9, with nothing after the version).
+scripts/release.sh tags them. Every few hours, and when asked, the channel's commit is compared with the commit this was
+built from (app.core.version.COMMIT), and GitHub's compare counts the commits between: commits it has that this hasn't
+make it an update; only commits this has that it hasn't (moving to an older channel, nightly to stable) make it older,
+which can be installed too, going back. Its version is read from that commit's pyproject.toml. Without a commit to
+compare (an image built without install.sh), or one GitHub doesn't know (a local build), the versions are compared.
+
+The channel is kept in the folder shared with the host (below, `channel`), where install.sh reads it too: an update,
+from here or by hand, goes to the channel's commit, whichever way that is.
 
 Manage → System turns it off (update_check), and then nothing is asked of GitHub but a check asked for by hand. A
 check makes three requests at most, well inside GitHub's 60 an hour without an account.
@@ -44,6 +52,28 @@ UPDATER_GONE = 180  # seconds without word from updater.sh (it runs every minute
 RECENT = 15 * 60  # a finished update is reported for this long
 LOG_LINES = 12
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+CHANNELS = ("nightly", "beta", "stable")
+DEFAULT_CHANNEL = "nightly"
+# A release tag: v and the version, and for a pre-release a hyphen and what it is (v2026.10.9-beta, v2026.10.9-rc.2).
+# install.sh picks the same tags, with git's version sort.
+TAG = re.compile(r"v(\d+(?:\.\d+)*)(?:-([0-9A-Za-z.]+))?")
+
+
+def tag_key(name: str) -> tuple[tuple[int, ...], bool, tuple[int, ...]] | None:
+    """A release tag's place among the others (None for a tag that isn't one): by version, then a stable release after
+    the same version's pre-releases, then the pre-releases by their numbers (-beta, -beta.2)."""
+    m = TAG.fullmatch(name)
+    if not m:
+        return None
+    return version_key(m[1]), m[2] is None, version_key(m[2] or "")
+
+
+def newest_tag(tags: list[dict[str, Any]], channel: str) -> dict[str, Any] | None:
+    """The tag (as GitHub lists them) a channel follows: the newest release, or for stable the newest stable one."""
+    keyed = [(key, t) for t in tags if (key := tag_key(str(t.get("name", "")))) is not None]
+    if channel == "stable":
+        keyed = [(key, t) for key, t in keyed if key[1]]
+    return max(keyed, key=lambda kt: kt[0])[1] if keyed else None
 
 
 class UpdateRefused(Exception):
@@ -69,6 +99,7 @@ class UpdateService:
         self._latest: dict[str, Any] | None = None
         self._checked_at: float | None = None
         self._error: str | None = None
+        self._checked: str | None = None  # the channel the check was for: changing it starts again
         self._task: asyncio.Task[None] | None = None
 
     def enabled(self) -> bool:
@@ -93,18 +124,51 @@ class UpdateService:
                     log.exception("Checking for updates failed")
             await asyncio.sleep(EVERY)
 
-    def check(self) -> dict[str, Any]:
-        """Ask GitHub for the latest commit on main, its version, and how many commits it's ahead of this one."""
+    def channel(self) -> str:
+        """The release channel it follows (nightly, beta or stable), as the host's install.sh reads it too."""
         try:
-            head = get_json(f"{API}/repos/{REPO}/commits/{BRANCH}")
-            sha = str(head["sha"])
+            saved = (self.folder / "channel").read_text().strip()
+        except OSError:
+            return DEFAULT_CHANNEL
+        return saved if saved in CHANNELS else DEFAULT_CHANNEL
+
+    def set_channel(self, channel: str) -> dict[str, Any]:
+        """Follow another channel (Manage → System → Updates), and check it now."""
+        if channel not in CHANNELS:
+            raise ValueError(f"There's no {channel!r} channel: it's one of {', '.join(CHANNELS)}.")
+        try:
+            self.folder.mkdir(parents=True, exist_ok=True)
+            tmp = self.folder / ".channel.tmp"
+            tmp.write_text(f"{channel}\n")
+            tmp.replace(self.folder / "channel")  # whole, for install.sh
+        except OSError as e:
+            raise UpdateRefused(f"Couldn't save the channel: {e.strerror or e}.") from e
+        return self.check()
+
+    def check(self) -> dict[str, Any]:
+        """Ask GitHub for the commit the channel is at, its version, and how many commits it's ahead or behind."""
+        channel = self.channel()
+        try:
+            if channel == "nightly":
+                head = get_json(f"{API}/repos/{REPO}/commits/{BRANCH}")
+                sha, tag, date = str(head["sha"]), None, head["commit"]["committer"]["date"]
+            else:
+                # GitHub lists tags by name, not version: a hundred is plenty to find the newest among.
+                found = newest_tag(get_json(f"{API}/repos/{REPO}/tags?per_page=100"), channel)
+                if found is None:  # nothing released on it yet: nothing to move to
+                    with self._lock:
+                        self._latest, self._checked_at, self._error, self._checked = None, time.time(), None, channel
+                    return self.status()
+                sha, tag, date = str(found["commit"]["sha"]), str(found["name"]), None
             project = tomllib.loads(get_text(f"https://raw.githubusercontent.com/{REPO}/{sha}/pyproject.toml"))
             changes: int | None = None
+            behind: int | None = None
             if sha == COMMIT:
-                changes = 0
+                changes = behind = 0
             elif COMMIT:
                 try:
-                    changes = int(get_json(f"{API}/repos/{REPO}/compare/{COMMIT}...{sha}")["ahead_by"])
+                    compared = get_json(f"{API}/repos/{REPO}/compare/{COMMIT}...{sha}")
+                    changes, behind = int(compared["ahead_by"]), int(compared["behind_by"])
                 except urllib.error.HTTPError as e:
                     if e.code != 404:  # 404: GitHub doesn't have this commit (a local build); compare versions
                         raise
@@ -112,26 +176,39 @@ class UpdateService:
                 "version": str(project.get("project", {}).get("version", "")),
                 "release": project.get("tool", {}).get("wattsmypower", {}).get("release"),
                 "commit": sha,
-                "date": head["commit"]["committer"]["date"],
+                "tag": tag,
+                "date": date,
                 "changes": changes,
+                "behind": behind,
             }
             with self._lock:
-                self._latest, self._checked_at, self._error = latest, time.time(), None
+                self._latest, self._checked_at, self._error, self._checked = latest, time.time(), None, channel
         except (urllib.error.URLError, OSError, KeyError, TypeError, ValueError, tomllib.TOMLDecodeError) as e:
             log.info("Couldn't check for updates: %s", e)
             with self._lock:
-                self._checked_at, self._error = time.time(), _why(e)
+                if self._checked != channel:
+                    self._latest = None
+                self._checked_at, self._error, self._checked = time.time(), _why(e), channel
         return self.status()
 
     def status(self) -> dict[str, Any]:
-        """This version, the latest on GitHub (as last checked), and whether it's an update."""
+        """This version, the channel's on GitHub (as last checked), and whether it's an update or older."""
+        channel = self.channel()
         with self._lock:
             latest, checked_at, error = self._latest, self._checked_at, self._error
+            if self._checked != channel:  # checked for another channel: not checked yet
+                latest = checked_at = error = None
+        move = _move(latest)
         return {
             "enabled": self.enabled(),
+            "channel": channel,
             "current": about(),
             "latest": latest,
-            "available": _newer(latest),
+            # Something to install: an update (newer), or older, from moving to a channel behind this one.
+            "move": move,
+            "available": move == "update",
+            # The channel has nothing released on it yet (checked, and no tag).
+            "unreleased": checked_at is not None and latest is None and error is None,
             "checked_at": checked_at,
             "error": error,
             "repo": REPO,
@@ -205,12 +282,16 @@ class UpdateService:
         return self.status()
 
 
-def _newer(latest: dict[str, Any] | None) -> bool:
-    """Whether the latest on GitHub is an update: commits since this one, or, without them to go on, a later version."""
+def _move(latest: dict[str, Any] | None) -> str | None:
+    """What installing the channel's commit would be: an update (commits this hasn't), older (only commits behind this
+    one), or nothing (this one). Without commits to go on, the versions decide."""
     if latest is None:
-        return False
+        return None
     if latest["changes"] is not None:
-        return bool(latest["changes"] > 0)
+        if latest["changes"] > 0:
+            return "update"
+        return "older" if latest["behind"] else None
     if COMMIT and latest["commit"] == COMMIT:
-        return False
-    return version_key(latest["version"]) > version_key(VERSION)
+        return None
+    theirs, ours = version_key(latest["version"]), version_key(VERSION)
+    return "update" if theirs > ours else "older" if theirs < ours else None

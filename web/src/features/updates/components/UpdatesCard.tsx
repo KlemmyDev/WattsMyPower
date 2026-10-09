@@ -10,15 +10,27 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Spinner } from "~/features/common/ui/components/Progress";
+import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
-import { checkForUpdates, installUpdate, updatesQuery } from "~/features/updates/api";
-import type { UpdateStatus } from "~/features/updates/types";
+import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
+import type { Channel, UpdateStatus } from "~/features/updates/types";
 
 const short = (commit: string) => commit.slice(0, 7);
 const titled = (release: string | null) => (release ? release.charAt(0).toUpperCase() + release.slice(1) : null);
 const UNDER_WAY = new Set(["requested", "running"]);
+
+const CHANNELS: { value: Channel; label: string; about: string }[] = [
+  {
+    value: "nightly",
+    label: "Nightly",
+    about: "Every change as soon as it's merged. The newest, and the least tried.",
+  },
+  { value: "beta", label: "Beta", about: "Pre-releases to try before they're stable, and every stable release." },
+  { value: "stable", label: "Stable", about: "Releases only, once they've been tried. Updates less often." },
+];
+const channelName = (c: Channel) => CHANNELS.find((o) => o.value === c)!.label;
 
 /** "10:42" today, else "Mon 6 Oct, 10:42". */
 const when = (ts: number) => (sameDay(ts, nowS()) ? hhmm(ts) : `${shortDay.format(new Date(ts * 1000))}, ${hhmm(ts)}`);
@@ -30,10 +42,26 @@ function newerWords(s: UpdateStatus) {
   return latest.changes ? `the ${latest.changes} newer ${plural(latest.changes, "change")}` : "the latest";
 }
 
+/** The changes this version has that the channel's older one hasn't, in a few words. */
+const leftOut = (s: UpdateStatus) =>
+  s.latest?.behind ? `the ${s.latest.behind} ${plural(s.latest.behind, "change")} since` : "what's newer here";
+
+/** Where "See what's changed" goes: between the two, a release's notes, or main's history. */
+function changesUrl(s: UpdateStatus) {
+  const { repo, current, latest } = s;
+  if (latest && current.commit && latest.changes != null && s.move === "update")
+    return `https://github.com/${repo}/compare/${current.commit}...${latest.commit}`;
+  if (latest && current.commit && latest.behind != null && s.move === "older")
+    return `https://github.com/${repo}/compare/${latest.commit}...${current.commit}`;
+  if (latest?.tag) return `https://github.com/${repo}/releases/tag/${latest.tag}`;
+  return `https://github.com/${repo}/commits/${s.branch}`;
+}
+
 /**
- * Updates (Manage → System): the version running, the latest on GitHub and whether it's newer, checking now, and
- * turning the checks every few hours off. With the updater set up on the machine it's installed on, Update now; else
- * how to update by hand.
+ * Updates (Manage → System): the release channel followed, the version running, the channel's on GitHub and whether
+ * it's newer (or older, after moving to a channel behind this version), checking now, and turning the checks every few
+ * hours off. With the updater set up on the machine it's installed on, Update now (or going back); else how to update
+ * by hand.
  */
 export function UpdatesCard() {
   const qc = useQueryClient();
@@ -55,6 +83,15 @@ export function UpdatesCard() {
     },
     onError: (e) => toast(errorMessage(e)),
   });
+  const channel = useMutation({
+    mutationFn: setChannel,
+    onSuccess: (s) => {
+      qc.setQueryData(updatesQuery.queryKey, s);
+      setConfirming(false);
+      toast(`Following ${channelName(s.channel)}.`);
+    },
+    onError: (e) => toast(errorMessage(e)),
+  });
   const install = useMutation({
     mutationFn: installUpdate,
     onSuccess: (s) => {
@@ -66,13 +103,15 @@ export function UpdatesCard() {
   const s = status.data;
   const on = save.isPending ? !!save.variables?.update_check : !!s?.enabled;
   const underWay = !!s && UNDER_WAY.has(s.install.state);
+  const following = channel.isPending ? channel.variables : s?.channel;
+  const older = s?.move === "older";
   // Once the new version answers, load its dashboard: the page here is the old one's.
   const [loadedWith, setLoadedWith] = useState<string | null | undefined>(undefined);
   if (loadedWith === undefined && s) setLoadedWith(s.current.commit);
   const updated = !!s?.current.commit && loadedWith != null && s.current.commit !== loadedWith;
   useEffect(() => {
     if (!updated) return;
-    toast(`Updated to v${s!.current.version}.`);
+    toast(`Now on v${s!.current.version}.`);
     const t = setTimeout(() => window.location.reload(), 1500);
     return () => clearTimeout(t);
   }, [updated, s, toast]);
@@ -106,6 +145,22 @@ export function UpdatesCard() {
         />
       </div>
 
+      {s && following && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-ink-muted">Channel</span>
+          <Segmented
+            label="Release channel"
+            options={CHANNELS}
+            value={following}
+            onChange={(c) => c !== following && channel.mutate(c)}
+            className="w-fit max-w-full"
+          />
+          <span className="text-[13px] text-pretty text-ink-muted">
+            {CHANNELS.find((o) => o.value === following)!.about}
+          </span>
+        </div>
+      )}
+
       {s && (
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-sm:grid-cols-1">
           <Version
@@ -117,7 +172,7 @@ export function UpdatesCard() {
           />
           {s.latest ? (
             <Version
-              label="Latest on GitHub"
+              label={`Latest on ${channelName(s.channel)}`}
               version={s.latest.version}
               release={s.latest.release}
               commit={s.latest.commit}
@@ -126,6 +181,10 @@ export function UpdatesCard() {
                 s.available ? (
                   <Pill tone="brand" size="sm">
                     {s.latest.changes ? `${s.latest.changes} ${plural(s.latest.changes, "change")} newer` : "Newer"}
+                  </Pill>
+                ) : older ? (
+                  <Pill tone="neutral" size="sm">
+                    Older
                   </Pill>
                 ) : (
                   <Pill tone="ok" size="sm">
@@ -136,14 +195,28 @@ export function UpdatesCard() {
             />
           ) : (
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-ink-muted">Latest on GitHub</span>
-              <span className="text-[15px] text-ink-muted">{s.checked_at ? "Couldn't check" : "Not checked yet"}</span>
+              <span className="text-xs text-ink-muted">Latest on {channelName(s.channel)}</span>
+              <span className="text-[15px] text-ink-muted">
+                {channel.isPending
+                  ? "Checking…"
+                  : s.unreleased
+                    ? "Nothing released yet"
+                    : s.checked_at
+                      ? "Couldn't check"
+                      : "Not checked yet"}
+              </span>
             </div>
           )}
         </div>
       )}
 
       {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
+      {s?.unreleased && !channel.isPending && (
+        <Notice tone="info">
+          Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly has
+          every change as it's merged.
+        </Notice>
+      )}
 
       {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
       {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
@@ -161,19 +234,29 @@ export function UpdatesCard() {
         </Notice>
       )}
 
-      {s?.available && !underWay && !updated && (
+      {s?.move && !underWay && !updated && (
         <>
           {s.install.ready ? (
             confirming && (
               <div className="flex flex-col gap-3 rounded-2xl border border-line-subtle bg-surface-inset p-4 text-sm">
-                <span className="font-medium">Update to {newerWords(s)} now?</span>
+                <span className="font-medium">
+                  {older
+                    ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
+                    : `Update to ${newerWords(s)} now?`}
+                </span>
+                {older && (
+                  <span className="text-pretty text-ink-muted">
+                    It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in the
+                    database, for when it's updated again.
+                  </span>
+                )}
                 <span className="text-pretty text-ink-muted">
-                  It downloads the update, backs up your data and rebuilds, which takes a few minutes. The dashboard is
-                  away for a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
+                  It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away for
+                  a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
                 </span>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
-                    {install.isPending ? "Asking…" : "Update now"}
+                    {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
                     Cancel
@@ -188,9 +271,9 @@ export function UpdatesCard() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        {s?.available && s.install.ready && !underWay && !confirming && !updated && (
-          <Button size="sm" onClick={() => setConfirming(true)}>
-            Update now
+        {s?.move && s.install.ready && !underWay && !confirming && !updated && (
+          <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
+            {older ? `Go back to v${s.latest!.version}` : "Update now"}
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending || underWay}>
@@ -198,11 +281,7 @@ export function UpdatesCard() {
         </Button>
         {s?.latest && (
           <a
-            href={
-              s.available && s.current.commit && s.latest.changes != null
-                ? `https://github.com/${s.repo}/compare/${s.current.commit}...${s.latest.commit}`
-                : `https://github.com/${s.repo}/commits/${s.branch}`
-            }
+            href={changesUrl(s)}
             target="_blank"
             rel="noreferrer"
             className="text-[13px] text-link no-underline hover:text-link-hover"
@@ -295,10 +374,12 @@ function Version({
 function HowToUpdate({ s }: { s: UpdateStatus }) {
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-line-subtle bg-surface-inset p-4 text-sm">
-      <span className="font-medium">To update to {newerWords(s)}</span>
+      <span className="font-medium">
+        {s.move === "older" ? `To go back to v${s.latest!.version}` : `To update to ${newerWords(s)}`}
+      </span>
       <span className="text-pretty text-ink-muted">
-        On the machine WattsMyPower runs on, run this in its folder. It downloads the update, backs up your data and
-        rebuilds; your settings and history are kept.
+        On the machine WattsMyPower runs on, run this in its folder. It installs {channelName(s.channel)}'s version,
+        backs up your data and rebuilds; your settings and history are kept.
       </span>
       <code className="w-fit rounded-lg bg-canvas px-3 py-1.5 font-mono text-[13px] text-ink select-all">
         bash install.sh
