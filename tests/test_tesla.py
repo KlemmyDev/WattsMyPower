@@ -17,7 +17,7 @@ from app.core.config import Config
 from app.core.database import Database
 from app.features.car.service import CarService
 from app.features.settings.store import SettingsStore
-from app.features.tesla import control
+from app.features.tesla import control, details
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
@@ -237,7 +237,16 @@ class ScriptedRadio:
         self.answers = list(answers)
         self.asked: list[tuple[bool, bool, bool | None]] = []
 
-    def read(self, vin: str, key: str, charge: bool, wake: bool, plugged: bool | None) -> dict[str, Any]:
+    def read(
+        self,
+        vin: str,
+        key: str,
+        charge: bool,
+        wake: bool,
+        plugged: bool | None,
+        extras: tuple[str, ...] = (),
+        wake_for_extras: bool = False,
+    ) -> dict[str, Any]:
         self.asked.append((charge, wake, plugged))
         return self.answers.pop(0)
 
@@ -268,6 +277,20 @@ def test_bluetooth_keeps_the_last_charge_while_the_car_sleeps() -> None:
     assert closed["last_state"]["charge_state"]["charging_state"] == "Disconnected"  # the port's shut
     away = control.parse(VIN, client.vehicles()[0]["last_state"], HOME, in_range=False)
     assert away.at_home is False and away.in_range is False
+
+
+def test_bluetooth_reads_a_car_back_in_range_at_once() -> None:
+    clock = Clock()
+    charge = last_state(charging_state="Disconnected")["charge_state"]
+    awake = {"heard": True, "asleep": False, "port_open": False, "charge_state": charge}
+    radio = ScriptedRadio(awake, {"heard": False}, awake)
+    client = BluetoothClient("key", lambda: [VIN], radio, clock)  # type: ignore[arg-type]
+    client.vehicles({VIN: "quiet"})
+    clock.t += 600
+    client.vehicles({VIN: "quiet"})  # gone
+    clock.t += 600
+    client.vehicles({VIN: "quiet"})  # back, ten minutes later: read now, not in an hour
+    assert radio.asked[2][0] is True
 
 
 def test_bluetooth_reads_as_closely_as_the_car_is_followed() -> None:
@@ -301,6 +324,7 @@ class FakeTessie:
         self.commands: list[tuple[str, dict[str, Any]]] = []
         self.fail: TeslaError | None = None
         self.clock: Clock | None = None  # stamps each reading with the time, as Tessie does
+        self.refreshed: list[bool] = []
 
     def charge(self, **kw: Any) -> None:
         self.state["charge_state"].update(kw)
@@ -310,7 +334,18 @@ class FakeTessie:
             raise self.fail
         if self.clock:
             self.state["charge_state"]["timestamp"] = int(self.clock() * 1000)
-        return [{"vin": VIN, "last_state": json.loads(json.dumps(self.state))}]
+        last = json.loads(json.dumps(self.state))
+        return [{"vin": VIN, "last_state": last, "details": details.from_fleet(last)}]
+
+    def refresh_details(self, vin: str, wake: bool) -> dict[str, Any]:
+        from app.features.tesla.client import CarAsleep
+
+        self.refreshed.append(wake)
+        row = self.vehicles()[0] | {"vin": vin}
+        row["details"] = details.from_fleet(row["last_state"])
+        if self.state.get("state") == "asleep" and not wake:
+            raise CarAsleep(row)
+        return row
 
     def command(self, vin: str, name: str, **params: Any) -> bool:
         self.commands.append((name, params))
@@ -326,6 +361,23 @@ class FakeTessie:
         return True
 
 
+# Each group of details as the car gives it over Bluetooth (MessageToDict's shapes).
+BLE_EXTRAS: dict[str, dict[str, Any]] = {
+    "schedule": {"charge_schedule_state": {"charge_schedules": [
+        {"name": "Nights", "days_of_week": 0b0111110, "start_enabled": True, "start_time": 1320, "enabled": True}
+    ]}},
+    "climate": {"climate_state": {"inside_temp_celsius": 41.0, "outside_temp_celsius": 30.5, "is_climate_on": False,
+                                  "climate_keeper_mode": {"Off": {}},
+                                  "cabin_overheat_protection": "CabinOverheatProtectionOn"}},
+    "security": {"closures_state": {"sentry_mode_state": {"Armed": {}}, "window_open_driver_rear": True}},
+    "tyres": {"tire_pressure_state": {"tpms_pressure_fl": 2.9, "tpms_pressure_rr": 2.4, "tpms_soft_warning_rr": True}},
+    "driving": {"drive_state": {"odometer_in_hundredths_of_a_mile": 1_000_000, "shift_state": {"P": {}}}},
+    "software": {"software_update_state": {"status": {"Downloading": {}}, "version": "2026.38.1", "download_perc": 40},
+                 "legacy_vehicle_state": {"car_version": "2026.32.6 abc"}},
+    "media": {"media_state": {"media_playback_status": "Stopped"}},
+}  # fmt: skip
+
+
 class FakeRadio:
     """The same car, over Bluetooth: heard while it's at home (where its location says it is)."""
 
@@ -336,24 +388,41 @@ class FakeRadio:
         self.fail: TeslaError | None = None
         self.asleep = False  # it stays so until it's woken, or a command wakes it
         self.asked: list[tuple[bool, bool]] = []
+        self.extras_asked: list[tuple[str, ...]] = []
+        self.refuse: set[str] = set()  # groups the key may not read
 
     def _home(self) -> bool:
         ds = self.car.state.get("drive_state") or {}
         return control.distance_m((ds["latitude"], ds["longitude"]), HOME) < 500
 
-    def read(self, vin: str, key: str, charge: bool, wake: bool, plugged: bool | None) -> dict[str, Any]:
+    def read(
+        self,
+        vin: str,
+        key: str,
+        charge: bool,
+        wake: bool,
+        plugged: bool | None,
+        extras: tuple[str, ...] = (),
+        wake_for_extras: bool = False,
+    ) -> dict[str, Any]:
         self.asked.append((charge, wake))
+        self.extras_asked.append(extras)
         if not self._home():
             return {"heard": False}
         if key not in self.keys:
             raise TeslaError("The car doesn't know this server's key.", refused=True)
         cs = json.loads(json.dumps(self.car.state["charge_state"]))
         port = cs["charging_state"] != "Disconnected"
-        if self.asleep and wake and port:
+        status = {"locked": True, "open": ["Charge port"] if port else [], "user_present": False, "gear": "P"}
+        woke = self.asleep and ((wake and port) or wake_for_extras)
+        if woke:
             self.asleep = False
         if self.asleep:
-            return {"heard": True, "asleep": True, "port_open": port, "charge_state": None}
-        return {"heard": True, "asleep": False, "port_open": port, "charge_state": cs}
+            return {"heard": True, "asleep": True, "port_open": port, "status": status, "charge_state": None}
+        got = {g: BLE_EXTRAS[g] for g in extras if g not in self.refuse}
+        refused = {g: "Not for this key" for g in extras if g in self.refuse}
+        return {"heard": True, "asleep": False, "port_open": port, "status": status, "charge_state": cs,
+                "extras": got, "refused": refused, "woke": woke}  # fmt: skip
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
         self.asleep = False
@@ -554,7 +623,9 @@ def test_solar_mode_starts_follows_and_stops(svc: TeslaService, provider: str, t
     # Clouds: the house draws from the grid for long enough, and it stops.
     minutes(svc, live, clock, 8, spare=-2000)
     assert tessie.commands[-1] == ("stop_charging", {})
-    assert [e["kind"] for e in svc.log()][:1] == ["solar"]
+    kinds = [e["kind"] for e in svc.log()]
+    assert kinds[:2] == ["charge", "solar"]  # the charge, summed up once it's stopped; the stop
+    assert svc.log()[0]["text"].startswith("Charged 50% → 50%: ")
 
 
 def test_starting_in_the_tesla_app_puts_it_on_hold_until_unplugged(svc: TeslaService, provider: str,
@@ -707,6 +778,7 @@ def test_with_no_chance_of_charging_the_car_is_left_to_sleep(ble: TeslaService, 
     minutes(ble, live, clock, 30, grid=500)
     assert len(radio.asked) == 6  # every five minutes
     assert all(not wake for _, wake in radio.asked)
+    assert ble.history.wakes(VIN, 0, 2**40) == []  # not woken all night
     v = ble.status()["vehicles"][0]
     assert (v["follow"], v["solar_from"], v["wake_at"]) == ("quiet", None, None)
     assert v["state"]["asleep"] and v["state"]["plugged"]  # its last reading stands
@@ -725,6 +797,8 @@ def test_the_car_is_woken_ahead_of_spare_solar(ble: TeslaService, radio: FakeRad
     assert woken and not radio.asleep
     assert len(radio.asked[: woken[0]]) <= 30  # left alone until then, read every five minutes
     assert ble.status()["vehicles"][0]["follow"] == "ready"
+    [wake] = ble.history.wakes(VIN, 0, 2**40)
+    assert wake["reason"] == "ready" and "Woke the car ready for spare solar" in [e["text"] for e in ble.log()]
     n = len(radio.asked)
     minutes(ble, live, clock, 5, grid=500)
     assert len(radio.asked) - n == 5  # each minute, kept awake
@@ -733,3 +807,173 @@ def test_the_car_is_woken_ahead_of_spare_solar(ble: TeslaService, radio: FakeRad
     assert ("start_charging", {}) in tessie.commands
     minutes(ble, live, clock, 1, spare=5000)  # read again after the command
     assert ble.status()["vehicles"][0]["follow"] == "active"
+
+
+# -- details beyond the charge --------------------------------------------------------------------------------------
+
+
+def test_details_from_tessie() -> None:
+    last = last_state(scheduled_charging_mode="StartAt", scheduled_charging_start_time_minutes=1320,
+                      charger_pilot_current=16, conn_charge_cable="IEC")  # fmt: skip
+    last |= {
+        "climate_state": {"inside_temp": 22.5, "outside_temp": 18.0, "climate_keeper_mode": "dog",
+                          "cabin_overheat_protection": "FanOnly"},
+        "vehicle_state": {"timestamp": 1_800_000_000_000, "locked": False, "df": 1, "rp_window": 1,
+                          "sentry_mode": True, "odometer": 1000, "car_version": "2026.32.6 abc",
+                          "tpms_pressure_fl": 2.9, "tpms_hard_warning_rr": True,
+                          "software_update": {"status": "available", "version": "2026.38.1 def"},
+                          "media_info": {"media_playback_status": "Playing", "now_playing_title": "Song"}},
+    }  # fmt: skip
+    d = details.from_fleet(last)
+    assert d["status"]["data"] == {"locked": False, "open": ["Driver door"], "user_present": None, "gear": "P"}
+    assert d["charging"]["data"]["pilot_amps"] == 16 and d["charging"]["data"]["cable"] == "IEC"
+    assert d["schedule"]["data"]["mode"] == "start_at" and d["schedule"]["data"]["start_minutes"] == 1320
+    assert "Scheduled charging is on" in (details.overrides_solar(d["schedule"]["data"]) or "")
+    assert d["security"]["data"] == {"sentry": "Armed", "sentry_available": None, "valet": None,
+                                     "windows_open": ["Rear right"]}  # fmt: skip
+    assert d["driving"]["data"]["odometer_km"] == 1609.3
+    assert d["software"]["data"] == {"version": "2026.32.6", "update": {"status": "available", "version": "2026.38.1",
+                                     "download_pct": None, "install_pct": None, "scheduled_at": None, "minutes": None}}  # fmt: skip
+    assert d["tyres"]["data"]["warnings"] == ["rr"] and d["media"]["data"]["title"] == "Song"
+    assert details.parked_draw(d) == ["Sentry mode (about 250 W)", "Dog mode"]
+
+
+def test_details_over_bluetooth() -> None:
+    charge = last_state(scheduled_charging_mode="ScheduledChargingModeOff")["charge_state"]
+    extras = {g: (100, raw) for g, raw in BLE_EXTRAS.items() if g != "media"}
+    d = details.from_ble({"locked": True, "open": [], "user_present": False, "gear": "P"}, 90, charge, 80, extras,
+                         {"media": (100, "Not for this key")})  # fmt: skip
+    assert d["status"]["as_of"] == 90 and d["charging"]["as_of"] == 80
+    assert d["schedule"]["data"]["mode"] == "off"
+    assert d["schedule"]["data"]["charge_schedules"] == [
+        {"name": "Nights", "days": ["Mon", "Tue", "Wed", "Thu", "Fri"], "start": 1320, "end": None,
+         "one_time": False, "enabled": True}
+    ]  # fmt: skip
+    assert "charge schedule" in (details.overrides_solar(d["schedule"]["data"]) or "")
+    assert d["climate"]["data"]["cabin_overheat"] == "on" and d["security"]["data"]["sentry"] == "Armed"
+    assert d["driving"]["data"]["odometer_km"] == 16093.4 and d["driving"]["data"]["gear"] == "P"
+    assert d["software"]["data"]["update"]["status"] == "downloading"
+    assert d["media"] == {"as_of": 100, "refused": "Not for this key"}
+    # 41 °C inside: cabin overheat protection is running, and sentry's on.
+    assert details.parked_draw(d) == ["Sentry mode (about 250 W)", "Cabin overheat protection"]
+
+
+def test_details_are_read_only_while_the_car_is_awake(ble: TeslaService, radio: FakeRadio, live: FakeLive,
+                                                       clock: Clock) -> None:  # fmt: skip
+    radio.extras_asked.clear()
+    minutes(ble, live, clock, 30, grid=500)  # asleep all along
+    assert all(not e for e in radio.extras_asked)  # quiet and asleep: nothing more is asked of it
+    d = ble.details(VIN)
+    assert d["refresh_wakes"] and d["groups"]["status"]["data"]["locked"] is True  # its free status, still read
+    assert "climate" in d["groups"]  # what was read when it was paired, while it was awake, stands
+
+
+def test_a_refresh_asks_before_waking(ble: TeslaService, radio: FakeRadio) -> None:
+    with pytest.raises(TeslaSetupError) as e:
+        ble.refresh_details(VIN, False)
+    assert e.value.status == 409 and radio.asleep
+    d = ble.refresh_details(VIN, True)
+    assert not radio.asleep and not d["refresh_wakes"]
+    assert set(d["groups"]) == set(details.GROUPS)
+    assert ble.log()[0]["text"] == "Woke the car to read its details"
+    assert [w["reason"] for w in ble.history.wakes(VIN, 0, 2**40)] == ["refresh"]
+
+
+def test_groups_the_key_may_not_read_are_said_so(svc: TeslaService, radio: FakeRadio) -> None:
+    radio.refuse = {"media"}
+    connect(svc, "bluetooth")
+    d = svc.refresh_details(VIN, True)
+    assert "refused" in d["groups"]["media"] and "data" in d["groups"]["tyres"]
+
+
+def test_details_through_tessie(svc: TeslaService, tessie: FakeTessie) -> None:
+    tessie.state["vehicle_state"] = {"locked": True, "sentry_mode": False, "odometer": 10}
+    connect(svc, "tessie")
+    assert svc.details(VIN)["groups"]["driving"]["data"]["odometer_km"] == 16.1
+    tessie.state["state"] = "asleep"
+    with pytest.raises(TeslaSetupError):
+        svc.refresh_details(VIN, False)
+    svc.refresh_details(VIN, True)
+    assert tessie.refreshed == [False, True]
+
+
+# -- in and out ------------------------------------------------------------------------------------------------------
+
+
+def leave(tessie: FakeTessie) -> None:
+    tessie.charge(charging_state="Disconnected")
+    tessie.state["drive_state"] = {"latitude": -33.86, "longitude": 151.21}  # Sydney: away (and out of range)
+
+
+def come_home(tessie: FakeTessie, soc: float, odometer_mi: float) -> None:
+    tessie.charge(battery_level=soc)
+    tessie.state["drive_state"] = {"latitude": HOME[0], "longitude": HOME[1]}
+    tessie.state["vehicle_state"] = {"odometer": odometer_mi}
+
+
+def test_time_away_is_logged_with_what_it_used(svc: TeslaService, provider: str, tessie: FakeTessie,
+                                               radio: FakeRadio, live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    tessie.charge(battery_level=70)
+    tessie.state["vehicle_state"] = {"odometer": 1000}
+    BLE_EXTRAS["driving"] = {"drive_state": {"odometer_in_hundredths_of_a_mile": 100_000}}
+    connect(svc, provider)
+    svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_battery_kwh": 75})
+    minutes(svc, live, clock, 5, grid=500)
+    leave(tessie)
+    minutes(svc, live, clock, 30, grid=500)
+    assert svc.history.open(VIN, "away") is not None
+    assert "Left home at 70%" in [e["text"] for e in svc.log()]
+    come_home(tessie, 50, 1075)  # 75 miles: 120.7 km
+    BLE_EXTRAS["driving"] = {"drive_state": {"odometer_in_hundredths_of_a_mile": 107_500}}
+    if provider == "bluetooth":
+        svc.refresh_details(VIN, False)  # (its details are otherwise read every 15 minutes)
+    minutes(svc, live, clock, 6, grid=500)
+    h = svc.car_history(VIN)
+    [trip] = [s for s in h["sessions"] if s["kind"] == "away"]
+    assert (trip["soc_start"], trip["soc_end"], trip["soc_change"], trip["used_kwh"]) == (70, 50, -20, 15.0)
+    assert trip["km"] == 120.7 and trip["kwh_per_100km"] == 12.4
+    assert svc.log()[0]["text"] == "Back home at 50%: used 20% (about 15 kWh), 121 km"
+    day = svc.car_levels(VIN, int(clock()) - 86400, int(clock()) + 1)
+    socs = [p["soc"] for p in day["points"]]
+    assert socs[0] == 70 and socs[-1] == 50  # left at 70, back at 50: the page draws the line between
+    [away] = day["away"]
+    assert away["end"] > away["start"] and day["charging"] == []
+    with pytest.raises(TeslaSetupError):
+        svc.car_levels(VIN, 0, 10 * 86400)
+    BLE_EXTRAS["driving"] = {"drive_state": {"odometer_in_hundredths_of_a_mile": 1_000_000, "shift_state": {"P": {}}}}
+
+
+def test_a_moment_out_of_range_is_not_a_trip(svc: TeslaService, tessie: FakeTessie, live: FakeLive,
+                                             clock: Clock) -> None:  # fmt: skip
+    connect(svc, "bluetooth")
+    minutes(svc, live, clock, 2, grid=500)
+    tessie.state["drive_state"] = {"latitude": -33.86, "longitude": 151.21}  # not heard…
+    minutes(svc, live, clock, 5, grid=500)
+    tessie.state["drive_state"] = {"latitude": HOME[0], "longitude": HOME[1]}  # …and back within ten minutes
+    minutes(svc, live, clock, 30, grid=500)
+    assert svc.car_history(VIN)["sessions"] == []
+
+
+def test_charging_at_home_is_counted_with_its_grid_share(svc: TeslaService, provider: str, tessie: FakeTessie,
+                                                          live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    connect(svc, provider)
+    tessie.charge(charging_state="Charging", charger_actual_current=10, charge_current_request=10,
+                  charger_voltage=230, charger_phases=3, charger_power=7, battery_level=40)  # fmt: skip
+    start = int(clock())
+    minutes(svc, live, clock, 60, grid=1725)  # 6.9 kW into the car, a quarter of it from the grid
+    tessie.charge(charging_state="Stopped", battery_level=48)
+    minutes(svc, live, clock, 2, grid=0)
+    [charge] = svc.car_history(VIN)["sessions"]
+    assert charge["kind"] == "charge" and (charge["soc_start"], charge["soc_end"]) == (40, 48)
+    assert charge["kwh"] == pytest.approx(6.9, abs=0.3) and charge["solar_share"] == pytest.approx(0.75, abs=0.01)
+    assert svc.log()[0]["text"].startswith("Charged 40% → 48%: ")
+    # The Home page's car line: what it drew, 5 minutes at a time.
+    w = svc.history.charged_w(start, int(clock()))
+    assert len(w) >= 11 and all(v == pytest.approx(6900, rel=0.25) for v in list(w.values())[1:-1])
+
+
+def test_a_command_to_a_sleeping_car_counts_as_a_wake(ble: TeslaService, radio: FakeRadio, live: FakeLive,
+                                                      clock: Clock) -> None:  # fmt: skip
+    minutes(ble, live, clock, 6, grid=500)  # read again: asleep
+    ble.command(VIN, {"action": "limit", "percent": 90})
+    assert [w["reason"] for w in ble.history.wakes(VIN, 0, 2**40)] == ["command"]

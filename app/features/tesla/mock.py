@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from app.features.tesla.client import TeslaError
 
@@ -35,6 +35,7 @@ class DemoTesla:
         self.at = clock()
         self.keys: set[str] = set()  # the keys paired over Bluetooth
         self.awake_until = clock() + AWAKE
+        self.odometer_mi = 21_450.3
 
     def asleep(self) -> bool:
         return not self.charging and self.clock() > self.awake_until
@@ -69,7 +70,113 @@ class DemoTesla:
             "charge_energy_added": 6.2,
             "minutes_to_full_charge": 95 if self.charging else 0,
             "fast_charger_present": False,
+            "charger_pilot_current": 16,
+            "conn_charge_cable": "IEC",
+            "charge_port_latch": "Engaged",
+            "usable_battery_level": max(0, round(self.soc) - 1),
+            "scheduled_charging_mode": "Off",
+            "scheduled_departure_time_minutes": 450,
+            "preconditioning_enabled": False,
         }
+
+    # What the rest of it is doing: parked in the garage, locked, sentry on, one schedule set (but switched off).
+    SCHEDULE: ClassVar[dict[str, Any]] = {
+        "id": 1,
+        "name": "Weeknights",
+        "days_of_week": 0b0111110,
+        "start_enabled": True,
+        "start_time": 1320,
+        "end_enabled": True,
+        "end_time": 360,
+        "one_time": False,
+        "enabled": False,
+    }
+
+    def fleet(self) -> dict[str, Any]:
+        """The rest of its vehicle data, as Tessie keeps it (Tesla's Fleet API shape)."""
+        ts = int(self.clock() * 1000)
+        return {
+            "climate_state": {
+                "timestamp": ts,
+                "inside_temp": 24.5,
+                "outside_temp": 19.0,
+                "is_climate_on": False,
+                "is_preconditioning": False,
+                "climate_keeper_mode": "off",
+                "cabin_overheat_protection": "On",
+                "battery_heater": False,
+            },
+            "vehicle_state": {
+                "timestamp": ts,
+                "locked": True,
+                "df": 0,
+                "pf": 0,
+                "dr": 0,
+                "pr": 0,
+                "ft": 0,
+                "rt": 0,
+                "fd_window": 0,
+                "fp_window": 0,
+                "rd_window": 0,
+                "rp_window": 0,
+                "sentry_mode": True,
+                "sentry_mode_available": True,
+                "valet_mode": False,
+                "is_user_present": False,
+                "odometer": self.odometer_mi,
+                "car_version": "2026.32.6 abc123",
+                "software_update": {"status": "", "version": " "},
+                "tpms_pressure_fl": 2.9,
+                "tpms_pressure_fr": 2.9,
+                "tpms_pressure_rl": 2.85,
+                "tpms_pressure_rr": 2.6,
+                "tpms_soft_warning_rr": True,
+                "media_info": {"media_playback_status": "Stopped"},
+            },
+            "charge_schedule_data": {"charge_schedules": [self.SCHEDULE]},
+        }
+
+    def ble(self, groups: tuple[str, ...]) -> dict[str, Any]:
+        """The details groups asked for, as the car gives them over Bluetooth (each message as MessageToDict has it)."""
+        all_ = {
+            "schedule": {
+                "charge_schedule_state": {"charge_schedules": [self.SCHEDULE]},
+                "preconditioning_schedule_state": {},
+            },
+            "climate": {
+                "climate_state": {
+                    "inside_temp_celsius": 24.5,
+                    "outside_temp_celsius": 19.0,
+                    "is_climate_on": False,
+                    "climate_keeper_mode": {"Off": {}},
+                    "cabin_overheat_protection": "CabinOverheatProtectionOn",
+                }
+            },
+            "security": {
+                "closures_state": {"locked": True, "sentry_mode_state": {"Armed": {}}, "sentry_mode_available": True}
+            },
+            "tyres": {
+                "tire_pressure_state": {
+                    "tpms_pressure_fl": 2.9,
+                    "tpms_pressure_fr": 2.9,
+                    "tpms_pressure_rl": 2.85,
+                    "tpms_pressure_rr": 2.6,
+                    "tpms_soft_warning_rr": True,
+                }
+            },
+            "driving": {
+                "drive_state": {
+                    "odometer_in_hundredths_of_a_mile": round(self.odometer_mi * 100),
+                    "shift_state": {"P": {}},
+                }
+            },
+            "software": {
+                "software_update_state": {"status": {"Unknown": {}}},
+                "legacy_vehicle_state": {"car_version": "2026.32.6 abc123"},
+            },
+            "media": {"media_state": {"media_playback_status": "Stopped"}},
+        }
+        return {g: all_[g] for g in groups if g in all_}
 
     def run(self, vin: str, name: str, **params: Any) -> bool:
         if vin != VIN:
@@ -104,9 +211,18 @@ class DemoTessie:
                     "vehicle_config": {"car_type": "modely", "trim_badging": "74d"},
                     "drive_state": {"latitude": lat, "longitude": lon},
                     "charge_state": self.car.charge_state(),
+                    **self.car.fleet(),
                 },
             }
         ]
+
+    def refresh_details(self, vin: str, wake: bool) -> dict[str, Any]:
+        from app.features.tesla import details
+
+        if vin != VIN:
+            raise TeslaError("Tessie doesn't know that car. It may have been removed from the account.", 404)
+        row = self.vehicles()[0]
+        return {"vin": vin, "last_state": row["last_state"], "details": details.from_fleet(row["last_state"])}
 
     def command(self, vin: str, name: str, **params: Any) -> bool:
         if vin != VIN:
@@ -127,17 +243,42 @@ class DemoRadio:
                 f"The car wasn't heard over Bluetooth. In mock mode, the car to pair is {VIN}.",
             )
 
-    def read(self, vin: str, key: str, charge: bool, wake: bool, plugged: bool | None) -> dict[str, Any]:
+    def read(
+        self,
+        vin: str,
+        key: str,
+        charge: bool,
+        wake: bool,
+        plugged: bool | None,
+        extras: tuple[str, ...] = (),
+        wake_for_extras: bool = False,
+    ) -> dict[str, Any]:
         if vin != VIN:
             return {"heard": False}
         if key not in self.car.keys:
             raise TeslaError("The car doesn't know this server's key. Pair it again.", refused=True)
         asleep = self.car.asleep()
-        out: dict[str, Any] = {"heard": True, "asleep": asleep, "port_open": True, "charge_state": None}
+        status = {"locked": True, "open": ["Charge port"], "user_present": False, "gear": "P"}
+        out: dict[str, Any] = {
+            "heard": True,
+            "asleep": asleep,
+            "port_open": True,
+            "status": status,
+            "charge_state": None,
+            "extras": {},
+            "refused": {},
+        }
+        if asleep and wake_for_extras:
+            self.car.touch()
+            asleep = out["asleep"] = False
+            out["woke"] = True
         if (not asleep and (charge or plugged is False)) or (asleep and wake):
             self.car.touch()
-            out["asleep"] = False
+            out["woke"] = asleep
+            asleep = out["asleep"] = False
             out["charge_state"] = self.car.charge_state()
+        if extras and not asleep:
+            out["extras"] = self.car.ble(extras)
         return out
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool:

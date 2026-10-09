@@ -131,8 +131,13 @@ async def get_usage(
 
 
 def _car(svc: Services, start: int, end: int) -> dict[int, float] | None:
-    """What the car drew in each rollup of [start, end) (app.features.home.car); None without a car connected."""
-    return home_car.car_use(svc.home.repo, svc.readings, svc.car, start, end) if svc.car.ids() else None
+    """What the cars drew in each rollup of [start, end): as a connected Tesla measured it while charging at home
+    (app.features.tesla.history), and elsewhere as found in what no device measured (app.features.home.car); None
+    without a car connected."""
+    if not svc.car.ids():
+        return None
+    measured = svc.tesla.history.charged_w(start, end)
+    return home_car.car_use(svc.home.repo, svc.readings, svc.car, start, end) | measured
 
 
 def _pricing(svc: Services, start: int, end: int) -> tuple[insights.Pricing, list[dict[str, Any]]]:

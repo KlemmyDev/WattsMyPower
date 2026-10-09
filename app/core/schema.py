@@ -36,6 +36,11 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                      meter
     home_energy      each device's energy, kWh per 5 minutes
     home_runs        each run of an appliance that runs in cycles (a wash, a dry): when, how long, how much
+    ev_energy    what each connected Tesla drew from the house while charging at home, Wh per 5 minutes (and of it
+                 from the grid), as the car measured it: the Home page's car line (app.features.tesla)
+    ev_wakes     each time the dashboard woke a Tesla, and why (to see it isn't woken too often, at night)
+    ev_sessions  each Tesla's time away (its level and odometer leaving and coming back) and each charge at home
+                 (levels, energy from the house and from the grid), for the EV page's in and out
     battery_controls each battery control from the dashboard (standby, a floor, a charge from the grid), and each
                      stretch something else had the battery (iSolarCloud…): when it started and ended, and how
                      it was set, for the Battery page's chart (app.features.battery)
@@ -395,6 +400,32 @@ def _battery_states(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE battery_controls ADD COLUMN command TEXT")
 
 
+def _ev_history(conn: sqlite3.Connection) -> None:
+    """What a connected Tesla drew from the house while charging at home (ev_energy, Wh per 5-minute rollup, and how
+    much of it came from the grid), and its sessions (ev_sessions): `kind` away (end null while it's still away) or
+    charge, with its level (and odometer, km) at each end, and for a charge the energy from the house and the grid."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ev_energy (vin TEXT NOT NULL, ts INTEGER NOT NULL, wh REAL NOT NULL,"
+        " grid_wh REAL NOT NULL DEFAULT 0, PRIMARY KEY (vin, ts))"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS ev_energy_by_ts ON ev_energy (ts)")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ev_sessions (id INTEGER PRIMARY KEY, vin TEXT NOT NULL, kind TEXT NOT NULL,"
+        " start INTEGER NOT NULL, end INTEGER, soc_start REAL, soc_end REAL, km_start REAL, km_end REAL, kwh REAL,"
+        " grid_kwh REAL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS ev_sessions_by_start ON ev_sessions (vin, start)")
+
+
+def _ev_wakes(conn: sqlite3.Connection) -> None:
+    """Each time the dashboard woke a Tesla (or sent it something while it slept), and why: to see that it isn't
+    woken too often, at night especially."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ev_wakes (vin TEXT NOT NULL, ts INTEGER NOT NULL, reason TEXT NOT NULL,"
+        " PRIMARY KEY (vin, ts))"
+    )
+
+
 def _drop_car_charges(conn: sqlite3.Connection) -> None:
     """Car charges are no longer planned on the dashboard (a Tesla is charged from spare solar
     instead): the charges planned ahead go."""
@@ -425,6 +456,8 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _home_peaks,
     _home_estimate,
     _drop_car_charges,
+    _ev_history,
+    _ev_wakes,
 ]
 
 

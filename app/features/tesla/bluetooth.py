@@ -35,13 +35,31 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 from app.core.bluetooth import run_alone, unavailable
-from app.features.tesla.client import COMMANDS, VIN, TeslaError
+from app.features.tesla import details
+from app.features.tesla.client import COMMANDS, VIN, CarAsleep, TeslaError
 from app.features.tesla.control import QUIET_READ
 
 log = logging.getLogger(__name__)
 
 SCAN_SECONDS = 12  # to hear the car's broadcast
 PAIR_SECONDS = 150  # to get in the car and tap the key card
+DETAILS_EVERY = 900  # seconds between reads of a car's details (app.features.tesla.details) while it's awake
+DETAILS_ACTIVE = 300  # while it's charging or ready to (awake anyway)
+REFUSED_RETRY = 86400  # a group the key may not read is asked for again after this
+# Each group of details over Bluetooth: the car's own vehicle-data requests, one at a time (two at once can be more
+# than a Bluetooth message holds), and where each answer is.
+READS: dict[str, tuple[tuple[str, str], ...]] = {
+    "schedule": (
+        ("CHARGE_SCHEDULE_STATE", "charge_schedule_state"),
+        ("PRECONDITIONING_SCHEDULE_STATE", "preconditioning_schedule_state"),
+    ),
+    "climate": (("CLIMATE_STATE", "climate_state"),),
+    "security": (("CLOSURES_STATE", "closures_state"),),
+    "tyres": (("TIRE_PRESSURE_STATE", "tire_pressure_state"),),
+    "driving": (("DRIVE_STATE", "drive_state"),),
+    "software": (("SOFTWARE_UPDATE_STATE", "software_update_state"), ("LEGACY_VEHICLE_STATE", "legacy_vehicle_state")),
+    "media": (("MEDIA_STATE", "media_state"),),
+}
 MODELS = {"3": "model3", "Y": "modely", "S": "models", "X": "modelx", "C": "cybertruck"}  # the VIN's 4th letter
 
 
@@ -78,11 +96,22 @@ def fingerprint(pem: str) -> str:
 class Radio(Protocol):
     """Conversations with a car (Bleak, below; app.features.tesla.mock in mock mode). Each raises TeslaError."""
 
-    def read(self, vin: str, key: str, charge: bool, wake: bool, plugged: bool | None) -> dict[str, Any]:
-        """{heard, asleep, port_open, charge_state}: whether it was heard; whether it's asleep and its charge port is
-        open (None when unknown); and its charge (Tesla's charge_state) when it's awake and either `charge` or its
-        port no longer says what `plugged` (what was last known) does, or with `wake`, when it's asleep with the port
-        not closed (waking it)."""
+    def read(
+        self,
+        vin: str,
+        key: str,
+        charge: bool,
+        wake: bool,
+        plugged: bool | None,
+        extras: tuple[str, ...] = (),
+        wake_for_extras: bool = False,
+    ) -> dict[str, Any]:
+        """{heard, asleep, port_open, status, charge_state, extras, refused}: whether it was heard; whether it's asleep
+        and its charge port is open (None when unknown); its security computer's status, in words (details' status
+        group); its charge (Tesla's charge_state) when it's awake and either `charge` or its port no longer says
+        what `plugged` (what was last known) does, or with `wake`, when it's asleep with the port not closed (waking
+        it); and the details groups in `extras` ({group: {field: message as a dict}}), read only while it's awake,
+        unless `wake_for_extras` (then it's woken), with those its key may not read in `refused` ({group: why})."""
         ...
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool: ...
@@ -98,7 +127,9 @@ class Radio(Protocol):
 
 class BluetoothClient:
     """The cars paired with this server, read and commanded over Bluetooth (app.features.tesla.client). Keeps each
-    car's last charge reading, which stands while the car sleeps."""
+    car's last charge reading and details, which stand while the car sleeps. Details are read along with the charge,
+    only while the car is awake: every DETAILS_ACTIVE seconds while it's charging or ready to, else with the quiet
+    hourly read, so they never keep it awake on their own."""
 
     def __init__(self, key: str, vins: Callable[[], list[str]], radio: Radio, clock: Callable[[], float] = time.time):
         self.key = key
@@ -107,22 +138,57 @@ class BluetoothClient:
         self.clock = clock
         self.names: dict[str, str] = {}
         self._charge: dict[str, tuple[float, dict[str, Any]]] = {}  # vin -> (when, charge_state)
+        self._status: dict[str, tuple[float, dict[str, Any]]] = {}  # vin -> (when, the security computer's status)
+        self._extras: dict[str, dict[str, tuple[int, dict[str, Any]]]] = {}  # vin -> group -> (when, raw)
+        self._refused: dict[str, dict[str, tuple[int, str]]] = {}  # vin -> group -> (when, why)
+        self._gone: set[str] = set()  # cars not heard last time: back in range, their charge is read at once
 
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]:
         return [self._vehicle(vin, (want or {}).get(vin, "quiet")) for vin in self.vins()]
+
+    def _due(self, vin: str, every: float) -> tuple[str, ...]:
+        """The details groups to read with this read, if the car's awake: those not read for `every` seconds (and
+        not refused lately)."""
+        now = self.clock()
+        have = self._extras.get(vin, {})
+        refused = self._refused.get(vin, {})
+        return tuple(
+            g
+            for g in details.EXTRAS
+            if now - have.get(g, (0, {}))[0] >= every and now - refused.get(g, (0, ""))[0] >= REFUSED_RETRY
+        )
 
     def _vehicle(self, vin: str, want: str) -> dict[str, Any]:
         now = self.clock()
         at, charge = self._charge.get(vin, (0.0, None))
         plugged = None if charge is None else charge.get("charging_state") not in ("", "Disconnected")
         if want == "quiet":
-            read, wake = charge is None or now - at >= QUIET_READ, charge is None
+            read, wake = charge is None or now - at >= QUIET_READ or vin in self._gone, charge is None
+            extras = self._due(vin, 0) if read else ()  # along with the hourly read, never on their own
         else:
             read, wake = True, want == "ready" or charge is None
-        r = self.radio.read(vin, self.key, read, wake, plugged)
+            extras = self._due(vin, DETAILS_ACTIVE if want == "active" else DETAILS_EVERY)
+        r = self.radio.read(vin, self.key, read, wake, plugged, extras)
+        return self._row(vin, r, "ready" if want == "ready" else "first")
+
+    def _row(self, vin: str, r: dict[str, Any], why: str | None = None) -> dict[str, Any]:
+        """What was read of a car (radio.read's answer), with what's kept from before, as vehicles() gives it. With
+        `woke`: why, when reading it woke it (the service logs it)."""
+        now = self.clock()
+        at, charge = self._charge.get(vin, (0.0, None))
+        if not r.get("heard"):
+            self._gone.add(vin)  # it's left (or out of range): what's kept is from before
         if r.get("charge_state") is not None:
             at, charge = now, r["charge_state"]
             self._charge[vin] = (at, charge)
+            self._gone.discard(vin)
+        if r.get("status"):
+            self._status[vin] = (now, r["status"])
+        for g, raw in (r.get("extras") or {}).items():
+            self._extras.setdefault(vin, {})[g] = (int(now), raw)
+            self._refused.get(vin, {}).pop(g, None)
+        for g, why in (r.get("refused") or {}).items():
+            self._refused.setdefault(vin, {})[g] = (int(now), why)
         state = dict(charge or {})
         if state:
             state["timestamp"] = int(at * 1000)
@@ -134,7 +200,28 @@ class BluetoothClient:
             "vehicle_config": {"car_type": car_type(vin)},
             "charge_state": state,
         }
-        return {"vin": vin, "last_state": last, "in_range": bool(r.get("heard"))}
+        status_at, status = self._status.get(vin, (0.0, None))
+        found = details.from_ble(
+            status,
+            int(status_at) or None,
+            charge,
+            int(at) or None,
+            self._extras.get(vin, {}),
+            self._refused.get(vin, {}),
+        )
+        row = {"vin": vin, "last_state": last, "in_range": bool(r.get("heard")), "details": found}
+        if r.get("woke") and why:
+            row["woke"] = why
+        return row
+
+    def refresh_details(self, vin: str, wake: bool) -> dict[str, Any]:
+        """Read everything about the car now: its charge and every group of details, waking it only with `wake`."""
+        r = self.radio.read(vin, self.key, True, False, None, details.EXTRAS, wake)
+        if not r.get("heard"):
+            raise TeslaError("The car wasn't heard over Bluetooth. Is it home, and in range of the server?")
+        if r.get("asleep") and not wake:
+            raise CarAsleep(self._row(vin, r))  # what its security computer said still counts
+        return self._row(vin, r)
 
     def command(self, vin: str, name: str, **params: Any) -> bool:
         if name not in COMMANDS or not VIN.match(vin):
@@ -223,8 +310,66 @@ def _converse(coro: Callable[[], Any]) -> Any:
         raise _explain(e) from None
 
 
-def _read_now(vin: str, key: str, charge: bool, wake: bool, plugged: bool | None) -> dict[str, Any]:
+CLOSURES = {"frontDriverDoor": "Driver door", "frontPassengerDoor": "Passenger door", "rearDriverDoor": "Rear left door",
+            "rearPassengerDoor": "Rear right door", "frontTrunk": "Frunk", "rearTrunk": "Boot",
+            "chargePort": "Charge port"}  # fmt: skip
+
+
+def _status(status: Any) -> dict[str, Any]:
+    """The security computer's status, in words (details' status group): locked, what's open, someone in it, gear."""
+    from tesla_protocol.command import vcsec_pb2 as vc
+
+    closures = status.closureStatuses if status.HasField("closureStatuses") else None
+    shut = (vc.ClosureState_E.CLOSURESTATE_CLOSED, vc.ClosureState_E.CLOSURESTATE_UNKNOWN)
+    presence = {vc.UserPresence_E.VEHICLE_USER_PRESENCE_PRESENT: True,
+                vc.UserPresence_E.VEHICLE_USER_PRESENCE_NOT_PRESENT: False}  # fmt: skip
+    gears = {vc.Gear_E.GEAR_PARK: "P", vc.Gear_E.GEAR_DRIVE: "D", vc.Gear_E.GEAR_REVERSE: "R",
+             vc.Gear_E.GEAR_NEUTRAL: "N"}  # fmt: skip
+    locked = (vc.VehicleLockState_E.VEHICLELOCKSTATE_LOCKED, vc.VehicleLockState_E.VEHICLELOCKSTATE_INTERNAL_LOCKED)
+    return {
+        "locked": status.vehicleLockState in locked,
+        "open": [name for f, name in CLOSURES.items() if closures is not None and getattr(closures, f) not in shut],
+        "user_present": presence.get(status.userPresence),
+        "gear": gears.get(status.gear),
+    }
+
+
+async def _extras(car: Any, groups: tuple[str, ...]) -> tuple[dict[str, Any], dict[str, str]]:
+    """The details groups asked for ({group: {field: message as a dict}}), and those the key may not read."""
     from google.protobuf.json_format import MessageToDict  # type: ignore[import-untyped]
+    from tesla_fleet_api import exceptions as x
+    from tesla_fleet_api.const import BluetoothVehicleData
+
+    got: dict[str, Any] = {}
+    refused: dict[str, str] = {}
+    for g in groups:
+        raw: dict[str, Any] = {}
+        try:
+            for request, field in READS[g]:
+                data = await car.vehicle_data([getattr(BluetoothVehicleData, request)])
+                raw[field] = MessageToDict(getattr(data, field), preserving_proto_field_name=True)
+        except x.TeslaFleetMessageFaultInsufficientPrivileges:
+            refused[g] = "The car doesn't share this with the dashboard's key (a charging manager)"
+            continue
+        except (x.BluetoothTransportError, x.BluetoothTimeout):
+            break  # the connection's gone or the car's gone quiet: the rest wait for the next read
+        except x.TeslaFleetError as e:
+            log.info("Tesla %s: couldn't read its %s (%s)", car.vin[-6:], g, type(e).__name__)
+            continue
+        got[g] = raw
+    return got, refused
+
+
+def _read_now(
+    vin: str,
+    key: str,
+    charge: bool,
+    wake: bool,
+    plugged: bool | None,
+    extras: tuple[str, ...] = (),
+    wake_for_extras: bool = False,
+) -> dict[str, Any]:
+    from google.protobuf.json_format import MessageToDict
     from tesla_protocol.command.vcsec_pb2 import ClosureState_E, VehicleSleepStatus_E
 
     async def then(car: Any) -> dict[str, Any]:
@@ -234,13 +379,23 @@ def _read_now(vin: str, key: str, charge: bool, wake: bool, plugged: bool | None
         port_open = (
             None if port in (None, ClosureState_E.CLOSURESTATE_UNKNOWN) else port != ClosureState_E.CLOSURESTATE_CLOSED
         )
-        out: dict[str, Any] = {"heard": True, "asleep": asleep, "port_open": port_open, "charge_state": None}
+        out: dict[str, Any] = {"heard": True, "asleep": asleep, "port_open": port_open, "status": _status(status),
+                               "charge_state": None, "extras": {}, "refused": {}}  # fmt: skip
+        if asleep and wake_for_extras:  # asked for: a refresh the household said may wake it
+            await car.wake_up(wait=True)
+            asleep = out["asleep"] = False
+            out["woke"] = True
         moved = port_open is not None and plugged is not None and port_open != plugged  # plugged in or out since
         if (not asleep and (charge or moved)) or (asleep and wake and port_open is not False):
             cs = await car.charge_state()
             state = MessageToDict(cs, preserving_proto_field_name=True)
             state["charging_state"] = cs.charging_state.WhichOneof("type") or ""
             out["charge_state"] = state
+            if asleep:
+                out["woke"] = True  # it was asleep: reading its charge woke it
+            asleep = False
+        if extras and not asleep:
+            out["extras"], out["refused"] = await _extras(car, extras)
         return out
 
     return _converse(lambda: _talk(vin, key, then, wake=wake)) or {"heard": False}
@@ -311,8 +466,17 @@ def _pair_now(vin: str, key: str, seconds: float) -> str | None:
 class Bleak:
     """The real radio, one conversation at a time (app.core.bluetooth)."""
 
-    def read(self, vin: str, key: str, charge: bool, wake: bool, plugged: bool | None) -> dict[str, Any]:
-        return run_alone(_read_now, vin, key, charge, wake, plugged, refused=TeslaError)
+    def read(
+        self,
+        vin: str,
+        key: str,
+        charge: bool,
+        wake: bool,
+        plugged: bool | None,
+        extras: tuple[str, ...] = (),
+        wake_for_extras: bool = False,
+    ) -> dict[str, Any]:
+        return run_alone(_read_now, vin, key, charge, wake, plugged, extras, wake_for_extras, refused=TeslaError)
 
     def command(self, vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
         return run_alone(_command_now, vin, key, name, params, refused=TeslaError)

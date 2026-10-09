@@ -31,6 +31,7 @@ import { Route as AppSolarRouteImport } from './routes/_app/solar'
 import { Route as AppSystemRouteImport } from './routes/_app/system'
 import { Route as AppBillsRatesRouteImport } from './routes/_app/bills_.rates'
 import { Route as AppEvIndexRouteImport } from './routes/_app/ev/index'
+import { Route as AppEvVinRouteImport } from './routes/_app/ev/$vin'
 import { Route as AppEvSetupRouteImport } from './routes/_app/ev/setup'
 import { Route as AppHomeDeviceRouteImport } from './routes/_app/home_.$device'
 import { Route as AppIntegrationsIndexRouteImport } from './routes/_app/integrations/index'
@@ -160,6 +161,11 @@ const AppEvIndexRoute = AppEvIndexRouteImport.update({
   path: '/ev/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEvVinRoute = AppEvVinRouteImport.update({
+  id: '/ev/$vin',
+  path: '/ev/$vin',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppEvSetupRoute = AppEvSetupRouteImport.update({
   id: '/ev/setup',
   path: '/ev/setup',
@@ -282,6 +288,7 @@ export interface FileRoutesByFullPath {
   '/solar': typeof AppSolarRoute
   '/system': typeof AppSystemRoute
   '/bills/rates': typeof AppBillsRatesRoute
+  '/ev/$vin': typeof AppEvVinRoute
   '/ev/setup': typeof AppEvSetupRoute
   '/home/$device': typeof AppHomeDeviceRoute
   '/integrations/amber': typeof AppIntegrationsAmberRoute
@@ -323,6 +330,7 @@ export interface FileRoutesByTo {
   '/system': typeof AppSystemRoute
   '/': typeof AppIndexRoute
   '/bills/rates': typeof AppBillsRatesRoute
+  '/ev/$vin': typeof AppEvVinRoute
   '/ev/setup': typeof AppEvSetupRoute
   '/home/$device': typeof AppHomeDeviceRoute
   '/integrations/amber': typeof AppIntegrationsAmberRoute
@@ -367,6 +375,7 @@ export interface FileRoutesById {
   '/_app/system': typeof AppSystemRoute
   '/_app/': typeof AppIndexRoute
   '/_app/bills_/rates': typeof AppBillsRatesRoute
+  '/_app/ev/$vin': typeof AppEvVinRoute
   '/_app/ev/setup': typeof AppEvSetupRoute
   '/_app/home_/$device': typeof AppHomeDeviceRoute
   '/_app/integrations/amber': typeof AppIntegrationsAmberRoute
@@ -411,6 +420,7 @@ export interface FileRouteTypes {
     | '/solar'
     | '/system'
     | '/bills/rates'
+    | '/ev/$vin'
     | '/ev/setup'
     | '/home/$device'
     | '/integrations/amber'
@@ -452,6 +462,7 @@ export interface FileRouteTypes {
     | '/system'
     | '/'
     | '/bills/rates'
+    | '/ev/$vin'
     | '/ev/setup'
     | '/home/$device'
     | '/integrations/amber'
@@ -495,6 +506,7 @@ export interface FileRouteTypes {
     | '/_app/system'
     | '/_app/'
     | '/_app/bills_/rates'
+    | '/_app/ev/$vin'
     | '/_app/ev/setup'
     | '/_app/home_/$device'
     | '/_app/integrations/amber'
@@ -677,6 +689,13 @@ declare module '@tanstack/react-router' {
       path: '/ev'
       fullPath: '/ev/'
       preLoaderRoute: typeof AppEvIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ev/$vin': {
+      id: '/_app/ev/$vin'
+      path: '/ev/$vin'
+      fullPath: '/ev/$vin'
+      preLoaderRoute: typeof AppEvVinRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/ev/setup': {
@@ -867,6 +886,7 @@ interface AppRouteChildren {
   AppSystemRoute: typeof AppSystemRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBillsRatesRoute: typeof AppBillsRatesRoute
+  AppEvVinRoute: typeof AppEvVinRoute
   AppEvSetupRoute: typeof AppEvSetupRoute
   AppHomeDeviceRoute: typeof AppHomeDeviceRoute
   AppSettingsSplatRoute: typeof AppSettingsSplatRoute
@@ -896,6 +916,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSystemRoute: AppSystemRoute,
   AppIndexRoute: AppIndexRoute,
   AppBillsRatesRoute: AppBillsRatesRoute,
+  AppEvVinRoute: AppEvVinRoute,
   AppEvSetupRoute: AppEvSetupRoute,
   AppHomeDeviceRoute: AppHomeDeviceRoute,
   AppSettingsSplatRoute: AppSettingsSplatRoute,

@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type { EvCommand, EvControl, EvEvent, TeslaStatus } from "~/features/ev/types";
+import type { EvCommand, EvControl, EvDetails, EvEvent, EvHistory, EvLevels, TeslaStatus } from "~/features/ev/types";
 
 /** How the Teslas are reached, and each car. Refreshed every 30 seconds while shown (the car changes as it charges),
  * and every 2 while a car is being paired. */
@@ -41,3 +41,34 @@ export const configureEv = ({
 
 export const commandEv = ({ vin, ...body }: EvCommand & { vin: string }) =>
   apiSend<TeslaStatus>("POST", `tesla/vehicles/${vin}/command`, body);
+
+/** A car's details beyond its charge. Refreshed every minute while shown: reading them never wakes the car. */
+export const detailsQuery = (vin: string) =>
+  queryOptions({
+    queryKey: ["tesla", "details", vin],
+    queryFn: ({ signal }) => apiGet<EvDetails>(`tesla/vehicles/${vin}/details`, undefined, { signal }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+/** Read a car's details now. Without `wake`, an asleep car answers 409 (and the page asks before waking it). */
+export const refreshDetails = ({ vin, wake }: { vin: string; wake: boolean }) =>
+  apiSend<EvDetails>("POST", `tesla/vehicles/${vin}/details`, { wake });
+
+/** A car's in and out over the last `days`: time away and charges at home. */
+export const historyQuery = (vin: string, days: number) =>
+  queryOptions({
+    queryKey: ["tesla", "history", vin, days],
+    queryFn: ({ signal }) => apiGet<EvHistory>(`tesla/vehicles/${vin}/history`, { days }, { signal }),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+
+/** A car's level through [start, end), with when it was away and when it charged. */
+export const levelsQuery = (vin: string, start: number, end: number) =>
+  queryOptions({
+    queryKey: ["tesla", "levels", vin, start, end],
+    queryFn: ({ signal }) => apiGet<EvLevels>(`tesla/vehicles/${vin}/levels`, { start, end }, { signal }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });

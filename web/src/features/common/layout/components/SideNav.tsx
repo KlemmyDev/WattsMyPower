@@ -105,6 +105,7 @@ function Circuit({
   const current = sectionOf(path);
   const pages = useSectionPages(current);
   const p = useSnapshot();
+  const live = useLive();
   const list = useRef<HTMLDivElement>(null);
   const wire = useWire(list, [path, items.length, variant, pages?.pages.length]);
   // Where the list scrolls (a short screen), the current page is kept in view: Manage's sit at the bottom. Again as
@@ -119,6 +120,7 @@ function Circuit({
     return () => ro.disconnect();
   }, [path]);
   const at = items.findIndex((i) => i.to === current);
+  const ev = live?.ev;
   const value: Partial<Record<string, string>> = p
     ? {
         "/solar": kW(p.pv_power),
@@ -126,6 +128,8 @@ function Circuit({
         "/battery": pct(p.battery_soc),
         "/grid": p.grid_power == null ? undefined : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
         "/history": kWh(p.daily_pv),
+        // Each car's charge.
+        "/ev": ev?.length ? ev.map((c) => pct(c.soc)).join(" · ") : undefined,
       }
     : {};
 

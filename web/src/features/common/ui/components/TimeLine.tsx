@@ -55,6 +55,8 @@ export function TimeLine({
   domain,
   signed,
   band,
+  spans = [],
+  events = [],
   marks = [],
   every = 6,
   fill = false,
@@ -72,6 +74,10 @@ export function TimeLine({
   domain?: [number, number];
   signed?: { above: string; below: string };
   band?: { from: number; to: number; label?: string };
+  /** Stretches of time to shade behind the line (when a car was away, when it charged), each in its own colour. */
+  spans?: { from: number; to: number; color: string }[];
+  /** Moments to mark along the top (when a car was woken), each a dot in its colour, with what it was. */
+  events?: { t: number; color: string; label: string }[];
   marks?: { v: number; label: string; color?: string }[];
   /** Hours between the marks along the bottom (every other one is left out on a phone). */
   every?: number;
@@ -171,6 +177,30 @@ export function TimeLine({
       >
         <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
         <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
+        {spans.map((s) =>
+          s.to > start && s.from < end ? (
+            <div
+              key={`${s.from}-${s.to}`}
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0"
+              style={{
+                left: `${chart.leftOf(s.from)}%`,
+                width: `${Math.max(0.3, chart.leftOf(s.to) - chart.leftOf(s.from))}%`,
+                background: alpha(s.color, 0.12),
+              }}
+            />
+          ) : null,
+        )}
+        {events.map((e) =>
+          e.t >= start && e.t <= end ? (
+            <span
+              key={`e${e.t}`}
+              title={e.label}
+              className="absolute -top-1 z-1 size-2.5 -translate-x-1/2 cursor-help rounded-full ring-2 ring-surface"
+              style={{ left: `${chart.leftOf(e.t)}%`, background: e.color }}
+            />
+          ) : null,
+        )}
         {band && (
           <div
             aria-hidden

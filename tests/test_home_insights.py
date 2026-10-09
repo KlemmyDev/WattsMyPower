@@ -157,6 +157,24 @@ def test_the_cars_charging_is_found(db: Database, readings: ReadingsRepository) 
     assert car_use(repo, readings, None, DAY, DAY + 86400) == {}
 
 
+def test_a_teslas_measured_charging_is_the_cars_line(db: Database, readings: ReadingsRepository) -> None:
+    """A car on one phase (1.7 kW at 7 A) can't be told from other loads, so it isn't found; a connected Tesla says
+    what it drew, so it's counted (app.features.tesla.history), and where both have a rollup, what it said wins."""
+    from app.features.tesla.history import History
+
+    repo = HomeRepository(db)
+    rows = [(DAY + i * ROLLUP, 0.0, 400.0 + (1700 if 24 <= i < 48 else 0)) for i in range(288)]  # 2 to 4 am
+    rollups(db, rows)
+    guessed = car_use(repo, readings, Cars(), DAY, DAY + 86400)  # type: ignore[arg-type]
+    assert guessed == {}
+    history = History(db)
+    for i in range(24, 48):
+        history.add_energy("7SAYGDEF1PA000001", DAY + i * ROLLUP + 10, 1700 * ROLLUP / 3600, 0.0)
+    car = guessed | history.charged_w(DAY, DAY + 86400)
+    out = usage.breakdown(repo, readings, DAY, DAY + 86400, "day", car)
+    assert out["car"]["total"] == pytest.approx(3.4, abs=0.01)
+
+
 def test_whats_changed_this_week(db: Database, readings: ReadingsRepository) -> None:
     """The fridge used half as much again each day this week; the dryer ran three more times; the TV went quiet four days ago;
     and what's always on dropped from 400 W to 300."""

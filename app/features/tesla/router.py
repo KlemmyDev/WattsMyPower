@@ -69,6 +69,42 @@ async def tesla_command(svc: ServicesDep, vin: str, body: JsonBody):
     return await _change(svc, svc.tesla.command, vin, body)
 
 
+@router.get("/vehicles/{vin}/details")
+async def tesla_details(svc: ServicesDep, vin: str):
+    """A car's details, group by group (app.features.tesla.details), each with when it was read; whether refreshing
+    now would wake it; what's using power while it's parked; anything in the car that starts charging by itself."""
+    try:
+        return await asyncio.to_thread(svc.tesla.details, vin)
+    except TeslaSetupError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+
+
+@router.post("/vehicles/{vin}/details")
+async def tesla_refresh_details(svc: ServicesDep, vin: str, body: JsonBody):
+    """Read a car's details now ({"wake": true} to wake it if it's asleep; without it, an asleep car answers 409 so
+    the page can ask first)."""
+    return await _change(svc, svc.tesla.refresh_details, vin, body.get("wake"))
+
+
+@router.get("/vehicles/{vin}/history")
+async def tesla_history(svc: ServicesDep, vin: str, days: int = 30):
+    """The car's in and out: time away (level leaving and back, distance) and charges at home (energy from the house
+    and the grid), newest first, with their totals."""
+    try:
+        return await asyncio.to_thread(svc.tesla.car_history, vin, days)
+    except TeslaSetupError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+
+
+@router.get("/vehicles/{vin}/levels")
+async def tesla_levels(svc: ServicesDep, vin: str, start: int, end: int):
+    """The car's level through [start, end) (up to 8 days), with when it was away and when it charged at home."""
+    try:
+        return await asyncio.to_thread(svc.tesla.car_levels, vin, start, end)
+    except TeslaSetupError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+
+
 @router.get("/log")
 async def tesla_log(svc: ServicesDep, limit: int = 50):
     """What the dashboard did with the cars, and what it saw done outside it, newest first."""

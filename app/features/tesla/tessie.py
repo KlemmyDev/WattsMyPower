@@ -10,6 +10,8 @@ does: Tessie wakes it first, retries, and answers once it has run (`result`: whe
 
 Endpoints used:
     GET  /vehicles                                   every car on the account, each with its latest state
+    GET  /{vin}/state                                one car's latest state (Tessie's copy: never wakes it)
+    POST /{vin}/wake                                 wake it, answering once it's awake (up to 90 s)
     POST /{vin}/command/start_charging               start charging
     POST /{vin}/command/stop_charging                stop charging
     POST /{vin}/command/set_charging_amps?amps=      the current to charge at
@@ -26,7 +28,8 @@ from collections.abc import Callable
 from typing import Any
 
 from app.core.http import request_json
-from app.features.tesla.client import COMMANDS, VIN, TeslaError
+from app.features.tesla import details
+from app.features.tesla.client import COMMANDS, VIN, CarAsleep, TeslaError
 
 BASE = "https://api.tessie.com"
 TIMEOUT = 100  # seconds: a command waits for the car to wake (up to 90 s) before Tessie answers
@@ -72,7 +75,26 @@ class TessieClient:
         nothing."""
         body = self._call("GET", "/vehicles")
         rows = body.get("results") if isinstance(body, dict) else None
-        return [r for r in rows or [] if isinstance(r, dict) and VIN.match(str(r.get("vin") or ""))]
+        cars = [r for r in rows or [] if isinstance(r, dict) and VIN.match(str(r.get("vin") or ""))]
+        for r in cars:
+            r["details"] = details.from_fleet(r.get("last_state") or {})
+        return cars
+
+    def refresh_details(self, vin: str, wake: bool) -> dict[str, Any]:
+        """The car's latest state from Tessie. Tessie's copy is current while the car is awake and from when it fell
+        asleep otherwise, so an asleep car is woken first, but only with `wake` (else CarAsleep)."""
+        if not VIN.match(vin):
+            raise ValueError("Not a VIN")
+        if wake:
+            body = self._call("POST", f"/{vin}/wake")
+            if isinstance(body, dict) and body.get("result") is False:
+                raise TeslaError("The car didn't wake up within 90 seconds. It may be out of mobile coverage.")
+        last = self._call("GET", f"/{vin}/state")
+        last = last if isinstance(last, dict) else {}
+        row = {"vin": vin, "last_state": last, "details": details.from_fleet(last)}
+        if str(last.get("state") or "") == "asleep" and not wake:
+            raise CarAsleep(row)
+        return row
 
     def command(self, vin: str, name: str, **params: Any) -> bool:
         """Run a command on the car (waking it first); whether it worked."""
