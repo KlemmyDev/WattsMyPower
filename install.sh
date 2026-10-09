@@ -241,16 +241,34 @@ wait_and_report() {
 # over its D-Bus socket, which docker-compose.bluetooth.yml mounts: it's added (COMPOSE_FILE in .env, so a plain
 # 'docker compose' uses it too) when there's an adapter and BlueZ is running. BLUETOOTH in .env: auto (the default),
 # on (add it without checking) or off. A COMPOSE_FILE of the household's own is left alone.
+#
+# In a Proxmox LXC, Bluetooth can't be used (the kernel only allows it outside containers), so BlueZ runs on the
+# Proxmox host and the host's D-Bus folder is mounted into the LXC. Found at /mnt/host-dbus, it's used instead
+# (BLUETOOTH_DBUS in .env, which can also name another folder).
+HOST_DBUS=/mnt/host-dbus
 BT_FILES="docker-compose.yml:docker-compose.bluetooth.yml"
 unset_env() { local tmp; tmp="$(mktemp)"; grep -v "^$1=" .env >"$tmp" || true; cat "$tmp" >.env; rm -f "$tmp"; }
 bluetooth_setup() {
   [ -f .env ] || return 0
-  local want files on=0
+  local want files dbus on=0
   want="$(get_env BLUETOOTH)"; want="${want:-auto}"
   files="$(get_env COMPOSE_FILE)"
+  dbus="$(get_env BLUETOOTH_DBUS)"
   [ -z "$files" ] || [ "$files" = "$BT_FILES" ] || return 0
+  if [ -z "$dbus" ] && [ "$want" != off ] && [ -S "$HOST_DBUS/system_bus_socket" ]; then
+    dbus="$HOST_DBUS"
+    set_env BLUETOOTH_DBUS "$dbus"
+  fi
   if [ "$want" = on ]; then
     on=1
+  elif [ "$want" != off ] && [ -n "$dbus" ] && [ "$dbus" != /run/dbus ]; then
+    # BlueZ is on another machine's D-Bus (the Proxmox host's): there's nothing here to check but its socket.
+    if [ -S "$dbus/system_bus_socket" ]; then
+      on=1
+      info "Bluetooth: using the D-Bus in $dbus (BlueZ on the Proxmox host)."
+    else
+      warn "BLUETOOTH_DBUS is $dbus, but there's no D-Bus socket there. Check the LXC's mount of the host's /run/dbus (see the README)."
+    fi
   elif [ "$want" != off ] && [ "$OS" = linux ] && ls -d /sys/class/bluetooth/hci* >/dev/null 2>&1; then
     if [ ! -S /run/dbus/system_bus_socket ] || ! { pgrep -x bluetoothd >/dev/null 2>&1 || systemctl is-active --quiet bluetooth 2>/dev/null; }; then
       warn "This machine has a Bluetooth adapter, but BlueZ isn't running, so the dashboard can't use it. Install and start it (sudo apt install bluez && sudo systemctl enable --now bluetooth), then run this again."
