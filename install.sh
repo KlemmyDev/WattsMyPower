@@ -4,6 +4,10 @@
 #   Install:  curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
 #   Update:   cd wattsmypower && bash install.sh
 #
+# It follows a release channel, chosen in the dashboard (Manage → System → Updates) or with --channel: nightly (every
+# change, as it's merged to main), beta (pre-releases and releases) or stable (releases only). An update goes to the
+# channel's version, so after moving to a channel behind this one (nightly to stable) it goes back to that version.
+#
 # Runs on Linux and in WSL (Docker is installed if it's missing), and on a Mac with Docker
 # Desktop (started if it isn't running). On Windows, install.ps1 sets up WSL and runs this.
 #
@@ -26,6 +30,9 @@
 #                        dashboard asks (it runs this script, as you would).
 #           Bluetooth (portable batteries, Teslas) is connected through to the dashboard when this machine has an
 #           adapter with BlueZ running: run this again after adding one. BLUETOOTH=off in .env turns that off.
+#           --channel nightly|beta|stable
+#                        follow this release channel from now on (the default is nightly, or the one chosen
+#                        in the dashboard). Its version is installed, newer or older than this one.
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
 #                        passed in, e.g. TZ=Australia/Perth bash install.sh --yes, and on a first
 #                        install PV_KW=10 or INVERTER_HOST=... to set up without the dashboard
@@ -43,8 +50,13 @@ CONFIGURE=0
 START=0
 HELP=0
 DASHBOARD_UPDATES=1
+CHANNEL=""
+want_channel=0
 for arg in "$@"; do
+  if [ "$want_channel" = 1 ]; then CHANNEL="$arg"; want_channel=0; continue; fi
   case "$arg" in
+    --channel) want_channel=1 ;;
+    --channel=*) CHANNEL="${arg#--channel=}" ;;
     -y|--yes) YES=1 ;;
     --configure) CONFIGURE=1 ;;
     --start) START=1; PULL=0 ;;
@@ -54,6 +66,8 @@ for arg in "$@"; do
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
+[ "$want_channel" = 0 ] || { echo "--channel needs one of: nightly, beta, stable" >&2; exit 2; }
+case "$CHANNEL" in ""|nightly|beta|stable) ;; *) echo "There's no '$CHANNEL' channel: it's nightly, beta or stable." >&2; exit 2 ;; esac
 
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -111,7 +125,7 @@ if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then SELF_DIR="$(
 is_app() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/app" ] && [ -f "$1/install.sh" ]; }
 
 if [ "$HELP" = 1 ]; then
-  if [ -n "$SELF_DIR" ]; then sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  if [ -n "$SELF_DIR" ]; then awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash [-s -- --yes]"; fi
   exit 0
 fi
@@ -143,22 +157,67 @@ cd "$SELF_DIR"
 HERE="$SELF_DIR"
 check_folder "$HERE"
 
+# ---------------------------------------------------------------- the release channel
+# Kept in data/update/channel, where the dashboard reads and changes it too (Manage → System → Updates).
+CHANNEL_FILE=data/update/channel
+saved_channel="$(tr -d '[:space:]' <"$CHANNEL_FILE" 2>/dev/null || true)"
+case "$saved_channel" in nightly|beta|stable) ;; *) saved_channel="" ;; esac
+if [ -n "$CHANNEL" ] && [ "$CHANNEL" != "$saved_channel" ]; then
+  # Written whole, beside the old one (which the dashboard may have written, as root): this folder is yours.
+  if mkdir -p data/update 2>/dev/null && printf '%s\n' "$CHANNEL" >"$CHANNEL_FILE.tmp" 2>/dev/null && mv -f "$CHANNEL_FILE.tmp" "$CHANNEL_FILE"; then
+    info "Following the $CHANNEL channel from now on."
+  else
+    warn "Couldn't save the channel in $CHANNEL_FILE: this update follows $CHANNEL, later ones ${saved_channel:-nightly}."
+  fi
+fi
+CHANNEL="${CHANNEL:-${saved_channel:-nightly}}"
+
+# The newest release tag on the channel (blank if there's none yet): v2026.10.9 is stable, v2026.10.9-beta (or -alpha,
+# -rc.2…) a pre-release, which beta follows as well. versionsort.suffix puts a version's pre-releases before it.
+channel_tag() {
+  local pattern='^v[0-9]+(\.[0-9]+)*(-[0-9A-Za-z.]+)?$'
+  [ "$1" = stable ] && pattern='^v[0-9]+(\.[0-9]+)*$'
+  git -c versionsort.suffix=- tag -l 'v[0-9]*' --sort=-v:refname | grep -E "$pattern" | head -n 1 || true
+}
+
 # ---------------------------------------------------------------- update the code
 if [ "$PULL" = 1 ] && [ -d .git ]; then
-  say "Getting the latest version"
+  say "Getting the latest version ($CHANNEL)"
   if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     git status --short --untracked-files=no
     die "These files have local changes, so the update would overwrite them. Commit or undo them (git checkout -- <file>) and run this again."
   fi
   before="$(git rev-parse HEAD)"
-  git pull --ff-only
-  if [ "$(git rev-parse HEAD)" = "$before" ]; then
-    info "Already up to date ($(git log -1 --format='%h, %cd' --date=short))."
+  # Tags too, with any removed from GitHub (a release taken back) removed here.
+  git fetch --quiet --tags --force --prune --prune-tags origin || die "Couldn't get the latest from GitHub: check this machine's internet connection, and run this again."
+  if [ "$CHANNEL" = nightly ]; then
+    # main, as it's merged: back on the branch if a release had been checked out.
+    if [ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" != main ]; then
+      git checkout --quiet main 2>/dev/null || git checkout --quiet -b main --track origin/main
+    fi
+    git merge --quiet --ff-only origin/main
   else
-    git log --oneline "$before..HEAD" | sed 's/^/  /'
-    # This script may itself have changed: carry on with the new version.
-    if ! git diff --quiet "$before" HEAD -- install.sh; then exec bash "$HERE/install.sh" --no-pull "$@"; fi
+    tag="$(channel_tag "$CHANNEL")"
+    if [ -z "$tag" ]; then
+      warn "Nothing has been released on the $CHANNEL channel yet, so this version stays. (bash install.sh --channel nightly follows every change.)"
+    else
+      git -c advice.detachedHead=false checkout --quiet --detach "refs/tags/$tag"
+    fi
   fi
+  after="$(git rev-parse HEAD)"
+  where="$(git describe --tags --exact-match 2>/dev/null || git log -1 --format='%h')"
+  if [ "$after" = "$before" ]; then
+    info "Already up to date ($where, $(git log -1 --format='%cd' --date=short))."
+  elif git merge-base --is-ancestor "$before" "$after"; then
+    info "Updating to $where:"
+    git log --oneline "$before..$after" | sed 's/^/  /'
+  else
+    # Moving to a channel behind this version: back to an older one. The databases are backed up below first.
+    info "Going back to $where, without these newer changes:"
+    git log --oneline "$after..$before" | sed 's/^/  /'
+  fi
+  # This script may itself have changed: carry on with the new version.
+  if [ "$after" != "$before" ] && ! git diff --quiet "$before" "$after" -- install.sh; then exec bash "$HERE/install.sh" --no-pull "$@"; fi
 fi
 
 # ---------------------------------------------------------------- Docker

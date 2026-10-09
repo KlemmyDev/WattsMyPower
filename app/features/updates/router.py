@@ -1,15 +1,21 @@
-"""Updates (Manage → System): whether a newer version is on GitHub."""
+"""Updates (Manage → System): whether a newer version is on GitHub, on the release channel followed."""
 
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.dependencies import ServicesDep
 from app.features.updates.service import UpdateRefused
 
 router = APIRouter(prefix="/api/updates")
+
+
+class ChannelBody(BaseModel):
+    channel: Literal["nightly", "beta", "stable"]
 
 
 @router.get("")
@@ -24,9 +30,19 @@ async def check_now(svc: ServicesDep):
     return await asyncio.to_thread(svc.updates.check)
 
 
+@router.put("/channel")
+async def set_channel(body: ChannelBody, svc: ServicesDep):
+    """Follow another release channel (Manage → System → Updates), and check it now."""
+    try:
+        return await asyncio.to_thread(svc.updates.set_channel, body.channel)
+    except UpdateRefused as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
 @router.post("/install")
 async def install(svc: ServicesDep):
-    """Update now: ask updater.sh, on the host, to run install.sh (Manage → System → Update now)."""
+    """Update now: ask updater.sh, on the host, to run install.sh, which installs the channel's version, newer or older
+    (Manage → System → Update now)."""
     try:
         return await asyncio.to_thread(svc.updates.install)
     except UpdateRefused as e:

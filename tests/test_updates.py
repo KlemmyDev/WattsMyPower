@@ -49,6 +49,8 @@ def _answer(
             if isinstance(gh["compare"], Exception):
                 raise gh["compare"]
             return gh["compare"]
+        if "/tags" in url:
+            return gh.get("tags", [])
         return gh["commits"]
 
     monkeypatch.setattr(updates, "get_json", get_json)
@@ -76,16 +78,19 @@ def test_the_same_commit_is_up_to_date(svc: UpdateService, monkeypatch: pytest.M
 
 def test_commits_since_this_one_are_an_update(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
     # A change merged without a new version is still an update: it's the commits that count.
-    _answer(monkeypatch, _github(NEWER, "2026.10.8", {"ahead_by": 3}), HERE)
+    _answer(monkeypatch, _github(NEWER, "2026.10.8", {"ahead_by": 3, "behind_by": 0}), HERE)
     status = svc.check()
     assert status["available"] is True
     assert status["latest"] == {
         "version": "2026.10.8",
         "release": "alpha",
         "commit": NEWER,
+        "tag": None,
         "date": "2026-10-10T01:00:00Z",
         "changes": 3,
+        "behind": 0,
     }
+    assert status["channel"] == "nightly" and status["move"] == "update"
 
 
 def test_a_local_build_compares_versions(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,6 +105,58 @@ def test_without_a_commit_the_version_decides(svc: UpdateService, monkeypatch: p
     _answer(monkeypatch, _github(NEWER, "2026.10.9"), None)
     status = svc.check()
     assert status["available"] is True and status["latest"]["changes"] is None
+
+
+def _tags(*names: str) -> list[dict[str, Any]]:
+    return [{"name": name, "commit": {"sha": f"{i:x}" * 40}} for i, name in enumerate(names, start=1)]
+
+
+def test_release_tags_in_order() -> None:
+    tags = _tags("v2026.10.9-beta", "v2026.10.10-beta", "v2026.10.9", "latest", "v2026.10.10-beta.2", "v2026.10.8.1")
+    assert updates.newest_tag(tags, "beta")["name"] == "v2026.10.10-beta.2"
+    assert updates.newest_tag(tags, "stable")["name"] == "v2026.10.9"
+    # The release of a version comes after its pre-releases.
+    assert updates.newest_tag(_tags("v2026.10.9-rc.1", "v2026.10.9"), "beta")["name"] == "v2026.10.9"
+    assert updates.newest_tag(_tags("v2026.10.9-beta", "nope"), "stable") is None
+
+
+def test_stable_behind_this_one_is_older(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Moving from nightly to stable: its release is behind this build, so installing it goes back.
+    gh = _github(NEWER, "2026.10.7", {"ahead_by": 0, "behind_by": 5}) | {"tags": _tags("v2026.10.7", "v2026.10.8-beta")}
+    _answer(monkeypatch, gh, HERE)
+    status = svc.set_channel("stable")
+    assert (svc.folder / "channel").read_text() == "stable\n"
+    assert status["channel"] == "stable" and status["latest"]["tag"] == "v2026.10.7"
+    assert status["move"] == "older" and status["available"] is False
+    assert status["latest"]["behind"] == 5
+
+
+def test_a_channel_with_nothing_released(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    _answer(monkeypatch, _github(NEWER, "2026.10.9") | {"tags": _tags("v2026.10.8-beta")}, HERE)
+    status = svc.set_channel("stable")
+    assert status["unreleased"] is True and status["latest"] is None and status["move"] is None
+
+
+def test_a_check_for_another_channel_isnt_shown(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    _answer(monkeypatch, _github(NEWER, "2026.10.9", {"ahead_by": 2, "behind_by": 0}), HERE)
+    assert svc.check()["available"] is True
+    svc.folder.mkdir(parents=True, exist_ok=True)
+    (svc.folder / "channel").write_text("beta\n")  # changed by install.sh --channel beta
+    status = svc.status()
+    assert status["channel"] == "beta" and status["latest"] is None and status["checked_at"] is None
+
+
+def test_an_unknown_channel_is_refused(svc: UpdateService) -> None:
+    with pytest.raises(ValueError):
+        svc.set_channel("weekly")
+    svc.folder.mkdir(parents=True, exist_ok=True)
+    (svc.folder / "channel").write_text("weekly\n")
+    assert svc.channel() == "nightly"
+
+
+def test_without_commits_an_older_version_is_older(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    _answer(monkeypatch, _github(NEWER, "2026.10.7"), None, version="2026.10.9")
+    assert svc.check()["move"] == "older"
 
 
 def test_github_out_of_reach_is_reported(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -204,3 +261,60 @@ def test_updater_script_runs_install_when_asked(tmp_path: Path) -> None:
     assert (app / "ran.txt").read_text().strip() == "--yes"
     assert "Building and starting" in (folder / "update.log").read_text()
     assert not (folder / "request").exists() and not (folder / ".running").exists()
+
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_install_script_follows_the_channel_both_ways(tmp_path: Path) -> None:
+    """install.sh's update, up to building (cut off before Docker), in a clone of a repository with releases tagged."""
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=main"]
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    script = (ROOT / "install.sh").read_text()
+    cut = script.index("# ---------------------------------------------------------------- Docker")
+    (origin / "install.sh").write_text(script[:cut] + 'echo "AT $(git rev-parse HEAD)"\nexit 0\n')
+    (origin / "docker-compose.yml").write_text("services: {}\n")
+    (origin / "app").mkdir()
+    subprocess.run([*git, "init", "-q"], cwd=origin, check=True)
+
+    def commit(name: str, tag: str | None = None) -> str:
+        (origin / "app" / "x.txt").write_text(name)
+        subprocess.run([*git, "add", "."], cwd=origin, check=True)
+        subprocess.run([*git, "commit", "-qm", name], cwd=origin, check=True)
+        if tag:
+            subprocess.run([*git, "tag", tag], cwd=origin, check=True)
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin, capture_output=True, text=True).stdout.strip()
+
+    stable = commit("one", "v2026.10.1")
+    beta = commit("two", "v2026.10.2-beta")
+    commit("three", "not-a-release")
+    nightly = commit("four")
+    app = tmp_path / "app"
+    subprocess.run([*git, "clone", "-q", str(origin), str(app)], check=True)
+
+    def install(*args: str) -> str:
+        done = subprocess.run(["bash", "install.sh", "--yes", *args], cwd=app, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+        at = subprocess.run(["git", "rev-parse", "HEAD"], cwd=app, capture_output=True, text=True).stdout.strip()
+        assert f"AT {at}" in done.stdout
+        return done.stdout + done.stderr
+
+    out = install("--channel", "stable")  # nightly to stable: back to the release
+    assert "Going back to v2026.10.1" in out and "four" in out
+    head = lambda: subprocess.run(["git", "rev-parse", "HEAD"], cwd=app, capture_output=True, text=True).stdout.strip()  # noqa: E731
+    assert head() == stable
+    assert (app / "data" / "update" / "channel").read_text() == "stable\n"
+    assert "Already up to date (v2026.10.1" in install()  # remembered
+    install("--channel=beta")
+    assert head() == beta  # the pre-release, newer than the release
+    (app / "data" / "update" / "channel").write_text("nightly\n")  # as the dashboard leaves it
+    assert "Updating to" in install()
+    assert head() == nightly
+    branch = subprocess.run(["git", "branch", "--show-current"], cwd=app, capture_output=True, text=True).stdout
+    assert branch.strip() == "main"
+    # A stable release of the same version as a beta comes after it, and beta follows it.
+    subprocess.run([*git, "tag", "v2026.10.2", beta], cwd=origin, check=True)
+    assert "Updating to" not in install("--channel", "beta") and head() == beta
+    # A release taken back on GitHub goes here too.
+    subprocess.run([*git, "tag", "-d", "v2026.10.2", "v2026.10.2-beta"], cwd=origin, check=True, capture_output=True)
+    install()
+    assert head() == stable

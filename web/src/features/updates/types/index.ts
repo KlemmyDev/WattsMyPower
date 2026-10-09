@@ -1,21 +1,34 @@
-/** The latest version on GitHub, as last checked (app.features.updates). */
+/** The release channels: every change merged to main, pre-releases and releases, or releases only. */
+export type Channel = "nightly" | "beta" | "stable";
+
+/** The version the channel is at on GitHub, as last checked (app.features.updates). */
 export type LatestVersion = {
   version: string;
   release: string | null;
   commit: string;
-  /** When it was committed (ISO 8601). */
-  date: string;
-  /** Commits on GitHub since this one; null when they can't be counted (a local build, or no commit to go on). */
+  /** Its release tag (v2026.10.9, v2026.10.9-beta); null on nightly. */
+  tag: string | null;
+  /** When it was committed (ISO 8601), on nightly. */
+  date: string | null;
+  /** Commits it has that this one hasn't, and this one has that it hasn't; null when they can't be counted (a local
+   * build, or no commit to go on). */
   changes: number | null;
+  behind: number | null;
 };
 
-/** This version, the latest on GitHub, and whether that's an update (GET /api/updates). */
+/** This version, the channel's on GitHub, and whether that's an update or older (GET /api/updates). */
 export type UpdateStatus = {
   /** Checking every few hours is on (Manage → System → Updates). */
   enabled: boolean;
+  channel: Channel;
   current: { version: string; release: string | null; commit: string | null };
   latest: LatestVersion | null;
+  /** What installing the channel's version would be: an update, older (after moving to a channel behind this
+   * version), or nothing. `available` is an update. */
+  move: "update" | "older" | null;
   available: boolean;
+  /** Nothing has been released on the channel yet. */
+  unreleased: boolean;
   /** When it last checked (unix seconds), and why that failed, if it did. */
   checked_at: number | null;
   error: string | null;
