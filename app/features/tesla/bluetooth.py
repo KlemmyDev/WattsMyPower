@@ -37,13 +37,14 @@ again once from the start (ATTEMPTS). Everything here is blocking.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import contextvars
 import hashlib
 import itertools
 import logging
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any, Protocol
 
 from app.core.bluetooth import run_alone, unavailable
@@ -350,19 +351,27 @@ def _where(talk: dict[str, Any] | None) -> str:
     return out
 
 
-def _cause(e: BaseException) -> str:
+def _plain(said: str) -> str:
+    """What Bluetooth said, without BlueZ's error name: "[org.bluez.Error.Failed] le-connection-abort-by-local" →
+    "le-connection-abort-by-local"."""
+    return re.sub(r"^\[org\.bluez[^]]*\]\s*", "", said.strip())[:120]
+
+
+def _cause(e: BaseException, talk: dict[str, Any] | None = None) -> str:
     """What Bluetooth itself said, underneath tesla-fleet-api's error, for the error's end: " (Bluetooth said:
-    le-connection-abort-by-local)"; "" when it said nothing."""
+    le-connection-abort-by-local)"; "" when it said nothing. When connecting was tried more than once and the first
+    try failed differently from the last (which is often only that the car's been forgotten since), both: the first
+    is the one that says why."""
     said = ""
     seen: set[int] = set()
     while (e := e.__cause__ or e.__context__) is not None and id(e) not in seen:  # type: ignore[assignment]
         seen.add(id(e))
         if text := str(e).strip():
-            said = text
-    if not said:
-        return ""
-    said = re.sub(r"^\[org\.bluez[^]]*\]\s*", "", said)  # "[org.bluez.Error.Failed] le-connection-abort-by-local"
-    return f" (Bluetooth said: {said[:120]})"
+            said = _plain(text)
+    tries = (talk or {}).get("tries") or []
+    if tries and tries[0] not in said:
+        return f" (Bluetooth said: {tries[0]}; then {said or tries[-1]})"
+    return f" (Bluetooth said: {said})" if said else ""
 
 
 def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError:
@@ -399,7 +408,7 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
         # Heard, but the link to it couldn't be made, or dropped: not range, when its signal was good.
         connecting = (talk or {}).get("step") == "connecting"
         what = "wouldn't take a Bluetooth connection" if connecting else "dropped the Bluetooth connection"
-        return TeslaError(f"The car was heard, but {what} (tried {ATTEMPTS} times){_where(talk)}{_cause(e)}")
+        return TeslaError(f"The car was heard, but {what} (tried {ATTEMPTS} times){_where(talk)}{_cause(e, talk)}")
     if named("BluetoothTimeout") or isinstance(e, TimeoutError):
         return TeslaError(f"The car didn't answer over Bluetooth in time{_where(talk)}")
     if named("TeslaFleetError"):
@@ -428,6 +437,10 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
             return
         if talk is not None:
             talk["rssi"] = adv.rssi  # how strongly it was heard, for an error's sake
+            details = device.details if isinstance(getattr(device, "details", None), dict) else {}
+            adapter = str(details.get("path") or "").split("/")[3:4]
+            kind = (details.get("props") or {}).get("AddressType")
+            talk["via"] = ", ".join([*adapter, *([f"{kind} address"] if kind else [])])  # "hci0, public address"
         heard.set_result(device)
 
     _step("listening for the car")
@@ -447,7 +460,8 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
             wake_if_asleep=wake,
         )
         car._default_timeout, car._actuation_timeout = REPLY_SECONDS, ACK_SECONDS
-        await car.connect()
+        with _connect_tries(talk):
+            await car.connect()
         try:
             return await then(car)
         finally:
@@ -461,6 +475,49 @@ async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -
             await scanner.stop()
         except Exception as e:  # what was said still counts
             log.info("Tesla over Bluetooth: stopping the scan went wrong (%s: %s)", type(e).__name__, e)
+
+
+# bleak-retry-connector's word for each try at connecting that failed (it only says so in its debug log): "Failed to
+# connect: <why>, device_missing: …" or "Timed out trying to connect".
+_TRY = re.compile(
+    r"(Timed out) trying to connect|Failed to connect(?: due to services changes)?: (.*?)(?:, device_missing|, backing off| \(attempt|$)"
+)
+
+
+@contextlib.contextmanager
+def _connect_tries(talk: dict[str, Any] | None) -> Iterator[None]:
+    """While connecting, why each try failed, in `talk["tries"]`, and logged: bleak-retry-connector tries several
+    times and its error is only the last try's, which after a first failure is often just that BlueZ has forgotten
+    the car since. Its debug log isn't passed on (only what's INFO or above)."""
+    if talk is None:
+        yield
+        return
+    tries: list[str] = []
+    talk["tries"] = tries
+    seen = talk
+    logger = logging.getLogger("bleak_retry_connector")
+
+    class Tries(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            if record.levelno >= logging.INFO:
+                logging.getLogger().handle(record)
+            elif m := _TRY.search(record.getMessage()):
+                why = "timed out" if m.group(1) else _plain(m.group(2))
+                tries.append(why)
+                log.info("Tesla over Bluetooth: connecting failed (try %d, %s): %s", len(tries),
+                         seen.get("via") or "adapter unknown", why)  # fmt: skip
+
+    handler = Tries(logging.DEBUG)
+    level, propagate = logger.level, logger.propagate
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(level)
+        logger.propagate = propagate
 
 
 def _converse(coro: Callable[[], Any], sleep: Callable[[float], None] = time.sleep) -> Any:
@@ -481,8 +538,9 @@ def _converse(coro: Callable[[], Any], sleep: Callable[[float], None] = time.sle
         except BaseException as e:  # tesla-fleet-api's errors are BaseExceptions
             if isinstance(e, KeyboardInterrupt | SystemExit):
                 raise
-            log.info("Tesla over Bluetooth: %s after %.1f s (%s; signal %s)%s", type(e).__name__,
-                     time.monotonic() - start, _timings(talk), signal(talk["rssi"]), _cause(e))  # fmt: skip
+            log.info("Tesla over Bluetooth: %s after %.1f s (%s; signal %s; %s)%s", type(e).__name__,
+                     time.monotonic() - start, _timings(talk), signal(talk["rssi"]), talk.get("via") or "adapter unknown",
+                     _cause(e, talk))  # fmt: skip
             if isinstance(e, BluetoothTransportError) and attempt < ATTEMPTS:
                 sleep(RETRY_PAUSE)
                 continue

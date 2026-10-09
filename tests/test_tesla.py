@@ -1230,6 +1230,57 @@ def test_the_scan_runs_until_the_conversation_is_over(monkeypatch: pytest.Monkey
     assert said == ["scan", "stop"]
 
 
+def test_a_failed_connection_says_why_its_first_try_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # bleak-retry-connector tries several times, and its error is only the last try's: after a first failure, that's
+    # often just that BlueZ has forgotten the car. The first try's reason (from its debug log) is what's shown.
+    import logging
+
+    import bleak
+    import tesla_fleet_api.tesla.bluetooth as tb
+    from bleak.exc import BleakError
+    from tesla_fleet_api.exceptions import BluetoothTransportError
+
+    retry_log = logging.getLogger("bleak_retry_connector")
+    path = "/org/bluez/hci1/dev_30_AF_7E_F2_62_73"
+
+    class Scanner:
+        def __init__(self, hear: Any) -> None:
+            self.hear = hear
+
+        async def start(self) -> None:
+            dev = SimpleNamespace(name=None, details={"path": path, "props": {"AddressType": "public"}})
+            self.hear(dev, SimpleNamespace(local_name=bluetooth.ble_name(VIN), rssi=-60))
+
+        async def stop(self) -> None: ...
+
+    class Car:
+        async def connect(self) -> None:
+            retry_log.debug("%s - %s: Connection attempt: %s", VIN, "30:AF", 1)
+            retry_log.debug("%s - %s: Failed to connect: %s, device_missing: %s, backing off: %s (attempt: %s)",
+                            VIN, "30:AF", "[org.bluez.Error.Failed] le-connection-abort-by-local", False, 0.25, 1)  # fmt: skip
+            retry_log.debug("%s - %s: Timed out trying to connect (attempt: %s)", VIN, "30:AF", 2)
+            retry_log.debug("%s - %s: Failed to connect: %s, device_missing: %s, backing off: %s (attempt: %s)",
+                            VIN, "30:AF", "device 'dev_30_AF_7E_F2_62_73' not found", True, 4.0, 3)  # fmt: skip
+            raise BluetoothTransportError() from BleakError("device 'dev_30_AF_7E_F2_62_73' not found")
+
+        async def disconnect(self) -> None: ...
+
+    monkeypatch.setattr(bleak, "BleakScanner", Scanner)
+    monkeypatch.setattr(
+        tb, "TeslaBluetooth", lambda: SimpleNamespace(vehicles=SimpleNamespace(create=lambda *a, **k: Car()))
+    )
+    key = bluetooth.new_key()
+
+    async def then(c: Any) -> None: ...
+
+    level = retry_log.level
+    with pytest.raises(TeslaError) as e:
+        bluetooth._converse(lambda: bluetooth._talk(VIN, key, then, wake=False), lambda _: None)
+    assert str(e.value).endswith("(Bluetooth said: le-connection-abort-by-local; then device 'dev_30_AF_7E_F2_62_73' "
+                                 "not found)")  # fmt: skip
+    assert retry_log.level == level and retry_log.propagate and not retry_log.handlers  # left as it was
+
+
 def test_a_car_that_doesnt_wake_is_left_asleep_for_a_while(ble: TeslaService, radio: FakeRadio, live: FakeLive,
                                                            clock: Clock) -> None:  # fmt: skip
     # The key can't wake it: the dashboard's just started (its charge unknown), so it's woken to be read, and doesn't.
