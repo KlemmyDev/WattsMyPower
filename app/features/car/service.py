@@ -226,20 +226,25 @@ class CarService:
         km = soc / 100 * d["car_battery_kwh"] * 1000 / d["car_wh_per_km"]
         return {"soc": round(soc, 1), "given": soc, "given_at": at, "km": round(km)}
 
-    def levels(self, car_id: int, start: int, end: int) -> list[tuple[int, float]]:
-        """The car's levels recorded in [start, end), oldest first, with the one before `start` (so a line can start
-        at the left edge) and the one after `end` (so it can reach the right)."""
+    def last_read(self, car_id: int, now: int) -> tuple[int, float] | None:
+        """When the car's level was last read from the car itself (not held while it slept, see levels), and what."""
         with self.db.reading() as conn:
-            before = conn.execute(
-                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts < ? ORDER BY ts DESC LIMIT 1", (car_id, start)
-            ).fetchall()
-            within = conn.execute(
-                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts >= ? AND ts < ? ORDER BY ts", (car_id, start, end)
-            ).fetchall()
-            after = conn.execute(
-                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts >= ? ORDER BY ts LIMIT 1", (car_id, end)
-            ).fetchall()
-        return [(int(ts), float(soc)) for ts, soc in [*before, *within, *after]]
+            row = conn.execute(
+                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts <= ? AND COALESCE(source, '') NOT LIKE '%:asleep' "
+                "ORDER BY ts DESC LIMIT 1",
+                (car_id, now),
+            ).fetchone()
+        return (int(row[0]), float(row[1])) if row else None
+
+    def levels(self, car_id: int, start: int, end: int) -> list[tuple[int, float, str]]:
+        """The car's levels recorded in [start, end), oldest first, each with where it came from, with the one before
+        `start` (so a line can start at the left edge) and the one after `end` (so it can reach the right)."""
+        cols = "SELECT ts, soc, COALESCE(source, '') FROM car_levels WHERE car = ?"
+        with self.db.reading() as conn:
+            before = conn.execute(f"{cols} AND ts < ? ORDER BY ts DESC LIMIT 1", (car_id, start)).fetchall()
+            within = conn.execute(f"{cols} AND ts >= ? AND ts < ? ORDER BY ts", (car_id, start, end)).fetchall()
+            after = conn.execute(f"{cols} AND ts >= ? ORDER BY ts LIMIT 1", (car_id, end)).fetchall()
+        return [(int(ts), float(soc), str(src)) for ts, soc, src in [*before, *within, *after]]
 
     # ------------------------------------------------------------------ views
     def view(self, car_id: int, now: int | None = None) -> dict[str, Any]:

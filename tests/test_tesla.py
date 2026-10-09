@@ -5,6 +5,7 @@ reached. Every request to Tessie, and the radio, is faked."""
 from __future__ import annotations
 
 import io
+import itertools
 import json
 import threading
 import time
@@ -23,7 +24,15 @@ from app.features.tesla import bluetooth, control, details
 from app.features.tesla.bluetooth import BluetoothClient, ble_name, car_type
 from app.features.tesla.client import TeslaError
 from app.features.tesla.control import Charger, Memory
-from app.features.tesla.service import POLL_ACTIVE, POLL_CHARGING, POLL_IDLE, TeslaService, TeslaSetupError, guess_model
+from app.features.tesla.service import (
+    LEVEL_ASLEEP,
+    POLL_ACTIVE,
+    POLL_CHARGING,
+    POLL_IDLE,
+    TeslaService,
+    TeslaSetupError,
+    guess_model,
+)
 from app.features.tesla.tessie import TessieClient
 from app.main import create_app
 
@@ -1220,3 +1229,67 @@ def test_at_night_a_car_charging_at_home_is_still_read_often(ble: TeslaService, 
     minutes(ble, live, clock, 31, grid=11000)  # seen at the next half-hourly check: awake and plugged in, so read
     assert ble.status()["vehicles"][0]["follow"] == "active"
     assert ble.status()["next_read"] - int(clock()) <= POLL_CHARGING["bluetooth"]
+
+
+def test_while_asleep_its_level_is_logged_every_half_hour_as_it_holds(ble: TeslaService, radio: FakeRadio,
+                                                                      live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    clock.t += 4 * 3600  # 10 at night: checked every half hour, never woken
+    start = int(clock())
+    minutes(ble, live, clock, 180, grid=500)
+    points = ble.car_levels(VIN, start, int(clock()) + 1)["points"]
+    held = [p for p in points if p.get("asleep")]
+    # A point every half hour or so (each night check), at the level it was last read, and never by waking it.
+    assert 5 <= len(held) <= 7 and {p["soc"] for p in held} == {points[0]["soc"]}
+    assert all(b["t"] - a["t"] >= LEVEL_ASLEEP for a, b in itertools.pairwise(held))
+    assert ble.history.wakes(VIN, 0, 2**40) == []
+
+
+def restarted(svc: TeslaService) -> TeslaService:
+    """The same dashboard after a restart (an update, say): a new service on the same database."""
+    return TeslaService(
+        svc.config, svc.db, svc.live, svc.cars, svc.settings,  # type: ignore[arg-type]
+        tessie=svc._tessie, radio=svc.radio, clock=svc.clock, spawn=lambda fn: fn(),
+    )  # fmt: skip
+
+
+def test_after_a_restart_an_asleep_cars_last_reading_still_shows(ble: TeslaService, radio: FakeRadio,
+                                                                 live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    before = ble.status()["vehicles"][0]["state"]
+    clock.t += 4 * 3600  # 10 at night: it's left asleep, not woken to be read
+    after = restarted(ble)
+    radio.asked.clear()
+    minutes(after, live, clock, 2, grid=500)
+    state = after.status()["vehicles"][0]["state"]
+    assert state["asleep"] is True and radio.asked and not any(wake for _, wake in radio.asked)
+    assert (state["soc"], state["limit"], state["amps"], state["as_of"]) == (
+        before["soc"], before["limit"], before["amps"], before["as_of"])  # fmt: skip
+
+
+def test_without_a_kept_reading_the_level_last_logged_shows(ble: TeslaService, live: FakeLive, clock: Clock) -> None:
+    soc = ble.status()["vehicles"][0]["state"]["soc"]
+    ble._put("tesla_charge", None)  # kept from before this version: only the chart's levels
+    clock.t += 4 * 3600
+    after = restarted(ble)
+    minutes(after, live, clock, 2, grid=500)
+    state = after.status()["vehicles"][0]["state"]
+    assert state["asleep"] is True and state["soc"] == soc and state["as_of"] is not None
+
+
+def test_after_a_restart_the_last_reading_shows_even_if_the_car_isnt_heard(ble: TeslaService, radio: FakeRadio,
+                                                                           live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    soc = ble.status()["vehicles"][0]["state"]["soc"]
+    radio.fail = TeslaError("The car didn't answer over Bluetooth in time.")
+    after = restarted(ble)
+    minutes(after, live, clock, 2, grid=500)
+    status = after.status()
+    assert status["error"] and status["vehicles"][0]["state"]["soc"] == soc
+
+
+def test_after_a_first_restart_the_logged_level_shows_even_if_the_car_isnt_heard(ble: TeslaService, radio: FakeRadio,
+                                                                                live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    soc = ble.status()["vehicles"][0]["state"]["soc"]
+    ble._put("tesla_charge", None)  # kept from before this version: only the chart's levels
+    radio.fail = TeslaError("The car didn't answer over Bluetooth in time.")
+    after = restarted(ble)
+    minutes(after, live, clock, 2, grid=500)
+    assert after.status()["vehicles"][0]["state"]["soc"] == soc

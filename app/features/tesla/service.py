@@ -61,6 +61,7 @@ CONN_KEY = "tesla"  # kv: how the cars are reached (provider, token) and each ca
 KEY_KEY = "tesla_key"  # kv: this server's Bluetooth key (PEM), kept across disconnecting so a car needn't re-pair
 MEMORY_KEY = "tesla_memory"  # kv: what the dashboard last did with each car (JSON)
 LOG_KEY = "tesla_log"  # kv: what it did lately (JSON list, newest last)
+CHARGE_KEY = "tesla_charge"  # kv: each car's last charge reading over Bluetooth (BluetoothClient's), across restarts
 DETAILS_KEY = "tesla_details"  # kv: each car's details, group by group (app.features.tesla.details), as last read
 WAKE_WHY = {
     "first": "to read it (nothing known of it since the dashboard started)",
@@ -86,6 +87,10 @@ AHEAD_EVERY = 300  # seconds the forecast's spare solar is kept before it's work
 SETTLE = 20  # seconds after a command before an inverter reading counts towards spare power
 STALE_READING = 240  # an inverter reading older than this isn't used for spare power
 LEVEL_EVERY = 900  # record a car's level at least this often while it changes less than a percent
+# While it's asleep it isn't read (that would wake it, or keep it awake), and its level holds: logged as it stands
+# about every half hour (the night's checks are POLL_NIGHT apart), marked asleep, so its chart has a point throughout.
+LEVEL_ASLEEP = 1740
+ASLEEP = ":asleep"  # a level's source, for one logged while it slept
 BACKOFF = (60, 120, 300, 600)  # seconds before retrying after 1, 2, 3, 4+ failed commands
 MAX_CARS = 6
 
@@ -249,7 +254,30 @@ class TeslaService:
         if key is None:
             raise TeslaError("There's no Bluetooth key yet. Pair the car again.", refused=True)
         if self._bluetooth is None or self._bluetooth.key != key:
-            self._bluetooth = BluetoothClient(key, lambda: list(self._conn()["vehicles"]), self.radio, self.clock)
+            self._bluetooth = BluetoothClient(
+                key,
+                lambda: list(self._conn()["vehicles"]),
+                self.radio,
+                self.clock,
+                kept=self._kv(CHARGE_KEY),
+                keep=lambda kept: self._put(CHARGE_KEY, kept),
+            )
+            # Shown from the start, before it's read again (or if that fails): each car's charge as last read, else
+            # (kept from before there was a kept reading) the level last logged for it.
+            for vin, v in c["vehicles"].items():
+                if vin in self._raw:
+                    continue
+                if vin in self._bluetooth._charge:
+                    at, charge = self._bluetooth._charge[vin]
+                    charge = {**charge, "timestamp": int(at * 1000)}
+                elif logged := self._logged_level(v):
+                    charge = {"battery_level": logged["given"], "timestamp": int(logged["given_at"]) * 1000}
+                else:
+                    continue
+                last = {"state": "online", "vehicle_config": {"car_type": bluetooth.car_type(vin)},
+                        "charge_state": charge}  # fmt: skip
+                self._raw[vin] = {"last_state": last, "in_range": None}
+                self._states[vin] = self._parse(vin, v)
         return self._bluetooth
 
     def home(self) -> tuple[float, float]:
@@ -409,6 +437,7 @@ class TeslaService:
             self._put(MEMORY_KEY, None)
             self._put(LOG_KEY, None)
             self._put(DETAILS_KEY, None)
+            self._put(CHARGE_KEY, None)
             self._details = None
             self._seen.clear()
             self._states.clear()
@@ -837,22 +866,28 @@ class TeslaService:
             self._put(CONN_KEY, c)
 
     def _level(self, vin: str, car: int | None) -> None:
-        """Record the car's level for its dashboard car, as it changes (and now and then while it doesn't)."""
+        """Record the car's level for its dashboard car, as it changes (and now and then while it doesn't); and while
+        it's asleep, the level it holds every half hour (LEVEL_ASLEEP)."""
         s = self._states[vin]
         if car is None or s.soc is None:
             return
-        ts = s.as_of or int(self.clock())
+        now = int(self.clock())
+        ts = s.as_of or now
+        source = self._conn().get("provider") or "tesla"
         try:
             last = self.cars.level(car, ts)
         except NoSuchCar:
             return
-        if (
+        if not (
             last
             and last.get("given_at")
             and (ts <= last["given_at"] or (abs(last["given"] - s.soc) < 1 and ts - last["given_at"] < LEVEL_EVERY))
         ):
-            return
-        self.cars.record_level(car, ts, s.soc, self._conn().get("provider") or "tesla")
+            self.cars.record_level(car, ts, s.soc, source)
+        if s.asleep:
+            held = self.cars.level(car, now)
+            if held and now - held["given_at"] >= LEVEL_ASLEEP:
+                self.cars.record_level(car, now, held["given"], source + ASLEEP)
 
     # -- following the sun ---------------------------------------------------------------------
     def _spare(self, vin: str, s: CarState, cfg: dict[str, Any], mem: Memory, spec: Charger) -> float | None:
@@ -1124,9 +1159,10 @@ class TeslaService:
         }
 
     def car_levels(self, vin: str, start: int, end: int) -> dict[str, Any]:
-        """The car's level through [start, end), as recorded (each change of a percent, and every 15 minutes it's
-        read), with the readings either side; and when it was away and when it charged at home, to shade. Between
-        readings far apart (away, or asleep), the page draws a straight line, as estimated."""
+        """The car's level through [start, end), as recorded (each change of a percent, every 15 minutes it's read,
+        and every half hour while it's asleep, as it holds), with the readings either side; and when it was away and
+        when it charged at home, to shade. Between readings far apart (away), the page draws a straight line, as
+        estimated."""
         c = self._conn()
         if vin not in c["vehicles"]:
             raise TeslaSetupError("No such car.", 404)
@@ -1144,7 +1180,11 @@ class TeslaService:
             "vin": vin,
             "start": start,
             "end": end,
-            "points": [{"t": t, "soc": round(soc, 1)} for t, soc in points],
+            # Each point; one logged while it slept (its level held, not read) is marked asleep.
+            "points": [
+                {"t": t, "soc": round(soc, 1)} | ({"asleep": True} if src.endswith(ASLEEP) else {})
+                for t, soc, src in points
+            ],
             "away": [{"start": s["start"], "end": s["end"] or now} for s in sessions if s["kind"] == "away"],
             "charging": [{"start": s["start"], "end": s["end"] or now} for s in sessions if s["kind"] == "charge"],
             "wakes": self.history.wakes(vin, start, end),
@@ -1158,6 +1198,8 @@ class TeslaService:
         amps = s.request_amps
         if s.in_range is False:
             return "away", "Not heard over Bluetooth: away from home, or out of the server's range"
+        if not s.charging_state:  # neither its charge nor its charge port read since the dashboard started
+            return "unknown", "Not read since the dashboard started: its level is as last read"
         if not s.plugged:
             return "unplugged", "Not plugged in"
         if s.fast_charger:
@@ -1189,6 +1231,8 @@ class TeslaService:
         spare = self._recent_spare(vin)
         follow, chance, wake_at = self._follow(vin, v)
         status, doing = self._doing(s, v, mem, spec) if s else ("unknown", "Not read yet")
+        # Not read since the dashboard started (an asleep car isn't woken for it): the level last logged, and when.
+        logged = self._logged_level(v) if s is not None and s.soc is None else None
         return {
             "vin": vin,
             "make": MAKE,
@@ -1236,12 +1280,12 @@ class TeslaService:
             "state": None
             if s is None
             else {
-                "as_of": s.as_of,
+                "as_of": s.as_of or (logged or {}).get("given_at"),
                 "asleep": s.asleep,
                 "charging_state": s.charging_state,
                 "plugged": s.plugged,
                 "charging": s.charging,
-                "soc": s.soc,
+                "soc": s.soc if s.soc is not None else (logged or {}).get("given"),
                 "limit": s.limit,
                 "range_km": s.range_km,
                 "amps": s.request_amps,
@@ -1253,6 +1297,16 @@ class TeslaService:
                 "in_range": s.in_range,
             },
         }
+
+    def _logged_level(self, v: dict[str, Any]) -> dict[str, Any] | None:
+        """The level last read for a Tesla's dashboard car, as logged ({given, given_at}), if any."""
+        if v.get("car") is None:
+            return None
+        try:
+            read = self.cars.last_read(v["car"], int(self.clock()))
+        except NoSuchCar:
+            return None
+        return {"given": read[1], "given_at": read[0]} if read else None
 
     def status(self) -> dict[str, Any]:
         """How the cars are reached and each car, as the EV page shows them. The token and key never leave in
