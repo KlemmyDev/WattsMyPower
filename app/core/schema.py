@@ -26,8 +26,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                      forecast can learn from it
     forecast_hours   the solar forecast for each hour as it stood the day before, to measure it against
                      what the panels really made
-    car_charges  car charges planned ahead, which the forecast counts as home use
-    car_levels   each car's battery level (%) as it was given, to estimate it between times
+    car_levels   each car's battery level (%), as read from the car (app.features.tesla)
     cars         the electric cars connected: name, the model chosen, and their details (JSON)
     push_subscriptions  browsers that turned on notifications: where their push service takes them, and
                  the keys to encrypt for them (app.features.alerts.webpush)
@@ -396,6 +395,12 @@ def _battery_states(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE battery_controls ADD COLUMN command TEXT")
 
 
+def _drop_car_charges(conn: sqlite3.Connection) -> None:
+    """Car charges are no longer planned on the dashboard (a Tesla is charged from spare solar
+    instead): the charges planned ahead go."""
+    conn.execute("DROP TABLE IF EXISTS car_charges")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -419,6 +424,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _battery_states,
     _home_peaks,
     _home_estimate,
+    _drop_car_charges,
 ]
 
 

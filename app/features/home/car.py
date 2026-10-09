@@ -2,17 +2,11 @@
 What the car drew from the home's power, so it's a line of its own on the Home page rather than the biggest part of
 "everything else".
 
-The car isn't read directly (there's no connection to it, app.features.car), so its charging is found in what no
-device measured: the home's use (from the inverter) less what the devices measured, above the day's floor (the
-lowest fifth of its 5-minute rollups, what the house draws anyway). Two ways:
-
-- **A planned charge** (app.features.car): through its time, what's above the floor, up to the charge's power, is the
-  car's, for each 5 minutes it's at least half the charge's power (a charge planned but not plugged in draws
-  nothing, and leaves the house's use alone).
-- **Charging that wasn't planned**: a block of at least CHARGING_MIN minutes, each 5 minutes at least 85% of the
-  slowest any connected car charges (its lowest current, on its phases), and no more than the fastest. A car on a
-  three-phase charger draws more than anything else in a home for that long; on a single phase (1.4 kW at 6 A) it
-  can't be told from other loads, so only planned charges count.
+Its charging is found in what no device measured: the home's use (from the inverter) less what the devices
+measured, above the day's floor (the lowest fifth of its 5-minute rollups, what the house draws anyway): a block of
+at least CHARGING_MIN minutes, each 5 minutes at least 85% of the slowest any connected car charges (its lowest
+current, on its phases), and no more than the fastest. A car on a three-phase charger draws more than anything else
+in a home for that long; on a single phase (1.4 kW at 6 A) it can't be told from other loads, so it isn't counted.
 
 Only with a car connected (Manage → Integrations → Electric vehicle).
 """
@@ -58,25 +52,16 @@ def car_use(
     specs = [cars.spec(i) for i in ids]
     slowest = min(s.power_kw(s.min_amps) for s in specs) * 1000
     fastest = max(s.power_kw(s.max_amps) for s in specs) * 1000
-    charges = cars.charges(start, end)
+    if slowest * 0.85 < DETECT_FROM_W:
+        return {}
     out: dict[int, float] = {}
     for rows in unmeasured(repo, readings, start, end).values():
         floor = sorted(w for _, w in rows)[len(rows) // 5] if rows else 0.0
-        planned: set[int] = set()
-        for ts, w in rows:
-            for c in charges:
-                if c.start - ROLLUP < ts < c.end and ts >= start:
-                    planned.add(ts)
-                    above = min(c.power_w * 1.05, w - floor)
-                    if above >= c.power_w / 2:
-                        out[ts] = above
-        if slowest * 0.85 < DETECT_FROM_W:
-            continue
         block: list[tuple[int, float]] = []
         prev = None
         for ts, w in [*rows, (2**62, 0.0)]:  # a sentinel closes the last block
             above = w - floor
-            charging = ts not in planned and slowest * 0.85 <= above <= fastest * 1.1
+            charging = slowest * 0.85 <= above <= fastest * 1.1
             if block and (not charging or (prev is not None and ts - prev > ROLLUP)):
                 if len(block) * ROLLUP >= CHARGING_MIN * 60:
                     out.update({t: a for t, a in block if t >= start})

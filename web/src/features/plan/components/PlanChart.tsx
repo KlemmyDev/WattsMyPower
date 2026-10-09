@@ -35,7 +35,6 @@ type Point = {
   grid: number | null;
   bat: number | null;
   soc: number | null;
-  car: number | null;
   /** The forecast hour it falls in; null for a recorded one. */
   h: ForecastHour | null;
   pvTop: number | null;
@@ -77,7 +76,7 @@ function plot(
 
   // The grid and battery bars, a half hour each: those gone (today) from the readings, the rest from the forecast.
   // The forecast is hourly, so each hour is shared over its halves (the part of one it covers, for the half hour under
-  // way). The battery's share is what the house and car used, less solar and the grid (+ discharging).
+  // way). The battery's share is what the house used, less solar and the grid (+ discharging).
   const recorded = day.today ? slotsOf(series, start, HALF_HOUR) : [];
   const flows: Flow[] = [];
   for (let t0 = start, i = 0; t0 < start + span; t0 += HALF_HOUR, i++) {
@@ -86,7 +85,7 @@ function plot(
     if (day.today && t1 <= now) flows.push({ grid: recorded[i]?.grid ?? null, bat: recorded[i]?.bat ?? null });
     else if (h) {
       const share = Math.max(0, Math.min(t1, hourEnd(h)) - Math.max(t0, h.start)) / Math.max(1, hourEnd(h) - h.start);
-      const bat = hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh;
+      const bat = hourKwh(h, h.load_kw) - h.pv_kwh - h.grid_kwh;
       flows.push({ grid: h.grid_kwh * share, bat: bat * share, forecast: true });
     } else flows.push({ grid: null, bat: null });
   }
@@ -106,7 +105,7 @@ function plot(
   // Forecast lines: hourly averages drawn through the middle of each hour, from `from` to midnight.
   const hrs = day.hours;
   const mid = (h: ForecastHour) => h.start + (hourEnd(h) - h.start) / 2;
-  const ahead = (k: "pv_kw" | "load_kw" | "car_kw"): P[] =>
+  const ahead = (k: "pv_kw" | "load_kw"): P[] =>
     hrs.length
       ? [
           { t: from, v: hrs[0][k] },
@@ -116,8 +115,6 @@ function plot(
       : [];
   const pvAhead = ahead("pv_kw");
   const loadAhead = ahead("load_kw");
-  // Planned car charging, drawn only on a day with some.
-  const carAhead = hrs.some((h) => (h.car_kw ?? 0) > 0) ? ahead("car_kw") : [];
   // The earlier forecast for the hours gone, through the middle of each.
   const before = (vals: (number | null)[] | undefined): P[] =>
     !day.today || !vals
@@ -134,7 +131,7 @@ function plot(
 
   const top = Math.max(
     1,
-    ...[...pvPast, ...loadPast, ...loadAhead, ...carAhead, ...pvWas, ...loadWas].map((p) => p.v),
+    ...[...pvPast, ...loadPast, ...loadAhead, ...pvWas, ...loadWas].map((p) => p.v),
     ...pvAhead.map((p) => p.v * (range ? range[1] : 1)),
   );
   const mx = top * 1.1;
@@ -182,7 +179,6 @@ function plot(
         grid: v("grid_power"),
         bat: v("battery_power"),
         soc: v("battery_soc"),
-        car: null,
         h: null,
       };
     } else {
@@ -195,9 +191,8 @@ function plot(
         pv: kw(lerp(pvAhead, t)),
         load: kw(lerp(loadAhead, t)),
         grid: h ? (h.grid_kwh / hours) * 1000 : null,
-        bat: h ? ((hourKwh(h, h.load_kw + (h.car_kw ?? 0)) - h.pv_kwh - h.grid_kwh) / hours) * 1000 : null,
+        bat: h ? ((hourKwh(h, h.load_kw) - h.pv_kwh - h.grid_kwh) / hours) * 1000 : null,
         soc: lerp(socAhead, t),
-        car: h && h.car_kw ? h.car_kw * 1000 : null,
         h,
       };
     }
@@ -227,7 +222,6 @@ function plot(
     pvAhead: path(pvAhead, py),
     pvAheadArea: area(pvAhead),
     loadAhead: path(loadAhead, py),
-    carAhead: path(carAhead, py),
     socAhead: path(socAhead, by),
     pvWas: path(pvWas, py),
     loadWas: path(loadWas, py),
@@ -305,7 +299,6 @@ function PointTooltip({
       {was?.pv != null && <TooltipRow label="Forecast solar" value={kW(was.pv)} />}
       <TooltipRow label="Home use" value={power(p.load)} color={COLOR.ink} />
       {was?.load != null && <TooltipRow label="Typical home use" value={kW(was.load)} />}
-      {p.car != null && p.car >= 50 && <TooltipRow label="Car charging" value={kW(p.car)} color={COLOR.lilac} />}
       <TooltipRow label="Battery" value={p.soc == null ? DASH : pct(p.soc)} color={COLOR.battery} />
       {Math.abs(b) >= 50 && (
         <TooltipRow
@@ -392,7 +385,6 @@ export function PlanChart({
     ["Battery charge", FLOW_COLOR.charge, "box"],
     ["Sent to grid", COLOR.export, "box"],
     ["Battery discharge", FLOW_COLOR.discharge, "box"],
-    ...(c.carAhead ? [["Car charging", COLOR.lilac, "line"] as [string, string, "line"]] : []),
   ];
 
   return (
@@ -502,9 +494,6 @@ export function PlanChart({
               <path d={c.loadWas} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
             )}
             <path d={c.loadAhead} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
-            {c.carAhead && (
-              <path d={c.carAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.lilac }} />
-            )}
             <line
               x1="0"
               x2={W}

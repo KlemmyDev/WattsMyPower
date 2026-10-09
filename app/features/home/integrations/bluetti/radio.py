@@ -1,36 +1,25 @@
 """
 Talking to power stations over this server's Bluetooth, with bleak (BlueZ over D-Bus on Linux, CoreBluetooth on a
 Mac). Everything here is blocking: each call runs its own event loop, so it can be called from the home service's
-polling thread. One conversation at a time (RADIO_LOCK): a station takes one connection, and so does the adapter.
-
-In Docker, the dashboard reaches the host's Bluetooth through the host's D-Bus socket (docker-compose.yml mounts
-/run/dbus). A station also only takes one connection at a time, so it can't be read while the Bluetti app on a phone
-is connected to it.
-
-On a Mac, macOS ends any process that uses Bluetooth without the app it was started from being allowed to, so there
-each conversation runs in a process of its own: refused, only that process ends, and the dashboard says why.
+polling thread. One conversation at a time, with anything else on the radio (app.core.bluetooth, which also runs each
+in a process of its own on a Mac). A station only takes one connection at a time, so it can't be read while the
+Bluetti app on a phone is connected to it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import multiprocessing
-import sys
-import threading
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Protocol
 
+from app.core.bluetooth import run_alone, unavailable
 from app.features.home.integrations.bluetti.protocol import HANDSHAKE, NOTIFY, WRITE_CHAR, expected_length
 
 log = logging.getLogger(__name__)
 
 CONNECT_SECONDS = 20
 ANSWER_SECONDS = 5
-RADIO_LOCK = threading.Lock()
-APART = sys.platform == "darwin"  # each conversation in a process of its own (see above)
 
 
 class RadioError(Exception):
@@ -61,10 +50,7 @@ class Radio(Protocol):
 
 
 def _unavailable(e: Exception) -> RadioError:
-    return RadioError(
-        f"This server's Bluetooth can't be used ({type(e).__name__}: {e}). It needs a Bluetooth adapter, switched on; "
-        "in Docker, the host's /run/dbus mounted into the dashboard (see docker-compose.yml)."
-    )
+    return RadioError(unavailable(e))
 
 
 def _scan_now(seconds: float) -> list[tuple[str, str]]:
@@ -76,18 +62,8 @@ def _exchange_now(address: str, requests: list[bytes]) -> list[bytes]:
 
 
 def _run[T](fn: Callable[..., T], *args: Any) -> T:
-    """`fn(*args)`, one at a time: here, or on a Mac in a process of its own."""
-    with RADIO_LOCK:
-        if not APART:
-            return fn(*args)
-        with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn")) as pool:
-            try:
-                return pool.submit(fn, *args).result()
-            except BrokenProcessPool as e:
-                raise RadioError(
-                    "macOS stopped the dashboard using Bluetooth. Allow Bluetooth for the app it runs from (System "
-                    "Settings → Privacy & Security → Bluetooth), or run it on a Linux server."
-                ) from e
+    """`fn(*args)`, one conversation on the radio at a time (app.core.bluetooth)."""
+    return run_alone(fn, *args, refused=RadioError)
 
 
 class Bleak:

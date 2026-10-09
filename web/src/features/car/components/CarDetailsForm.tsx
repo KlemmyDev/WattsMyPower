@@ -1,53 +1,19 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useCarChange } from "~/features/car/hooks";
-import type { CarBody, CarChanges, CarColour, CarDetails, CarView, ChargeMode, Weekday } from "~/features/car/types";
-import {
-  BODY,
-  BODIES,
-  minutesToTime,
-  MODE,
-  MODES,
-  PAINT,
-  paintOf,
-  PAINTS,
-  timeToMinutes,
-  WEEKDAYS,
-} from "~/features/car/utils";
+import type { CarBody, CarChanges, CarColour, CarDetails, CarView } from "~/features/car/types";
+import { BODY, BODIES, PAINT, paintOf, PAINTS } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 
-type NumberKey = Exclude<
-  keyof CarDetails,
-  | "car_phases"
-  | "car_ready_by"
-  | "car_days"
-  | "car_battery_helps"
-  | "car_charge_mode"
-  | "car_colour"
-  | "car_body"
-  | "car_park"
->;
-const NUMBERS: NumberKey[] = [
-  "car_battery_kwh",
-  "car_wh_per_km",
-  "car_efficiency",
-  "car_amps",
-  "car_min_amps",
-  "car_voltage",
-  "car_target_soc",
-];
+type NumberKey = Exclude<keyof CarDetails, "car_phases" | "car_colour" | "car_body" | "car_park">;
+const NUMBERS: NumberKey[] = ["car_battery_kwh", "car_wh_per_km", "car_amps", "car_min_amps", "car_voltage"];
 
 type Values = Record<NumberKey, string> & {
   phases: "1" | "3";
-  readyBy: string;
-  days: Weekday[];
-  helps: boolean;
-  mode: ChargeMode;
   colour: CarColour;
   body: CarBody;
   park: "garage" | "outside";
@@ -56,10 +22,6 @@ type Values = Record<NumberKey, string> & {
 const valuesOf = (car: CarDetails): Values => ({
   ...(Object.fromEntries(NUMBERS.map((k) => [k, String(car[k])])) as Record<NumberKey, string>),
   phases: car.car_phases === 3 ? "3" : "1",
-  readyBy: minutesToTime(car.car_ready_by),
-  days: car.car_days,
-  helps: !!car.car_battery_helps,
-  mode: car.car_charge_mode,
   colour: car.car_colour,
   body: car.car_body,
   park: car.car_park,
@@ -70,11 +32,6 @@ function detailsOf(v: Values): Partial<CarDetails> {
   return {
     ...Object.fromEntries(NUMBERS.map((k) => [k, Number(v[k])])),
     car_phases: Number(v.phases),
-    car_ready_by: timeToMinutes(v.readyBy),
-    // In the week's order, and none for every day.
-    car_days: v.days.length === 7 ? [] : WEEKDAYS.filter((d) => v.days.includes(d)),
-    car_battery_helps: v.helps ? 1 : 0,
-    car_charge_mode: v.mode,
     car_colour: v.colour,
     car_body: v.body,
     car_park: v.park,
@@ -94,8 +51,7 @@ function Group({ title, sub, children }: { title: string; sub: string; children:
 }
 
 /**
- * A car's details: the car itself, how it's charged at home, what it's charged to and by when, and how the Overview
- * draws it. Given its name and model (`identity`), saving sends them and every detail: it connects a new car, or
+ * A car's details: the car itself, how it's charged at home, and how the Overview draws it. Given its name and model (`identity`), saving sends them and every detail: it connects a new car, or
  * changes which car a connected one (`id`) is. Otherwise, for a connected car, saving sends what changed.
  */
 export function CarDetailsForm({
@@ -130,7 +86,6 @@ export function CarDetailsForm({
     setError("");
     if (NUMBERS.some((k) => v[k].trim() === "" || Number.isNaN(Number(v[k]))))
       return setError("Enter a number for each detail.");
-    if (!/^\d\d:\d\d$/.test(v.readyBy)) return setError("Give a time the car's usually needed by.");
     const done = {
       onSuccess: (saved: CarView) => {
         if (!identity) toast("Car details saved.");
@@ -154,7 +109,6 @@ export function CarDetailsForm({
       <Group title="The car" sub="Its battery, and what it uses on the road.">
         {num("car_battery_kwh", "Battery", "kWh", "Its usable size: the car's specs, or its app.")}
         {num("car_wh_per_km", "Energy use", "Wh/km", "The trip screen's average. 150 to 200 is usual.")}
-        {num("car_efficiency", "Charging efficiency", "%", "What reaches the battery: about 90% at home.")}
       </Group>
       <Group title="Charging at home" sub="What your charger gives, and what the car takes.">
         {num("car_amps", "Most current", "A", "The charger's or cable's limit, or the car's if lower.")}
@@ -173,71 +127,7 @@ export function CarDetailsForm({
           />
           <span className="text-xs text-ink-muted">Three on a three-phase charger, if the car takes three.</span>
         </div>
-        {num("car_voltage", "Voltage", "V", "230 in Australia.")}
-      </Group>
-      <Group title="Day to day" sub="Where suggested charges stop, when they finish by, and what they aim for.">
-        {num("car_target_soc", "Charge to", "%", "80 or 90 day to day; 100 for an LFP battery.")}
-        <Field label="Usually needed by" help="Suggestions finish before this time.">
-          <Input type="time" value={v.readyBy} onChange={set("readyBy")} />
-        </Field>
-        <div className="flex flex-col gap-1.5">
-          <span id="car-days" className="text-[13px] font-semibold">
-            On
-          </span>
-          <div role="group" aria-labelledby="car-days" className="flex flex-wrap gap-1">
-            {WEEKDAYS.map((d) => {
-              const on = !v.days.length || v.days.includes(d);
-              return (
-                <button
-                  key={d}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() =>
-                    setV((o) => {
-                      const was = o.days.length ? o.days : WEEKDAYS;
-                      const days = was.includes(d) ? was.filter((x) => x !== d) : [...was, d];
-                      return { ...o, days: days.length ? days : was };
-                    })
-                  }
-                  className={cn(
-                    "h-9 w-10 rounded-full border text-[13px] font-semibold capitalize transition-colors",
-                    on ? "border-ink bg-ink text-ink-inverse" : "border-line bg-surface text-ink-muted hover:text-ink",
-                  )}
-                >
-                  {d.slice(0, 2)}
-                </button>
-              );
-            })}
-          </div>
-          <span className="text-xs text-ink-muted">
-            The days it's needed. On a week off, charging can wait for the sunniest days.
-          </span>
-        </div>
-        <Field label="Aim for" help={MODE[v.mode].about}>
-          <Select value={v.mode} onChange={(e) => setV((o) => ({ ...o, mode: e.target.value as ChargeMode }))}>
-            {MODES.map((m) => (
-              <option key={m} value={m}>
-                {MODE[m].label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="flex items-start justify-between gap-4 sm:col-span-2">
-          <div className="flex flex-col gap-0.5">
-            <span id="car-helps-setting" className="text-[13px] font-semibold">
-              Let the home battery help
-            </span>
-            <span className="text-xs text-pretty text-ink-muted">
-              Your inverter normally discharges the battery into the car. Turn this off if you've set it not to, so
-              suggestions count only solar and the grid.
-            </span>
-          </div>
-          <Switch
-            on={v.helps}
-            onChange={(helps) => setV((o) => ({ ...o, helps }))}
-            aria-labelledby="car-helps-setting"
-          />
-        </div>
+        {num("car_voltage", "Voltage", "V", "230 in Australia. A Tesla's own reading is used once it charges.")}
       </Group>
       <Group title="On the Overview" sub="How the drawing of your house shows it.">
         <div className="flex flex-col gap-1.5">

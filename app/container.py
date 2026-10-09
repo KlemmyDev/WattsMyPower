@@ -16,7 +16,6 @@ from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.battery.service import BatteryService, CollectorRegisters, ForecastPlanner
 from app.features.bills.service import BillsService
-from app.features.car.planner import ChargePlanner
 from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
 from app.features.grid.outages.service import OutageService
@@ -40,6 +39,7 @@ from app.features.settings.geocode import Geocoder
 from app.features.settings.store import SettingsStore
 from app.features.storage.service import StorageService
 from app.features.tariffs.store import TariffStore
+from app.features.tesla.service import TeslaService
 from app.features.updates.service import UpdateService
 from app.features.weather.service import WeatherService
 
@@ -58,7 +58,6 @@ class Services:
     forecast: ForecastService
     insights: InsightsService
     car: CarService
-    charge_planner: ChargePlanner
     home: HomeService
     meter: MeterService
     bills: BillsService
@@ -73,6 +72,7 @@ class Services:
     grid: GridService
     outages: OutageService
     hazards: HazardService
+    tesla: TeslaService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -93,7 +93,7 @@ def build_services(config: Config) -> Services:
     )
     weather = WeatherService(config, db, settings)
     car = CarService(db)
-    forecast = ForecastService(config, readings, settings, weather, car)
+    forecast = ForecastService(config, readings, settings, weather)
     insights = InsightsService(db, readings, settings, weather, forecast, tariffs, amber.repo)
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
@@ -113,7 +113,6 @@ def build_services(config: Config) -> Services:
         forecast=forecast,
         insights=insights,
         car=car,
-        charge_planner=ChargePlanner(car, forecast, settings, tariffs, amber.repo),
         home=HomeService(config, db, conditions=lambda: home_insights.conditions(readings, tariffs, amber.repo)),
         meter=meter,
         bills=bills,
@@ -133,5 +132,6 @@ def build_services(config: Config) -> Services:
         grid=grid,
         outages=outages,
         hazards=hazards,
+        tesla=TeslaService(config, db, live, car, settings, forecast),
         source=source,
     )

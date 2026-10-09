@@ -35,8 +35,6 @@ export type PlanDay = {
   /** Whole-day figures (kWh). On today, what's been recorded so far plus the forecast for the rest. */
   pv: number;
   load: number;
-  /** Planned car charging (kWh from the wall), still to come. */
-  car: number;
   /** Today only: what's been recorded so far (kWh); the rest of `pv` and `load` is forecast. */
   soFar: { pv: number; load: number } | null;
   imp: number;
@@ -106,7 +104,6 @@ export function planDays(
       hours,
       pv: pvSoFar + day.pv_kwh,
       load: (so?.home ?? 0) + day.load_kwh,
-      car: day.car_kwh ?? 0,
       soFar: so ? { pv: so.pv, load: so.home } : null,
       imp: (so?.imp ?? 0) + day.import_kwh,
       exp: (so?.exp ?? 0) + day.export_kwh,
@@ -134,8 +131,6 @@ export type Window = {
   rate: number | null;
   /** The band or source of the price ("Peak", "Amber"), when it's worth naming. */
   band: string | null;
-  /** Planned car charging in the window (kWh from the wall). */
-  car: number;
 };
 
 const MIN_HOUR = 0.2; // kWh in an hour before it counts toward a window
@@ -172,7 +167,6 @@ function windowOf(
     kwh: total,
     rate: price && total > 0 ? hrs.reduce((a, h) => a + price(h) * kwh(h), 0) / total : null,
     band,
-    car: hrs.reduce((a, h) => a + hourKwh(h, h.car_kw ?? 0), 0),
   };
 }
 

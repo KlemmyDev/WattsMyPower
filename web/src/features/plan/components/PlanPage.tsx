@@ -16,7 +16,6 @@ import { useNow } from "~/features/common/time/hooks";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { shortDay } from "~/features/common/formatting/utils/date";
 import { locationLabel, reserveOf } from "~/features/common/energy/utils";
-import { CarCharging } from "~/features/car/components/CarCharging";
 import { AccuracyCard } from "~/features/plan/components/AccuracyCard";
 import { BestTimes } from "~/features/plan/components/BestTimes";
 import { DayBreakdown } from "~/features/plan/components/DayBreakdown";
@@ -173,7 +172,6 @@ export function PlanPage({ day: selected = 0 }: { day?: number }) {
             />
             <DayBreakdown day={day} forecast={forecast} system={system} />
           </Card>
-          <CarCharging />
           <AccuracyCard accuracy={accuracy} />
           <Footnote>
             {forecast.calibration.fitted_hours >= 0.5

@@ -7,7 +7,7 @@ import { useCarChange } from "~/features/car/hooks";
 import type { CarDetails, CarModel, CarView } from "~/features/car/types";
 import { BODY, carName, paintOf, phaseWord } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
-import { Button, ButtonLink } from "~/features/common/ui/components/Button";
+import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
@@ -23,17 +23,11 @@ const OTHER = "other";
 /** A new car's details before any are chosen. */
 const FRESH: CarDetails = {
   car_battery_kwh: 75,
-  car_efficiency: 90,
   car_amps: 16,
   car_min_amps: 6,
   car_phases: 1,
   car_voltage: 230,
   car_wh_per_km: 170,
-  car_target_soc: 80,
-  car_ready_by: 450,
-  car_days: [],
-  car_battery_helps: 1,
-  car_charge_mode: "cheapest",
   car_colour: "white",
   car_body: "suv",
   car_park: "garage",
@@ -53,7 +47,6 @@ const withModel = (car: CarDetails, m: CarModel | null): CarDetails =>
         car_amps: m.max_amps,
         car_min_amps: m.min_amps,
         car_phases: m.phases,
-        car_target_soc: m.target_soc,
         car_body: m.body,
       }
     : car;
@@ -151,12 +144,6 @@ function ConnectCar({ view, onDone }: { view?: CarView; onDone?: (car: CarView) 
       )}
       {ready && (
         <div className="flex flex-col gap-5 border-t border-line-subtle pt-6">
-          {model?.lfp && (
-            <Notice tone="info">
-              The {model.model} has an LFP battery, which its maker says to charge to 100% regularly, so suggested
-              charges go to 100%.
-            </Notice>
-          )}
           <CarDetailsForm
             key={modelId || make}
             car={withModel(base, model)}
@@ -194,7 +181,7 @@ export function CarSettings() {
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-car"
         title="Electric vehicles"
-        sub="Tell the dashboard about your cars, and Plan suggests when to charge each one: from spare solar where it can, and at the cheapest times where it can't."
+        sub="Tell the dashboard about your cars: how each charges at home, and how the Overview draws it."
       />
       {error && <Notice>{errorMessage(error)}</Notice>}
       {cars && cars.length > 0 && (
@@ -247,10 +234,9 @@ function ControlNote() {
         <Icon name="plug" size={18} />
       </span>
       <span>
-        <b className="mb-0.5 block font-medium text-ink">You start and stop the charging, for now</b>
-        The dashboard suggests times and a current; set them in the car's app or on the charger. Controlling a Tesla or
-        BYD directly, so charging follows the sun by itself, is coming. With more than one car, charges are planned so
-        they don't overlap, as on one charger.
+        <b className="mb-0.5 block font-medium text-ink">Charging from spare solar</b>A Tesla connected over Bluetooth
+        or through Tessie (Integrations → Tesla) can charge from spare solar by itself, with its level read from the
+        car. Other cars are charged as you set them in the car's app or on the charger.
       </span>
     </Notice>
   );
@@ -324,9 +310,7 @@ export function CarPage({ carId }: { carId: number }) {
               {(confirming || remove.isError) && (
                 <div className="basis-full pl-[60px] max-sm:pl-0">
                   <HelpText tone={remove.isError ? "bad" : undefined}>
-                    {remove.isError
-                      ? errorMessage(remove.error)
-                      : "Its planned charges and the levels you've given go with it."}
+                    {remove.isError ? errorMessage(remove.error) : "Its recorded levels go with it."}
                   </HelpText>
                 </div>
               )}
@@ -336,16 +320,13 @@ export function CarPage({ carId }: { carId: number }) {
             <SettingsTitle
               id="h-car-details"
               title="Details"
-              sub="What charge suggestions and its range are worked out from, and how the Overview draws it."
+              sub="How it charges at home, what its range is worked out from, and how the Overview draws it."
             />
             <CarDetailsForm key={view.id} id={view.id} car={view.car} />
           </SettingsCard>
         </>
       )}
       <ControlNote />
-      <ButtonLink to="/plan" hash="car" variant="link" size="sm" className="self-start">
-        See suggested charges on Plan
-      </ButtonLink>
     </>
   );
 }

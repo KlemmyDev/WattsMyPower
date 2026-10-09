@@ -30,10 +30,13 @@ import { Route as AppSavingsRouteImport } from './routes/_app/savings'
 import { Route as AppSolarRouteImport } from './routes/_app/solar'
 import { Route as AppSystemRouteImport } from './routes/_app/system'
 import { Route as AppBillsRatesRouteImport } from './routes/_app/bills_.rates'
+import { Route as AppEvIndexRouteImport } from './routes/_app/ev/index'
+import { Route as AppEvSetupRouteImport } from './routes/_app/ev/setup'
 import { Route as AppHomeDeviceRouteImport } from './routes/_app/home_.$device'
 import { Route as AppIntegrationsIndexRouteImport } from './routes/_app/integrations/index'
 import { Route as AppIntegrationsAmberRouteImport } from './routes/_app/integrations/amber'
 import { Route as AppIntegrationsGridRouteImport } from './routes/_app/integrations/grid'
+import { Route as AppIntegrationsTeslaRouteImport } from './routes/_app/integrations/tesla'
 import { Route as AppIntegrationsWeatherRouteImport } from './routes/_app/integrations/weather'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsSplatRouteImport } from './routes/_app/settings/$'
@@ -152,6 +155,16 @@ const AppBillsRatesRoute = AppBillsRatesRouteImport.update({
   path: '/bills/rates',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEvIndexRoute = AppEvIndexRouteImport.update({
+  id: '/ev/',
+  path: '/ev/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEvSetupRoute = AppEvSetupRouteImport.update({
+  id: '/ev/setup',
+  path: '/ev/setup',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppHomeDeviceRoute = AppHomeDeviceRouteImport.update({
   id: '/home_/$device',
   path: '/home/$device',
@@ -170,6 +183,11 @@ const AppIntegrationsAmberRoute = AppIntegrationsAmberRouteImport.update({
 const AppIntegrationsGridRoute = AppIntegrationsGridRouteImport.update({
   id: '/grid',
   path: '/grid',
+  getParentRoute: () => AppIntegrationsRouteRoute,
+} as any)
+const AppIntegrationsTeslaRoute = AppIntegrationsTeslaRouteImport.update({
+  id: '/tesla',
+  path: '/tesla',
   getParentRoute: () => AppIntegrationsRouteRoute,
 } as any)
 const AppIntegrationsWeatherRoute = AppIntegrationsWeatherRouteImport.update({
@@ -264,12 +282,15 @@ export interface FileRoutesByFullPath {
   '/solar': typeof AppSolarRoute
   '/system': typeof AppSystemRoute
   '/bills/rates': typeof AppBillsRatesRoute
+  '/ev/setup': typeof AppEvSetupRoute
   '/home/$device': typeof AppHomeDeviceRoute
   '/integrations/amber': typeof AppIntegrationsAmberRoute
   '/integrations/grid': typeof AppIntegrationsGridRoute
+  '/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/settings/$': typeof AppSettingsSplatRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
+  '/ev/': typeof AppEvIndexRoute
   '/integrations/': typeof AppIntegrationsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/tesla/': typeof AppTeslaIndexRoute
@@ -302,12 +323,15 @@ export interface FileRoutesByTo {
   '/system': typeof AppSystemRoute
   '/': typeof AppIndexRoute
   '/bills/rates': typeof AppBillsRatesRoute
+  '/ev/setup': typeof AppEvSetupRoute
   '/home/$device': typeof AppHomeDeviceRoute
   '/integrations/amber': typeof AppIntegrationsAmberRoute
   '/integrations/grid': typeof AppIntegrationsGridRoute
+  '/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/settings/$': typeof AppSettingsSplatRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
+  '/ev': typeof AppEvIndexRoute
   '/integrations': typeof AppIntegrationsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/tesla': typeof AppTeslaIndexRoute
@@ -343,12 +367,15 @@ export interface FileRoutesById {
   '/_app/system': typeof AppSystemRoute
   '/_app/': typeof AppIndexRoute
   '/_app/bills_/rates': typeof AppBillsRatesRoute
+  '/_app/ev/setup': typeof AppEvSetupRoute
   '/_app/home_/$device': typeof AppHomeDeviceRoute
   '/_app/integrations/amber': typeof AppIntegrationsAmberRoute
   '/_app/integrations/grid': typeof AppIntegrationsGridRoute
+  '/_app/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/_app/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/_app/settings/$': typeof AppSettingsSplatRoute
   '/_app/tesla/setup': typeof AppTeslaSetupRoute
+  '/_app/ev/': typeof AppEvIndexRoute
   '/_app/integrations/': typeof AppIntegrationsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/tesla/': typeof AppTeslaIndexRoute
@@ -384,12 +411,15 @@ export interface FileRouteTypes {
     | '/solar'
     | '/system'
     | '/bills/rates'
+    | '/ev/setup'
     | '/home/$device'
     | '/integrations/amber'
     | '/integrations/grid'
+    | '/integrations/tesla'
     | '/integrations/weather'
     | '/settings/$'
     | '/tesla/setup'
+    | '/ev/'
     | '/integrations/'
     | '/settings/'
     | '/tesla/'
@@ -422,12 +452,15 @@ export interface FileRouteTypes {
     | '/system'
     | '/'
     | '/bills/rates'
+    | '/ev/setup'
     | '/home/$device'
     | '/integrations/amber'
     | '/integrations/grid'
+    | '/integrations/tesla'
     | '/integrations/weather'
     | '/settings/$'
     | '/tesla/setup'
+    | '/ev'
     | '/integrations'
     | '/settings'
     | '/tesla'
@@ -462,12 +495,15 @@ export interface FileRouteTypes {
     | '/_app/system'
     | '/_app/'
     | '/_app/bills_/rates'
+    | '/_app/ev/setup'
     | '/_app/home_/$device'
     | '/_app/integrations/amber'
     | '/_app/integrations/grid'
+    | '/_app/integrations/tesla'
     | '/_app/integrations/weather'
     | '/_app/settings/$'
     | '/_app/tesla/setup'
+    | '/_app/ev/'
     | '/_app/integrations/'
     | '/_app/settings/'
     | '/_app/tesla/'
@@ -636,6 +672,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBillsRatesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ev/': {
+      id: '/_app/ev/'
+      path: '/ev'
+      fullPath: '/ev/'
+      preLoaderRoute: typeof AppEvIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ev/setup': {
+      id: '/_app/ev/setup'
+      path: '/ev/setup'
+      fullPath: '/ev/setup'
+      preLoaderRoute: typeof AppEvSetupRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/home_/$device': {
       id: '/_app/home_/$device'
       path: '/home/$device'
@@ -662,6 +712,13 @@ declare module '@tanstack/react-router' {
       path: '/grid'
       fullPath: '/integrations/grid'
       preLoaderRoute: typeof AppIntegrationsGridRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
+    '/_app/integrations/tesla': {
+      id: '/_app/integrations/tesla'
+      path: '/tesla'
+      fullPath: '/integrations/tesla'
+      preLoaderRoute: typeof AppIntegrationsTeslaRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
     '/_app/integrations/weather': {
@@ -761,6 +818,7 @@ declare module '@tanstack/react-router' {
 interface AppIntegrationsRouteRouteChildren {
   AppIntegrationsAmberRoute: typeof AppIntegrationsAmberRoute
   AppIntegrationsGridRoute: typeof AppIntegrationsGridRoute
+  AppIntegrationsTeslaRoute: typeof AppIntegrationsTeslaRoute
   AppIntegrationsWeatherRoute: typeof AppIntegrationsWeatherRoute
   AppIntegrationsIndexRoute: typeof AppIntegrationsIndexRoute
   AppIntegrationsCarCarIdRoute: typeof AppIntegrationsCarCarIdRoute
@@ -775,6 +833,7 @@ interface AppIntegrationsRouteRouteChildren {
 const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
   AppIntegrationsAmberRoute: AppIntegrationsAmberRoute,
   AppIntegrationsGridRoute: AppIntegrationsGridRoute,
+  AppIntegrationsTeslaRoute: AppIntegrationsTeslaRoute,
   AppIntegrationsWeatherRoute: AppIntegrationsWeatherRoute,
   AppIntegrationsIndexRoute: AppIntegrationsIndexRoute,
   AppIntegrationsCarCarIdRoute: AppIntegrationsCarCarIdRoute,
@@ -808,9 +867,11 @@ interface AppRouteChildren {
   AppSystemRoute: typeof AppSystemRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBillsRatesRoute: typeof AppBillsRatesRoute
+  AppEvSetupRoute: typeof AppEvSetupRoute
   AppHomeDeviceRoute: typeof AppHomeDeviceRoute
   AppSettingsSplatRoute: typeof AppSettingsSplatRoute
   AppTeslaSetupRoute: typeof AppTeslaSetupRoute
+  AppEvIndexRoute: typeof AppEvIndexRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
   AppTeslaIndexRoute: typeof AppTeslaIndexRoute
   AppHomeRoomsRoomRoute: typeof AppHomeRoomsRoomRoute
@@ -835,9 +896,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppSystemRoute: AppSystemRoute,
   AppIndexRoute: AppIndexRoute,
   AppBillsRatesRoute: AppBillsRatesRoute,
+  AppEvSetupRoute: AppEvSetupRoute,
   AppHomeDeviceRoute: AppHomeDeviceRoute,
   AppSettingsSplatRoute: AppSettingsSplatRoute,
   AppTeslaSetupRoute: AppTeslaSetupRoute,
+  AppEvIndexRoute: AppEvIndexRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppTeslaIndexRoute: AppTeslaIndexRoute,
   AppHomeRoomsRoomRoute: AppHomeRoomsRoomRoute,

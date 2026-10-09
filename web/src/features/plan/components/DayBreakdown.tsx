@@ -81,13 +81,12 @@ function HomeUse({ day, forecast }: { day: PlanDay; forecast: Forecast }) {
         ["Expected for the rest of the day", rest],
       ]
     : [["Your typical day", rest]];
-  if (day.car >= 0.05) parts.push(["Planned car charging", day.car]);
   const missing = basis ? 24 - basis.hours_known : 0;
   const wd = weekdayOf(day.key);
   const same = basis?.days.filter((d) => weekdayOf(d.date) === wd) ?? [];
   return (
     <div className="flex flex-col gap-4">
-      <Total label="Home use" total={day.load + day.car} color={COLOR.ink} parts={parts} />
+      <Total label="Home use" total={day.load} color={COLOR.ink} parts={parts} />
       <About>
         Your typical day is <b className="font-medium text-ink">{kWh(typical)}</b>. For each hour of the day it takes
         what your home used in that hour over the last {basis?.window_days ?? 14} days, leaving out the highest and
@@ -96,7 +95,6 @@ function HomeUse({ day, forecast }: { day: PlanDay; forecast: Forecast }) {
         week it is, and doesn't change with the weather.
         {missing > 0 &&
           ` ${missing} ${missing === 1 ? "hour" : "hours"} of the day ${missing === 1 ? "has" : "have"} no readings yet, so ${missing === 1 ? "it uses" : "they use"} a typical household's use.`}
-        {day.car >= 0.05 && " Planned car charges are added on top."}
       </About>
       {basis && basis.days.length > 0 && <RecentDays basis={basis} weekday={wd} same={same} />}
     </div>

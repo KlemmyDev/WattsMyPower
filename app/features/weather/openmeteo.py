@@ -66,7 +66,7 @@ def _url(base: str, latitude: float, longitude: float, model: str, hourly: list[
     return f"{base}?{urlencode(params)}"
 
 
-FORECAST_DAYS = 7  # today and the next six: the Plan page shows three, and car charges can be planned over a week
+FORECAST_DAYS = 7  # today and the next six: the Plan page shows three
 
 
 def forecast_url(latitude: float, longitude: float, model: str) -> str:

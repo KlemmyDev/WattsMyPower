@@ -35,6 +35,7 @@ from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
 from app.features.storage.router import router as storage_router
 from app.features.tariffs.router import router as tariffs_router
+from app.features.tesla.router import router as tesla_router
 from app.features.updates.router import router as updates_router
 from app.features.weather.router import router as weather_router
 
@@ -59,6 +60,7 @@ ROUTERS = [
     plans_router,
     car_router,
     battery_router,
+    tesla_router,
     home_router,
     health_router,
     updates_router,
@@ -98,6 +100,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.grid.start()  # AEMO's prices and notices for the region, unless turned off
             await services.outages.start()
             await services.hazards.start()  # the Bureau's and the Fire Department's warnings for the house  # the electricity network's outages around the house
+            await services.tesla.start()  # reads and steers the Teslas, once they're connected (Tessie or Bluetooth)
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
@@ -107,6 +110,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.outages.stop()
             await services.grid.stop()
             await services.updates.stop()
+            await services.tesla.stop()
             await services.battery.stop_loop()
             await services.home.stop()
             await services.weather.stop()

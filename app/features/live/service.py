@@ -33,6 +33,8 @@ class LiveService:
         self.driver: str | None = None  # the hybrid's driver id (e.g. "sungrow.sh_rs"), None until one is connected
         # What the battery is set to do, from app.features.battery (BatteryService.summary); None if it can't be told.
         self.battery_mode: dict[str, Any] | None = None
+        # Each EV in brief, from app.features.tesla (TeslaService.summary); None when none is connected.
+        self.ev: list[dict[str, Any]] | None = None
         # The second inverter, when the collector has one configured.
         self.pv2: dict[str, Any] | None = None
         self._subscribers: set[asyncio.Queue[Status]] = set()
@@ -86,6 +88,7 @@ class LiveService:
             "forecast": cfg.forecast,
             "tariff": self.tariffs.get(),
             "pv2": None if self.pv2 is None else {"behind_meter": cfg.pv2_behind_meter, **self.pv2},
+            "ev_connected": self.ev is not None,
             **self.settings.all_values(),
         }
 
@@ -103,4 +106,5 @@ class LiveService:
             "battery_mode": self.battery_mode,
             # Which version this is, shown at the foot of the navigation.
             "app": about(),
+            "ev": self.ev,
         }
