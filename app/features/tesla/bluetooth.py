@@ -409,49 +409,58 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
     return TeslaError(f"Bluetooth went wrong ({type(e).__name__}: {e}).")
 
 
-async def _find(vin: str) -> Any:
-    """The car's Bluetooth device, or None when it isn't heard; how strongly it was heard goes in the conversation."""
-    from bleak import BleakScanner
-
-    name = ble_name(vin)
-
-    def match(device: Any, adv: Any) -> bool:
-        if (adv.local_name or device.name) != name:
-            return False
-        if (t := _TALK.get(None)) is not None:
-            t["rssi"] = adv.rssi
-        return True
-
-    return await BleakScanner.find_device_by_filter(match, timeout=SCAN_SECONDS)
-
-
 async def _talk(vin: str, key: str, then: Callable[[Any], Any], *, wake: bool) -> Any:
-    """Find the car, connect, `await then(car)`, and disconnect. None when it isn't heard."""
+    """Find the car, connect, `await then(car)`, and disconnect. None when it isn't heard.
+
+    The scan runs until the conversation's over. BlueZ forgets a car it's only heard in passing as soon as scanning
+    stops, unless the last broadcast it heard said it takes connections; a Tesla also sends ones that don't (its
+    beacon), so with the scan stopped first, connecting could fail with the car "not found" however well it was heard."""
+    from bleak import BleakScanner
     from cryptography.hazmat.primitives import serialization
     from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 
+    name = ble_name(vin)
+    talk = _TALK.get(None)
+    heard: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+
+    def hear(device: Any, adv: Any) -> None:
+        if (adv.local_name or device.name) != name or heard.done():
+            return
+        if talk is not None:
+            talk["rssi"] = adv.rssi  # how strongly it was heard, for an error's sake
+        heard.set_result(device)
+
     _step("listening for the car")
-    device = await _find(vin)
-    if device is None:
-        return None
-    _step("connecting")
-    car = TeslaBluetooth().vehicles.create(
-        vin,
-        serialization.load_pem_private_key(key.encode(), None),  # type: ignore[arg-type]
-        device,
-        keepalive_interval=None,  # one conversation, then let it sleep
-        wake_if_asleep=wake,
-    )
-    car._default_timeout, car._actuation_timeout = REPLY_SECONDS, ACK_SECONDS
-    await car.connect()
+    scanner = BleakScanner(hear)
+    await scanner.start()
     try:
-        return await then(car)
+        try:
+            device = await asyncio.wait_for(heard, SCAN_SECONDS)
+        except TimeoutError:
+            return None
+        _step("connecting")
+        car = TeslaBluetooth().vehicles.create(
+            vin,
+            serialization.load_pem_private_key(key.encode(), None),  # type: ignore[arg-type]
+            device,
+            keepalive_interval=None,  # one conversation, then let it sleep
+            wake_if_asleep=wake,
+        )
+        car._default_timeout, car._actuation_timeout = REPLY_SECONDS, ACK_SECONDS
+        await car.connect()
+        try:
+            return await then(car)
+        finally:
+            try:
+                async with asyncio.timeout(HANG_UP_SECONDS):
+                    await car.disconnect()
+            except Exception as e:  # the car's already gone, say: what it said still counts
+                log.info("Tesla over Bluetooth: disconnecting went wrong (%s: %s)", type(e).__name__, e)
     finally:
         try:
-            async with asyncio.timeout(HANG_UP_SECONDS):
-                await car.disconnect()
-        except Exception as e:  # the car's already gone, say: what it said still counts
-            log.info("Tesla over Bluetooth: disconnecting went wrong (%s: %s)", type(e).__name__, e)
+            await scanner.stop()
+        except Exception as e:  # what was said still counts
+            log.info("Tesla over Bluetooth: stopping the scan went wrong (%s: %s)", type(e).__name__, e)
 
 
 def _converse(coro: Callable[[], Any], sleep: Callable[[float], None] = time.sleep) -> Any:
