@@ -166,6 +166,31 @@ DASHBOARD: dict[str, Table] = {
         grows=True,
         retention=90,
     ),
+    "ev_energy": Table(
+        "cars",
+        "Charging energy",
+        "What a connected Tesla drew from the house in every 5 minutes it charged at home, and how much of it came "
+        "from the grid, for the Home page's car line.",
+        "Kept for good",
+        Spec("ts"),
+        grows=True,
+    ),
+    "ev_sessions": Table(
+        "cars",
+        "Trips and charges",
+        "Each time a connected Tesla was away (its level leaving and back, and the distance) and each charge at home.",
+        "Kept for good",
+        Spec("start"),
+        grows=True,
+    ),
+    "ev_wakes": Table(
+        "cars",
+        "Wakes",
+        "Each time the dashboard woke a connected Tesla, and why: to see that it isn't woken too often.",
+        "Kept for good",
+        Spec("ts"),
+        grows=True,
+    ),
     "home_accounts": Table(
         "home",
         "Connected accounts",

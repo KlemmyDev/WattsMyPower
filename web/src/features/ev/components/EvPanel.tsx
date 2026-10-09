@@ -1,10 +1,11 @@
 import { errorMessage } from "~/features/common/api/utils";
 import { kW } from "~/features/common/formatting/utils/number";
-import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { useTween } from "~/features/common/ui/hooks/useTween";
+import { EvChargeBar } from "~/features/ev/components/EvChargeBar";
 import { useEvChange } from "~/features/ev/hooks";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
@@ -25,13 +26,26 @@ function readiness(v: EvVehicle, provider: TeslaProvider | null): string | null 
   return bt ? "Left to sleep: no spare solar expected for it soon" : "No spare solar expected for it soon";
 }
 
+/** How fresh what's shown is: asleep or not, when its charge was read, and when it was last checked (over Bluetooth,
+ * the car's checked without waking it far more often than its charge is read). */
+function freshness(v: EvVehicle, provider: TeslaProvider | null): string {
+  const s = v.state;
+  const parts = [
+    s?.in_range === false && v.seen_at ? `Not heard since ${hhmm(v.seen_at)}` : s?.asleep ? "Asleep" : null,
+    s?.as_of ? `charge read ${hhmm(s.as_of)}` : "charge not read yet",
+    v.seen_at && s?.in_range !== false && (!s?.as_of || v.seen_at - s.as_of > 90)
+      ? `${provider === "bluetooth" ? "checked" : "Tessie read"} ${hhmm(v.seen_at)}`
+      : null,
+  ].filter(Boolean) as string[];
+  const text = parts.join(" · ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: TeslaProvider | null }) {
   const { command } = useEvChange();
   const s = v.state;
   const soc = useTween(s?.soc ?? undefined) ?? s?.soc ?? null;
   const tone = statusColor(v.status, v.control.mode);
-  const following = v.control.mode !== "off" && s?.plugged && s.at_home && !v.hold;
-  const spare = v.spare_w != null ? Math.max(0, v.spare_w) : null;
   return (
     <Card aria-labelledby={`h-tp-${v.vin}`} className="gap-6 overflow-hidden">
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -50,6 +64,7 @@ export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: Tesla
               .filter(Boolean)
               .join(" · ") || " "}
           </span>
+          <span className="text-xs text-ink-faint tabular-nums">{freshness(v, provider)}</span>
         </div>
         <div className="flex max-w-[420px] min-w-0 flex-col items-start gap-2 max-sm:max-w-none">
           {s?.charging && (
@@ -76,60 +91,7 @@ export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: Tesla
         </div>
       </div>
 
-      {/* The car's charge up to its limit, the rest of the bar faded. */}
-      <div className="relative h-3 overflow-hidden rounded-full bg-track" aria-hidden>
-        <div
-          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
-          style={{ width: `${Math.min(100, soc ?? 0)}%`, background: s?.charging ? tone : COLOR.battery }}
-        />
-        {s?.limit != null && (
-          <div className="absolute inset-y-0 w-0.5 bg-ink/60" style={{ left: `calc(${s.limit}% - 1px)` }} />
-        )}
-      </div>
-
-      {following && v.min_w != null && (
-        <SpareMeter spare={spare} need={v.min_w} amps={v.solar_amps} charging={!!s?.charging} />
-      )}
+      <EvChargeBar v={v} soc={soc} fill={s?.charging ? tone : COLOR.battery} />
     </Card>
-  );
-}
-
-/** Spare solar against what the car needs to charge at its lowest current. */
-function SpareMeter({
-  spare,
-  need,
-  amps,
-  charging,
-}: {
-  spare: number | null;
-  need: number;
-  amps: number | null;
-  charging: boolean;
-}) {
-  const top = Math.max(need * 2, spare ?? 0, 1);
-  const enough = spare != null && spare >= need;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-[13px]">
-        <span className="text-ink-muted">Spare solar for the car</span>
-        <span className="tabular-nums">
-          {spare == null
-            ? "Working it out…"
-            : amps
-              ? `${kW(spare)} · enough for ${amps} A`
-              : `${kW(spare)} of ${kW(need)} to ${charging ? "keep going" : "start"}`}
-        </span>
-      </div>
-      <div className="relative h-1.5 rounded-full bg-track" aria-hidden>
-        <div
-          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
-          style={{
-            width: `${((spare ?? 0) / top) * 100}%`,
-            background: enough ? COLOR.solar : alpha(COLOR.solar, 0.45),
-          }}
-        />
-        <div className="absolute -inset-y-1 w-px bg-ink/50" style={{ left: `${(need / top) * 100}%` }} />
-      </div>
-    </div>
   );
 }

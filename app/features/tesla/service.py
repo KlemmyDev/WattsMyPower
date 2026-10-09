@@ -41,10 +41,11 @@ from app.core.database import Database
 from app.features.car.service import CarService, NoSuchCar
 from app.features.live.service import LiveService
 from app.features.settings.store import SettingsStore
-from app.features.tesla import bluetooth, control
+from app.features.tesla import bluetooth, control, details, history
 from app.features.tesla.bluetooth import BluetoothClient, Radio
-from app.features.tesla.client import VIN, Client, TeslaError
+from app.features.tesla.client import VIN, CarAsleep, Client, TeslaError
 from app.features.tesla.control import CarState, Charger, Decision, Memory
+from app.features.tesla.history import History
 from app.features.tesla.mock import TOKEN as DEMO_TOKEN
 from app.features.tesla.mock import VIN as DEMO_VIN
 from app.features.tesla.mock import DemoRadio, DemoTesla, DemoTessie
@@ -57,6 +58,15 @@ CONN_KEY = "tesla"  # kv: how the cars are reached (provider, token) and each ca
 KEY_KEY = "tesla_key"  # kv: this server's Bluetooth key (PEM), kept across disconnecting so a car needn't re-pair
 MEMORY_KEY = "tesla_memory"  # kv: what the dashboard last did with each car (JSON)
 LOG_KEY = "tesla_log"  # kv: what it did lately (JSON list, newest last)
+DETAILS_KEY = "tesla_details"  # kv: each car's details, group by group (app.features.tesla.details), as last read
+WAKE_WHY = {
+    "first": "to read it (nothing known of it since the dashboard started)",
+    "ready": "ready for spare solar",
+    "refresh": "to read its details",
+    "command": "to send it a command",
+    "solar": "to charge from spare solar",
+}
+TRACK_KEY = "tesla_track"  # kv: each car's last level and odometer at home, and since when it's been gone
 LOG_KEPT = 200
 TICK = 20  # seconds between the loop's turns
 POLL_ACTIVE = 60  # seconds between reads of the cars while one is being charged from solar
@@ -134,6 +144,11 @@ class TeslaService:
         self._next_read = 0.0
         self._pairing: dict[str, Any] | None = None  # {vin, step (looking, tap, done, failed), error, at}
         self._ahead: tuple[int, list[dict[str, Any]], dict[bool, list[tuple[int, int, float]]]] | None = None
+        self._details: dict[str, dict[str, Any]] | None = None  # vin -> group -> entry (DETAILS_KEY), once loaded
+        self._seen: dict[str, int] = {}  # vin -> when it was last read (heard, over Bluetooth)
+        self.history = History(db)  # each car's in and out (app.features.tesla.history)
+        self._tracks: dict[str, dict[str, Any]] | None = None  # TRACK_KEY, once loaded
+        self._charge_tick: dict[str, float] = {}  # vin -> when its charging was last counted
         self._task: asyncio.Task[None] | None = None
         self._wake: asyncio.Event | None = None
 
@@ -269,6 +284,7 @@ class TeslaService:
                 self._raw[row["vin"]] = {"last_state": last}
                 self._add(c, row["vin"], last)
                 self._states[row["vin"]] = control.parse(row["vin"], last, self._home_of(c["vehicles"][row["vin"]]))
+                self._merge_details(row["vin"], row.get("details") or {})
             self._put(CONN_KEY, c)
             self._read_at = self.clock()
             self._error = None
@@ -356,6 +372,8 @@ class TeslaService:
             self._states.pop(vin, None)
             self._raw.pop(vin, None)
             self._samples.pop(vin, None)
+            if self._all_details().pop(vin, None) is not None:
+                self._put(DETAILS_KEY, self._all_details())
             self._put(CONN_KEY, c)
         self.wake()
         return self.status()
@@ -367,6 +385,9 @@ class TeslaService:
             self._put(CONN_KEY, None)
             self._put(MEMORY_KEY, None)
             self._put(LOG_KEY, None)
+            self._put(DETAILS_KEY, None)
+            self._details = None
+            self._seen.clear()
             self._states.clear()
             self._raw.clear()
             self._samples.clear()
@@ -460,10 +481,13 @@ class TeslaService:
                 name, params, hold, text = "set_charge_limit", {"percent": pct}, None, f"Charge limit set to {pct}%"
             else:
                 raise TeslaSetupError("Unknown command.")
+            was_asleep = bool(self._states.get(vin) and self._states[vin].asleep)
             try:
                 ok = self._client(c).command(vin, name, **params)
             except TeslaError as e:
                 raise TeslaSetupError(str(e), 502) from e
+            if ok and was_asleep:
+                self._woke(vin, "command")
             if not ok:
                 raise TeslaSetupError(
                     "The car didn't take the command. It may be out of reach; try again shortly.", 502
@@ -531,14 +555,96 @@ class TeslaService:
         self._error = None
         self._read_at = self.clock()
         for row in found:
-            vin = row["vin"]
-            if vin not in c["vehicles"]:
-                continue
-            self._raw[vin] = {"last_state": row.get("last_state") or {}, "in_range": row.get("in_range")}
-            self._states[vin] = self._parse(vin, c["vehicles"][vin])
-            self._level(vin, c["vehicles"][vin].get("car"))
-            self._measure(vin, c)
+            if row["vin"] in c["vehicles"]:
+                self._take(row, c)
         self._next_read = self.clock() + self._poll_after(c)
+
+    def _take(self, row: dict[str, Any], c: dict[str, Any]) -> None:
+        """What was read of a car (as Client.vehicles gives it): its state, level, supply, details."""
+        vin = row["vin"]
+        self._raw[vin] = {"last_state": row.get("last_state") or {}, "in_range": row.get("in_range")}
+        self._states[vin] = self._parse(vin, c["vehicles"][vin])
+        if row.get("in_range") is not False:  # heard (or read through Tessie)
+            self._seen[vin] = int(self.clock())
+        self._level(vin, c["vehicles"][vin].get("car"))
+        self._measure(vin, c)
+        self._merge_details(vin, row.get("details") or {})
+        if row.get("woke"):
+            self._woke(vin, str(row["woke"]))
+
+    def _woke(self, vin: str, why: str) -> None:
+        """The dashboard woke the car (or sent it something while it slept, which wakes it): kept, to see that it isn't
+        woken too often (the EV page's chart), and in the activity."""
+        self.history.add_wake(vin, self.clock(), why)
+        self._note(vin, f"Woke the car {WAKE_WHY.get(why, why)}", "wake")
+
+    # -- details (app.features.tesla.details) ------------------------------------------------------
+    def _all_details(self) -> dict[str, dict[str, Any]]:
+        if self._details is None:
+            self._details = self._kv(DETAILS_KEY) or {}
+        return self._details
+
+    def _merge_details(self, vin: str, found: dict[str, Any]) -> None:
+        """Keep each group as newly read, unless what's kept is newer (Tessie's copy can lag a read over Bluetooth)."""
+        kept = self._all_details().setdefault(vin, {})
+        changed = False
+        for g, entry in found.items():
+            old = kept.get(g)
+            if entry != old and (old is None or (entry.get("as_of") or 0) >= (old.get("as_of") or 0)):
+                kept[g] = entry
+                changed = True
+        if changed:
+            self._put(DETAILS_KEY, self._all_details())
+
+    def details(self, vin: str) -> dict[str, Any]:
+        """A car's details, group by group, each with when it was read; whether a refresh now would wake it (it's
+        asleep); what's using power while it's parked; and anything in the car that starts charging by itself."""
+        c = self._conn()
+        if vin not in c["vehicles"] or not self._is_connected(c):
+            raise TeslaSetupError("No such car.", 404)
+        groups = self._all_details().get(vin, {})
+        s = self._states.get(vin)
+        schedule = (groups.get("schedule") or {}).get("data")
+        return {
+            "vin": vin,
+            "provider": c.get("provider"),
+            "seen_at": self._seen.get(vin),
+            "asleep": s.asleep if s else None,
+            "in_range": s.in_range if s else None,
+            # Reading the details needs the car awake: a refresh now would wake it (and asks first).
+            "refresh_wakes": bool(s and s.asleep),
+            "every": bluetooth.DETAILS_EVERY if c.get("provider") == "bluetooth" else None,
+            "groups": {g: groups[g] for g in details.GROUPS if g in groups},
+            "parked_draw": details.parked_draw(groups),
+            "overrides_solar": details.overrides_solar(schedule),
+        }
+
+    def refresh_details(self, vin: str, wake: Any) -> dict[str, Any]:
+        """Read everything about a car now. An asleep car is only woken with `wake` true (the household said so):
+        otherwise this raises TeslaSetupError 409, for the page to ask. Raises TeslaSetupError, in words."""
+        wake = wake is True
+        with self._lock:
+            c = self._conn()
+            if vin not in c["vehicles"] or not self._is_connected(c):
+                raise TeslaSetupError("No such car.", 404)
+            if c.get("provider") == "bluetooth" and self._pairing and self._pairing["step"] in ("looking", "tap"):
+                raise TeslaSetupError("A car is being paired over Bluetooth. Try again once it's done.", 409)
+            was_asleep = bool(self._states.get(vin) and self._states[vin].asleep)
+            try:
+                row = self._client(c).refresh_details(vin, wake)
+            except CarAsleep as e:
+                if e.row:
+                    self._take(e.row, c)
+                raise TeslaSetupError(
+                    "The car is asleep. Reading its details wakes it, and it then stays awake for a while.", 409
+                ) from e
+            except TeslaError as e:
+                raise TeslaSetupError(str(e), 502) from e
+            self._take({"in_range": True if c.get("provider") == "bluetooth" else None} | row, c)
+            if wake and was_asleep:
+                self._woke(vin, "refresh")
+        self.wake()
+        return self.details(vin)
 
     # -- how closely each car is followed ----------------------------------------------------------
     def _spare_ahead(self, battery_first: bool) -> list[tuple[int, int, float]]:
@@ -684,6 +790,8 @@ class TeslaService:
             ok, why = False, str(e)
         else:
             why = "the car didn't take it"
+        if ok and self._states[vin].asleep:
+            self._woke(vin, "solar")
         if not ok:
             mem.failures, mem.failed_at = mem.failures + 1, now
             if mem.failures == 1:
@@ -765,8 +873,169 @@ class TeslaService:
                     self._steer(vin, v, client)
                 except Exception:
                     log.exception("Steering Tesla %s failed", vin[-6:])
+                try:
+                    self._track(vin, v)
+                except Exception:
+                    log.exception("Keeping Tesla %s's history failed", vin[-6:])
             # Spare solar sooner than forecast makes a car ready now, rather than at its next quiet read.
             self._next_read = min(self._next_read, self.clock() + self._poll_after(c))
+
+    # -- in and out (app.features.tesla.history) -------------------------------------------------
+    def _all_tracks(self) -> dict[str, dict[str, Any]]:
+        if self._tracks is None:
+            self._tracks = self._kv(TRACK_KEY) or {}
+        return self._tracks
+
+    def _odometer(self, vin: str) -> tuple[int, float | None]:
+        """The car's odometer (km), from its driving details, and when it was read."""
+        g = self._all_details().get(vin, {}).get("driving") or {}
+        return int(g.get("as_of") or 0), (g.get("data") or {}).get("odometer_km")
+
+    def _battery_kwh(self, vin: str) -> float | None:
+        car = self._conn()["vehicles"].get(vin, {}).get("car")
+        try:
+            return float(self.cars.details(car)["car_battery_kwh"]) if car is not None else None
+        except (NoSuchCar, KeyError, TypeError, ValueError):
+            return None
+
+    def _track(self, vin: str, v: dict[str, Any]) -> None:
+        """Keep the car's in and out: time away (leaving with its last level at home, back once its level's been read
+        since), and what it draws while charging at home. Each turn of the loop."""
+        s = self._states.get(vin)
+        if s is None:
+            return
+        now = int(self.clock())
+        tracks = self._all_tracks()
+        t = dict(tracks.get(vin) or {})
+        km_at, km = self._odometer(vin)
+        away = self.history.open(vin, "away")
+        if s.at_home:
+            t.pop("gone_since", None)
+            if away is not None and s.soc is not None and (s.as_of or 0) > away["start"]:
+                done = self.history.finish(
+                    away["id"], int(s.as_of or now), s.soc, km if km_at > away["start"] else None
+                )
+                if done:
+                    self._note(vin, self._back(done, vin), "trip")
+                away = None
+            if away is None:  # what's read at home now is its level at home (not one from before it left)
+                if s.soc is not None and (s.as_of or 0) >= t.get("soc_at", 0):
+                    t.update(soc=s.soc, soc_at=s.as_of or now)
+                if km is not None:
+                    t["km"] = km
+                t["home_at"] = now
+        elif s.at_home is False and away is None:
+            gone = t.setdefault("gone_since", now)
+            if now - gone >= history.AWAY_AFTER and t.get("soc") is not None:
+                self.history.start(vin, "away", int(t.get("home_at") or gone), t["soc"], t.get("km"))
+                self._note(vin, f"Left home at {t['soc']:.0f}%", "trip")
+        if t != tracks.get(vin):
+            tracks[vin] = t
+            self._put(TRACK_KEY, tracks)
+        self._charging(vin, s)
+
+    def _charging(self, vin: str, s: CarState) -> None:
+        """Count what the car draws while charging at home (ev_energy, and the charge's session), and end the
+        session once it's stopped."""
+        now = self.clock()
+        last = self._charge_tick.get(vin)
+        self._charge_tick[vin] = now
+        charge = self.history.open(vin, "charge")
+        if s.charging and s.at_home:
+            if charge is None:
+                self.history.start(vin, "charge", int(now), s.soc, None)
+                return
+            if last is None:
+                return
+            dt = min(history.MAX_STEP, now - last)
+            spec = self._charger(vin)
+            w = control.car_watts(s, spec) if spec else (s.power_kw or 0) * 1000
+            reading = self.live.latest or {}
+            fresh = reading.get("ts") and now - int(reading["ts"]) <= STALE_READING
+            grid = reading.get("grid_power") if fresh else None
+            # From the grid: as much of it as the house is importing (all of it, when that isn't known).
+            grid_w = min(w, max(0.0, float(grid))) if grid is not None else w
+            self.history.add_energy(vin, now, w * dt / 3600, grid_w * dt / 3600)
+            self.history.add_charge(charge["id"], w * dt / 3.6e6, grid_w * dt / 3.6e6)
+        elif charge is not None and (s.as_of or now) > charge["start"]:
+            done = self.history.finish(charge["id"], int(now), s.soc, None)
+            if done:
+                d = history.describe(done, self._battery_kwh(vin))
+                share = f", {d['solar_share']:.0%} from solar or the battery" if d["solar_share"] is not None else ""
+                levels = (f"{d['soc_start']:.0f}% → {d['soc_end']:.0f}%: "
+                          if d["soc_start"] is not None and d["soc_end"] is not None else "")  # fmt: skip
+                self._note(vin, f"Charged {levels}{d['kwh']:.1f} kWh from the house{share}", "charge")
+
+    def _back(self, done: dict[str, Any], vin: str) -> str:
+        d = history.describe(done, self._battery_kwh(vin))
+        change = d["soc_change"] or 0
+        used = (f"used {-change:.0f}%" if change <= 0 else f"gained {change:.0f}%") + (
+            f" (about {abs(d['used_kwh']):.0f} kWh)" if d["used_kwh"] else ""
+        )
+        km = f", {d['km']:.0f} km" if d["km"] else ""
+        return f"Back home at {d['soc_end']:.0f}%: {used}{km}"
+
+    def car_history(self, vin: str, days: int = 30) -> dict[str, Any]:
+        """The car's in and out over the last `days`: its sessions (newest first), and their totals."""
+        c = self._conn()
+        if vin not in c["vehicles"]:
+            raise TeslaSetupError("No such car.", 404)
+        days = max(1, min(int(days), 366))
+        now = int(self.clock())
+        battery = self._battery_kwh(vin)
+        sessions = [history.describe(s, battery) for s in self.history.sessions(vin, now - days * 86400, now + 1)]
+        charges = [s for s in sessions if s["kind"] == "charge" and s["end"]]
+        trips = [s for s in sessions if s["kind"] == "away" and s["end"]]
+        kwh = sum(s["kwh"] for s in charges)
+        grid = sum(s["grid_kwh"] for s in charges)
+        km = sum(s["km"] or 0 for s in trips)
+        used = sum(s["used_kwh"] or 0 for s in trips if s["km"])
+        t = self._all_tracks().get(vin) or {}
+        return {
+            "vin": vin,
+            "days": days,
+            "battery_kwh": battery,
+            "sessions": sessions,
+            "totals": {
+                "charged_kwh": round(kwh, 1),
+                "grid_kwh": round(grid, 1),
+                "solar_share": round(max(0.0, 1 - grid / kwh), 3) if kwh > 0 else None,
+                "charges": len(charges),
+                "trips": len(trips),
+                "km": round(km) if km else None,
+                "kwh_per_100km": round(used / km * 100, 1) if km >= 20 and used > 0 else None,
+            },
+            # Its last level at home, and since when it's been gone (not yet counted as away).
+            "home": {"soc": t.get("soc"), "soc_at": t.get("soc_at"), "gone_since": t.get("gone_since")},
+        }
+
+    def car_levels(self, vin: str, start: int, end: int) -> dict[str, Any]:
+        """The car's level through [start, end), as recorded (each change of a percent, and every 15 minutes it's
+        read), with the readings either side; and when it was away and when it charged at home, to shade. Between
+        readings far apart (away, or asleep), the page draws a straight line, as estimated."""
+        c = self._conn()
+        if vin not in c["vehicles"]:
+            raise TeslaSetupError("No such car.", 404)
+        if end <= start or end - start > 8 * 86400:
+            raise TeslaSetupError("Choose up to 8 days.")
+        car = c["vehicles"][vin].get("car")
+        try:
+            points = self.cars.levels(car, start, end) if car is not None else []
+        except NoSuchCar:
+            points = []
+        now = int(self.clock())
+        sessions = self.history.sessions(vin, start, end)
+        limit = self._states[vin].limit if vin in self._states else None
+        return {
+            "vin": vin,
+            "start": start,
+            "end": end,
+            "points": [{"t": t, "soc": round(soc, 1)} for t, soc in points],
+            "away": [{"start": s["start"], "end": s["end"] or now} for s in sessions if s["kind"] == "away"],
+            "charging": [{"start": s["start"], "end": s["end"] or now} for s in sessions if s["kind"] == "charge"],
+            "wakes": self.history.wakes(vin, start, end),
+            "limit": limit,
+        }
 
     # -- views -----------------------------------------------------------------------------------
     def _doing(self, s: CarState, v: dict[str, Any], mem: Memory, spec: Charger | None) -> tuple[str, str]:
@@ -813,6 +1082,8 @@ class TeslaService:
             "control": v["control"],
             "home": v.get("home"),
             "paired_at": v.get("paired_at"),
+            # When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of.
+            "seen_at": self._seen.get(vin),
             "status": status,
             "doing": doing,
             "hold": mem.hold if v["control"]["mode"] != "off" else None,

@@ -10,8 +10,11 @@ charging from spare solar works the same through either.
                                     `want` is how closely each car is followed (control.readiness, by VIN): a
                                     way that reads the car itself (Bluetooth) lets a "quiet" car sleep and wakes a
                                     "ready" one; Tessie's copy of the car's state is read the same either way
+                                    Each also has `details` (app.features.tesla.details): every group known of it,
+                                    and `woke` (why) when reading it woke it (over Bluetooth: ready, first)
     command(vin, name, **params)    start_charging, stop_charging, set_charging_amps (amps), set_charge_limit (percent),
                                     waking the car first; whether it worked
+    refresh_details(vin, wake)      one car, read in full now: woken only with `wake` (CarAsleep otherwise)
 
 Both are blocking, and raise TeslaError, in words.
 """
@@ -43,7 +46,20 @@ def _tesla_error(message: str, status: int | None, refused: bool) -> TeslaError:
     return TeslaError(message, status, refused=refused)
 
 
+class CarAsleep(TeslaError):
+    """The car is asleep, and reading what was asked would wake it: ask first (refresh_details with wake)."""
+
+    def __init__(self, row: dict[str, Any] | None = None, message: str = "The car is asleep. Refreshing wakes it."):
+        super().__init__(message)
+        self.row = row  # what could be read without waking it, as vehicles() gives a car
+
+
 class Client(Protocol):
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]: ...
 
     def command(self, vin: str, name: str, **params: Any) -> bool: ...
+
+    def refresh_details(self, vin: str, wake: bool) -> dict[str, Any]:
+        """Read everything about one car now (as vehicles() gives it, details and all), waking it only with `wake`.
+        Raises CarAsleep when it's asleep and `wake` isn't given."""
+        ...

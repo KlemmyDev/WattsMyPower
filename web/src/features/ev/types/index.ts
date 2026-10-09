@@ -44,6 +44,8 @@ export type EvVehicle = {
   home: [number, number] | null;
   /** Over Bluetooth: when it was paired (unix seconds). */
   paired_at: number | null;
+  /** When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of. */
+  seen_at: number | null;
   status: EvStatus;
   /** What it's doing, in a sentence. */
   doing: string;
@@ -104,7 +106,7 @@ export type EvEvent = {
   ts: number;
   vin: string;
   text: string;
-  kind: "solar" | "manual" | "mode" | "error" | null;
+  kind: "solar" | "manual" | "mode" | "error" | "trip" | "charge" | "wake" | null;
 };
 
 /** Each EV in brief, in the live status. */
@@ -118,3 +120,163 @@ export type EvBrief = Pick<EvVehicle, "vin" | "name" | "car" | "status" | "doing
 
 export type EvCommand =
   { action: "start" | "stop" | "resume" } | { action: "amps"; amps: number } | { action: "limit"; percent: number };
+
+/** One group of a car's details: what was read and when, or why the car won't give it to the dashboard's key. */
+export type DetailGroup<T> =
+  { as_of: number | null; data: T; refused?: undefined } | { as_of: number | null; refused: string; data?: undefined };
+
+export type ChargeSchedule = {
+  name: string | null;
+  days: string[];
+  /** Minutes after midnight; null: it doesn't start (or end) at a set time. */
+  start: number | null;
+  end: number | null;
+  one_time: boolean;
+  enabled: boolean;
+};
+
+export type PreconditionSchedule = {
+  name: string | null;
+  days: string[];
+  time: number | null;
+  one_time: boolean;
+  enabled: boolean;
+};
+
+export type SoftwareUpdate = {
+  status: "available" | "downloading" | "waiting_for_wifi" | "scheduled" | "installing" | string;
+  version: string | null;
+  download_pct: number | null;
+  install_pct: number | null;
+  scheduled_at: number | null;
+  minutes: number | null;
+};
+
+/** A car's details beyond its charge (app.features.tesla.details), group by group. */
+export type EvDetailGroups = {
+  status: DetailGroup<{ locked: boolean | null; open: string[]; user_present: boolean | null; gear: string | null }>;
+  charging: DetailGroup<{
+    pilot_amps: number | null;
+    cable: string | null;
+    latch: string | null;
+    minutes_to_limit: number | null;
+    usable_soc: number | null;
+    energy_added: number | null;
+    battery_heater: boolean | null;
+    low_power_mode: boolean | null;
+  }>;
+  schedule: DetailGroup<{
+    mode: "off" | "start_at" | "depart_by" | string;
+    start_minutes: number | null;
+    departure_minutes: number | null;
+    preconditioning: boolean | null;
+    /** null: not read (only the charge reading's scheduled charging is known). */
+    charge_schedules: ChargeSchedule[] | null;
+    precondition_schedules: PreconditionSchedule[] | null;
+  }>;
+  climate: DetailGroup<{
+    inside_c: number | null;
+    outside_c: number | null;
+    climate_on: boolean | null;
+    preconditioning: boolean | null;
+    keeper: "On" | "Dog" | "Camp" | null;
+    cabin_overheat: "on" | "fan_only" | "off" | null;
+    battery_heater: boolean | null;
+    defrost: boolean | null;
+  }>;
+  security: DetailGroup<{
+    sentry: string | null;
+    sentry_available: boolean | null;
+    valet: boolean | null;
+    windows_open: string[];
+  }>;
+  tyres: DetailGroup<{
+    fl: number | null;
+    fr: number | null;
+    rl: number | null;
+    rr: number | null;
+    warnings: string[];
+  }>;
+  driving: DetailGroup<{
+    odometer_km: number | null;
+    gear: string | null;
+    speed_kmh: number | null;
+    power_kw: number | null;
+  }>;
+  software: DetailGroup<{ version: string | null; update: SoftwareUpdate | null }>;
+  media: DetailGroup<{
+    playing: boolean;
+    title: string | null;
+    artist: string | null;
+    source: string | null;
+    volume: number | null;
+  }>;
+};
+
+export type EvDetails = {
+  vin: string;
+  provider: TeslaProvider | null;
+  seen_at: number | null;
+  asleep: boolean | null;
+  in_range: boolean | null;
+  /** The car's asleep: refreshing its details now would wake it (the page asks first). */
+  refresh_wakes: boolean;
+  /** Over Bluetooth: seconds between reads of its details while it's awake. */
+  every: number | null;
+  groups: Partial<EvDetailGroups>;
+  /** What's using power while it's parked (plugged in, from the house). */
+  parked_draw: string[];
+  /** Why the car may start charging by itself (a schedule set in it); null when nothing will. */
+  overrides_solar: string | null;
+};
+
+/** One session of a car's in and out: time away, or a charge at home. */
+export type EvSession = {
+  id: number;
+  kind: "away" | "charge";
+  start: number;
+  /** null: still under way. */
+  end: number | null;
+  soc_start: number | null;
+  soc_end: number | null;
+  soc_change: number | null;
+  km: number | null;
+  /** Away: what it used (kWh, from its battery size); negative when it came back fuller. */
+  used_kwh?: number | null;
+  kwh_per_100km?: number | null;
+  /** A charge: from the house, and of it from the grid. */
+  kwh?: number;
+  grid_kwh?: number;
+  solar_share?: number | null;
+};
+
+export type EvHistory = {
+  vin: string;
+  days: number;
+  battery_kwh: number | null;
+  sessions: EvSession[];
+  totals: {
+    charged_kwh: number;
+    grid_kwh: number;
+    solar_share: number | null;
+    charges: number;
+    trips: number;
+    km: number | null;
+    kwh_per_100km: number | null;
+  };
+  home: { soc: number | null; soc_at: number | null; gone_since: number | null };
+};
+
+/** A car's level through a stretch of time, with when it was away and when it charged at home. */
+export type EvLevels = {
+  vin: string;
+  start: number;
+  end: number;
+  /** As recorded: each change of a percent, and every 15 minutes it's read; with the readings either side. */
+  points: { t: number; soc: number }[];
+  away: { start: number; end: number }[];
+  charging: { start: number; end: number }[];
+  /** Each time the dashboard woke the car, and why. */
+  wakes: { t: number; reason: "first" | "ready" | "refresh" | "command" | "solar" | string }[];
+  limit: number | null;
+};

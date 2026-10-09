@@ -23,10 +23,10 @@ function dayName(ts: number, now: number): string {
 }
 
 /** What the dashboard told the cars, and what it saw done in the car's app, newest first and grouped by day. */
-export function EvActivity({ now, className }: { now: number; className?: string }) {
+export function EvActivity({ now, vin, className }: { now: number; vin?: string; className?: string }) {
   const [shown, setShown] = useState(FIRST);
   const { data, isPending } = useQuery({ ...teslaLogQuery(shown + 1), placeholderData: keepPreviousData });
-  const events = data?.events ?? [];
+  const events = (data?.events ?? []).filter((e) => !vin || e.vin === vin);
   const more = events.length > shown;
   const days: [string, EvEvent[]][] = [];
   for (const e of events.slice(0, shown)) {

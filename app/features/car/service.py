@@ -226,6 +226,21 @@ class CarService:
         km = soc / 100 * d["car_battery_kwh"] * 1000 / d["car_wh_per_km"]
         return {"soc": round(soc, 1), "given": soc, "given_at": at, "km": round(km)}
 
+    def levels(self, car_id: int, start: int, end: int) -> list[tuple[int, float]]:
+        """The car's levels recorded in [start, end), oldest first, with the one before `start` (so a line can start
+        at the left edge) and the one after `end` (so it can reach the right)."""
+        with self.db.reading() as conn:
+            before = conn.execute(
+                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts < ? ORDER BY ts DESC LIMIT 1", (car_id, start)
+            ).fetchall()
+            within = conn.execute(
+                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts >= ? AND ts < ? ORDER BY ts", (car_id, start, end)
+            ).fetchall()
+            after = conn.execute(
+                "SELECT ts, soc FROM car_levels WHERE car = ? AND ts >= ? ORDER BY ts LIMIT 1", (car_id, end)
+            ).fetchall()
+        return [(int(ts), float(soc)) for ts, soc in [*before, *within, *after]]
+
     # ------------------------------------------------------------------ views
     def view(self, car_id: int, now: int | None = None) -> dict[str, Any]:
         """A car: its id, name and model, its details, and its level."""

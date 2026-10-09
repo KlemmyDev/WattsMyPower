@@ -5,7 +5,8 @@ import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { NAV, type SectionPages } from "~/features/common/layout/utils";
+import { NAV, type NavPage, type SectionPages } from "~/features/common/layout/utils";
+import { statusColor } from "~/features/ev/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -103,6 +104,7 @@ export const NAV_DOCKED = "(min-width: 1000px)";
 /** The pages within a section, for the navigation to list; null for a section without any (Overview, System…). */
 export function useSectionPages(section: string): SectionPages | null {
   const home = useHomeNavPages(section === "/home");
+  const ev = useLive()?.ev;
   const load = useSnapshot()?.load_power;
   const path = useRouterState({ select: (s) => s.location.pathname });
   if (section === "/home" && home.length)
@@ -112,6 +114,27 @@ export function useSectionPages(section: string): SectionPages | null {
       root: { link: { to: "/home" }, label: "Whole home", active: path === "/home" },
       pages: home,
     };
+  if (section === "/ev" && ev?.length) {
+    const charging = ev.filter((c) => c.status === "charging" && c.power_kw);
+    return {
+      title: "EV",
+      sub: charging.length
+        ? `Charging at ${kW(charging.reduce((a, c) => a + (c.power_kw ?? 0), 0) * 1000)}`
+        : "Your cars, and charging them from spare solar",
+      root: ev.length > 1 ? { link: { to: "/ev" }, label: "All cars", active: path === "/ev" } : undefined,
+      pages: ev.map((c): NavPage => ({
+        key: c.vin,
+        label: c.name ?? "Tesla",
+        icon: "car",
+        link: { to: "/ev/$vin", params: { vin: c.vin } },
+        value: c.soc != null ? `${Math.round(c.soc)}%` : "—",
+        share: c.soc != null ? c.soc / 100 : undefined,
+        color: statusColor(c.status, c.mode),
+        // With one car, the EV page is its page.
+        active: path === `/ev/${c.vin}` || (ev.length === 1 && path === "/ev"),
+      })),
+    };
+  }
   if (section === "/bills")
     return {
       title: "Bills",

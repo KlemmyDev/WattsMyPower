@@ -10,14 +10,35 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { teslaQuery } from "~/features/ev/api";
 import { EvActivity } from "~/features/ev/components/EvActivity";
 import { EvCharging } from "~/features/ev/components/EvCharging";
+import { EvDetails } from "~/features/ev/components/EvDetails";
+import { EvInOut } from "~/features/ev/components/EvInOut";
+import { EvLevelChart } from "~/features/ev/components/EvLevelChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
-import { PROVIDER_VIA } from "~/features/ev/utils";
+import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
+import { ProviderChip } from "~/features/ev/components/ProviderChip";
+
+/** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), how it charges
+ * beside what the dashboard did with it, its in and out, and everything else it says about itself. */
+function Car({ v, provider, now }: { v: EvVehicle; provider: TeslaProvider | null; now: number }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <EvPanel v={v} provider={provider} />
+      <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+        <EvCharging v={v} />
+        <EvActivity now={now} vin={v.vin} />
+      </div>
+      <EvLevelChart vin={v.vin} now={now} />
+      <EvInOut vin={v.vin} now={now} />
+      <EvDetails vin={v.vin} name={v.name ?? "The car"} />
+    </div>
+  );
+}
 
 /**
- * Each EV connected (so far Teslas, through Tessie or over Bluetooth): big and simple at the top (its charge, what it's
- * doing, the spare solar it's following), how it charges beside what the dashboard did with it.
+ * The EV page: each car connected (so far Teslas, through Tessie or over Bluetooth), or with `vin`, one of them (its
+ * own page, as the side nav lists them).
  */
-export function EvPage() {
+export function EvPage({ vin }: { vin?: string } = {}) {
   const now = useNow(30_000);
   const { data, error, isPending } = useQuery(teslaQuery);
   if (isPending)
@@ -46,27 +67,28 @@ export function EvPage() {
         </EmptyState>
       </>
     );
-  const one = data.vehicles.length === 1;
+  const cars = vin ? data.vehicles.filter((v) => v.vin === vin) : data.vehicles;
+  const sub = (
+    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+      {data.provider && <ProviderChip provider={data.provider} />}
+      {data.read_at && <span className="text-sm font-normal text-ink-muted">Read {hhmm(data.read_at)}</span>}
+    </span>
+  );
+  if (vin && cars.length === 0)
+    return (
+      <>
+        <PageHeader title="EV" sub={sub} />
+        <Notice tone="plain">That car isn't connected any more.</Notice>
+      </>
+    );
   return (
     <>
-      <PageHeader
-        title="EV"
-        sub={[data.provider && PROVIDER_VIA[data.provider], data.read_at && `read ${hhmm(data.read_at)}`]
-          .filter(Boolean)
-          .join(" · ")}
-      />
-      <div className="flex flex-col gap-5">
+      <PageHeader title={vin ? (cars[0].name ?? "EV") : "EV"} sub={sub} />
+      <div className="flex flex-col gap-10">
         {data.error && <Notice tone="bad">{data.error}</Notice>}
-        {data.vehicles.map((v) => (
-          <div key={v.vin} className="flex flex-col gap-5">
-            <EvPanel v={v} provider={data.provider} />
-            <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
-              <EvCharging v={v} />
-              {one && <EvActivity now={now} />}
-            </div>
-          </div>
+        {cars.map((v) => (
+          <Car key={v.vin} v={v} provider={data.provider} now={now} />
         ))}
-        {!one && <EvActivity now={now} />}
       </div>
     </>
   );
