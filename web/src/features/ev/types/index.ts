@@ -64,6 +64,9 @@ export type EvVehicle = {
   no_wake_until: number | null;
   /** When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of. */
   seen_at: number | null;
+  /** Over Bluetooth: the link to it is held open since its last read (plugged in at home by day), so the dashboard
+   * keeps its place among the few connections the car takes. */
+  linked: boolean;
   status: EvStatus;
   /** What it's doing, in a sentence. */
   doing: string;
@@ -127,6 +130,9 @@ export type TeslaStatus = {
     mock_vin: string | null;
   };
   error: string | null;
+  /** Why the last read failed, when it's a known kind: "busy", the car's taking no more Bluetooth connections
+   * (phones with its key near it), so reads are eased off until it does. */
+  error_kind: "busy" | null;
   read_at: number | null;
   /** When the cars are next read (after a failed read, tried again), unix seconds; null until connected. */
   next_read: number | null;
@@ -319,5 +325,10 @@ export type EvLevels = {
   charging: { start: number; end: number }[];
   /** Each time the dashboard woke the car, and why. */
   wakes: { t: number; reason: "first" | "ready" | "refresh" | "command" | "solar" | string }[];
+  /** What the car drew from the house while charging at home, each five minutes it did (average W), and of that
+   * what came from the grid. */
+  power: { t: number; w: number; grid_w: number }[];
+  /** What the dashboard did with the car, and saw done, through the stretch: oldest first. */
+  events: EvEvent[];
   limit: number | null;
 };

@@ -8,28 +8,25 @@ import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { teslaQuery } from "~/features/ev/api";
-import { EvActivity } from "~/features/ev/components/EvActivity";
 import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvDetails } from "~/features/ev/components/EvDetails";
 import { EvInOut } from "~/features/ev/components/EvInOut";
-import { EvLevelChart } from "~/features/ev/components/EvLevelChart";
+import { EvDayChart } from "~/features/ev/components/EvDayChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
 import { NextRead } from "~/features/ev/components/NextRead";
 import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { ProviderChip } from "~/features/ev/components/ProviderChip";
 import { carTitle, evTitle } from "~/features/ev/utils";
 
-/** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), how it charges
- * beside what the dashboard did with it, its in and out, and everything else it says about itself. */
+/** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), how it charges,
+ * its day (its charge, what went into it and from where, and everything the dashboard did with it, day by day), its
+ * in and out, and everything else it says about itself. */
 function Car({ v, provider, now }: { v: EvVehicle; provider: TeslaProvider | null; now: number }) {
   return (
     <div className="flex flex-col gap-5">
       <EvPanel v={v} provider={provider} />
-      <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
-        <EvCharging v={v} />
-        <EvActivity now={now} vin={v.vin} />
-      </div>
-      <EvLevelChart vin={v.vin} now={now} />
+      <EvCharging v={v} />
+      <EvDayChart v={v} now={now} />
       <EvInOut vin={v.vin} now={now} />
       <EvDetails vin={v.vin} name={v.name ?? "The car"} />
     </div>
@@ -91,11 +88,25 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     <>
       <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />
       <div className="flex flex-col gap-10">
-        {data.error && (
-          <Notice tone="bad" className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <span>{data.error}</span>
-            <NextRead status={data} className="text-inherit" />
+        {data.error && data.error_kind === "busy" ? (
+          <Notice tone="warn" className="flex flex-col gap-1.5 px-5 py-4">
+            <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <b className="font-semibold">Your car isn't taking Bluetooth connections right now</b>
+              <NextRead status={data} className="text-inherit" />
+            </span>
+            <span className="text-pretty text-ink-muted">
+              A Tesla takes about three at once, and each phone or watch with its key holds one while it's near the car.
+              The dashboard gets in once one of them is out of range; it eases off trying in the meantime. If this keeps
+              happening, remove a key you don't use (in the car, under Controls → Locks).
+            </span>
           </Notice>
+        ) : (
+          data.error && (
+            <Notice tone="bad" className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span>{data.error}</span>
+              <NextRead status={data} className="text-inherit" />
+            </Notice>
+          )
         )}
         {cars.map((v) => (
           <Car key={v.vin} v={v} provider={data.provider} now={now} />

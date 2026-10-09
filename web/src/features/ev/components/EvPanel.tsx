@@ -33,6 +33,9 @@ function readiness(v: EvVehicle, provider: TeslaProvider | null): string | null 
 function freshness(v: EvVehicle, provider: TeslaProvider | null): string {
   const s = v.state;
   const parts = [
+    // The link's held open (plugged in at home by day): the dashboard keeps its place among the few connections
+    // the car takes, and reads it without finding and connecting first.
+    v.linked && provider === "bluetooth" && s?.in_range !== false ? "Connected" : null,
     s?.in_range === false && v.seen_at
       ? `Not heard since ${hhmm(v.seen_at)}`
       : s?.asleep

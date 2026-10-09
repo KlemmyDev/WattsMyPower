@@ -6,7 +6,7 @@ import { kW } from "~/features/common/formatting/utils/number";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card, TitleBlock } from "~/features/common/ui/components/Card";
+import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
@@ -42,52 +42,32 @@ const HOME_BATTERY = COLOR.battery;
 const CAR = COLOR.lilac;
 const EXPORT = COLOR.export;
 
-function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+/** One thing about how it charges: a title with its control beside it, what it shows, and a line on what it means. */
+function Row({
+  title,
+  control,
+  about,
+  children,
+}: {
+  title: string;
+  control?: ReactNode;
+  about?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+    <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <span className="text-sm font-semibold">{title}</span>
-        {aside && <span className="text-xs text-ink-muted tabular-nums">{aside}</span>}
+        {control}
       </div>
       {children}
+      {about && <Muted>{about}</Muted>}
     </div>
   );
 }
 
-/** Manual or solar only, as two tiles: what each does, the chosen one outlined. */
-function ModeTiles({ value, onChange }: { value: EvMode; onChange: (m: EvMode) => void }) {
-  return (
-    <div role="radiogroup" aria-label="How your car charges" className="grid grid-cols-2 gap-3">
-      {MODES.map((m) => {
-        const on = m.mode === value;
-        const tint = m.mode === "solar" ? COLOR.solar : COLOR.inkMuted;
-        return (
-          <button
-            key={m.mode}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => !on && onChange(m.mode)}
-            className={cn(
-              "flex flex-col gap-2 rounded-2xl border bg-surface p-4 text-left transition-[border-color,box-shadow] duration-200",
-              on ? "border-ink shadow-[0_0_0_1px_var(--color-ink)]" : "border-line-subtle hover:border-line",
-            )}
-          >
-            <span className="flex items-center gap-2.5">
-              <span
-                className="flex size-8 flex-none items-center justify-center rounded-full"
-                style={{ color: tint, background: alpha(tint, 0.14) }}
-              >
-                <Icon name={m.icon} size={17} />
-              </span>
-              <span className="text-[15px] font-semibold">{m.title}</span>
-            </span>
-            <span className="text-[13px] leading-5 text-pretty text-ink-muted">{m.about}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
+function Dot({ color }: { color: string }) {
+  return <span className="size-2 flex-none rounded-full" style={{ background: color }} />;
 }
 
 /**
@@ -100,10 +80,7 @@ function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
   const hasBattery = useHasBattery();
   if (!p) return null;
   const solar = Math.max(0, p.pv_power ?? 0);
-  if (solar < 50)
-    return (
-      <p className="m-0 text-[13px] text-ink-muted">No sun right now. Charging picks up again once the sun's up.</p>
-    );
+  if (solar < 50) return <Muted>No sun right now. Charging picks up again once the sun's up.</Muted>;
   const home = Math.max(0, (p.load_power ?? 0) - carW);
   const battery = hasBattery ? Math.max(0, -(p.battery_power ?? 0)) : 0;
   const exported = Math.max(0, -(p.grid_power ?? 0));
@@ -136,16 +113,11 @@ function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
             />
           ))}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {parts.map((x, i) => (
-          <span key={x.key} className="flex items-center gap-1.5 text-xs text-ink-muted tabular-nums">
-            {i > 0 && (
-              <span aria-hidden className="text-ink-faint">
-                →
-              </span>
-            )}
-            <span className="size-2 rounded-full" style={{ background: x.color }} />
-            {x.label} <span className="text-ink">{kW(x.w)}</span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {parts.map((x) => (
+          <span key={x.key} className="flex items-center gap-1.5 text-[13px] text-ink-muted tabular-nums">
+            <Dot color={x.color} />
+            {x.label} <span className="font-medium text-ink">{kW(x.w)}</span>
           </span>
         ))}
       </div>
@@ -154,107 +126,78 @@ function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
 }
 
 /**
- * The car's share: a scale from nothing to the most it can draw, with each amp marked, the spare solar there is for
- * it now, where it starts (its lowest current), how far short it may run once it's going, and what it's drawing.
+ * The car's share of the sun: how much is spare for it now, on a scale up to the most it can draw, with the mark it
+ * has to reach to start (and, striped, how far short it may run once it's going), and what it's drawing.
  */
-function CarShare({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
+function CarMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   const s = v.state;
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
   if (!perAmp || v.min_amps == null || v.max_amps == null || v.min_w == null)
-    return (
-      <p className="m-0 text-[13px] text-ink-muted">
-        Link this Tesla to one of your cars (Integrations → Tesla) to see this.
-      </p>
-    );
-  const lowest = v.min_amps;
+    return <Muted>Link this Tesla to one of your cars (Integrations → Tesla) to see this.</Muted>;
   const top = v.max_amps * perAmp;
   const at = (w: number) => `${Math.max(0, Math.min(100, (w / top) * 100))}%`;
   const spare = v.spare_w != null ? Math.max(0, v.spare_w) : null;
   const draw = s?.charging ? (s.power_kw ?? 0) * 1000 : null;
   const floor = Math.max(0, v.min_w - shortBy);
-  const amps = Array.from({ length: Math.max(0, v.max_amps - lowest + 1) }, (_, i) => lowest + i);
   const caption =
-    spare == null
-      ? "Working out how much is spare…"
-      : v.solar_amps
-        ? `Enough to charge at ${v.solar_amps} A (${kW(v.solar_amps * perAmp)})`
-        : `Needs ${kW(v.min_w - spare)} more to start`;
+    draw != null
+      ? `Charging at ${kW(draw)}${s?.amps != null ? ` · ${s.amps} A` : ""}`
+      : spare == null
+        ? "Working out how much is spare…"
+        : v.solar_amps
+          ? `Enough to charge at ${v.solar_amps} A (${kW(v.solar_amps * perAmp)})`
+          : !s?.charging && v.solar_from
+            ? `Spare sun expected from ${hhmm(v.solar_from)}`
+            : `Needs ${kW(v.min_w - spare)} more to start`;
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative pt-5 pb-6">
-        <span
-          className="absolute top-0 -translate-x-1/2 text-[11px] whitespace-nowrap text-ink-muted tabular-nums"
-          style={{ left: `clamp(2.75rem, ${at(v.min_w)}, calc(100% - 2.75rem))` }}
-        >
-          Starts at {kW(v.min_w)}
-        </span>
-        <div className="relative h-3 rounded-full bg-track">
-          {/* How much it may borrow once it's going: striped, below where it starts. */}
-          {shortBy > 0 && (
-            <span
-              className="absolute inset-y-0 transition-[left,width] duration-300"
-              style={{
-                left: at(floor),
-                width: `calc(${at(v.min_w)} - ${at(floor)})`,
-                background: `repeating-linear-gradient(135deg, ${alpha(COLOR.solar, 0.5)} 0 3px, transparent 3px 6px)`,
-              }}
-            />
-          )}
-          {spare != null && (
-            <span
-              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
-              style={{ width: at(spare), background: COLOR.solar }}
-            />
-          )}
-          <span
-            className="absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full bg-ink"
-            style={{ left: at(v.min_w) }}
-          />
-          {draw != null && (
-            <span
-              className="absolute -inset-y-1 w-1.5 -translate-x-1/2 rounded-full ring-2 ring-surface"
-              style={{ left: at(draw), background: CAR }}
-            />
-          )}
-        </div>
-        {/* Each amp along the bottom; the lowest and highest named. */}
-        {amps.map((a) => (
-          <span
-            key={a}
-            aria-hidden
-            className="absolute bottom-[18px] h-1.5 w-px -translate-x-1/2 bg-ink-faint"
-            style={{ left: at(a * perAmp) }}
-          />
-        ))}
-        <span className="absolute bottom-0 left-0 text-[11px] text-ink-faint tabular-nums">0</span>
-        <span
-          className="absolute bottom-0 -translate-x-1/2 text-[11px] text-ink-faint tabular-nums"
-          style={{ left: at(v.min_w) }}
-        >
-          {lowest} A
-        </span>
-        <span className="absolute right-0 bottom-0 text-[11px] text-ink-faint tabular-nums">
-          {v.max_amps} A · {kW(top)}
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[13px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px]">
         <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full" style={{ background: COLOR.solar }} />
-          <span className="text-ink-muted">Spare for the car</span>
-          <span className="tabular-nums">{spare != null ? kW(spare) : "—"}</span>
+          <Dot color={draw != null ? CAR : COLOR.solar} />
+          <span className="text-ink-muted">{draw != null ? "Charging at" : "Spare for the car"}</span>
+          <span className="font-medium tabular-nums">{draw != null ? kW(draw) : spare != null ? kW(spare) : "—"}</span>
         </span>
         <span className="text-ink-muted tabular-nums">{caption}</span>
       </div>
-      {draw != null && (
-        <span className="flex items-center gap-1.5 text-[13px]">
-          <span className="size-2 rounded-full" style={{ background: CAR }} />
-          <span className="text-ink-muted">Charging at</span>
-          <span className="tabular-nums">
-            {kW(draw)}
-            {s?.amps != null ? ` · ${s.amps} A` : ""}
-          </span>
+      <div className="relative h-3 rounded-full bg-track">
+        {shortBy > 0 && (
+          <span
+            className="absolute inset-y-0 transition-[left,width] duration-300"
+            style={{
+              left: at(floor),
+              width: `calc(${at(v.min_w)} - ${at(floor)})`,
+              background: `repeating-linear-gradient(135deg, ${alpha(COLOR.solar, 0.5)} 0 3px, transparent 3px 6px)`,
+            }}
+          />
+        )}
+        {spare != null && (
+          <span
+            className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
+            style={{ width: at(spare), background: COLOR.solar }}
+          />
+        )}
+        <span
+          className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-full bg-ink"
+          style={{ left: at(v.min_w) }}
+        />
+        {draw != null && (
+          <span
+            className="absolute -inset-y-1 w-1.5 -translate-x-1/2 rounded-full ring-2 ring-surface transition-[left] duration-700 ease-out"
+            style={{ left: at(draw), background: CAR }}
+          />
+        )}
+      </div>
+      <div className="relative h-4 text-[11px] text-ink-faint tabular-nums">
+        <span
+          className="absolute -translate-x-1/2 whitespace-nowrap"
+          style={{ left: `clamp(3rem, ${at(v.min_w)}, calc(100% - 4.5rem))` }}
+        >
+          Starts at {kW(v.min_w)} · {v.min_amps} A
         </span>
-      )}
+        <span className="absolute right-0">
+          {v.max_amps} A · {kW(top)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -312,7 +255,7 @@ function useAmps(v: EvVehicle, command: ReturnType<typeof useEvChange>["command"
   return { amps, step, asking, confirm, cancel, waiting: target != null && !asking && !command.isPending };
 }
 
-/** How much it may borrow through a cloud (W), as a slider: shown on the scale while it moves, saved once it's let
+/** How much it may borrow through a cloud (W), as a slider: shown on the meter while it moves, saved once it's let
  * go. */
 function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
   const [moving, setMoving] = useState<number | null>(null);
@@ -341,9 +284,9 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
 }
 
 /**
- * How the car charges at home: by hand, or from solar only. With solar only, where the sun's going now, the car's
- * share of it on a scale of what it can draw, who gets the sun first, and how much it may borrow through a cloud.
- * Then starting, stopping and its speed, now.
+ * How the car charges at home: by hand, or from solar only. With solar only, where the sun's going now and the car's
+ * share of it, then the two choices (who gets the sun first; how far it may run short through a cloud), each a row
+ * with its control beside it. Then starting, stopping and its speed, now.
  */
 export function EvCharging({ v, className }: { v: EvVehicle; className?: string }) {
   const { configure, command } = useEvChange();
@@ -362,6 +305,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
   const shortBy = useShortBy(v, (w) => set({ vin: v.vin, grid_w: w }));
   const carW = s?.charging ? (s.power_kw ?? 0) * 1000 : 0;
   const ampsText = amps != null ? `${amps} A${perAmp ? ` · ${kW(amps * perAmp)}` : ""}` : "—";
+  const mode = MODES.find((m) => m.mode === c.mode) ?? MODES[0];
   const [status, tone] =
     c.mode === "off"
       ? ["Manual", COLOR.inkMuted]
@@ -391,58 +335,80 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <TitleBlock id={`h-tc-${v.vin}`} title="Charging" sub="How your car charges at home" />
         <span className="flex items-center gap-1.5 rounded-full border border-chip-line bg-chip px-2.5 py-1 text-xs font-semibold">
-          <span className="size-2 rounded-full" style={{ background: tone }} />
+          <Dot color={tone} />
           {status}
         </span>
       </div>
-      <ModeTiles value={c.mode} onChange={(mode) => set({ vin: v.vin, mode })} />
+
+      <div className="flex flex-col gap-2.5">
+        <Segmented
+          label="How your car charges"
+          options={MODES.map((m) => ({
+            value: m.mode,
+            label: (
+              <>
+                <Icon name={m.icon} size={15} /> {m.title}
+              </>
+            ),
+          }))}
+          value={c.mode}
+          onChange={(mode) => mode !== c.mode && set({ vin: v.vin, mode })}
+          buttonClassName="flex-1 justify-center"
+        />
+        <Muted>{mode.about}</Muted>
+      </div>
 
       {c.mode === "solar" && (
         <>
-          <Section title="Your solar right now">
-            <SunShare carW={carW} first={c.first} />
-          </Section>
-          <Section
-            title="Solar for the car"
-            aside={
-              !s?.charging && v.solar_from
-                ? `Spare sun expected from ${hhmm(v.solar_from)}`
-                : perAmp && v.phases
-                  ? `${v.phases === 1 ? "Single-phase" : `${v.phases}-phase`} · ${kW(perAmp)} per amp`
-                  : undefined
+          <Row
+            title="Your sun right now"
+            control={
+              perAmp && v.phases ? (
+                <span className="text-xs text-ink-muted tabular-nums">
+                  {v.phases === 1 ? "Single-phase" : `${v.phases}-phase`} · {kW(perAmp)} per amp
+                </span>
+              ) : undefined
             }
           >
-            <CarShare v={v} shortBy={shortBy.value} />
-          </Section>
-          <Section title="Who gets solar first">
-            <Segmented
-              label="Who gets solar first"
-              options={FIRST.map((f) => ({
-                value: f.value,
-                label: (
-                  <>
-                    <Icon name={f.icon} size={15} /> {f.label}
-                  </>
-                ),
-              }))}
-              value={c.first}
-              onChange={(first) => set({ vin: v.vin, first })}
-              buttonClassName="flex-1 justify-center"
-            />
-            <span className="text-[13px] leading-5 text-pretty text-ink-muted">{firstAbout}</span>
-          </Section>
-          <Section
-            title="When a cloud passes"
-            aside={shortBy.value ? `Borrows up to ${kW(shortBy.value)}` : "Stops straight away"}
+            <SunShare carW={carW} first={c.first} />
+            <CarMeter v={v} shortBy={shortBy.value} />
+          </Row>
+          <Row
+            title="Who gets the sun first"
+            about={firstAbout}
+            control={
+              <Segmented
+                label="Who gets the sun first"
+                options={FIRST.map((f) => ({
+                  value: f.value,
+                  label: (
+                    <>
+                      <Icon name={f.icon} size={14} /> {f.label}
+                    </>
+                  ),
+                }))}
+                value={c.first}
+                onChange={(first) => set({ vin: v.vin, first })}
+                buttonClassName="px-3 py-1.5 text-[13px]"
+              />
+            }
+          />
+          <Row
+            title="Through a cloud"
+            control={
+              <span className="text-sm font-medium tabular-nums">
+                {shortBy.value ? `Borrows up to ${kW(shortBy.value)}` : "Stops straight away"}
+              </span>
+            }
+            about={
+              <>
+                Once it's charging, it keeps going through a passing cloud by borrowing up to this much from the grid or
+                your home battery, rather than stopping straight away. Shown striped on the meter above.
+              </>
+            }
           >
             {shortBy.input}
-            <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-              Once it's charging, it keeps going through a passing cloud by borrowing up to this much from the grid or
-              your home battery, rather than stopping straight away.
-              {v.min_w ? ` The car needs at least ${kW(v.min_w)} to charge at all.` : ""} Shown striped on the bar
-              above.
-            </span>
-          </Section>
+          </Row>
           <EvTiming v={v} hasBattery={hasBattery} />
           {s?.at_home === false && s.in_range == null && s.plugged && (
             <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
@@ -456,19 +422,11 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
       )}
       {configure.isError && <HelpText tone="bad">{errorMessage(configure.error)}</HelpText>}
 
-      <Section title="Right now" aside={auto ? "The sun sets the speed" : undefined}>
-        <div className="flex flex-wrap items-center gap-3">
-          {s?.charging ? (
-            <Button variant="outline" disabled={busy} onClick={() => act("stop")}>
-              <Icon name="pause" size={16} /> Stop charging
-            </Button>
-          ) : (
-            <Button disabled={busy || !s?.plugged || s.charging_state === "Complete"} onClick={() => act("start")}>
-              <Icon name="bolt" size={16} /> Start charging
-            </Button>
-          )}
-          {auto ? (
-            s?.charging && <span className="text-sm text-ink-muted tabular-nums">{ampsText}</span>
+      <Row
+        title="Right now"
+        control={
+          auto ? (
+            <span className="text-xs text-ink-muted">The sun sets the speed</span>
           ) : (
             <div
               className="flex items-center gap-1 rounded-full border border-chip-line bg-canvas p-1"
@@ -495,7 +453,20 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
                 +
               </Button>
             </div>
+          )
+        }
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          {s?.charging ? (
+            <Button variant="outline" disabled={busy} onClick={() => act("stop")}>
+              <Icon name="pause" size={16} /> Stop charging
+            </Button>
+          ) : (
+            <Button disabled={busy || !s?.plugged || s.charging_state === "Complete"} onClick={() => act("start")}>
+              <Icon name="bolt" size={16} /> Start charging
+            </Button>
           )}
+          {auto && s?.charging && <span className="text-sm text-ink-muted tabular-nums">{ampsText}</span>}
         </div>
         {(asking || askAction) && (
           <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
@@ -549,7 +520,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
                   ? "Starting, stopping or changing the speed here or in the Tesla app pauses solar charging until you unplug."
                   : ""}
         </HelpText>
-      </Section>
+      </Row>
     </Card>
   );
 }

@@ -94,6 +94,9 @@ LEVEL_EVERY = 900  # record a car's level at least this often while it changes l
 LEVEL_ASLEEP = 1740
 ASLEEP = ":asleep"  # a level's source, for one logged while it slept
 BACKOFF = (60, 120, 300, 600)  # seconds before retrying after 1, 2, 3, 4+ failed commands
+# Seconds before reading again after 1, 2, 3+ reads the car wouldn't take a Bluetooth connection for (busy: all its
+# few connections taken by phones with its key): every try holds the radio for a while, and it clears on its own.
+BUSY_BACKOFF = (120, 300, 600)
 MAX_CARS = 6
 
 
@@ -157,6 +160,7 @@ class TeslaService:
         self._raw: dict[str, dict[str, Any]] = {}  # each car's last read: {last_state, in_range}
         self._samples: dict[str, deque[tuple[int, float]]] = {}
         self._error: str | None = None
+        self._busy = 0  # reads in a row the car wouldn't take a Bluetooth connection for (TeslaError.busy)
         self._read_at: float | None = None
         self._next_read = 0.0
         self._reading = False  # a read is under way (over Bluetooth, seconds)
@@ -218,10 +222,13 @@ class TeslaService:
         self._put(MEMORY_KEY, all_)
 
     def _note(self, vin: str, text: str, kind: str | None = None) -> None:
+        """What the dashboard did with a car, or saw done: logged, in the latest activity (LOG_KEY), and kept for good
+        for the car's day-by-day chart (history.events)."""
         log.info("Tesla %s: %s", vin[-6:], text)
         events = (self._kv(LOG_KEY) or [])[-(LOG_KEPT - 1) :]
         events.append({"ts": int(self.clock()), "vin": vin, "text": text, "kind": kind})
         self._put(LOG_KEY, events)
+        self.history.add_event(vin, self.clock(), text, kind)
 
     def log(self, limit: int = 50) -> list[dict[str, Any]]:
         """What the dashboard did with the cars, and what it saw the household do, newest first."""
@@ -646,6 +653,10 @@ class TeslaService:
             c = self._conn()  # as it is now: the page may have changed it meanwhile
             if not self._is_connected(c):
                 return
+            if self._busy:
+                self._busy = 0
+                for vin in c["vehicles"]:
+                    self._note(vin, "Reached over Bluetooth again")
             self._error = None
             self._read_at = self.clock()
             for row in found:
@@ -655,13 +666,23 @@ class TeslaService:
 
     def _read_failed(self, e: TeslaError) -> None:
         self._error = str(e)
-        self._next_read = self.clock() + (POLL_IDLE if e.refused else POLL_ACTIVE)
+        if e.busy:  # the car's taking no more connections: eased off, it clears once a phone's out of range
+            self._busy += 1
+            self._next_read = self.clock() + BUSY_BACKOFF[min(self._busy, len(BUSY_BACKOFF)) - 1]
+            if self._busy == 1:
+                for vin in self._conn()["vehicles"]:
+                    self._note(vin, "Couldn't connect over Bluetooth: the car's taking no more connections (phones "
+                                    "or watches with its key are near it)", "error")  # fmt: skip
+        else:
+            self._busy = 0
+            self._next_read = self.clock() + (POLL_IDLE if e.refused else POLL_ACTIVE)
         log.warning("Tesla: %s", e)
 
     def _take(self, row: dict[str, Any], c: dict[str, Any]) -> None:
         """What was read of a car (as Client.vehicles gives it): its state, level, supply, details."""
         vin = row["vin"]
-        self._raw[vin] = {"last_state": row.get("last_state") or {}, "in_range": row.get("in_range")}
+        self._raw[vin] = {"last_state": row.get("last_state") or {}, "in_range": row.get("in_range"),
+                          "linked": bool(row.get("linked"))}  # fmt: skip
         self._states[vin] = self._parse(vin, c["vehicles"][vin])
         if row.get("in_range") is not False:  # heard (or read through Tessie)
             self._seen[vin] = int(self.clock())
@@ -1165,10 +1186,11 @@ class TeslaService:
         }
 
     def car_levels(self, vin: str, start: int, end: int) -> dict[str, Any]:
-        """The car's level through [start, end), as recorded (each change of a percent, every 15 minutes it's read,
-        and every half hour while it's asleep, as it holds), with the readings either side; and when it was away and
-        when it charged at home, to shade. Between readings far apart (away), the page draws a straight line, as
-        estimated."""
+        """The car's day: its level through [start, end), as recorded (each change of a percent, every 15 minutes
+        it's read, and every half hour while it's asleep, as it holds), with the readings either side; when it was
+        away and when it charged at home, to shade; what it drew while charging at home, every five minutes, and of
+        that what came from the grid; each time the dashboard woke it; and everything the dashboard did with it or saw
+        done (the activity). Between readings far apart (away), the page draws a straight line, as estimated."""
         c = self._conn()
         if vin not in c["vehicles"]:
             raise TeslaSetupError("No such car.", 404)
@@ -1194,6 +1216,8 @@ class TeslaService:
             "away": [{"start": s["start"], "end": s["end"] or now} for s in sessions if s["kind"] == "away"],
             "charging": [{"start": s["start"], "end": s["end"] or now} for s in sessions if s["kind"] == "charge"],
             "wakes": self.history.wakes(vin, start, end),
+            "power": self.history.power(vin, start, end),
+            "events": self.history.events(vin, start, end),
             "limit": limit,
         }
 
@@ -1230,11 +1254,24 @@ class TeslaService:
             return "waiting", "Tie it to a car on the dashboard to charge from solar"
         return "waiting", "Waiting for spare solar"
 
+    def _spare_now(
+        self, vin: str, v: dict[str, Any], s: CarState | None, mem: Memory, spec: Charger | None
+    ) -> float | None:
+        """The power there's been for the car lately, as the loop works it out each turn; and when it hasn't yet (the
+        page's just been opened, or how the car charges has just changed, which starts the average afresh), from the
+        latest inverter reading now, so the page needn't wait a turn of the loop to show it."""
+        cfg = v["control"]
+        spare = self._recent_spare(vin, control.Timing.of(cfg).average)
+        plugged_at_home = s is not None and s.plugged and s.at_home and not s.fast_charger
+        if spare is None and plugged_at_home and spec is not None and cfg["mode"] == "solar":
+            spare = self._spare(vin, s, cfg, mem, spec)  # type: ignore[arg-type]
+        return spare
+
     def vehicle(self, vin: str, v: dict[str, Any]) -> dict[str, Any]:
         s = self._states.get(vin)
         mem = self._memory(vin)
         spec = self._charger(vin)
-        spare = self._recent_spare(vin, control.Timing.of(v["control"]).average)
+        spare = self._spare_now(vin, v, s, mem, spec)
         follow, chance, wake_at = self._follow(vin, v)
         status, doing = self._doing(s, v, mem, spec) if s else ("unknown", "Not read yet")
         # Not read since the dashboard started (an asleep car isn't woken for it): the level last logged, and when.
@@ -1253,6 +1290,9 @@ class TeslaService:
             "paired_at": v.get("paired_at"),
             # When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of.
             "seen_at": self._seen.get(vin),
+            # Over Bluetooth: the link to it is held open since its last read (plugged in at home by day), so the
+            # dashboard keeps its place among the few connections the car takes.
+            "linked": bool(self._raw.get(vin, {}).get("linked")),
             # Over Bluetooth, after it didn't wake: until when it isn't woken again (unix seconds).
             "no_wake_until": u if (u := self._no_wake.get(vin)) and u > self.clock() else None,
             "status": status,
@@ -1333,6 +1373,9 @@ class TeslaService:
                 "mock_vin": DEMO_VIN if self.config.mock else None,  # the made-up car to pair in mock mode
             },
             "error": self._error,
+            # Why the last read failed, when it's a known kind: "busy", the car's taking no more Bluetooth
+            # connections (phones with its key near it); reads are eased off until it does (BUSY_BACKOFF).
+            "error_kind": "busy" if self._error is not None and self._busy else None,
             "read_at": self._read_at,
             # When the cars are next read (after a failed read: tried again), unix seconds; and whether a read is
             # under way now. The loop turns every TICK seconds, so it's up to that much later.

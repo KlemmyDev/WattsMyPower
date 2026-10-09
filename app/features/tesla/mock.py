@@ -252,6 +252,7 @@ class DemoRadio:
         plugged: bool | None,
         extras: tuple[str, ...] = (),
         wake_for_extras: bool = False,
+        hold: bool | None = None,
     ) -> dict[str, Any]:
         if vin != VIN:
             return {"heard": False}
@@ -267,6 +268,7 @@ class DemoRadio:
             "charge_state": None,
             "extras": {},
             "refused": {},
+            "held": bool(hold),  # as the real radio would, while it's plugged in by day
         }
         if asleep and wake_for_extras:
             self.car.touch()
