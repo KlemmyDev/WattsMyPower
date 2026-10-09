@@ -11,7 +11,7 @@ export type Section =
   | "/plan"
   | "/battery"
   | "/bills"
-  | "/tesla"
+  | "/ev"
   | "/system"
   | "/integrations"
   | "/data";
@@ -39,7 +39,7 @@ export const NAV: NavItem[] = [
   { to: "/home", label: "Home", icon: "home", group: "Live", color: COLOR.teal },
   { to: "/battery", label: "Battery", icon: "battery", group: "Live", color: COLOR.battery },
   { to: "/grid", label: "Grid", icon: "grid", group: "Live", color: COLOR.import },
-  { to: "/tesla", label: "Tesla", icon: "car", group: "Live", color: COLOR.danger },
+  { to: "/ev", label: "EV", icon: "car", group: "Live", color: COLOR.danger },
   { to: "/history", label: "History", icon: "chart", group: "Insights", color: COLOR.lilac },
   { to: "/plan", label: "Plan", icon: "cloudSun", group: "Insights", color: COLOR.export },
   { to: "/bills", label: "Bills", icon: "dollar", group: "Insights", color: COLOR.good },

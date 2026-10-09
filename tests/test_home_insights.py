@@ -6,7 +6,7 @@ import pytest
 
 from app.core.database import Database
 from app.core.schema import ROLLUP
-from app.features.car.service import CarSpec, Charge
+from app.features.car.service import CarSpec
 from app.features.home import insights, usage
 from app.features.home.car import car_use
 from app.features.home.repository import HomeRepository
@@ -127,25 +127,18 @@ def test_the_best_time_to_run_is_the_first_covered_by_spare_solar_else_the_cheap
 
 
 class Cars:
-    """A car on a three-phase charger (6 to 16 A: 4.1 to 11 kW), with the charges planned for it."""
-
-    def __init__(self, charges: list[tuple[int, int, float]]):
-        self._charges = charges
+    """A car on a three-phase charger (6 to 16 A: 4.1 to 11 kW)."""
 
     def ids(self) -> list[int]:
         return [1]
 
     def spec(self, car_id: int) -> CarSpec:
-        return CarSpec(75, 90, 230, 3, 6, 16, True, 170)
-
-    def charges(self, start: int, end: int) -> list[Charge]:
-        return [Charge(s, e, w, False) for s, e, w in self._charges if e > start and s < end]
+        return CarSpec(75, 230, 3, 6, 16, 170)
 
 
-def test_the_cars_charging_is_found_planned_or_not(db: Database, readings: ReadingsRepository) -> None:
-    """The house draws 400 W. A planned 7.4 kW charge runs 1–3 am; one that wasn't planned, 5.5 kW from 9 pm for an
-    hour; a 2 kW kettle-and-oven block at 6 pm isn't the car; and a planned charge the car wasn't plugged in for adds
-    nothing."""
+def test_the_cars_charging_is_found(db: Database, readings: ReadingsRepository) -> None:
+    """The house draws 400 W. The car charges at 7.4 kW from 1 to 3 am and 5.5 kW from 9 pm for an hour; a 2 kW
+    kettle-and-oven block at 6 pm isn't the car."""
     repo = HomeRepository(db)
     rows = []
     for i in range(288):
@@ -154,8 +147,7 @@ def test_the_cars_charging_is_found_planned_or_not(db: Database, readings: Readi
         w = 400.0 + (7400 if 1 <= h < 3 else 5500 if 21 <= h < 22 else 2000 if 18 <= h < 18.5 else 0)
         rows.append((ts, 0.0, w))
     rollups(db, rows)
-    plan = [(DAY + 3600, DAY + 3 * 3600, 7400.0), (DAY + 13 * 3600, DAY + 14 * 3600, 7400.0)]
-    car = car_use(repo, readings, Cars(plan), DAY, DAY + 86400)  # type: ignore[arg-type]
+    car = car_use(repo, readings, Cars(), DAY, DAY + 86400)  # type: ignore[arg-type]
     kwh = sum(car.values()) * insights.KWH_PER_W_ROLLUP
     assert kwh == pytest.approx(7.4 * 2 + 5.5, abs=0.01)
     assert not any(DAY + 18 * 3600 <= ts < DAY + 19 * 3600 for ts in car)

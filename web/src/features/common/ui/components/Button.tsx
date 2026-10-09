@@ -51,7 +51,7 @@ const StyledAnchor = forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnch
 
 const CreatedButtonLink = createLink(StyledAnchor);
 
-/** A router link styled as a button: <ButtonLink to="/tesla/setup" variant="primary">. */
+/** A router link styled as a button: <ButtonLink to="/ev/setup" variant="primary">. */
 export const ButtonLink: LinkComponent<typeof StyledAnchor> = (props) => (
   <CreatedButtonLink preload="intent" {...props} />
 );

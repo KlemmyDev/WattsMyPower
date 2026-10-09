@@ -22,7 +22,7 @@ GROUPS: dict[str, tuple[str, str]] = {
     "prices": ("Electricity prices", "Amber's prices for each interval, when a tariff follows them."),
     "meter": ("Smart meter", "Interval readings from smart-meter (NEM12) files imported in Bills → Rates & settings."),
     "imports": ("Imported history", "History imported from files, and the recorded readings an import replaced."),
-    "cars": ("Electric cars", "The cars connected, their planned charges, and battery levels given."),
+    "cars": ("Electric cars", "The cars connected, and their battery levels."),
     "home": (
         "Smart home",
         "Appliances and smart plugs connected in Manage → Integrations: what each used, and each run of a washer "
@@ -157,17 +157,10 @@ DASHBOARD: dict[str, Table] = {
         "Kept until removed",
         Spec("created_at"),
     ),
-    "car_charges": Table(
-        "cars",
-        "Planned charges",
-        "Charges planned ahead, which the forecast counts as home use.",
-        "Kept until removed",
-        Spec("start", _CAR.format("car_charges")),
-    ),
     "car_levels": Table(
         "cars",
         "Battery levels",
-        "Each car's battery level as you gave it, to estimate it in between.",
+        "Each car's battery level, as read from the car.",
         "90 days",
         Spec("ts", _CAR.format("car_levels")),
         grows=True,

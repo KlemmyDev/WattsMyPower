@@ -1,0 +1,928 @@
+"""
+Tesla: connecting the cars, showing each, and charging it from spare solar (app.features.tesla.control says what to
+tell the car; this sends it). Two ways to reach the cars, with the same features through either (Manage →
+Integrations → Tesla):
+
+    tessie      the cloud: a Tessie account's access token (app.features.tesla.tessie). Every car on the account,
+                wherever it is; at home is from its location
+    bluetooth   locally, over this server's Bluetooth (app.features.tesla.bluetooth): each car paired by its VIN and
+                a tap of its key card. At home is in range; nothing leaves the house
+
+One at a time. Switching keeps each car's settings (its mode, its dashboard car, what it measured), matched by VIN.
+
+Optional: nothing here reaches a car until one is connected. Each Tesla is tied to one of the dashboard's cars
+(app.features.car), made for it when it's connected, so its details (phases, the lowest and highest current) are the
+ones charging works with; its level is recorded from the car from then on.
+
+A background loop reads the cars and, after each reading of the inverters, works out the spare power and tells each
+car in solar mode what to do. How often depends on whether a car could charge soon (control.readiness): each minute
+while one is charging, or plugged in at home in solar mode with spare solar for it now or expected from the forecast
+within half an hour (then, over Bluetooth, it's woken and kept awake so it starts and follows the sun quickly);
+otherwise every five minutes, letting it sleep, and reading again in time to wake it before spare solar is expected. Commands go out at most one at a time per car; one that fails is retried after a pause that grows.
+
+The access token and the Bluetooth key are kept in the database and never sent back to the browser: status() shows
+the token masked, and the key by a short fingerprint.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import logging
+import threading
+import time
+from collections import deque
+from collections.abc import Callable
+from typing import Any
+
+from app.core.config import Config
+from app.core.database import Database
+from app.features.car.service import CarService, NoSuchCar
+from app.features.live.service import LiveService
+from app.features.settings.store import SettingsStore
+from app.features.tesla import bluetooth, control
+from app.features.tesla.bluetooth import BluetoothClient, Radio
+from app.features.tesla.client import VIN, Client, TeslaError
+from app.features.tesla.control import CarState, Charger, Decision, Memory
+from app.features.tesla.mock import TOKEN as DEMO_TOKEN
+from app.features.tesla.mock import VIN as DEMO_VIN
+from app.features.tesla.mock import DemoRadio, DemoTesla, DemoTessie
+from app.features.tesla.tessie import TOKEN, TessieClient
+
+log = logging.getLogger(__name__)
+
+PROVIDERS = ("tessie", "bluetooth")
+CONN_KEY = "tesla"  # kv: how the cars are reached (provider, token) and each car's link and control settings (JSON)
+KEY_KEY = "tesla_key"  # kv: this server's Bluetooth key (PEM), kept across disconnecting so a car needn't re-pair
+MEMORY_KEY = "tesla_memory"  # kv: what the dashboard last did with each car (JSON)
+LOG_KEY = "tesla_log"  # kv: what it did lately (JSON list, newest last)
+LOG_KEPT = 200
+TICK = 20  # seconds between the loop's turns
+POLL_ACTIVE = 60  # seconds between reads of the cars while one is being charged from solar
+POLL_IDLE = 300  # otherwise
+AFTER_COMMAND = 25  # read the cars again this soon after a command, to see it take
+AHEAD_EVERY = 300  # seconds the forecast's spare solar is kept before it's worked out again
+SETTLE = 20  # seconds after a command before an inverter reading counts towards spare power
+STALE_READING = 240  # an inverter reading older than this isn't used for spare power
+LEVEL_EVERY = 900  # record a car's level at least this often while it changes less than a percent
+BACKOFF = (60, 120, 300, 600)  # seconds before retrying after 1, 2, 3, 4+ failed commands
+MAX_CARS = 6
+
+
+class TeslaSetupError(ValueError):
+    """A change that can't be made, in words; `status` is the HTTP status to answer with."""
+
+    def __init__(self, detail: str, status: int = 422):
+        super().__init__(detail)
+        self.status = status
+
+
+def mask(token: str) -> str:
+    return f"{token[:4]}…{token[-4:]}" if len(token) >= 16 else "••••"
+
+
+def guess_model(car_type: str | None, trim: str | None) -> str | None:
+    """The catalog model (app.features.car.catalog) closest to what Tesla calls the car: its type and trim badge."""
+    kind = {"model3": "tesla-model-3", "modely": "tesla-model-y"}.get((car_type or "").lower())
+    if not kind:
+        return None
+    t = (trim or "").lower()
+    if t.startswith("p"):
+        return f"{kind}-perf"
+    if "d" in t:  # dual motor
+        return f"{kind}-lr"
+    return f"{kind}-rwd"
+
+
+def _spawn(fn: Callable[[], None]) -> None:
+    threading.Thread(target=fn, name="tesla-pairing", daemon=True).start()
+
+
+class TeslaService:
+    def __init__(
+        self,
+        config: Config,
+        db: Database,
+        live: LiveService,
+        cars: CarService,
+        settings: SettingsStore,
+        forecast: Any = None,
+        tessie: Callable[[str], Client] | None = None,
+        radio: Radio | None = None,
+        clock: Callable[[], float] = time.time,
+        spawn: Callable[[Callable[[], None]], None] = _spawn,
+    ):
+        self.config = config
+        self.db = db
+        self.live = live
+        self.cars = cars
+        self.settings = settings
+        self.forecast = forecast  # app.features.forecast.service.ForecastService: when spare solar is expected
+        self.clock = clock
+        self._spawn = spawn
+        self._demo: DemoTesla | None = None
+        self._tessie = tessie or self._default_tessie
+        self._radio = radio
+        self._bluetooth: BluetoothClient | None = None  # kept: it holds each car's last charge reading
+        self._lock = threading.RLock()  # one change at a time: requests and the loop
+        self._states: dict[str, CarState] = {}
+        self._raw: dict[str, dict[str, Any]] = {}  # each car's last read: {last_state, in_range}
+        self._samples: dict[str, deque[tuple[int, float]]] = {}
+        self._error: str | None = None
+        self._read_at: float | None = None
+        self._next_read = 0.0
+        self._pairing: dict[str, Any] | None = None  # {vin, step (looking, tap, done, failed), error, at}
+        self._ahead: tuple[int, list[dict[str, Any]], dict[bool, list[tuple[int, int, float]]]] | None = None
+        self._task: asyncio.Task[None] | None = None
+        self._wake: asyncio.Event | None = None
+
+    def _demo_car(self) -> DemoTesla:
+        if self._demo is None:
+            self._demo = DemoTesla(self.home, self.clock)
+        return self._demo
+
+    def _default_tessie(self, token: str) -> Client:
+        if self.config.mock and token == DEMO_TOKEN:
+            return DemoTessie(self._demo_car())
+        return TessieClient(token)
+
+    @property
+    def radio(self) -> Radio:
+        if self._radio is None:
+            self._radio = DemoRadio(self._demo_car()) if self.config.mock else bluetooth.Bleak()
+        return self._radio
+
+    # -- storage ---------------------------------------------------------------------------
+    def _kv(self, key: str) -> Any:
+        with self.db.reading() as conn:
+            row = conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def _put(self, key: str, value: Any) -> None:
+        with self.db.writing() as conn:
+            if value is None:
+                conn.execute("DELETE FROM kv WHERE key = ?", (key,))
+            else:
+                conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (key, json.dumps(value)))
+
+    def _conn(self) -> dict[str, Any]:
+        c: dict[str, Any] = self._kv(CONN_KEY) or {}
+        c.setdefault("vehicles", {})
+        return c
+
+    def _memory(self, vin: str) -> Memory:
+        return Memory.load((self._kv(MEMORY_KEY) or {}).get(vin))
+
+    def _remember(self, vin: str, mem: Memory | None) -> None:
+        all_ = self._kv(MEMORY_KEY) or {}
+        if mem is None:
+            all_.pop(vin, None)
+        else:
+            all_[vin] = mem.dump()
+        self._put(MEMORY_KEY, all_)
+
+    def _note(self, vin: str, text: str, kind: str | None = None) -> None:
+        log.info("Tesla %s: %s", vin[-6:], text)
+        events = (self._kv(LOG_KEY) or [])[-(LOG_KEPT - 1) :]
+        events.append({"ts": int(self.clock()), "vin": vin, "text": text, "kind": kind})
+        self._put(LOG_KEY, events)
+
+    def log(self, limit: int = 50) -> list[dict[str, Any]]:
+        """What the dashboard did with the cars, and what it saw the household do, newest first."""
+        events: list[dict[str, Any]] = self._kv(LOG_KEY) or []
+        return list(reversed(events))[: max(1, min(limit, LOG_KEPT))]
+
+    def _key(self, make: bool = False) -> str | None:
+        """This server's Bluetooth key (PEM), made the first time it's needed."""
+        k = (self._kv(KEY_KEY) or {}).get("pem")
+        if k is None and make:
+            k = bluetooth.new_key()
+            self._put(KEY_KEY, {"pem": k, "made_at": int(self.clock())})
+        return k
+
+    @staticmethod
+    def _is_connected(c: dict[str, Any]) -> bool:
+        if c.get("provider") == "tessie":
+            return bool(c.get("token"))
+        return c.get("provider") == "bluetooth" and bool(c["vehicles"])
+
+    @property
+    def connected(self) -> bool:
+        return self._is_connected(self._conn())
+
+    def _client(self, c: dict[str, Any]) -> Client:
+        """How the cars are reached now."""
+        if c.get("provider") == "tessie":
+            return self._tessie(c["token"])
+        key = self._key()
+        if key is None:
+            raise TeslaError("There's no Bluetooth key yet. Pair the car again.", refused=True)
+        if self._bluetooth is None or self._bluetooth.key != key:
+            self._bluetooth = BluetoothClient(key, lambda: list(self._conn()["vehicles"]), self.radio, self.clock)
+        return self._bluetooth
+
+    def home(self) -> tuple[float, float]:
+        return (self.settings.get("latitude"), self.settings.get("longitude"))
+
+    # -- connecting ------------------------------------------------------------------------
+    def _switch(self, c: dict[str, Any], provider: str, vins: list[str]) -> dict[str, Any]:
+        """The connection through `provider`, keeping the cars it reaches (by VIN) and their settings; what it doesn't
+        reach is dropped, with what the dashboard remembered of it."""
+        if c.get("provider") != provider:
+            for vin in [v for v in c["vehicles"] if v not in vins]:
+                c["vehicles"].pop(vin)
+                self._remember(vin, None)
+                self._states.pop(vin, None)
+                self._raw.pop(vin, None)
+            c.pop("token", None)
+            c["provider"] = provider
+            self._error = None
+            self._bluetooth = None
+        return c
+
+    def _add(self, c: dict[str, Any], vin: str, last: dict[str, Any], name: str | None = None) -> None:
+        """A car reached for the first time (or again): kept with its settings, tied to a dashboard car."""
+        claimed = {v.get("car") for k, v in c["vehicles"].items() if k != vin}
+        v = c["vehicles"].setdefault(vin, {"control": dict(control.DEFAULTS)})
+        v["name"] = name or str(last.get("display_name") or "") or v.get("name")
+        if v.get("car") not in self.cars.ids():
+            v["car"] = self._claim(vin, last, claimed)
+
+    def connect(self, token: Any) -> dict[str, Any]:
+        """Connect through Tessie with an access token: checked by listing the account's cars, each tied to a
+        dashboard car (one is made for it if there's no unclaimed Tesla to tie it to). Raises TeslaSetupError."""
+        token = str(token or "").strip()
+        if not TOKEN.match(token):
+            raise TeslaSetupError("Paste the access token from Tessie (Settings → API → Generate Access Token).")
+        try:
+            found = self._tessie(token).vehicles()
+        except TeslaError as e:
+            raise TeslaSetupError(str(e), 400 if e.refused else 502) from e
+        if not found:
+            raise TeslaSetupError("Tessie doesn't have any cars on that account yet. Add your Tesla in Tessie first.")
+        with self._lock:
+            c = self._switch(self._conn(), "tessie", [r["vin"] for r in found])
+            c["token"] = token
+            for row in found:
+                last = row.get("last_state") or {}
+                self._raw[row["vin"]] = {"last_state": last}
+                self._add(c, row["vin"], last)
+                self._states[row["vin"]] = control.parse(row["vin"], last, self._home_of(c["vehicles"][row["vin"]]))
+            self._put(CONN_KEY, c)
+            self._read_at = self.clock()
+            self._error = None
+            self._next_read = 0
+        self.wake()
+        return self.status()
+
+    def pair(self, vin: Any) -> dict[str, Any]:
+        """Start pairing a car over Bluetooth, by its VIN: find it, and (unless it already knows this server's key)
+        ask it to add the key, which takes a tap of a key card in the car. Runs in the background: status()'s
+        `bluetooth.pairing` follows it. Raises TeslaSetupError."""
+        vin = str(vin or "").strip().upper()
+        if not VIN.match(vin):
+            raise TeslaSetupError("Enter the car's VIN: 17 letters and numbers, as on the car's screen (Controls → "
+                                  "Software) or the Tesla app.")  # fmt: skip
+        with self._lock:
+            if self._pairing and self._pairing["step"] in ("looking", "tap"):
+                raise TeslaSetupError("A car is already being paired. Wait for it to finish.", 409)
+            c = self._conn()
+            if c.get("provider") == "bluetooth" and vin not in c["vehicles"] and len(c["vehicles"]) >= MAX_CARS:
+                raise TeslaSetupError(f"Up to {MAX_CARS} cars can be paired.")
+            key = self._key(make=True)
+            assert key is not None
+            self._pairing = {"vin": vin, "step": "looking", "error": None, "at": int(self.clock())}
+        self._spawn(lambda: self._pair(vin, key))
+        return self.status()
+
+    def _pair(self, vin: str, key: str) -> None:
+        """Pairing, in the background (see pair)."""
+        try:
+            name = None
+            if not self.radio.probe(vin, key):
+                with self._lock:
+                    if self._pairing:
+                        self._pairing["step"] = "tap"
+                name = self.radio.pair(vin, key, bluetooth.PAIR_SECONDS)
+        except TeslaError as e:
+            with self._lock:
+                self._pairing = {"vin": vin, "step": "failed", "error": str(e), "at": int(self.clock())}
+            return
+        except Exception:
+            log.exception("Pairing Tesla %s failed", vin[-6:])
+            with self._lock:
+                self._pairing = {"vin": vin, "step": "failed", "error": "Pairing failed. Try again.",
+                                 "at": int(self.clock())}  # fmt: skip
+            return
+        with self._lock:
+            c = self._conn()
+            vins = [*c["vehicles"], vin] if c.get("provider") == "bluetooth" else [vin]
+            c = self._switch(c, "bluetooth", vins)
+            last = {"display_name": name, "vehicle_config": {"car_type": bluetooth.car_type(vin)}}
+            self._add(c, vin, last, name)
+            c["vehicles"][vin]["paired_at"] = int(self.clock())
+            self._put(CONN_KEY, c)
+            self._pairing = {"vin": vin, "step": "done", "error": None, "at": int(self.clock())}
+            if self._bluetooth is not None and name:
+                self._bluetooth.names[vin] = name
+            self._next_read = 0
+            self._note(vin, "Paired over Bluetooth", "mode")
+        self.wake()
+
+    def _claim(self, vin: str, last: dict[str, Any], claimed: set[Any]) -> int | None:
+        """The dashboard car for a Tesla: a Tesla not tied to another, else a new one with its model's details."""
+        for view in self.cars.views():
+            model = view.get("model") or {}
+            if view["id"] not in claimed and str(model.get("id", "")).startswith("tesla-"):
+                return int(view["id"])
+        vc = last.get("vehicle_config") or {}
+        model = guess_model(vc.get("car_type"), vc.get("trim_badging"))
+        try:
+            made = self.cars.create({"name": last.get("display_name") or "Tesla", "model": model})
+        except ValueError as e:  # six cars already
+            log.warning("Tesla %s: no car to tie it to: %s", vin[-6:], e)
+            return None
+        return int(made["id"])
+
+    def remove(self, vin: str) -> dict[str, Any]:
+        """Stop following a car (a Tesla on the Tessie account stays left out until it's connected again). Its
+        dashboard car and levels stay."""
+        with self._lock:
+            c = self._conn()
+            if c["vehicles"].pop(vin, None) is None:
+                raise TeslaSetupError("No such car.", 404)
+            self._remember(vin, None)
+            self._states.pop(vin, None)
+            self._raw.pop(vin, None)
+            self._samples.pop(vin, None)
+            self._put(CONN_KEY, c)
+        self.wake()
+        return self.status()
+
+    def disconnect(self) -> dict[str, Any]:
+        """Forget the token, the cars' links and what the dashboard did. The cars themselves stay, and so does the
+        Bluetooth key, so a car that still has it pairs again without a tap."""
+        with self._lock:
+            self._put(CONN_KEY, None)
+            self._put(MEMORY_KEY, None)
+            self._put(LOG_KEY, None)
+            self._states.clear()
+            self._raw.clear()
+            self._samples.clear()
+            self._bluetooth = None
+            self._error = None
+            self._read_at = None
+            if self._pairing and self._pairing["step"] not in ("looking", "tap"):
+                self._pairing = None
+        self.wake()
+        return self.status()
+
+    def configure(self, vin: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Change a car's mode, whether the home battery fills first, how far short it may run, which dashboard car
+        it is, or its home ({"home": "here"}: where it is now; null: the system's location). Raises TeslaSetupError."""
+        with self._lock:
+            c = self._conn()
+            v = c["vehicles"].get(vin)
+            if v is None:
+                raise TeslaSetupError("No such car.", 404)
+            try:
+                v["control"] = control.clean(body, v.get("control"))
+            except ValueError as e:
+                raise TeslaSetupError(str(e)) from e
+            if "car" in body:
+                if body["car"] not in self.cars.ids():
+                    raise TeslaSetupError("Choose one of the cars on the dashboard.")
+                if any(o.get("car") == body["car"] for k, o in c["vehicles"].items() if k != vin):
+                    raise TeslaSetupError("That car is already tied to another Tesla.")
+                v["car"] = body["car"]
+            if "home" in body:
+                if body["home"] == "here":
+                    state = self._states.get(vin)
+                    if state is None or state.location is None:
+                        raise TeslaSetupError("The car's location isn't known yet.")
+                    v["home"] = list(state.location)
+                elif body["home"] is None:
+                    v.pop("home", None)
+                else:
+                    raise TeslaSetupError('Give "here" for where the car is now, or null for the system\'s location.')
+            before = (self._conn()["vehicles"].get(vin) or {}).get("control", {}).get("mode")
+            self._put(CONN_KEY, c)
+            if before != v["control"]["mode"]:
+                words = {"off": "Charging control off", "solar": "Charging from spare solar"}
+                self._note(vin, words[v["control"]["mode"]], "mode")
+            self._refresh(vin)
+            self._samples.pop(vin, None)  # spare power worked out the old way
+            self._next_read = min(self._next_read, self.clock() + 1)
+        self.wake()
+        return self.status()
+
+    # -- commands from the EV page -----------------------------------------------------------
+    def command(self, vin: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Start or stop charging now, set the current or the charge limit, or let the dashboard take charge again
+        ("resume"). Starting, stopping or setting the current puts the car on hold until it's unplugged (or resumed),
+        so the dashboard doesn't undo it. Raises TeslaSetupError, in words."""
+        action = body.get("action")
+        with self._lock:
+            c = self._conn()
+            if vin not in c["vehicles"] or not self._is_connected(c):
+                raise TeslaSetupError("No such car.", 404)
+            mem = self._memory(vin)
+            now = int(self.clock())
+            if action == "resume":
+                mem.hold = mem.hold_at = None
+                mem.command = None
+                mem.enough_since = mem.short_since = None
+                self._remember(vin, mem)
+                self._note(vin, "The dashboard is in charge of charging again", "mode")
+                return self.status()
+            spec = self._charger(vin)
+            params: dict[str, Any]
+            if action == "start":
+                name, params, hold, text = "start_charging", {}, "Charging now, started here", "Started charging"
+            elif action == "stop":
+                name, params, hold, text = "stop_charging", {}, "Stopped here", "Stopped charging"
+            elif action == "amps":
+                amps = body.get("amps")
+                hi = spec.max_amps if spec else 32
+                if isinstance(amps, bool) or not isinstance(amps, int) or not 1 <= amps <= hi:
+                    raise TeslaSetupError(f"Give the current as whole amps, 1 to {hi}.")
+                name, params, hold, text = (
+                    "set_charging_amps",
+                    {"amps": amps},
+                    f"Set to {amps} A here",
+                    f"Set to {amps} A",
+                )
+            elif action == "limit":
+                pct = body.get("percent")
+                if isinstance(pct, bool) or not isinstance(pct, int) or not 50 <= pct <= 100:
+                    raise TeslaSetupError("Give the charge limit as a whole percentage, 50 to 100.")
+                name, params, hold, text = "set_charge_limit", {"percent": pct}, None, f"Charge limit set to {pct}%"
+            else:
+                raise TeslaSetupError("Unknown command.")
+            try:
+                ok = self._client(c).command(vin, name, **params)
+            except TeslaError as e:
+                raise TeslaSetupError(str(e), 502) from e
+            if not ok:
+                raise TeslaSetupError(
+                    "The car didn't take the command. It may be out of reach; try again shortly.", 502
+                )
+            if hold and c["vehicles"][vin]["control"]["mode"] != "off":
+                mem.hold, mem.hold_at = hold, now
+                text += ": on hold from spare solar until it's unplugged"
+            if name == "set_charging_amps":
+                mem.amps, mem.amps_at = params["amps"], now
+            self._samples.pop(vin, None)
+            self._remember(vin, mem)
+            self._note(vin, text, "manual")
+            self._next_read = min(self._next_read, self.clock() + AFTER_COMMAND)
+        self.wake()
+        return self.status()
+
+    # -- what's known of each car ---------------------------------------------------------------
+    def _home_of(self, v: dict[str, Any]) -> tuple[float, float]:
+        h = v.get("home")
+        return (float(h[0]), float(h[1])) if h else self.home()
+
+    def _charger(self, vin: str) -> Charger | None:
+        car = self._conn()["vehicles"].get(vin, {}).get("car")
+        if car is None:
+            return None
+        try:
+            d = self.cars.details(car)
+        except NoSuchCar:
+            return None
+        # What the car last measured charging at home wins over the car's details.
+        m = self._conn()["vehicles"].get(vin, {}).get("measured") or {}
+        return Charger(
+            phases=int(m.get("phases") or d["car_phases"]),
+            volts=float(m.get("volts") or d["car_voltage"]),
+            min_amps=int(min(d["car_min_amps"], d["car_amps"])),
+            max_amps=int(d["car_amps"]),
+        )
+
+    def _parse(self, vin: str, v: dict[str, Any]) -> CarState:
+        raw = self._raw[vin]
+        last = raw["last_state"]
+        if not last.get("display_name") and v.get("name"):
+            last = {**last, "display_name": v["name"]}
+        return control.parse(vin, last, self._home_of(v), raw.get("in_range"))
+
+    def _refresh(self, vin: str) -> None:
+        """Re-read a car's state from its last raw state (after its home changed)."""
+        v = self._conn()["vehicles"].get(vin)
+        if v is not None and vin in self._raw:
+            self._states[vin] = self._parse(vin, v)
+
+    def read(self) -> None:
+        """Read every car. Blocking."""
+        c = self._conn()
+        if not self._is_connected(c):
+            return
+        want = {vin: self._follow(vin, v)[0] for vin, v in c["vehicles"].items()}
+        try:
+            found = self._client(c).vehicles(want)
+        except TeslaError as e:
+            self._error = str(e)
+            self._next_read = self.clock() + (POLL_IDLE if e.refused else POLL_ACTIVE)
+            log.warning("Tesla: %s", e)
+            return
+        self._error = None
+        self._read_at = self.clock()
+        for row in found:
+            vin = row["vin"]
+            if vin not in c["vehicles"]:
+                continue
+            self._raw[vin] = {"last_state": row.get("last_state") or {}, "in_range": row.get("in_range")}
+            self._states[vin] = self._parse(vin, c["vehicles"][vin])
+            self._level(vin, c["vehicles"][vin].get("car"))
+            self._measure(vin, c)
+        self._next_read = self.clock() + self._poll_after(c)
+
+    # -- how closely each car is followed ----------------------------------------------------------
+    def _spare_ahead(self, battery_first: bool) -> list[tuple[int, int, float]]:
+        """The forecast's spare solar for a car, step by step (control.spare_ahead); kept for AHEAD_EVERY seconds.
+        Empty without a forecast."""
+        now = int(self.clock())
+        if self._ahead is None or now - self._ahead[0] >= AHEAD_EVERY:
+            steps: list[dict[str, Any]] | None = None
+            if self.forecast is not None:
+                try:
+                    steps = self.forecast.steps(now, days=2)
+                except Exception:  # no location or weather yet: only spare solar now makes a car ready
+                    log.debug("No forecast for the Teslas", exc_info=True)
+            self._ahead = (now, steps or [], {})
+        _, steps, made = self._ahead
+        if battery_first not in made:
+            latest = self.live.latest or {}
+            soc = latest.get("battery_soc")
+            made[battery_first] = control.spare_ahead(
+                steps,
+                battery_first=battery_first,
+                soc=soc / 100 if soc is not None else None,
+                cap=self.live.battery_kwh(),
+                reserve=self.live.reserve() / 100,
+                max_kw=self.settings.get("battery_max_kw"),
+            )
+        return made[battery_first]
+
+    def _recent_spare(self, vin: str) -> float | None:
+        """The power there's been for the car lately (W), averaged; None until known."""
+        now = int(self.clock())
+        recent = [w for ts, w in self._samples.get(vin) or () if ts > now - control.AVERAGE - 30]
+        return sum(recent) / len(recent) if recent else None
+
+    def _follow(self, vin: str, v: dict[str, Any]) -> tuple[str, int | None, int | None]:
+        """How closely to follow a car now (control.readiness); when spare solar is next expected for it; and, while
+        it's left to sleep, when it'll be made ready (woken) for that."""
+        s = self._states.get(vin)
+        cfg = v["control"]
+        spec = self._charger(vin)
+        need = spec.watts(spec.min_amps) if spec else None
+        now = int(self.clock())
+        chance = None
+        if need is not None and cfg["mode"] == "solar":
+            chance = control.next_chance(self._spare_ahead(bool(cfg["battery_first"])), now, need)
+        held = self._memory(vin).hold is not None
+        follow = control.readiness(s, cfg["mode"], held, chance, self._recent_spare(vin), need, now)
+        wake_at = None
+        if follow == "quiet" and chance is not None:
+            at = chance - control.LEAD
+            if control.readiness(s, cfg["mode"], held, chance, None, need, at) == "ready":
+                wake_at = at
+        return follow, chance, wake_at
+
+    def _poll_after(self, c: dict[str, Any]) -> float:
+        """Seconds until the cars should next be read: each minute while one is charging or ready, else every five,
+        and in time to make a car ready before spare solar is expected for it."""
+        now = self.clock()
+        after = float(POLL_IDLE)
+        for vin, v in c["vehicles"].items():
+            follow, _, wake_at = self._follow(vin, v)
+            if follow != "quiet":
+                return POLL_ACTIVE
+            if wake_at is not None:
+                after = min(after, max(1.0, wake_at - now))
+        return after
+
+    def _measure(self, vin: str, c: dict[str, Any]) -> None:
+        """Keep the phases and volts the car charges on at home, as it reports them (control.measured)."""
+        s = self._states[vin]
+        if not s.at_home:
+            return
+        phases, volts = control.measured(s)
+        v = c["vehicles"][vin]
+        old = v.get("measured") or {}
+        new = {"phases": phases or old.get("phases"), "volts": round(volts) if volts else old.get("volts")}
+        if new != {k: old.get(k) for k in new}:
+            if phases and phases != old.get("phases"):
+                self._note(vin, f"Charging on {phases} {'phase' if phases == 1 else 'phases'}"
+                                f"{f' at {round(volts)} V' if volts else ''}", "mode")  # fmt: skip
+            v["measured"] = new
+            self._put(CONN_KEY, c)
+
+    def _level(self, vin: str, car: int | None) -> None:
+        """Record the car's level for its dashboard car, as it changes (and now and then while it doesn't)."""
+        s = self._states[vin]
+        if car is None or s.soc is None:
+            return
+        ts = s.as_of or int(self.clock())
+        try:
+            last = self.cars.level(car, ts)
+        except NoSuchCar:
+            return
+        if (
+            last
+            and last.get("given_at")
+            and (ts <= last["given_at"] or (abs(last["given"] - s.soc) < 1 and ts - last["given_at"] < LEVEL_EVERY))
+        ):
+            return
+        self.cars.record_level(car, ts, s.soc, self._conn().get("provider") or "tesla")
+
+    # -- following the sun ---------------------------------------------------------------------
+    def _spare(self, vin: str, s: CarState, cfg: dict[str, Any], mem: Memory, spec: Charger) -> float | None:
+        """The power there is for the car, averaged over the last few inverter readings (control.spare_w)."""
+        reading = self.live.latest
+        now = int(self.clock())
+        samples = self._samples.setdefault(vin, deque(maxlen=20))
+        if reading and reading.get("ts") and now - int(reading["ts"]) <= STALE_READING:
+            ts = int(reading["ts"])
+            # Only readings taken once the car had settled after the last command: it ramps over a few seconds.
+            settled = ts >= max(mem.amps_at, mem.command_at) + SETTLE
+            if settled and (not samples or samples[-1][0] < ts):
+                # What the car draws: as it last said, unless the dashboard set a current since then.
+                car_w = control.car_watts(s, spec)
+                if s.charging and mem.amps is not None and (s.as_of or 0) < mem.amps_at + 30:
+                    car_w = spec.watts(mem.amps)
+                has_battery = self.live.battery_kwh() > 0
+                spare = control.spare_w(
+                    reading,
+                    car_w,
+                    battery_first=bool(cfg["battery_first"]),
+                    home_soc=reading.get("battery_soc") if has_battery else None,
+                    battery_max_w=self.settings.get("battery_max_kw") * 1000 if has_battery else 0,
+                )
+                if spare is not None:
+                    samples.append((ts, spare))
+        recent = [w for ts, w in samples if ts > now - control.AVERAGE - 30]
+        return sum(recent) / len(recent) if recent else None
+
+    def _send(self, vin: str, client: Client, d: Decision, mem: Memory, now: int) -> None:
+        if mem.failures and now - mem.failed_at < BACKOFF[min(mem.failures, len(BACKOFF)) - 1]:
+            return
+        try:
+            if d.action == "start":
+                if d.amps is not None and d.amps != self._states[vin].request_amps:
+                    client.command(vin, "set_charging_amps", amps=d.amps)
+                ok = client.command(vin, "start_charging")
+            elif d.action == "stop":
+                ok = client.command(vin, "stop_charging")
+            else:
+                ok = client.command(vin, "set_charging_amps", amps=d.amps)
+        except TeslaError as e:
+            ok, why = False, str(e)
+        else:
+            why = "the car didn't take it"
+        if not ok:
+            mem.failures, mem.failed_at = mem.failures + 1, now
+            if mem.failures == 1:
+                self._note(vin, f"Couldn't {'start' if d.action == 'start' else 'stop' if d.action == 'stop' else 'change'}"
+                                f" charging: {why}. Trying again shortly", "error")  # fmt: skip
+            return
+        mem.failures = 0
+        self._samples.pop(vin, None)  # what was spare before the change doesn't say what's spare after it
+        if d.action in ("start", "stop"):
+            mem.command, mem.command_at = d.action, now
+            mem.enough_since = mem.short_since = None
+        elif mem.command is None:
+            mem.command, mem.command_at = "start", now  # it started by itself on plugging in: it's the dashboard's now
+        if d.amps is not None:
+            mem.amps, mem.amps_at = d.amps, now
+        text = {
+            "start": f"Started charging at {d.amps} A: {d.why}",
+            "stop": f"Stopped charging: {d.why}",
+            "amps": f"{d.amps} A: {d.why}",
+        }[d.action]
+        self._note(vin, text, "solar")
+        self._next_read = min(self._next_read, self.clock() + AFTER_COMMAND)
+
+    def _steer(self, vin: str, v: dict[str, Any], client: Client) -> None:
+        """Tell one car what to do, if anything (see control)."""
+        s = self._states.get(vin)
+        if s is None:
+            return
+        now = int(self.clock())
+        mem = self._memory(vin)
+        changed = False
+        if not s.plugged and s.in_range is not False and mem != Memory():
+            if mem.hold:
+                self._note(vin, "Unplugged: the dashboard is in charge of charging again", "mode")
+            mem, changed = Memory(), True
+            self._samples.pop(vin, None)
+        cfg = v["control"]
+        spec = self._charger(vin)
+        if cfg["mode"] == "off" or spec is None or not s.plugged or not s.at_home or s.fast_charger:
+            if changed:
+                self._remember(vin, mem)
+            return
+        spare = self._spare(vin, s, cfg, mem, spec)
+        if mem.hold is None and (why := control.taken_over(s, mem, now)):
+            mem.hold, mem.hold_at = why, now
+            self._note(vin, f"{why}: on hold until it's unplugged", "manual")
+            self._remember(vin, mem)
+            return
+        if mem.hold is not None:
+            if changed:
+                self._remember(vin, mem)
+            return
+        before = mem.dump()
+        d = control.decide(cfg["mode"], s, spec, spare, cfg["grid_w"], mem, now)
+        if d is not None:
+            self._send(vin, client, d, mem, now)
+        if changed or mem.dump() != before:
+            self._remember(vin, mem)
+
+    def tick(self) -> None:
+        """One turn of the loop: read the cars when it's time, then steer each. Blocking."""
+        with self._lock:
+            c = self._conn()
+            if not self._is_connected(c):
+                return
+            if c.get("provider") == "bluetooth" and self._pairing and self._pairing["step"] in ("looking", "tap"):
+                return  # the radio is busy pairing, for a couple of minutes at most
+            if self.clock() >= self._next_read:
+                self.read()
+                c = self._conn()
+            if self._error is not None and not self._states:
+                return
+            try:
+                client = self._client(c)
+            except TeslaError:
+                return
+            for vin, v in c["vehicles"].items():
+                try:
+                    self._steer(vin, v, client)
+                except Exception:
+                    log.exception("Steering Tesla %s failed", vin[-6:])
+            # Spare solar sooner than forecast makes a car ready now, rather than at its next quiet read.
+            self._next_read = min(self._next_read, self.clock() + self._poll_after(c))
+
+    # -- views -----------------------------------------------------------------------------------
+    def _doing(self, s: CarState, v: dict[str, Any], mem: Memory, spec: Charger | None) -> tuple[str, str]:
+        """What the car is doing, as a short state and a sentence."""
+        mode = v["control"]["mode"]
+        amps = s.request_amps
+        if s.in_range is False:
+            return "away", "Not heard over Bluetooth: away from home, or out of the server's range"
+        if not s.plugged:
+            return "unplugged", "Not plugged in"
+        if s.fast_charger:
+            return "away", "Fast charging away from home"
+        if s.at_home is False:
+            return (
+                "charging" if s.charging else "away"
+            ), "Charging away from home" if s.charging else "Plugged in away from home"
+        if s.full and not s.charging:
+            return "complete", f"Charged to its limit ({s.limit:.0f}%)" if s.limit is not None else "Charged"
+        if mode != "off" and s.at_home is None:
+            return ("charging" if s.charging else "waiting"), "The car's location isn't known, so it's left alone"
+        if mem.hold and mode != "off":
+            return ("charging" if s.charging else "hold"), f"{mem.hold}: on hold until it's unplugged"
+        if s.charging:
+            if mode == "off":
+                return "charging", f"Charging at {amps} A" if amps else "Charging"
+            return "charging", f"Charging at {amps} A from spare solar"
+        if mode == "off":
+            return "stopped", "Plugged in, not charging"
+        if spec is None:
+            return "waiting", "Tie it to a car on the dashboard to charge from solar"
+        return "waiting", "Waiting for spare solar"
+
+    def vehicle(self, vin: str, v: dict[str, Any]) -> dict[str, Any]:
+        s = self._states.get(vin)
+        mem = self._memory(vin)
+        spec = self._charger(vin)
+        spare = self._recent_spare(vin)
+        follow, chance, wake_at = self._follow(vin, v)
+        status, doing = self._doing(s, v, mem, spec) if s else ("unknown", "Not read yet")
+        return {
+            "vin": vin,
+            "name": v.get("name") or (s.name if s else None),
+            "car": v.get("car"),
+            "control": v["control"],
+            "home": v.get("home"),
+            "paired_at": v.get("paired_at"),
+            "status": status,
+            "doing": doing,
+            "hold": mem.hold if v["control"]["mode"] != "off" else None,
+            "spare_w": round(spare) if spare is not None else None,
+            # How closely it's followed (control.readiness): active, ready (read each minute, kept awake over
+            # Bluetooth) or quiet (left to sleep); when spare solar is next expected for it; and, while it's left
+            # to sleep, when it'll be made ready for that.
+            "follow": follow,
+            "solar_from": chance,
+            "wake_at": wake_at,
+            "min_w": round(spec.watts(spec.min_amps)) if spec else None,
+            "max_amps": min(spec.max_amps, s.max_amps or spec.max_amps)
+            if spec and s
+            else spec.max_amps
+            if spec
+            else None,
+            "min_amps": spec.min_amps if spec else None,
+            "phases": spec.phases if spec else None,
+            "volts": spec.volts if spec else None,
+            # The current spare solar alone would charge at (0: not enough for its lowest), as it's followed.
+            "solar_amps": None
+            if spec is None or spare is None
+            else (lambda a: a if a >= spec.min_amps else 0)(min(spec.amps_for(spare), spec.max_amps)),
+            "state": None
+            if s is None
+            else {
+                "as_of": s.as_of,
+                "asleep": s.asleep,
+                "charging_state": s.charging_state,
+                "plugged": s.plugged,
+                "charging": s.charging,
+                "soc": s.soc,
+                "limit": s.limit,
+                "range_km": s.range_km,
+                "amps": s.request_amps,
+                "actual_amps": s.actual_amps,
+                "power_kw": round(control.car_watts(s, spec) / 1000, 2) if spec else s.power_kw,
+                "energy_added": s.energy_added,
+                "minutes_to_full": s.minutes_to_full,
+                "at_home": s.at_home,
+                "in_range": s.in_range,
+            },
+        }
+
+    def status(self) -> dict[str, Any]:
+        """How the cars are reached and each car, as the EV page shows them. The token and key never leave in
+        full."""
+        c = self._conn()
+        token = c.get("token")
+        key = self._key()
+        connected = self._is_connected(c)
+        return {
+            "provider": c.get("provider") if connected else None,
+            "connected": connected,
+            "token": mask(token) if token else None,
+            "bluetooth": {
+                "key": bluetooth.fingerprint(key) if key else None,
+                "pairing": self._pairing,
+                "mock_vin": DEMO_VIN if self.config.mock else None,  # the made-up car to pair in mock mode
+            },
+            "error": self._error,
+            "read_at": self._read_at,
+            "home": list(self.home()),
+            "vehicles": [self.vehicle(vin, v) for vin, v in c["vehicles"].items()] if connected else [],
+        }
+
+    def summary(self) -> list[dict[str, Any]] | None:
+        """Each car in brief, for every page (the live status's `ev`); None when not connected."""
+        c = self._conn()
+        if not self._is_connected(c):
+            return None
+        out = []
+        for vin, v in c["vehicles"].items():
+            full = self.vehicle(vin, v)
+            st = full["state"] or {}
+            out.append({k: full[k] for k in ("vin", "name", "car", "status", "doing")} | {
+                "mode": v["control"]["mode"], "soc": st.get("soc"), "limit": st.get("limit"),
+                "power_kw": st.get("power_kw"), "amps": st.get("amps"),
+            })  # fmt: skip
+        return out
+
+    # -- the loop --------------------------------------------------------------------------------
+    def wake(self) -> None:
+        if self._wake is not None:
+            self._wake.set()
+
+    async def publish(self) -> None:
+        summary = await asyncio.to_thread(self.summary)
+        if summary != self.live.ev:
+            self.live.ev = summary
+            self.live.publish()
+
+    async def start(self) -> None:
+        self._wake = asyncio.Event()
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+
+    async def _run(self) -> None:
+        assert self._wake is not None
+        while True:
+            try:
+                await asyncio.to_thread(self.tick)
+                await self.publish()
+            except Exception:
+                log.exception("Checking the Teslas failed")
+            self._wake.clear()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._wake.wait(), TICK)

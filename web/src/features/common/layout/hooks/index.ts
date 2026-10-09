@@ -56,12 +56,12 @@ export function usePillIndicator(
   return ind;
 }
 
-/** The sections to offer: Tesla once a car's connected (until then it's reached from Overview and Integrations), Battery
+/** The sections to offer: EV once a car's connected (until then it's reached from Overview and Integrations), Battery
  * when there is one. */
 export function useNavItems() {
-  const teslaConnected = !!useLive()?.system.tesla_connected;
+  const evConnected = !!useLive()?.system.ev_connected;
   const hasBattery = useHasBattery();
-  return NAV.filter((i) => (i.to !== "/tesla" || teslaConnected) && (i.to !== "/battery" || hasBattery));
+  return NAV.filter((i) => (i.to !== "/ev" || evConnected) && (i.to !== "/battery" || hasBattery));
 }
 
 export type LiveState = "live" | "stale" | "error";

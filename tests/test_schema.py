@@ -64,7 +64,7 @@ def test_garbled_history_is_cleaned_and_its_rollups_rebuilt(tmp_path: Path) -> N
 
 
 def test_the_one_car_in_settings_becomes_the_first_of_the_cars(tmp_path: Path) -> None:
-    """Before more than one car could be connected, the car lived in settings; its charges and levels move with it."""
+    """Before more than one car could be connected, the car lived in settings; its levels move with it."""
     path = str(tmp_path / "car.db")
     with sqlite3.connect(path) as conn:
         cars_at = next(i for i, m in enumerate(MIGRATIONS) if m.__name__ == "_cars")
@@ -91,7 +91,8 @@ def test_the_one_car_in_settings_becomes_the_first_of_the_cars(tmp_path: Path) -
         (car_id, name, model, details) = c.execute("SELECT id, name, model, details FROM cars").fetchone()
         assert (name, model) == ("The Y", "tesla-model-y-lr")
         assert json.loads(details) == {"car_phases": 3, "car_target_soc": 90, "car_days": ["wed", "fri"]}
-        assert c.execute("SELECT car FROM car_charges").fetchone() == (car_id,)
+        # Planned charges went later, with their table.
+        assert c.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'car_charges'").fetchone() == (0,)
         assert c.execute("SELECT car, ts, soc FROM car_levels").fetchone() == (car_id, 50, 40)
         # The car's settings are gone; the others stay.
         assert c.execute("SELECT key FROM settings").fetchall() == [("pv_kw",)]

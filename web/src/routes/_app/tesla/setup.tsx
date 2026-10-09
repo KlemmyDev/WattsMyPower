@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { TeslaSetupPage } from "~/features/tesla/components/TeslaSetupPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Connecting an EV was connecting a Tesla: old links land on it. */
 export const Route = createFileRoute("/_app/tesla/setup")({
-  head: () => ({ meta: [{ title: "Connect Tesla · WattsMyPower" }] }),
-  component: TeslaSetupPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/ev/setup", replace: true });
+  },
 });

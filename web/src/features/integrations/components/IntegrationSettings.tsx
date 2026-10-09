@@ -15,6 +15,8 @@ import { IntegrationLink } from "~/features/integrations/components/IntegrationL
 import { useInverters } from "~/features/integrations/hooks";
 import { gridQuery } from "~/features/grid/api";
 import type { InverterState } from "~/features/integrations/utils";
+import { teslaQuery } from "~/features/ev/api";
+import { MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -123,18 +125,14 @@ function CarLink() {
     : error || !cars
       ? ["Unavailable", errorMessage(error)]
       : !cars.length
-        ? ["Not connected", "Tell it about your EV, and Plan suggests when to charge it from spare solar"]
+        ? ["Not connected", "Tell it about your EV: how it charges, and how the Overview draws it"]
         : [
             "Connected",
             cars.length === 1
-              ? [
-                  carName(cars[0]),
-                  cars[0].level ? `${Math.round(cars[0].level.soc)}%` : null,
-                  "charge times suggested on Plan",
-                ]
+              ? [carName(cars[0]), cars[0].level ? `${Math.round(cars[0].level.soc)}%` : null]
                   .filter(Boolean)
                   .join(" · ")
-              : `${cars.map(carName).join(" and ")} · charge times suggested on Plan`,
+              : cars.map(carName).join(" and "),
           ];
   return (
     <IntegrationLink
@@ -176,6 +174,37 @@ function GridLink() {
       status={label}
       on={!!out?.network && !out.error}
       detail={<span className="line-clamp-2">{detail}</span>}
+    />
+  );
+}
+
+function TeslaLink() {
+  const { data: status, isPending, error } = useQuery(teslaQuery);
+  const [label, detail] = isPending
+    ? ["Checking", "Checking the connection…"]
+    : error || !status
+      ? ["Unavailable", errorMessage(error)]
+      : !status.connected
+        ? ["Not connected", "Over Bluetooth or through Tessie, and charge it from spare solar"]
+        : [
+            status.error ? "Not updating" : `${status.provider ? PROVIDER_LABEL[status.provider] : "Connected"}`,
+            status.vehicles
+              .map((v) =>
+                [v.name ?? "Tesla", v.state?.soc != null && `${Math.round(v.state.soc)}%`, MODE_LABEL[v.control.mode]]
+                  .filter(Boolean)
+                  .join(" · "),
+              )
+              .join(", "),
+          ];
+  return (
+    <IntegrationLink
+      card
+      to="/integrations/tesla"
+      icon={status?.provider === "bluetooth" ? "bluetooth" : "bolt"}
+      name="Tesla"
+      status={label}
+      on={!!status?.connected && !status.error}
+      detail={detail}
     />
   );
 }
@@ -249,8 +278,9 @@ export function IntegrationSettings() {
       >
         <SmartHomeLinks />
       </Group>
-      <Group id="vehicles" title="Electric vehicles" sub="Cars to plan charging for">
+      <Group id="vehicles" title="Electric vehicles" sub="Your cars, and charging them from spare solar">
         <CarLink />
+        <TeslaLink />
       </Group>
       <Group
         id="prices-weather"

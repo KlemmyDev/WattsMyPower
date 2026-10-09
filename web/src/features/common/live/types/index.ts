@@ -1,6 +1,7 @@
 /** Live status from the inverter poller (GET /api/live, /api/stream). Times are unix seconds; power is W; energy is kWh. */
 import type { Settings } from "~/features/common/settings/types";
 import type { Tariff } from "~/features/common/tariffs/types";
+import type { EvBrief } from "~/features/ev/types";
 
 export type Snapshot = {
   ts: number;
@@ -59,7 +60,7 @@ export type SystemInfo = {
   forecast: boolean;
   tariff: Tariff;
   pv2: SecondInverter | null;
-  tesla_connected?: boolean;
+  ev_connected?: boolean;
 } & Settings;
 
 /** What the battery is set to do (app.features.battery): who has it, and the control in effect from the dashboard or
@@ -97,4 +98,6 @@ export type LiveStatus = {
   /** Which version this is: the date it was released ("2026.10.8"), and how far along it is ("alpha"; null once it's
    * stable). */
   app?: { version: string; release: string | null; commit: string | null };
+  /** Each EV in brief (app.features.tesla); null when none is connected. */
+  ev?: EvBrief[] | null;
 };

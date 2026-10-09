@@ -13,7 +13,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- shared Python base
-FROM python:3.12-slim AS python
+FROM python:3.13-slim AS python
 # tzdata so SQLite's 'localtime' (daily totals) and log timestamps follow $TZ
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*

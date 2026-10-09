@@ -1,5 +1,4 @@
 import { AmberPricesCard } from "~/features/amber/components/AmberPricesCard";
-import { CarCards } from "~/features/car/components/CarCard";
 import { useAmberPrices } from "~/features/amber/hooks";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { GridOverviewCard } from "~/features/grid/components/GridOverviewCard";
@@ -30,7 +29,6 @@ export function OverviewPage() {
         <RunningNowCard />
         <TodayCard tariff={s?.tariff} now={now} />
         <TodayEnergyCard p={p} s={s} f={f} now={now} prices={prices} />
-        <CarCards now={now} />
         {prices && <AmberPricesCard prices={prices} now={now} />}
       </div>
     </>

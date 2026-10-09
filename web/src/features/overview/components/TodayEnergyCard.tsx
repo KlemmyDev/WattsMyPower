@@ -261,12 +261,7 @@ function TodayStats({
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">
         <Stat label="Solar made" {...energy(e?.pv)} color={COLOR.solar} note={by(e?.pv, rest?.pv_kwh ?? 0)} />
-        <Stat
-          label="Home use"
-          {...energy(e?.home)}
-          color={COLOR.ink}
-          note={by(e?.home, (rest?.load_kwh ?? 0) + (rest?.car_kwh ?? 0))}
-        />
+        <Stat label="Home use" {...energy(e?.home)} color={COLOR.ink} note={by(e?.home, rest?.load_kwh ?? 0)} />
         <Stat
           label="Self-sufficiency"
           value={from ? String(Math.round(from.ss * 100)) : "—"}
@@ -330,7 +325,7 @@ function forecastTotals(day: PlanDay) {
   let home = 0;
   let peak = day.hours[0];
   for (const h of day.hours) {
-    const use = hourKwh(h, h.load_kw + (h.car_kw ?? 0));
+    const use = hourKwh(h, h.load_kw);
     const direct = Math.min(h.pv_kwh, use);
     home += use;
     solar += direct;

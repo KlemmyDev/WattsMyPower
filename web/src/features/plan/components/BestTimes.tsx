@@ -34,17 +34,10 @@ export function BestTimes({ times, today }: { times: ReturnType<typeof bestTimes
       w,
       icon: "grid" as const,
       color: COLOR.bad,
-      // When it's mostly the car charge that's planned, say so: it's the one big load you chose to put there.
-      title: `${span(w)}: ${w.car >= w.kwh / 2 ? "your car charge draws from the grid" : "go easy on the grid"}`,
+      title: `${span(w)}: go easy on the grid`,
       sub:
         `About ${kWh(w.kwh)} from the grid${at(w)}. ` +
-        (w.car >= w.kwh / 2
-          ? spare.length
-            ? "Charging in the spare solar hours instead would cost less."
-            : "A cheaper rate or a sunnier day would cost less."
-          : spare.length
-            ? "Move what you can to the spare solar hours."
-            : "Run big loads earlier if you can."),
+        (spare.length ? "Move what you can to the spare solar hours." : "Run big loads earlier if you can."),
     })),
   ].sort((a, b) => a.w.start - b.w.start);
 
