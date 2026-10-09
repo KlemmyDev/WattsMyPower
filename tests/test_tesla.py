@@ -148,6 +148,42 @@ def test_it_starts_only_after_spare_power_has_lasted() -> None:
     assert d is not None and (d.action, d.amps) == ("start", 6)  # 4200 / 690 = 6 A
 
 
+def test_each_car_can_time_its_own_charging() -> None:
+    # Started after a minute rather than three, and switched again after a minute rather than five.
+    quick = control.Timing(start_after=60, min_switch=60, stop_after=60, amps_every=10)
+    mem, s = Memory(), car()
+    assert control.decide("solar", s, THREE, 4200, 300, mem, 1000, quick) is None
+    d = control.decide("solar", s, THREE, 4200, 300, mem, 1060, quick)
+    assert d is not None and d.action == "start"
+    # Charging: the current changes after ten seconds, and it's stopped a minute after it's gone short.
+    mem = Memory(command="start", command_at=0, amps=6, amps_at=1000)
+    on = car(charging_state="Charging", charge_current_request=6, charger_actual_current=6)
+    d = control.decide("solar", on, THREE, 9000, 300, mem, 1010, quick)
+    assert d is not None and (d.action, d.amps) == ("amps", 13)
+    mem.amps, mem.amps_at = 5, 1010  # at its lowest
+    assert control.decide("solar", on, THREE, 2000, 300, mem, 1100, quick) is None
+    d = control.decide("solar", on, THREE, 2000, 300, mem, 1160, quick)
+    assert d is not None and d.action == "stop"
+    # With the home battery first, it counts as full from where it's set.
+    r = {"grid_power": -2500, "battery_power": 0}
+    assert control.spare_w(r, 0, first="battery", home_soc=92, battery_max_w=5000) == -2500
+    assert control.spare_w(r, 0, first="battery", home_soc=92, battery_max_w=5000, battery_full=90) == 2500
+    # Made ready an hour ahead rather than half an hour.
+    plugged = car(charging_state="Stopped")
+    assert control.readiness(plugged, "solar", False, 1000 + 3600, None, 3450, 1000) == "quiet"
+    assert control.readiness(plugged, "solar", False, 1000 + 3600, None, 3450, 1000, lead=3600) == "ready"
+
+
+def test_timings_are_checked_and_go_back_to_their_defaults() -> None:
+    cfg = control.clean({"start_after": 60, "average": 300})
+    assert control.Timing.of(cfg) == control.Timing(start_after=60, average=300)
+    assert control.Timing.of(control.clean({"start_after": None}, cfg)) == control.Timing(average=300)
+    for key, bad in (("start_after", -1), ("start_after", 1801), ("min_switch", 30), ("battery_full", 101),
+                     ("amps_every", "60"), ("lead", True)):  # fmt: skip
+        with pytest.raises(ValueError):
+            control.clean({key: bad})
+
+
 def test_the_current_follows_whatever_is_spare() -> None:
     # On one phase at 240 V each amp is 240 W: 1.5 kW charges at 6 A, 2.6 kW at 10 A, 4.1 kW at 17 A, and so on.
     one = Charger(phases=1, volts=240, min_amps=5, max_amps=32)
@@ -689,6 +725,26 @@ def test_solar_mode_starts_follows_and_stops(svc: TeslaService, provider: str, t
     kinds = [e["kind"] for e in svc.log()]
     assert kinds[:2] == ["charge", "solar"]  # the charge, summed up once it's stopped; the stop
     assert svc.log()[0]["text"].startswith("Charged 50% → 50%: ")
+
+
+def test_a_car_waits_as_long_as_its_set_to(svc: TeslaService, provider: str, tessie: FakeTessie, live: FakeLive,
+                                          clock: Clock) -> None:  # fmt: skip
+    connect(svc, provider)
+    svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 3, "car_min_amps": 5, "car_amps": 16})
+    status = svc.configure(VIN, {"mode": "solar", "start_after": 600})
+    # The page gets each timing, as set or its default, and what each may be.
+    c = status["vehicles"][0]["control"]
+    assert (c["start_after"], c["stop_after"], c["average"]) == (600, control.STOP_AFTER, control.AVERAGE)
+    assert status["timing"]["start_after"] == {"default": 180, "min": 0, "max": 1800}
+    # Not after the usual few minutes: after ten.
+    minutes(svc, live, clock, 6, spare=5000)
+    assert tessie.commands == []
+    minutes(svc, live, clock, 6, spare=5000)
+    assert ("start_charging", {}) in tessie.commands
+    with pytest.raises(TeslaSetupError, match="30 minutes"):
+        svc.configure(VIN, {"start_after": 3600})
+    # Back to its default.
+    assert svc.configure(VIN, {"start_after": None})["vehicles"][0]["control"]["start_after"] == control.START_AFTER
 
 
 def test_starting_in_the_tesla_app_puts_it_on_hold_until_unplugged(svc: TeslaService, provider: str,

@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
 import type {
   EvCommand,
-  EvControl,
+  EvControlChange,
   EvDetails,
   EvEvent,
   EvHistory,
@@ -51,10 +51,7 @@ export const disconnectTesla = () => apiSend<TeslaStatus>("DELETE", "tesla");
 
 export const removeEv = (vin: string) => apiSend<TeslaStatus>("DELETE", `tesla/vehicles/${vin}`);
 
-export const configureEv = ({
-  vin,
-  ...body
-}: Partial<EvControl> & { vin: string; car?: number; home?: "here" | null }) =>
+export const configureEv = ({ vin, ...body }: EvControlChange & { vin: string; car?: number; home?: "here" | null }) =>
   apiSend<TeslaStatus>("PUT", `tesla/vehicles/${vin}`, body);
 
 export const commandEv = ({ vin, ...body }: EvCommand & { vin: string }) =>

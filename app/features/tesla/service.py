@@ -35,6 +35,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Any
 
 from app.core.config import Config
@@ -86,6 +87,7 @@ AFTER_COMMAND = 25  # read the cars again this soon after a command, to see it t
 AHEAD_EVERY = 300  # seconds the forecast's spare solar is kept before it's worked out again
 SETTLE = 20  # seconds after a command before an inverter reading counts towards spare power
 STALE_READING = 240  # an inverter reading older than this isn't used for spare power
+SAMPLES = 400  # inverter readings kept per car for its spare power: enough for the longest average (control.TIMING)
 LEVEL_EVERY = 900  # record a car's level at least this often while it changes less than a percent
 # While it's asleep it isn't read (that would wake it, or keep it awake), and its level holds: logged as it stands
 # about every half hour (the night's checks are POLL_NIGHT apart), marked asleep, so its chart has a point throughout.
@@ -806,10 +808,10 @@ class TeslaService:
         ahead: list[tuple[int, int, float]] = made[first]
         return ahead
 
-    def _recent_spare(self, vin: str) -> float | None:
-        """The power there's been for the car lately (W), averaged; None until known."""
+    def _recent_spare(self, vin: str, average: int) -> float | None:
+        """The power there's been for the car over the last `average` seconds (W); None until known."""
         now = int(self.clock())
-        recent = [w for ts, w in self._samples.get(vin) or () if ts > now - control.AVERAGE - 30]
+        recent = [w for ts, w in self._samples.get(vin) or () if ts > now - average - 30]
         return sum(recent) / len(recent) if recent else None
 
     def _follow(self, vin: str, v: dict[str, Any]) -> tuple[str, int | None, int | None]:
@@ -824,11 +826,13 @@ class TeslaService:
         if need is not None and cfg["mode"] == "solar":
             chance = control.next_chance(self._spare_ahead(cfg["first"]), now, need)
         held = self._memory(vin).hold is not None
-        follow = control.readiness(s, cfg["mode"], held, chance, self._recent_spare(vin), need, now)
+        timing = control.Timing.of(cfg)
+        spare = self._recent_spare(vin, timing.average)
+        follow = control.readiness(s, cfg["mode"], held, chance, spare, need, now, timing.lead)
         wake_at = None
         if follow == "quiet" and chance is not None:
-            at = chance - control.LEAD
-            if control.readiness(s, cfg["mode"], held, chance, None, need, at) == "ready":
+            at = chance - timing.lead
+            if control.readiness(s, cfg["mode"], held, chance, None, need, at, timing.lead) == "ready":
                 wake_at = at
         return follow, chance, wake_at
 
@@ -894,7 +898,8 @@ class TeslaService:
         """The power there is for the car, averaged over the last few inverter readings (control.spare_w)."""
         reading = self.live.latest
         now = int(self.clock())
-        samples = self._samples.setdefault(vin, deque(maxlen=20))
+        timing = control.Timing.of(cfg)
+        samples = self._samples.setdefault(vin, deque(maxlen=SAMPLES))
         if reading and reading.get("ts") and now - int(reading["ts"]) <= STALE_READING:
             ts = int(reading["ts"])
             # Only readings taken once the car had settled after the last command: it ramps over a few seconds.
@@ -912,10 +917,11 @@ class TeslaService:
                     home_soc=reading.get("battery_soc") if has_battery else None,
                     battery_max_w=self.settings.get("battery_max_kw") * 1000 if has_battery else 0,
                     share=self._share()[0] if cfg["first"] == "shared" else 0.0,
+                    battery_full=timing.battery_full,
                 )
                 if spare is not None:
                     samples.append((ts, spare))
-        recent = [w for ts, w in samples if ts > now - control.AVERAGE - 30]
+        recent = [w for ts, w in samples if ts > now - timing.average - 30]
         return sum(recent) / len(recent) if recent else None
 
     def _send(self, vin: str, client: Client, d: Decision, mem: Memory, now: int) -> None:
@@ -990,7 +996,7 @@ class TeslaService:
                 self._remember(vin, mem)
             return
         before = mem.dump()
-        d = control.decide(cfg["mode"], s, spec, spare, cfg["grid_w"], mem, now)
+        d = control.decide(cfg["mode"], s, spec, spare, cfg["grid_w"], mem, now, control.Timing.of(cfg))
         if d is not None:
             self._send(vin, client, d, mem, now)
         if changed or mem.dump() != before:
@@ -1228,7 +1234,7 @@ class TeslaService:
         s = self._states.get(vin)
         mem = self._memory(vin)
         spec = self._charger(vin)
-        spare = self._recent_spare(vin)
+        spare = self._recent_spare(vin, control.Timing.of(v["control"]).average)
         follow, chance, wake_at = self._follow(vin, v)
         status, doing = self._doing(s, v, mem, spec) if s else ("unknown", "Not read yet")
         # Not read since the dashboard started (an asleep car isn't woken for it): the level last logged, and when.
@@ -1241,7 +1247,8 @@ class TeslaService:
             "year": control.model_year(vin),
             "name": v.get("name") or (s.name if s else None),
             "car": v.get("car"),
-            "control": v["control"],
+            # With each timing (control.TIMING) as set, or its default.
+            "control": {**v["control"], **asdict(control.Timing.of(v["control"]))},
             "home": v.get("home"),
             "paired_at": v.get("paired_at"),
             # When it was last read (heard, over Bluetooth); its charge reading's own time is state.as_of.
@@ -1332,6 +1339,8 @@ class TeslaService:
             "next_read": max(math.ceil(self._next_read), int(self.clock())) if connected else None,
             "reading": self._reading,
             "tick": TICK,
+            # Each timing a car's solar charging can be given (control.TIMING): its default, lowest and highest.
+            "timing": {k: {"default": d, "min": lo, "max": hi} for k, (d, lo, hi, _) in control.TIMING.items()},
             "home": list(self.home()),
             "vehicles": [self.vehicle(vin, v) for vin, v in c["vehicles"].items()] if connected else [],
         }
