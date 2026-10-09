@@ -290,7 +290,7 @@ class DemoRadio:
         self._heard(vin)
         return key in self.car.keys
 
-    def pair(self, vin: str, key: str, seconds: float) -> str | None:
+    def pair(self, vin: str, key: str, seconds: float, role: str = "charging_manager") -> str | None:
         self._heard(vin)
         self.sleep(PAIR_SECONDS)  # someone gets in and taps the card
         self.car.keys.add(key)

@@ -31,7 +31,13 @@ function readiness(v: EvVehicle, provider: TeslaProvider | null): string | null 
 function freshness(v: EvVehicle, provider: TeslaProvider | null): string {
   const s = v.state;
   const parts = [
-    s?.in_range === false && v.seen_at ? `Not heard since ${hhmm(v.seen_at)}` : s?.asleep ? "Asleep" : null,
+    s?.in_range === false && v.seen_at
+      ? `Not heard since ${hhmm(v.seen_at)}`
+      : s?.asleep
+        ? v.no_wake_until
+          ? `Asleep, and didn't wake for the dashboard: left to sleep until ${hhmm(v.no_wake_until)}`
+          : "Asleep"
+        : null,
     s?.as_of ? `charge read ${hhmm(s.as_of)}` : "charge not read yet",
     v.seen_at && s?.in_range !== false && (!s?.as_of || v.seen_at - s.as_of > 90)
       ? `${provider === "bluetooth" ? "checked" : "Tessie read"} ${hhmm(v.seen_at)}`

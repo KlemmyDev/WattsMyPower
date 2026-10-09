@@ -40,7 +40,9 @@ function ConnectionRow({ status }: { status: TeslaStatus }) {
       status={status.error ? "Not updating" : "Connected"}
       detail={
         <>
-          {bt ? `This server's key ${status.bluetooth.key ?? ""}, a charging manager` : `Access token ${status.token}`}
+          {bt
+            ? `This server's key ${status.bluetooth.key ?? ""}, ${status.bluetooth.role === "driver" ? "a driver's: it can wake the car" : "charging only: it can't wake the car"}`
+            : `Access token ${status.token}`}
           {status.read_at && ` · read ${hhmm(status.read_at)}`}
           {status.error && <span className="mt-0.5 block text-xs text-bad">{status.error}</span>}
         </>
@@ -147,6 +149,7 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
 export function TeslaSettings() {
   const { data: status, isPending, error } = useQuery(teslaQuery);
   const [adding, setAdding] = useState(false);
+  const [asDriver, setAsDriver] = useState(false);
   const [switching, setSwitching] = useState(false);
   const provider = status?.connected ? status.provider : null;
 
@@ -187,6 +190,30 @@ export function TeslaSettings() {
           </>
         )}
       </SettingsCard>
+      {provider === "bluetooth" && status?.bluetooth.role === "charging_manager" && (
+        <SettingsCard padded aria-labelledby="h-tesla-wake">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <SettingsTitle
+              id="h-tesla-wake"
+              title="Let the dashboard wake the car"
+              sub="This server's key is charging only, so it can't wake the car: once it's asleep, charging from solar waits until it wakes. Pair it again as a driver, as your phone key is, and the dashboard can wake it."
+            />
+            {!asDriver && (
+              <Button variant="outline" size="sm" onClick={() => setAsDriver(true)}>
+                Pair again as a driver
+              </Button>
+            )}
+          </div>
+          {asDriver && (
+            <div className="mt-4 flex flex-col gap-3">
+              <BluetoothPair role="driver" vin={status.vehicles[0]?.vin} onPaired={() => setAsDriver(false)} />
+              <Button variant="muted-link" size="sm" className="self-start" onClick={() => setAsDriver(false)}>
+                Cancel
+              </Button>
+            </div>
+          )}
+        </SettingsCard>
+      )}
       {provider && (
         <SettingsCard padded aria-labelledby="h-tesla-switch">
           <div className="flex flex-wrap items-start justify-between gap-4">
