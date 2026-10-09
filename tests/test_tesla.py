@@ -1141,6 +1141,40 @@ def test_a_bluetooth_timeout_says_where_it_failed_and_how_strong_the_car_was_hea
     assert bluetooth.signal(None) == "unknown" and bluetooth.signal(-78) == "fair (−78 dBm)"
 
 
+def test_a_link_that_fails_is_tried_again_and_its_error_says_what_bluetooth_said() -> None:
+    from bleak.exc import BleakDBusError
+    from tesla_fleet_api.exceptions import BluetoothTransportError
+
+    tries: list[int] = []
+    pauses: list[float] = []
+
+    async def flaky() -> str:
+        tries.append(1)
+        bluetooth._TALK.get()["rssi"] = -62
+        bluetooth._step("connecting")
+        if len(tries) == 1:
+            raise BluetoothTransportError() from BleakDBusError(
+                "org.bluez.Error.Failed", ["le-connection-abort-by-local"]
+            )
+        return "read"
+
+    # Heard well, but the first link failed: tried again after a pause, and what it read stands.
+    assert bluetooth._converse(flaky, pauses.append) == "read"
+    assert len(tries) == 2 and pauses == [bluetooth.RETRY_PAUSE]
+
+    async def never() -> None:
+        bluetooth._TALK.get()["rssi"] = -62
+        bluetooth._step("connecting")
+        raise BluetoothTransportError() from BleakDBusError("org.bluez.Error.Failed", ["le-connection-abort-by-local"])
+
+    # Failing every time: the error says it was heard, that the link is what failed, and what Bluetooth said.
+    with pytest.raises(TeslaError) as e:
+        bluetooth._converse(never, pauses.append)
+    assert str(e.value) == ("The car was heard, but wouldn't take a Bluetooth connection (tried 2 times) while "
+                            "connecting. Its signal was strong (−62 dBm). (Bluetooth said: "
+                            "le-connection-abort-by-local)")  # fmt: skip
+
+
 def test_a_car_that_doesnt_wake_is_left_asleep_for_a_while(ble: TeslaService, radio: FakeRadio, live: FakeLive,
                                                            clock: Clock) -> None:  # fmt: skip
     # The key can't wake it: the dashboard's just started (its charge unknown), so it's woken to be read, and doesn't.
