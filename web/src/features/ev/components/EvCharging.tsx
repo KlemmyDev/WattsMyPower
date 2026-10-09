@@ -263,10 +263,11 @@ const AMPS_SETTLE = 700; // ms after the last tap of − or + before the current
 /**
  * The charging current by hand: each tap of − or + shows at once, and once the taps stop the last is sent to the car
  * as one command (over Bluetooth each is a conversation of its own, seconds long). A tap while one's on its way is
- * sent after it.
+ * sent after it. With the car asleep it asks first (`asking`): sending it wakes the car.
  */
 function useAmps(v: EvVehicle, command: ReturnType<typeof useEvChange>["command"]) {
   const [target, setTarget] = useState<number | null>(null);
+  const [asking, setAsking] = useState(false);
   const latest = useRef<number | null>(null);
   const sending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -293,9 +294,21 @@ function useAmps(v: EvVehicle, command: ReturnType<typeof useEvChange>["command"
     latest.current = next;
     setTarget(next);
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => !sending.current && send(next), AMPS_SETTLE);
+    timer.current = setTimeout(() => {
+      if (v.state?.asleep) setAsking(true);
+      else if (!sending.current) send(next);
+    }, AMPS_SETTLE);
   };
-  return { amps, step, waiting: target != null && !command.isPending };
+  const confirm = () => {
+    setAsking(false);
+    if (latest.current != null) send(latest.current);
+  };
+  const cancel = () => {
+    setAsking(false);
+    latest.current = null;
+    setTarget(null);
+  };
+  return { amps, step, asking, confirm, cancel, waiting: target != null && !asking && !command.isPending };
 }
 
 /** How much it may borrow through a cloud (W), as a slider: shown on the scale while it moves, saved once it's let
@@ -339,7 +352,10 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
   const busy = command.isPending;
   // While the dashboard follows the sun it sets the speed itself; by hand only when it's manual or paused.
   const auto = c.mode !== "off" && !v.hold;
-  const { amps, step, waiting } = useAmps(v, command);
+  const { amps, step, waiting, asking, confirm, cancel } = useAmps(v, command);
+  // Starting or stopping an asleep car wakes it: asked first.
+  const [askAction, setAskAction] = useState<"start" | "stop" | null>(null);
+  const act = (action: "start" | "stop") => (s?.asleep ? setAskAction(action) : command.mutate({ vin: v.vin, action }));
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
   const shortBy = useShortBy(v, (w) => set({ vin: v.vin, grid_w: w }));
   const carW = s?.charging ? (s.power_kw ?? 0) * 1000 : 0;
@@ -440,14 +456,11 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
       <Section title="Right now" aside={auto ? "The sun sets the speed" : undefined}>
         <div className="flex flex-wrap items-center gap-3">
           {s?.charging ? (
-            <Button variant="outline" disabled={busy} onClick={() => command.mutate({ vin: v.vin, action: "stop" })}>
+            <Button variant="outline" disabled={busy} onClick={() => act("stop")}>
               <Icon name="pause" size={16} /> Stop charging
             </Button>
           ) : (
-            <Button
-              disabled={busy || !s?.plugged || s.charging_state === "Complete"}
-              onClick={() => command.mutate({ vin: v.vin, action: "start" })}
-            >
+            <Button disabled={busy || !s?.plugged || s.charging_state === "Complete"} onClick={() => act("start")}>
               <Icon name="bolt" size={16} /> Start charging
             </Button>
           )}
@@ -481,6 +494,47 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
             </div>
           )}
         </div>
+        {(asking || askAction) && (
+          <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
+            <span className="min-w-0 flex-1 text-pretty">
+              <b className="font-semibold">
+                {asking
+                  ? `Set the current to ${amps} A?`
+                  : askAction === "start"
+                    ? "Start charging?"
+                    : "Stop charging?"}
+              </b>{" "}
+              {v.name ?? "The car"} is asleep, and sending this wakes it.
+            </span>
+            <span className="flex items-center gap-3">
+              <Button
+                size="sm"
+                disabled={command.isPending}
+                onClick={() => {
+                  if (asking) confirm();
+                  else if (askAction) command.mutate({ vin: v.vin, action: askAction });
+                  setAskAction(null);
+                }}
+              >
+                {asking
+                  ? `Wake and set ${amps} A`
+                  : askAction === "start"
+                    ? "Wake and start charging"
+                    : "Wake and stop"}
+              </Button>
+              <Button
+                variant="muted-link"
+                size="sm"
+                onClick={() => {
+                  cancel();
+                  setAskAction(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </span>
+          </Notice>
+        )}
         <HelpText tone={command.isError ? "bad" : undefined}>
           {waiting
             ? `Setting to ${amps} A…`

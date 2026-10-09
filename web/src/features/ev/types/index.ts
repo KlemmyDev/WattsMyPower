@@ -69,6 +69,8 @@ export type EvVehicle = {
    * mode). */
   solar_from: number | null;
   /** While it's quiet: when it'll be made ready for that spare solar. */
+  /** Over Bluetooth with the sun down (and it not charging): left to sleep, only checked every half hour. */
+  night: boolean;
   wake_at: number | null;
   /** Shared: the home battery's share (0 to 1) of the sun it could take, and what it still needs (kWh), to be full
    * by the end of the day's sun; null otherwise, or with no home battery. */

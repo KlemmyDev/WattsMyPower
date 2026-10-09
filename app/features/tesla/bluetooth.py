@@ -18,6 +18,10 @@ closely the service follows the car (app.features.tesla.control.readiness):
             so it starts and follows the sun without waiting on it to wake
     quiet   no chance of charging soon: left to sleep. Its charge is read at most every QUIET_READ seconds, and
             only while it's awake, or when its charge port has opened or closed since (plugged in or out)
+    night   quiet, with the sun down: never woken, and checked every half hour. Its charge is read only while it's
+            awake and plugged in (charging, say on a schedule: then it's followed as active), or when it's just come
+            back in range, been sent a command, or been plugged in or out; an asleep car is left be. The household
+            wakes it from the EV page if they want it read (refresh_details)
 
 Asleep, its last charge reading stands, and a closed charge port says it's unplugged. A car with no charge reading
 yet (the dashboard has just started) is woken once to be read, unless its port is closed. A command wakes the car
@@ -182,7 +186,11 @@ class BluetoothClient:
         now = self.clock()
         at, charge = self._charge.get(vin, (0.0, None))
         plugged = None if charge is None else charge.get("charging_state") not in ("", "Disconnected")
-        if want == "quiet":
+        extras: tuple[str, ...] = ()
+        if want == "night":
+            read = plugged is not False or vin in self._gone or vin in self._stale  # only read if it's awake
+            wake = False
+        elif want == "quiet":
             read = charge is None or now - at >= QUIET_READ or vin in self._gone or vin in self._stale
             wake = charge is None
             extras = self._due(vin, 0) if read else ()  # along with the hourly read, never on their own

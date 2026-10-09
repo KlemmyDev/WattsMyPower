@@ -51,6 +51,7 @@ from app.features.tesla.mock import TOKEN as DEMO_TOKEN
 from app.features.tesla.mock import VIN as DEMO_VIN
 from app.features.tesla.mock import DemoRadio, DemoTesla, DemoTessie
 from app.features.tesla.tessie import TOKEN, TessieClient
+from app.features.weather import sun
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +77,10 @@ POLL_ACTIVE = 60  # seconds between reads of the cars while one could start char
 # conversation of a few seconds on a radio others share; Tessie's own copy of the car changes no faster than this.
 POLL_CHARGING = {"bluetooth": 15, "tessie": 30}
 POLL_IDLE = 300  # otherwise
+POLL_NIGHT = (
+    1800  # over Bluetooth, with the sun down and no car charging: only checked whether it's asleep or plugged in
+)
+NIGHT_ELEVATION = 0.0  # degrees: the sun below this is night (no car is woken or read in the background)
 AFTER_COMMAND = 25  # read the cars again this soon after a command, to see it take
 AHEAD_EVERY = 300  # seconds the forecast's spare solar is kept before it's worked out again
 SETTLE = 20  # seconds after a command before an inverter reading counts towards spare power
@@ -574,6 +579,18 @@ class TeslaService:
         if v is not None and vin in self._raw:
             self._states[vin] = self._parse(vin, v)
 
+    def _night(self) -> bool:
+        """Whether the sun's down at home: over Bluetooth, no car's woken or read in the background (POLL_NIGHT)."""
+        return sun.position(self.clock(), *self.home())[0] < NIGHT_ELEVATION
+
+    def _want(self, vin: str, v: dict[str, Any], c: dict[str, Any]) -> str:
+        """How closely to follow a car now (control.readiness), as the client's read takes it: at night over
+        Bluetooth, a car that isn't charging is "night" (never woken, only checked whether it's asleep)."""
+        follow = self._follow(vin, v)[0]
+        if follow != "active" and c.get("provider") == "bluetooth" and self._night():
+            return "night"
+        return follow
+
     def read(self) -> None:
         """Read every car. Blocking: over Bluetooth, finding and talking to a car takes seconds, so that's done without
         holding the lock, and changes from the page don't wait on it."""
@@ -581,7 +598,7 @@ class TeslaService:
             c = self._conn()
             if not self._is_connected(c):
                 return
-            want = {vin: self._follow(vin, v)[0] for vin, v in c["vehicles"].items()}
+            want = {vin: self._want(vin, v, c) for vin, v in c["vehicles"].items()}
             try:
                 client = self._client(c)
             except TeslaError as e:
@@ -788,10 +805,10 @@ class TeslaService:
 
     def _poll_after(self, c: dict[str, Any]) -> float:
         """Seconds until the cars should next be read: as often as it can be while one is charging at home
-        (POLL_CHARGING), each minute while one is charging elsewhere or ready, else every five, and in time to make a
-        car ready before spare solar is expected for it."""
+        (POLL_CHARGING), each minute while one is charging elsewhere or ready, else every five (every half hour at
+        night over Bluetooth), and in time to make a car ready before spare solar is expected for it."""
         now = self.clock()
-        after = float(POLL_IDLE)
+        after = float(POLL_NIGHT if c.get("provider") == "bluetooth" and self._night() else POLL_IDLE)
         for vin, v in c["vehicles"].items():
             follow, _, wake_at = self._follow(vin, v)
             s = self._states.get(vin)
@@ -1195,6 +1212,9 @@ class TeslaService:
             # Bluetooth) or quiet (left to sleep); when spare solar is next expected for it; and, while it's left
             # to sleep, when it'll be made ready for that.
             "follow": follow,
+            # Over Bluetooth with the sun down and it not charging: never woken or read in the background, only
+            # checked every half hour whether it's asleep or plugged in (it's woken from the EV page, if asked).
+            "night": follow != "active" and self._conn().get("provider") == "bluetooth" and self._night(),
             "solar_from": chance,
             "wake_at": wake_at,
             # Shared: the home battery's share of the sun it could take, and what it still needs (kWh), to be full
