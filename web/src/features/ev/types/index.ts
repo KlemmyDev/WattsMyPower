@@ -10,7 +10,16 @@ export type EvControl = {
   first: EvFirst;
   /** How far short (W) the car may run, from the grid or the home battery, before it's stopped. */
   grid_w: number;
-};
+} & Record<EvTimingKey, number>;
+
+/** How a car's solar charging is timed (app.features.tesla.control.TIMING), each as set or its default: the waits
+ * before starting and stopping, the least time between the two, between changes of speed and the spare power's
+ * average (seconds); how early the car's made ready for the sun (seconds); when the home battery counts as full (%). */
+export type EvTimingKey =
+  "start_after" | "stop_after" | "min_switch" | "amps_every" | "average" | "lead" | "battery_full";
+
+/** A change to how a car charges: a timing given as null goes back to its default. */
+export type EvControlChange = Partial<Omit<EvControl, EvTimingKey>> & Partial<Record<EvTimingKey, number | null>>;
 
 /** What was last known of the car (through Tessie, or over Bluetooth). */
 export type EvCarState = {
@@ -125,6 +134,8 @@ export type TeslaStatus = {
   reading: boolean;
   /** Seconds between the server's checks: a read that's due starts within this. */
   tick: number;
+  /** What each timing may be: its default, lowest and highest. */
+  timing: Record<EvTimingKey, { default: number; min: number; max: number }>;
   home: [number, number];
   vehicles: EvVehicle[];
 };

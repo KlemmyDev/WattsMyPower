@@ -12,6 +12,7 @@ import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
+import { EvTiming } from "~/features/ev/components/EvTiming";
 import { useEvChange } from "~/features/ev/hooks";
 import type { EvFirst, EvMode, EvVehicle } from "~/features/ev/types";
 
@@ -346,6 +347,7 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
  */
 export function EvCharging({ v, className }: { v: EvVehicle; className?: string }) {
   const { configure, command } = useEvChange();
+  const hasBattery = useHasBattery();
   const c = v.control;
   const s = v.state;
   const set = (body: Parameters<typeof configure.mutate>[0]) => configure.mutate(body);
@@ -441,6 +443,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
               above.
             </span>
           </Section>
+          <EvTiming v={v} hasBattery={hasBattery} />
           {s?.at_home === false && s.in_range == null && s.plugged && (
             <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
               <span>The car doesn't seem to be at home, so it won't charge from solar here. Is this your home?</span>
