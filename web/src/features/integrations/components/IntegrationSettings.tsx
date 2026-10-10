@@ -301,7 +301,7 @@ function useGridEntry(): Entry {
             out?.network ? (out.error ? "Not updating" : "Following") : grid.enabled ? "Prices only" : "Not following",
             [
               out?.network
-                ? `${out.network.name} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
+                ? `${(out.networks?.length ? out.networks : [out.network]).map((n) => n.name).join(" and ")} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
                 : "No network's outages",
               grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
             ]
