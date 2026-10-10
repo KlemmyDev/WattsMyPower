@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactElement, ReactNode } from "react";
 import { amberQuery } from "~/features/amber/api";
-import { carsQuery } from "~/features/car/api";
-import { carName } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
@@ -10,6 +8,7 @@ import { useLive } from "~/features/common/live/hooks/useLive";
 import { useLocationSet } from "~/features/common/settings/hooks";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { buttonClass } from "~/features/common/ui/components/Button";
+import { Pill } from "~/features/common/ui/components/Pill";
 import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useForecast } from "~/features/common/weather/hooks";
 import { teslaQuery } from "~/features/ev/api";
@@ -32,21 +31,30 @@ const withoutBrand = (name: string, brand: string | null) =>
 
 type GroupId = "energy" | "home" | "vehicles" | "services";
 
+const GROUPS: { id: GroupId; title: string; sub: string }[] = [
+  { id: "energy", title: "Solar and battery", sub: "Inverters it reads on your network, by brand" },
+  { id: "home", title: "Smart home", sub: "Plugs, meters and appliances, for the breakdown on the Home page" },
+  { id: "vehicles", title: "Electric vehicles", sub: "Your Tesla, and charging it from spare solar" },
+  { id: "services", title: "Grid, prices and weather", sub: "Outages and prices around you, and the solar forecast" },
+];
+
 /**
- * One integration on the hub: whether it's set up (and if so, working), how it's read, its card for "Connected", and
- * its tile for "Add an integration" while it isn't.
+ * One integration on the hub: whether it's connected (and if so, working), how it's read, and how it's shown: as a
+ * card under Connected, or as a tile to connect it under Available.
  */
 type Entry = {
   id: string;
   group: GroupId;
   name: string;
   connected: boolean;
-  /** Set up, but not working: signed out, not answering, not updating. */
+  /** Connected, but not working: signed out, not answering, not updating. */
   attention: boolean;
   /** Read on the home network, over Bluetooth or from public data: not through a company's cloud. */
   local: boolean;
-  card: ReactElement;
-  tile?: ReactElement;
+  /** One of the inverter brands offered until an inverter's connected: they count as one integration. */
+  brand?: boolean;
+  /** Its card under Connected (when connected), or its tile under Available (when not). */
+  view: ReactElement;
 };
 
 const tags = (reach: Reach | Reach[], untested?: boolean) => (
@@ -61,13 +69,7 @@ const tags = (reach: Reach | Reach[], untested?: boolean) => (
 /** The inverters at a glance: whether they're all answering, else what isn't. */
 function inverterStatus(inverters: InverterState[]): { status: string; on: boolean; detail: string } {
   if (!inverters.some((i) => i.hybrid))
-    return {
-      status: "Not connected",
-      on: false,
-      detail: inverters.length
-        ? "Connect your main inverter to start recording"
-        : "Connect your inverter to start recording",
-    };
+    return { status: "No main inverter", on: false, detail: "Connect your main inverter to start recording" };
   const frozen = inverters.find((i) => i.frozen);
   const silent = inverters.filter((i) => !i.ok && i.last);
   const waiting = inverters.filter((i) => !i.last);
@@ -97,97 +99,114 @@ function brandsOf(kinds: InverterKind[]): { brand: string; verified: boolean; la
   return [...out.values()];
 }
 
+/** The inverters as one card once any is connected; until then, a tile for each brand it reads. */
 function useInverterEntries(): Entry[] {
   const { data, isPending, error, inverters } = useInverters();
-  const summary = isPending
-    ? { status: "Checking", on: false, detail: "Checking what's connected…" }
-    : error || !data?.available
-      ? { status: "Unavailable", on: false, detail: error ? errorMessage(error) : (data?.error ?? "") }
-      : inverterStatus(inverters);
-  const connected = inverters.length > 0;
-  const brands = brandsOf(data?.kinds ?? []);
-  const have = new Set(inverters.map((i) => i.device.brand));
-  const entries: Entry[] = [
-    {
-      id: "inverters",
-      group: "energy",
-      name: "Inverters",
-      // Always listed: nothing is recorded without one, so it's where to start.
-      connected: true,
-      attention: connected && !summary.on,
-      local: true,
-      card: (
-        <IntegrationLink
-          card
-          to="/integrations/inverters"
-          icon="sun"
-          name="Inverters"
-          status={summary.status}
-          on={summary.on}
-          detail={<span className="line-clamp-2">{summary.detail}</span>}
-          tags={tags("local")}
-        />
-      ),
-    },
-  ];
-  // Brands not connected yet, to add.
-  for (const b of brands.filter((b) => !have.has(b.brand))) {
-    entries.push({
-      id: `inverter-${b.brand}`,
-      group: "energy",
-      name: b.brand,
-      connected: false,
-      attention: false,
-      local: true,
-      card: <></>,
-      tile: (
-        <IntegrationLink
-          card
-          to="/integrations/inverters/connect"
-          search={{ brand: b.brand }}
-          icon="sun"
-          name={`${b.brand} inverter`}
-          detail={<span className="line-clamp-2">{b.labels.join(", ")}</span>}
-          tags={tags("local", !b.verified)}
-        />
-      ),
-    });
+  if (inverters.length) {
+    const summary = inverterStatus(inverters);
+    const attention = !summary.on && summary.status !== "Connecting";
+    return [
+      {
+        id: "inverters",
+        group: "energy",
+        name: "Inverters",
+        connected: true,
+        attention,
+        local: true,
+        view: (
+          <IntegrationLink
+            card
+            to="/integrations/inverters"
+            icon="sun"
+            name="Inverters"
+            status={summary.status}
+            on={summary.on}
+            attention={attention}
+            detail={<span className="line-clamp-2">{summary.detail}</span>}
+            tags={tags("local")}
+          />
+        ),
+      },
+    ];
   }
-  return entries;
+  if (isPending) return [];
+  if (error || !data?.available)
+    // No collector to ask (the demo, or it's down or out of date): say so where the inverters would be.
+    return [
+      {
+        id: "inverters",
+        group: "energy",
+        name: "Inverters",
+        connected: true,
+        attention: true,
+        local: true,
+        view: (
+          <IntegrationLink
+            card
+            to="/integrations/inverters"
+            icon="sun"
+            name="Inverters"
+            status="Unavailable"
+            attention
+            detail={<span className="line-clamp-2">{error ? errorMessage(error) : data?.error}</span>}
+            tags={tags("local")}
+          />
+        ),
+      },
+    ];
+  return brandsOf(data.kinds).map((b) => ({
+    id: `inverter-${b.brand}`,
+    group: "energy",
+    name: b.brand,
+    connected: false,
+    attention: false,
+    local: true,
+    brand: true,
+    view: (
+      <IntegrationLink
+        connect
+        to="/integrations/inverters/connect"
+        search={{ brand: b.brand }}
+        icon="sun"
+        name={`${b.brand} inverter`}
+        detail={<span className="line-clamp-2">{b.labels.join(", ")}</span>}
+        tags={tags("local", !b.verified)}
+      />
+    ),
+  }));
 }
 
 function useWeatherEntry(): Entry {
   const live = useLive();
   const forecast = useForecast();
   const located = useLocationSet();
+  const connected = located !== false;
   return {
     id: "weather",
     group: "services",
     name: "Weather",
-    connected: true,
-    attention: located === false || forecast === null,
+    connected,
+    attention: connected && forecast === null,
     local: true,
-    card: (
+    view: connected ? (
       <IntegrationLink
         card
         to="/integrations/weather"
         icon="cloudSun"
         name="Weather"
-        status={
-          located === false
-            ? "Needs your location"
-            : forecast
-              ? "Connected"
-              : forecast === undefined
-                ? "Checking"
-                : "Unavailable"
-        }
+        status={forecast ? "Connected" : forecast === undefined ? "Checking" : "Unavailable"}
         on={!!forecast}
-        detail={
-          located === false
-            ? "Choose where your panels are for the solar forecast, from Open-Meteo"
-            : `Forecast for ${locationLabel(live?.system)}, from Open-Meteo`
-        }
+        attention={forecast === null}
+        detail={`Forecast for ${locationLabel(live?.system)}, from Open-Meteo`}
+        tags={tags("public")}
+      />
+    ) : (
+      <IntegrationLink
+        connect
+        to="/integrations/weather"
+        icon="cloudSun"
+        name="Weather"
+        detail="The solar forecast for where your panels are, from Open-Meteo. Needs your location."
         tags={tags("public")}
       />
     ),
@@ -198,132 +217,100 @@ function useAmberEntry(): Entry {
   const { data: status, isPending, error } = useQuery(amberQuery);
   const site = status?.sites.find((s) => s.id === status.site_id);
   const length = status?.interval_length;
-  const [label, detail] = isPending
-    ? ["Checking", "Checking the connection…"]
-    : error || !status
-      ? ["Unavailable", errorMessage(error)]
-      : !status.connected
-        ? ["Not connected", "Cost your power at Amber's prices, which change every 5 or 30 minutes"]
-        : !status.site_id
-          ? ["Choose a site", "Your account has more than one site. Choose yours."]
-          : [
-              status.error ? "Not updating" : "Connected",
-              [
-                site?.network,
-                length ? `${length}-minute prices` : "Prices",
-                status.last_sync && `updated ${hhmm(status.last_sync)}`,
-              ]
-                .filter(Boolean)
-                .join(" · "),
-            ];
-  const on = !!status?.connected && !!status.site_id && !status.error;
-  const link = (
-    <IntegrationLink
-      card
-      to="/integrations/amber"
-      icon="dollar"
-      name="Amber Electric"
-      status={status?.connected ? label : undefined}
-      on={on}
-      detail={detail}
-      tags={tags("cloud")}
-    />
-  );
+  const connected = !!status?.connected;
+  const on = connected && !!status?.site_id && !status?.error;
+  const [label, detail] = !status
+    ? [isPending ? "Checking" : "Unavailable", isPending ? "Checking the connection…" : errorMessage(error)]
+    : !status.site_id
+      ? ["Choose a site", "Your account has more than one site. Choose yours."]
+      : [
+          status.error ? "Not updating" : "Connected",
+          [
+            site?.network,
+            length ? `${length}-minute prices` : "Prices",
+            status.last_sync && `updated ${hhmm(status.last_sync)}`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ];
   return {
     id: "amber",
     group: "services",
     name: "Amber Electric",
-    connected: !!status?.connected,
-    attention: !!status?.connected && !on,
+    connected,
+    attention: connected && !on,
     local: false,
-    card: link,
-    tile: link,
-  };
-}
-
-function useCarEntry(): Entry {
-  const { data: cars, isPending, error } = useQuery(carsQuery);
-  const [label, detail] = isPending
-    ? ["Checking", "Checking for cars…"]
-    : error || !cars
-      ? ["Unavailable", errorMessage(error)]
-      : !cars.length
-        ? ["Not connected", "Tell it about your EV: how it charges, and how the Overview draws it"]
-        : [
-            "Connected",
-            cars.length === 1
-              ? [carName(cars[0]), cars[0].level ? `${Math.round(cars[0].level.soc)}%` : null]
-                  .filter(Boolean)
-                  .join(" · ")
-              : cars.map(carName).join(" and "),
-          ];
-  const link = (
-    <IntegrationLink
-      card
-      to="/integrations/car"
-      icon="car"
-      name={cars && cars.length > 1 ? "Electric vehicles" : "Electric vehicle"}
-      status={cars?.length ? label : undefined}
-      on={!!cars?.length}
-      detail={detail}
-    />
-  );
-  return {
-    id: "car",
-    group: "vehicles",
-    name: "Electric vehicle",
-    connected: !!cars?.length,
-    attention: false,
-    local: true,
-    card: link,
-    tile: link,
+    view: connected ? (
+      <IntegrationLink
+        card
+        to="/integrations/amber"
+        icon="dollar"
+        name="Amber Electric"
+        status={label}
+        on={on}
+        attention={!on}
+        detail={detail}
+        tags={tags("cloud")}
+      />
+    ) : (
+      <IntegrationLink
+        connect
+        to="/integrations/amber"
+        icon="dollar"
+        name="Amber Electric"
+        detail="Cost your power at Amber's prices, which change every 5 or 30 minutes"
+        tags={tags("cloud")}
+      />
+    ),
   };
 }
 
 function useGridEntry(): Entry {
   const { data: grid, isPending, error } = useQuery(gridQuery);
   const out = grid?.outages;
-  const [label, detail] = isPending
-    ? ["Checking", "Checking…"]
-    : error || !grid
-      ? ["Unavailable", errorMessage(error)]
-      : !grid.location_set
-        ? [
-            grid.enabled ? "Prices only" : "Needs your location",
-            [
-              grid.enabled && `AEMO prices for ${grid.region_name}`,
-              "Set your location for outages and warnings near you",
-            ]
-              .filter(Boolean)
-              .join(" · "),
-          ]
-        : [
-            out?.network ? (out.error ? "Not updating" : "Following") : grid.enabled ? "Prices only" : "Not following",
-            [
-              out?.network
-                ? `${(out.networks?.length ? out.networks : [out.network]).map((n) => n.name).join(" and ")} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
-                : "No network's outages",
-              grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · "),
-          ];
+  const networks = out?.networks?.length ? out.networks : out?.network ? [out.network] : [];
+  const connected = !!grid && (grid.enabled || networks.length > 0);
+  const status = out?.error ? "Not updating" : networks.length ? "Following" : "Prices only";
+  const detail = !grid
+    ? isPending
+      ? "Checking…"
+      : errorMessage(error)
+    : [
+        networks.length
+          ? `${networks.map((n) => n.name).join(" and ")} outages within ${out?.radius_km} km${out?.street ? "" : " (no street set)"}`
+          : grid.location_set
+            ? "No network's outages"
+            : "Set your location for outages near you",
+        grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
   return {
     id: "grid",
     group: "services",
     name: "Grid",
-    connected: true,
+    connected,
     attention: !!out?.error,
     local: true,
-    card: (
+    view: connected ? (
       <IntegrationLink
         card
         to="/integrations/grid"
         icon="grid"
         name="Grid"
-        status={label}
-        on={!!out?.network && !out.error}
+        status={status}
+        on={networks.length > 0 && !out?.error}
+        attention={!!out?.error}
         detail={<span className="line-clamp-2">{detail}</span>}
+        tags={tags("public")}
+      />
+    ) : (
+      <IntegrationLink
+        connect
+        to="/integrations/grid"
+        icon="grid"
+        name="Grid"
+        detail="Outages around you from your electricity network, AEMO's wholesale prices, and weather and fire warnings"
         tags={tags("public")}
       />
     ),
@@ -331,159 +318,114 @@ function useGridEntry(): Entry {
 }
 
 function useTeslaEntry(): Entry {
-  const { data: status, isPending, error } = useQuery(teslaQuery);
-  const [label, detail] = isPending
-    ? ["Checking", "Checking the connection…"]
-    : error || !status
-      ? ["Unavailable", errorMessage(error)]
-      : !status.connected
-        ? ["Not connected", "Over Bluetooth or through Tessie, and charge it from spare solar"]
-        : [
-            status.error ? "Not updating" : `${status.provider ? PROVIDER_LABEL[status.provider] : "Connected"}`,
-            status.vehicles
-              .map((v) =>
-                [v.name ?? "Tesla", v.state?.soc != null && `${Math.round(v.state.soc)}%`, MODE_LABEL[v.control.mode]]
-                  .filter(Boolean)
-                  .join(" · "),
-              )
-              .join(", "),
-          ];
-  const reach: Reach[] = status?.connected
-    ? [status.provider === "bluetooth" ? "bluetooth" : "cloud"]
-    : ["bluetooth", "cloud"];
-  const link = (
-    <IntegrationLink
-      card
-      to="/integrations/tesla"
-      icon={status?.provider === "bluetooth" ? "bluetooth" : "bolt"}
-      name="Tesla"
-      status={status?.connected ? label : undefined}
-      on={!!status?.connected && !status.error}
-      detail={detail}
-      tags={tags(reach)}
-    />
-  );
+  const { data: status } = useQuery(teslaQuery);
+  const connected = !!status?.connected;
+  const on = connected && !status?.error;
+  const label = status?.error ? "Not updating" : status?.provider ? PROVIDER_LABEL[status.provider] : "Connected";
+  const detail = (status?.vehicles ?? [])
+    .map((v) =>
+      [v.name ?? "Tesla", v.state?.soc != null && `${Math.round(v.state.soc)}%`, MODE_LABEL[v.control.mode]]
+        .filter(Boolean)
+        .join(" · "),
+    )
+    .join(", ");
   return {
     id: "tesla",
     group: "vehicles",
     name: "Tesla",
-    connected: !!status?.connected,
-    attention: !!status?.connected && !!status.error,
+    connected,
+    attention: connected && !on,
     local: status?.provider === "bluetooth",
-    card: link,
-    tile: link,
+    view: connected ? (
+      <IntegrationLink
+        card
+        to="/integrations/tesla"
+        icon={status?.provider === "bluetooth" ? "bluetooth" : "bolt"}
+        name="Tesla"
+        status={label}
+        on={on}
+        attention={!on}
+        detail={detail || "No cars yet"}
+        tags={tags(status?.provider === "bluetooth" ? "bluetooth" : "cloud")}
+      />
+    ) : (
+      <IntegrationLink
+        connect
+        to="/integrations/tesla"
+        icon="car"
+        name="Tesla"
+        detail="Over Bluetooth or through Tessie: its level, its charging at home, and charging it from spare solar"
+        tags={tags(["bluetooth", "cloud"])}
+      />
+    ),
   };
 }
 
 /** A smart-home integration (Hisense through ConnectLife…): whether it's connected and reading, and its devices. */
 function homeEntry(i: HomeIntegration): Entry {
   const a = i.account;
+  const reach = integrationReach(i);
+  const attention = !!a && (a.signed_out || !!a.error);
   const [label, detail] = !a
-    ? ["Not connected", i.about]
+    ? ["", i.about]
     : a.signed_out
       ? ["Sign in again", a.error ?? "Its sign-in no longer works"]
       : [
           a.error ? "Not updating" : a.last_poll ? "Connected" : "Connecting",
-          [
-            a.label,
-            `${a.devices} ${a.devices === 1 ? "device" : "devices"}`,
-            a.last_poll && `read ${hhmm(a.last_poll)}`,
-          ]
+          [a.label, plural(a.devices, "device"), a.last_poll && `read ${hhmm(a.last_poll)}`]
             .filter(Boolean)
             .join(" · "),
         ];
-  const link = (
-    <IntegrationLink
-      card
-      to="/integrations/home/$integration"
-      params={{ integration: i.id }}
-      icon={integrationIcon(i)}
-      name={i.name}
-      status={a ? label : undefined}
-      on={!!a && !a.error && !!a.last_poll}
-      detail={<span className="line-clamp-2">{detail}</span>}
-      tags={tags(integrationReach(i))}
-    />
-  );
   return {
     id: `home-${i.id}`,
     group: "home",
     name: i.name,
     connected: !!a,
-    attention: !!a && (a.signed_out || !!a.error),
-    local: integrationReach(i) !== "cloud",
-    card: link,
-    tile: link,
+    attention,
+    local: reach !== "cloud",
+    view: (
+      <IntegrationLink
+        card={!!a}
+        connect={!a}
+        to="/integrations/home/$integration"
+        params={{ integration: i.id }}
+        icon={integrationIcon(i)}
+        name={i.name}
+        status={a ? label : undefined}
+        on={!!a && !a.error && !!a.last_poll && !a.signed_out}
+        attention={attention}
+        detail={<span className="line-clamp-2">{detail}</span>}
+        tags={tags(reach)}
+      />
+    ),
   };
 }
 
-const GROUPS: { id: GroupId; title: string; sub: string; add: string }[] = [
-  {
-    id: "energy",
-    title: "Solar and battery",
-    sub: "Your inverters, and the battery they run",
-    add: "Inverters it reads on your network, by brand",
-  },
-  {
-    id: "home",
-    title: "Smart home",
-    sub: "Appliances and plugs that measure what they use, for the breakdown on the Home page",
-    add: "Plugs, meters and appliances, for the breakdown on the Home page",
-  },
-  {
-    id: "vehicles",
-    title: "Electric vehicles",
-    sub: "Your cars, and charging them from spare solar",
-    add: "Your car, and charging it from spare solar",
-  },
-  {
-    id: "services",
-    title: "Grid, prices and weather",
-    sub: "Outages around you, where your prices come from, and the solar forecast",
-    add: "Where your prices come from",
-  },
-];
-
-/** A group of cards under a heading, two across where there's room. */
-function Group({ id, title, sub, children }: { id: string; title: string; sub: string; children: ReactNode }) {
-  return (
-    <section id={id} aria-labelledby={`h-${id}`} className="flex scroll-mt-28 flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <h2 id={`h-${id}`}>{title}</h2>
-        <span className="text-sm text-ink-muted">{sub}</span>
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,420px),1fr))] gap-4">{children}</div>
-    </section>
-  );
-}
-
-/** What's connected at a glance: how many, whether any need a look, the inverters, the smart home, and how much of
- * it is read on the home network rather than through a cloud. */
+/** What's connected at a glance: how many, whether any need a look, the main inverter, the smart home's devices, and
+ * how much is read on the home network rather than through a cloud. */
 function Summary({ entries, devices }: { entries: Entry[]; devices: number }) {
   const { inverters } = useInverters();
   const connected = entries.filter((e) => e.connected);
   const attention = connected.filter((e) => e.attention);
   const local = connected.filter((e) => e.local).length;
   const main = inverters.find((i) => i.hybrid);
-  const homes = entries.filter((e) => e.group === "home" && e.connected).length;
+  const homes = connected.filter((e) => e.group === "home").length;
   return (
     <SummaryCard
       icon="plug"
-      color={attention.length ? COLOR.warn : COLOR.brand}
+      color={attention.length || !main ? COLOR.warn : COLOR.brand}
       label="Your integrations"
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
           <span className="min-w-0 flex-1">
-            {attention.length
-              ? `${attention.map((e) => e.name).join(", ")} ${attention.length === 1 ? "needs" : "need"} a look.`
-              : "Everything connected is answering."}{" "}
-            <span className="text-ink-faint max-sm:hidden">
-              WattsMyPower reads devices on your own network wherever it can, and a company&apos;s cloud only where
-              there&apos;s no other way.
-            </span>
+            {!main && entries.some((e) => e.brand)
+              ? "Nothing is recorded until your main inverter is connected: it's first under Available to connect."
+              : attention.length
+                ? `${attention.map((e) => e.name).join(", ")} ${attention.length === 1 ? "needs" : "need"} a look.`
+                : "Everything connected is answering."}
           </span>
-          <a href="#add" className={buttonClass("outline", "sm")}>
-            Add an integration
+          <a href="#available" className={buttonClass("outline", "sm")}>
+            Connect another
           </a>
         </div>
       }
@@ -493,11 +435,12 @@ function Summary({ entries, devices }: { entries: Entry[]; devices: number }) {
         label="Need a look"
         value={attention.length}
         color={attention.length ? COLOR.warn : undefined}
-        sub={attention.length ? attention[0].name : "All working"}
+        sub={attention.length ? attention.map((e) => e.name).join(", ") : "All working"}
       />
       <SummaryStat
         label="Main inverter"
         value={main ? withoutBrand(main.name, main.device.brand) : "None yet"}
+        color={main ? undefined : COLOR.warn}
         sub={
           main
             ? [main.device.brand, inverters.length > 1 && "+1 more"].filter(Boolean).join(", ")
@@ -514,72 +457,109 @@ function Summary({ entries, devices }: { entries: Entry[]; devices: number }) {
   );
 }
 
+/** A top-level section of the hub: its heading with a count, a line under it, then what's in it. */
+function Section({
+  id,
+  title,
+  count,
+  sub,
+  children,
+}: {
+  id: string;
+  title: string;
+  count: number;
+  sub: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} aria-labelledby={`h-${id}`} className="flex scroll-mt-28 flex-col gap-4">
+      <div className="flex flex-col gap-0.5">
+        <h2 id={`h-${id}`} className="flex items-center gap-2.5">
+          {title}
+          <Pill tone="neutral">{count}</Pill>
+        </h2>
+        <span className="text-sm text-ink-muted">{sub}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /**
- * Manage → Integrations: a summary of what's connected, then each connected integration as a card with how it's
- * doing (opening to its own page), grouped by what it's for, then everything else that can be added.
+ * Manage → Integrations: a summary, then what's connected (each card opening to its own page, any needing a look
+ * first), then everything else that can be connected, grouped by what it's for, as tiles that say Connect.
  */
 export function IntegrationSettings() {
   const { data: home, error: homeError } = useQuery(homeQuery);
   const entries = [
     ...useInverterEntries(),
-    ...(home?.integrations ?? []).filter((i) => !i.demo || i.account).map(homeEntry),
-    useCarEntry(),
+    ...(home?.integrations ?? []).map(homeEntry),
     useTeslaEntry(),
     useGridEntry(),
     useAmberEntry(),
     useWeatherEntry(),
   ];
   const devices = (home?.integrations ?? []).reduce((n, i) => n + (i.account?.devices ?? 0), 0);
-  const listed = entries.filter((e) => e.connected);
-  const toAdd = entries.filter((e) => !e.connected && e.tile);
+  const order = (e: Entry) => GROUPS.findIndex((g) => g.id === e.group);
+  const connected = entries
+    .filter((e) => e.connected)
+    .sort((a, b) => Number(b.attention) - Number(a.attention) || order(a) - order(b));
+  const available = entries.filter((e) => !e.connected);
+  // The inverter brands on offer count as one integration (an inverter), however many brands there are.
+  const firstBrand = available.find((e) => e.brand);
+  const counted = [...entries.filter((e) => !e.brand), ...(firstBrand ? [firstBrand] : [])];
   return (
-    <div className="flex flex-col gap-8">
-      <Summary entries={entries.filter((e) => !e.id.startsWith("inverter-"))} devices={devices} />
-      {GROUPS.map((g) => {
-        const cards = listed.filter((e) => e.group === g.id);
-        return (
-          cards.length > 0 && (
-            <Group key={g.id} id={g.id} title={g.title} sub={g.sub}>
-              {cards.map((e) => (
-                <div key={e.id} className="contents">
-                  {e.card}
-                </div>
-              ))}
-            </Group>
-          )
-        );
-      })}
-      {homeError && <p className="m-0 text-sm text-bad">{errorMessage(homeError)}</p>}
-      {toAdd.length > 0 && (
-        <section id="add" aria-labelledby="h-add" className="flex scroll-mt-28 flex-col gap-5">
-          <div className="flex flex-col gap-0.5 border-t border-line-subtle pt-7">
-            <h2 id="h-add">Add an integration</h2>
-            <span className="text-sm text-ink-muted">
-              Everything else WattsMyPower can read. Each says how it&apos;s reached: on your network, over Bluetooth,
-              or through its maker&apos;s cloud.
-            </span>
+    <div className="flex flex-col gap-10">
+      <Summary entries={counted} devices={devices} />
+      <Section
+        id="connected"
+        title="Connected"
+        count={connected.length}
+        sub="Set up and reading. Open one to see how it's doing, or to change it."
+      >
+        {connected.length ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,420px),1fr))] gap-4">
+            {connected.map((e) => (
+              <div key={e.id} className="contents">
+                {e.view}
+              </div>
+            ))}
           </div>
-          {GROUPS.map((g) => {
-            const tiles = toAdd.filter((e) => e.group === g.id);
-            return (
-              tiles.length > 0 && (
-                <div key={g.id} className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className="text-[15px] font-semibold">{g.title}</h3>
-                    <span className="text-[13px] text-ink-muted">{g.add}</span>
+        ) : (
+          <p className="m-0 text-sm text-ink-muted">Nothing yet. Start with your inverter, below.</p>
+        )}
+      </Section>
+      {homeError && <p className="m-0 text-sm text-bad">{errorMessage(homeError)}</p>}
+      {available.length > 0 && (
+        <Section
+          id="available"
+          title="Available to connect"
+          count={counted.filter((e) => !e.connected).length}
+          sub="Everything else WattsMyPower can read. Each says how it's reached: on your network, over Bluetooth, from public data, or through its maker's cloud."
+        >
+          <div className="flex flex-col gap-6">
+            {GROUPS.map((g) => {
+              const tiles = available.filter((e) => e.group === g.id);
+              return (
+                tiles.length > 0 && (
+                  <div key={g.id} className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-0.5">
+                      <h3 className="text-[15px] font-semibold">{g.title}</h3>
+                      <span className="text-[13px] text-ink-muted">{g.sub}</span>
+                    </div>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-3">
+                      {tiles.map((e) => (
+                        <div key={e.id} className="contents">
+                          {e.view}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
-                    {tiles.map((e) => (
-                      <div key={e.id} className="contents">
-                        {e.tile}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            );
-          })}
-        </section>
+                )
+              );
+            })}
+          </div>
+        </Section>
       )}
     </div>
   );

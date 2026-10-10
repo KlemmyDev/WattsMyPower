@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CarSettings } from "~/features/car/components/CarSettings";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Cars aren't added by hand any more (each connected Tesla brings its own): old links land on Tesla. */
 export const Route = createFileRoute("/_app/integrations/car/")({
-  head: () => ({ meta: [{ title: "Electric vehicles · Integrations · WattsMyPower" }] }),
-  component: CarSettings,
+  beforeLoad: () => {
+    throw redirect({ to: "/integrations/tesla", replace: true });
+  },
 });

@@ -4,11 +4,14 @@ import { carsQuery } from "~/features/car/api";
 import { carName } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { HelpText, Select } from "~/features/common/ui/components/Field";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
+import { REACH } from "~/features/integrations/components/ReachTag";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { teslaQuery } from "~/features/ev/api";
 import { BluetoothPair } from "~/features/ev/components/BluetoothPair";
@@ -26,71 +29,97 @@ const SWITCH_ABOUT: Record<TeslaProvider, string> = {
     "Reach the car through Tessie instead, from anywhere. Once Tessie's connected, the cars it has replace the ones paired here.",
 };
 
-/** How the cars are reached, in a row: Tessie's token, or this server's Bluetooth key, and disconnecting. */
-function ConnectionRow({ status }: { status: TeslaStatus }) {
+/** The connection at a glance: how the cars are reached, how many, the first one's charge, and when they were read;
+ * then how it's reached in words, and disconnecting. */
+function Summary({ status }: { status: TeslaStatus }) {
   const { disconnect } = useEvChange();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const bt = status.provider === "bluetooth";
+  const first = status.vehicles[0];
+  const reach = REACH[bt ? "bluetooth" : "cloud"];
   return (
-    <IntegrationRow
+    <SummaryCard
       icon={bt ? "bluetooth" : "bolt"}
-      name={bt ? "Bluetooth" : "Tessie"}
-      on={!status.error}
-      status={status.error ? "Not updating" : "Connected"}
-      detail={
-        <>
-          {bt
-            ? `This server's key ${status.bluetooth.key ?? ""}, ${status.bluetooth.role === "driver" ? "a driver's: it can wake the car" : "charging only: it can't wake the car"}`
-            : `Access token ${status.token}`}
-          {status.read_at && ` · read ${hhmm(status.read_at)}`}
-          {status.error && <span className="mt-0.5 block text-xs text-bad">{status.error}</span>}
-        </>
-      }
-      action={
-        confirming ? (
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disconnect.isPending}
-              onClick={() =>
-                disconnect.mutate(undefined, {
-                  onSuccess: () => {
-                    setConfirming(false);
-                    toast(bt ? "The Teslas are disconnected." : "Disconnected from Tessie.");
-                  },
-                })
-              }
-            >
-              {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-            </Button>
-            <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
+      color={status.error ? COLOR.warn : COLOR.lilac}
+      label="Your Tesla"
+      footer={
+        <div className="flex flex-col gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="min-w-0 flex-1">
+              {status.error ? (
+                <span className="text-bad">{status.error}</span>
+              ) : bt ? (
+                `This server's key ${status.bluetooth.key ?? ""}: ${status.bluetooth.role === "driver" ? "a driver's, so it can wake the car" : "charging only, so it can't wake the car"}.`
+              ) : (
+                `Through Tessie with the access token ${status.token}.`
+              )}
+            </span>
+            {confirming ? (
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disconnect.isPending}
+                  onClick={() =>
+                    disconnect.mutate(undefined, {
+                      onSuccess: () => {
+                        setConfirming(false);
+                        toast(bt ? "The Teslas are disconnected." : "Disconnected from Tessie.");
+                      },
+                    })
+                  }
+                >
+                  {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
+                </Button>
+                <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+                Disconnect
+              </Button>
+            )}
           </div>
-        ) : (
-          <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-            Disconnect
-          </Button>
-        )
+          {confirming && (
+            <HelpText>
+              {bt
+                ? "The dashboard stops reading the cars and charging from solar. The cars keep this server's key (remove it in the car, under Controls → Locks, if you like), so pairing again needs no tap."
+                : "The token is removed from this server and the dashboard stops charging from solar."}{" "}
+              Your cars and their levels stay.
+            </HelpText>
+          )}
+        </div>
       }
     >
-      {confirming && (
-        <div className="basis-full pl-[60px] max-sm:pl-0">
-          <HelpText>
-            {bt
-              ? "The dashboard stops reading the cars and charging from solar. The cars keep this server's key (remove it in the car, under Controls → Locks, if you like), so pairing again needs no tap."
-              : "The token is removed from this server and the dashboard stops charging from solar."}{" "}
-            Your cars and their levels stay.
-          </HelpText>
-        </div>
-      )}
-    </IntegrationRow>
+      <SummaryStat
+        label="Connected"
+        value={PROVIDER_LABEL[status.provider ?? "bluetooth"]}
+        sub={reach.label}
+        title={reach.title}
+      />
+      <SummaryStat
+        label="Cars"
+        value={status.vehicles.length}
+        sub={status.vehicles.map((v) => v.name ?? "Tesla").join(", ") || "None yet"}
+      />
+      <SummaryStat
+        label={first?.name ?? "Charge"}
+        value={first?.state?.soc != null ? `${Math.round(first.state.soc)}%` : "—"}
+        sub={first ? MODE_LABEL[first.control.mode] : undefined}
+      />
+      <SummaryStat
+        label="Last read"
+        value={status.read_at ? hhmm(status.read_at) : "—"}
+        color={status.error ? COLOR.warn : undefined}
+        sub={status.error ? "Not updating" : status.reading ? "Reading now…" : "From the car"}
+      />
+    </SummaryCard>
   );
 }
 
-/** A Tesla: which dashboard car it is, and (over Bluetooth) leaving it out. */
+/** A Tesla: which car's details it charges with, opening them, and (over Bluetooth) leaving it out. */
 function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) {
   const { data: cars } = useQuery(carsQuery);
   const { configure, remove } = useEvChange();
@@ -104,9 +133,14 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
         : "not heard"
       : null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle px-6 py-5 last:border-b-0">
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle px-5 py-4 last:border-b-0">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm font-medium">{v.name ?? "Tesla"}</span>
+        <span className="text-[15px] font-semibold">
+          {v.name ?? "Tesla"}
+          {v.state?.soc != null && (
+            <span className="font-normal text-ink-muted tabular-nums"> · {Math.round(v.state.soc)}%</span>
+          )}
+        </span>
         <span className="font-mono text-xs text-ink-muted">
           {v.vin}
           <span className="font-sans">
@@ -116,9 +150,9 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
           </span>
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <Select
-          aria-label={`The dashboard car ${v.name ?? "this Tesla"} is`}
+          aria-label={`The details ${v.name ?? "this Tesla"} charges with`}
           className="w-48"
           value={v.car ?? ""}
           disabled={configure.isPending}
@@ -127,10 +161,15 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
           <option value="">Its model's figures</option>
           {cars?.map((c) => (
             <option key={c.id} value={c.id}>
-              {carName(c)}
+              {carName(c)}&apos;s details
             </option>
           ))}
         </Select>
+        {v.car != null && (
+          <ButtonLink to="/integrations/tesla/car/$carId" params={{ carId: String(v.car) }} size="sm" variant="outline">
+            Details
+          </ButtonLink>
+        )}
         <ButtonLink to="/ev" size="sm" variant="outline">
           Open
         </ButtonLink>
@@ -170,10 +209,38 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
   );
 }
 
+/** Cars added by hand before each Tesla brought its own, and not tied to one: shown so they can be checked or removed. */
+function HandAdded({ status }: { status?: TeslaStatus }) {
+  const { data: cars } = useQuery(carsQuery);
+  const tied = new Set((status?.vehicles ?? []).map((v) => v.car));
+  const loose = (cars ?? []).filter((c) => !tied.has(c.id));
+  if (!loose.length) return null;
+  return (
+    <SettingsSection
+      id="h-tesla-other-cars"
+      title="Cars added by hand"
+      sub="From before cars came from a connected Tesla. The Overview still draws them; remove one you don't need."
+    >
+      <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
+        {loose.map((c) => (
+          <IntegrationLink
+            key={c.id}
+            to="/integrations/tesla/car/$carId"
+            params={{ carId: String(c.id) }}
+            icon="car"
+            name={carName(c)}
+            detail={`${c.car.car_battery_kwh} kWh · up to ${c.car.car_amps} A`}
+          />
+        ))}
+      </div>
+    </SettingsSection>
+  );
+}
+
 /**
  * Manage → Integrations → Tesla: how the cars are reached (over this server's Bluetooth, or through Tessie; the
- * dashboard does the same with them either way), which dashboard car each Tesla is, pairing another over Bluetooth,
- * and switching from one way to the other.
+ * dashboard does the same with them either way), each car and the details it charges with, pairing another over
+ * Bluetooth, and switching from one way to the other.
  */
 export function TeslaSettings() {
   const { data: status, isPending, error } = useQuery(teslaQuery);
@@ -190,90 +257,103 @@ export function TeslaSettings() {
         title="Tesla"
         sub="See each car's charge, and charge it from spare solar on the EV page. Over this server's Bluetooth or through Tessie: the dashboard does the same either way."
       />
-      <SettingsCard aria-labelledby="h-tesla">
-        {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking the connection…</div>}
-        {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
-        {status && !provider && <TeslaConnect className="px-6 py-5" />}
-        {status && provider && (
-          <>
-            <ConnectionRow status={status} />
-            {status.vehicles.map((v) => (
-              <VehicleRow key={v.vin} v={v} provider={provider} />
-            ))}
-            {provider === "bluetooth" &&
-              (adding ? (
-                <div className="flex flex-col gap-3 px-6 py-5">
-                  <span className="text-sm font-medium">Pair another car</span>
-                  <BluetoothPair onPaired={() => setAdding(false)} />
-                  <Button variant="muted-link" size="sm" className="self-start" onClick={() => setAdding(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="px-6 py-4">
-                  <Button variant="link" size="sm" onClick={() => setAdding(true)}>
-                    Pair another car
-                  </Button>
-                </div>
-              ))}
-          </>
-        )}
-      </SettingsCard>
+      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
+      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {status && !provider && (
+        <SettingsSection
+          id="h-tesla-connect"
+          title="Connect your Tesla"
+          sub="Choose how the dashboard reaches it. You can switch later; each car keeps how it charges."
+        >
+          <TeslaConnect />
+        </SettingsSection>
+      )}
+      {status && provider && (
+        <>
+          <Summary status={status} />
+          <SettingsSection
+            id="h-tesla-cars"
+            title="Cars"
+            sub="Each charges with its own details (phases, the lowest and highest current) once it's charged at home and reported them, or its model's until then."
+            aside={
+              provider === "bluetooth" &&
+              !adding && (
+                <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+                  Pair another car
+                </Button>
+              )
+            }
+          >
+            {status.vehicles.length > 0 && (
+              <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
+                {status.vehicles.map((v) => (
+                  <VehicleRow key={v.vin} v={v} provider={provider} />
+                ))}
+              </div>
+            )}
+            {provider === "bluetooth" && adding && (
+              <div className="flex flex-col gap-3 rounded-2xl bg-canvas/60 p-5 light:bg-canvas">
+                <span className="text-sm font-medium">Pair another car</span>
+                <BluetoothPair onPaired={() => setAdding(false)} />
+                <Button variant="muted-link" size="sm" className="self-start" onClick={() => setAdding(false)}>
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </SettingsSection>
+        </>
+      )}
       {provider === "bluetooth" && status?.bluetooth.role === "charging_manager" && (
-        <SettingsCard padded aria-labelledby="h-tesla-wake">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <SettingsTitle
-              id="h-tesla-wake"
-              title="Let the dashboard wake the car"
-              sub="This server's key is charging only, so it can't wake the car: once it's asleep, charging from solar waits until it wakes. Pair it again as a driver, as your phone key is, and the dashboard can wake it."
-            />
-            {!asDriver && (
+        <SettingsSection
+          id="h-tesla-wake"
+          title="Let the dashboard wake the car"
+          sub="This server's key is charging only, so it can't wake the car: once it's asleep, charging from solar waits until it wakes. Pair it again as a driver, as your phone key is, and the dashboard can wake it."
+          aside={
+            !asDriver && (
               <Button variant="outline" size="sm" onClick={() => setAsDriver(true)}>
                 Pair again as a driver
               </Button>
-            )}
-          </div>
+            )
+          }
+        >
           {asDriver && (
-            <div className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-3">
               <BluetoothPair role="driver" vin={status.vehicles[0]?.vin} onPaired={() => setAsDriver(false)} />
               <Button variant="muted-link" size="sm" className="self-start" onClick={() => setAsDriver(false)}>
                 Cancel
               </Button>
             </div>
           )}
-        </SettingsCard>
-      )}
-      {provider === "bluetooth" && (
-        <SettingsCard padded aria-labelledby="h-tesla-slots">
-          <SettingsTitle
-            id="h-tesla-slots"
-            title="A Tesla takes only a few Bluetooth connections"
-            sub="About three at once: each phone or watch with its key holds one while it's near the car, and with them all taken the car won't take the dashboard's. So while the car's plugged in at home by day (or charging), the dashboard keeps its connection open after each read, to keep its place; at night, and once the car's unplugged, it lets go so the car can sleep. When the dashboard can't get in, the EV page says so and tries again every few minutes. Keys you don't use are best removed in the car, under Controls → Locks."
-          />
-        </SettingsCard>
+        </SettingsSection>
       )}
       {provider && (
-        <SettingsCard padded aria-labelledby="h-tesla-switch">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <SettingsTitle
-              id="h-tesla-switch"
-              title={`Use ${PROVIDER_LABEL[OTHER[provider]]} instead`}
-              sub={SWITCH_ABOUT[OTHER[provider]]}
-            />
-            {!switching && (
-              <Button variant="outline" size="sm" onClick={() => setSwitching(true)}>
-                Switch to {PROVIDER_LABEL[OTHER[provider]]}
-              </Button>
-            )}
-          </div>
-          {switching && <TeslaConnect only={OTHER[provider]} onConnected={() => setSwitching(false)} />}
-        </SettingsCard>
+        <div className="grid gap-5 xl:grid-cols-2">
+          {provider === "bluetooth" && (
+            <SettingsSection
+              id="h-tesla-slots"
+              title="A Tesla takes only a few Bluetooth connections"
+              sub="About three at once: each phone or watch with its key holds one while it's near the car, and with them all taken the car won't take the dashboard's. So while the car's plugged in at home by day (or charging), the dashboard keeps its connection open after each read, to keep its place; at night, and once the car's unplugged, it lets go so the car can sleep. When the dashboard can't get in, the EV page says so and tries again every few minutes. Keys you don't use are best removed in the car, under Controls → Locks."
+            >
+              {null}
+            </SettingsSection>
+          )}
+          <SettingsSection
+            id="h-tesla-switch"
+            title={`Use ${PROVIDER_LABEL[OTHER[provider]]} instead`}
+            sub={SWITCH_ABOUT[OTHER[provider]]}
+            aside={
+              !switching && (
+                <Button variant="outline" size="sm" onClick={() => setSwitching(true)}>
+                  Switch to {PROVIDER_LABEL[OTHER[provider]]}
+                </Button>
+              )
+            }
+          >
+            {switching && <TeslaConnect only={OTHER[provider]} onConnected={() => setSwitching(false)} />}
+          </SettingsSection>
+        </div>
       )}
-      <HelpText className="text-[13px]">
-        Each Tesla keeps how it charges when you switch. Its model's phases and lowest and highest current are used
-        until the car has charged at home and reported its own, or a car's from Integrations → Electric vehicle if you
-        tie it to one.
-      </HelpText>
+      <HandAdded status={status} />
     </>
   );
 }

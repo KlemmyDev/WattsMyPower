@@ -830,7 +830,7 @@ def test_a_tesla_needs_no_dashboard_car(svc: TeslaService, provider: str, tessie
                                         clock: Clock) -> None:  # fmt: skip
     connect(svc, provider)
     car = svc.status()["vehicles"][0]["car"]
-    assert svc.cars.delete(car)  # Manage → Integrations → Electric vehicle → disconnect
+    assert svc.cars.delete(car)  # Manage → Integrations → Tesla → Details → remove
     tessie.charge(battery_level=64)
     minutes(svc, live, clock, 2, grid=500)
     v = svc.status()["vehicles"][0]

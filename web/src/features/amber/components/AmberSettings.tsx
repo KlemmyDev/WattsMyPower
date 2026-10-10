@@ -7,14 +7,16 @@ import { priceLabel, syncLine } from "~/features/amber/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
 import { tariffQuery } from "~/features/common/tariffs/api";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
-import { Notice } from "~/features/common/ui/components/Notice";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
-import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { ConfirmAction } from "~/features/integrations/components/ConfirmAction";
+import { REACH } from "~/features/integrations/components/ReachTag";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const day = (ts: number) => longDate.format(new Date(ts * 1000));
@@ -118,119 +120,77 @@ export function AmberConnect({ onReady }: { onReady: () => void }) {
   );
 }
 
-/**
- * Connecting Amber Electric, whose prices change every 5 or 30 minutes. Optional: until a key is pasted
- * here, nothing calls Amber and no cost uses its prices.
- */
-function AmberAccount() {
+/** The connection at a glance: whether prices are coming in, the prices now, how often they change, and when they
+ * were last fetched; then the key, the prices kept, and disconnecting. */
+function AmberSummary({ status }: { status: AmberStatus }) {
   const now = useNow();
-  const { data: status, isPending, error } = useQuery(amberQuery);
-  const tariff = useQuery(tariffQuery).data;
   const prices = useAmberPrices(now);
   const { disconnect } = useAmberChange();
   const toast = useToast();
-  const [confirming, setConfirming] = useState(false);
-  const ready = !!status?.site_id;
-  const length = status?.interval_length;
-
+  const ready = !!status.site_id;
+  const site = status.sites.find((s) => s.id === status.site_id);
   return (
-    <SettingsCard aria-labelledby="h-amber">
-      {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking the connection…</div>}
-      {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
-      {status && !status.connected && <ConnectForm className="px-6 py-5" />}
-      {status?.connected && (
-        <>
-          <IntegrationRow
-            icon="dollar"
-            name="Amber"
-            on={ready && !status.error}
-            status={!ready ? "Choose a site" : status.error ? "Not updating" : "Connected"}
-            detail={
-              <>
-                API key {status.key}
-                {ready && (
-                  <>
-                    {" "}
-                    · {length ? `${length}-minute prices` : "Prices"} · {syncLine(status, day)}
-                    {status.last_sync && ` · updated ${hhmm(status.last_sync)}`}
-                  </>
-                )}
-                {status.error && <span className="mt-0.5 block text-xs text-bad">{status.error}</span>}
-              </>
+    <SummaryCard
+      icon="dollar"
+      color={status.error || !ready ? COLOR.warn : COLOR.export}
+      label="Amber Electric"
+      footer={
+        <div className="flex flex-wrap items-start justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+          <span className="min-w-0 flex-1">
+            {status.error ? <span className="text-bad">{status.error}</span> : `API key ${status.key}`}
+            {ready && <span className="block text-ink-faint">{syncLine(status, day)}</span>}
+          </span>
+          <ConfirmAction
+            label="Disconnect"
+            doing="Disconnecting…"
+            note="The API key and Amber's prices are removed from this server. If your rates use Amber prices, they go back to a single rate at your fallback rates."
+            pending={disconnect.isPending}
+            error={disconnect.error}
+            run={(done) =>
+              disconnect.mutate(undefined, {
+                onSuccess: () => {
+                  done();
+                  toast("Disconnected from Amber.");
+                },
+              })
             }
-            action={
-              confirming ? (
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={disconnect.isPending}
-                    onClick={() =>
-                      disconnect.mutate(undefined, {
-                        onSuccess: () => {
-                          setConfirming(false);
-                          toast("Disconnected from Amber.");
-                        },
-                      })
-                    }
-                  >
-                    {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-                  </Button>
-                  <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-                  Disconnect
-                </Button>
-              )
-            }
-          >
-            {(confirming || disconnect.isError) && (
-              <div className="basis-full pl-[60px] max-sm:pl-0">
-                <HelpText tone={disconnect.isError ? "bad" : undefined}>
-                  {disconnect.isError
-                    ? errorMessage(disconnect.error)
-                    : "The API key and Amber's prices are removed from this server. If your rates use Amber prices, they go back to a single rate at your fallback rates."}
-                </HelpText>
-              </div>
-            )}
-          </IntegrationRow>
-          <SitePicker status={status} className="border-b border-line-subtle px-6 py-5" />
-          {ready && (
-            <div className="flex flex-col gap-4 px-6 py-5">
-              {prices && (
-                <div className="text-sm text-ink-muted tabular-nums">
-                  Right now:{" "}
-                  <b className="font-semibold text-ink">
-                    {prices.now.general != null ? priceLabel(prices.now.general) : "—"}
-                  </b>{" "}
-                  per kWh from the grid, and{" "}
-                  <b className="font-semibold text-ink">
-                    {prices.now.feed_in != null ? priceLabel(prices.now.feed_in) : "—"}
-                  </b>{" "}
-                  for feed-in. Today's prices are on the Overview.
-                </div>
-              )}
-              {tariff && tariff.type !== "amber" && (
-                <Notice tone="info" className="flex flex-wrap items-center justify-between gap-3">
-                  <span>Your rates don't use Amber's prices yet.</span>
-                  <ButtonLink to="/bills/rates" hash="rates" size="sm" variant="outline">
-                    Use them in Tariffs
-                  </ButtonLink>
-                </Notice>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </SettingsCard>
+          />
+        </div>
+      }
+    >
+      <SummaryStat
+        label="Status"
+        value={!ready ? "Choose a site" : status.error ? "Not updating" : "Connected"}
+        color={status.error || !ready ? COLOR.warn : undefined}
+        sub={site?.network ?? REACH.cloud.label}
+      />
+      <SummaryStat
+        label="From the grid now"
+        value={prices?.now.general != null ? priceLabel(prices.now.general) : "—"}
+        sub="per kWh"
+      />
+      <SummaryStat
+        label="Feed-in now"
+        value={prices?.now.feed_in != null ? priceLabel(prices.now.feed_in) : "—"}
+        sub="per kWh"
+      />
+      <SummaryStat
+        label="Prices change"
+        value={status.interval_length ? `every ${status.interval_length} min` : "—"}
+        sub={status.last_sync ? `Fetched ${hhmm(status.last_sync)}` : "Not fetched yet"}
+      />
+    </SummaryCard>
   );
 }
 
-/** Manage → Integrations → Amber Electric: the API key and site, and whether the rates use its prices. */
+/**
+ * Manage → Integrations → Amber Electric: connecting with an API key (optional: until one's pasted here, nothing calls
+ * Amber and no cost uses its prices), then the connection at a glance, the site, and whether the rates use its prices.
+ */
 export function AmberSettings() {
+  const { data: status, isPending, error } = useQuery(amberQuery);
+  const tariff = useQuery(tariffQuery).data;
+  const ready = !!status?.site_id;
   return (
     <>
       <SubPageHeader
@@ -239,7 +199,48 @@ export function AmberSettings() {
         title="Amber Electric"
         sub="With Amber, the price of power changes every 5 or 30 minutes. Connect your account to cost your power at the price of the time."
       />
-      <AmberAccount />
+      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
+      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {status && !status.connected && (
+        <SettingsSection
+          id="h-amber-connect"
+          title="Connect Amber"
+          sub="Its prices come from Amber's own API, through the internet: there's nothing to read on your network."
+        >
+          <ConnectForm />
+        </SettingsSection>
+      )}
+      {status?.connected && (
+        <>
+          <AmberSummary status={status} />
+          {(status.sites.length > 1 || !status.site_id) && (
+            <SettingsSection id="h-amber-site" title="Site" sub="Which of your account's sites the prices are for.">
+              <SitePicker status={status} />
+            </SettingsSection>
+          )}
+          {ready && (
+            <SettingsSection
+              id="h-amber-rates"
+              title="Your rates"
+              sub="Costs, Bills and the Plan price your power at Amber's prices once your rates follow them."
+              aside={
+                tariff &&
+                tariff.type !== "amber" && (
+                  <ButtonLink to="/bills/rates" hash="rates" size="sm" variant="outline">
+                    Use Amber's prices
+                  </ButtonLink>
+                )
+              }
+            >
+              <p className="m-0 text-sm text-ink-muted">
+                {tariff?.type === "amber"
+                  ? "Your rates follow Amber's prices. Today's prices are on the Overview."
+                  : "Your rates don't use Amber's prices yet: they're set in Bills → Rates & settings."}
+              </p>
+            </SettingsSection>
+          )}
+        </>
+      )}
     </>
   );
 }

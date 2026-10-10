@@ -57,9 +57,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   dishwashers and ovens when they run and how long they've left; air conditioners whether they're on and the room's
   temperature. Connect with an API key and refresh token from developer.electrolux.one (see the README's Home
   section). None of them report their power, so no energy is recorded for them.
-- **Electric vehicles:** your cars drawn in the garage; a Tesla over the server's Bluetooth or through Tessie, charged
-  from spare solar a step at a time (Standard, Quick, Steady or Custom timing), with each charge and trip logged and
-  the car's day charted.
+- **Electric vehicles:** a Tesla over the server's Bluetooth or through Tessie, charged from spare solar a step at a
+  time (Standard, Quick, Steady or Custom timing), with each charge and trip logged and the car's day charted, and
+  drawn in the garage. Each Tesla brings its own car details; cars aren't added by hand.
 - **Manage → Data:** everything both databases hold, table by table.
 - **Sign-in** with one household account, created on the first visit, and a set-up guide for the inverter, system,
   rates, location and billing period.
