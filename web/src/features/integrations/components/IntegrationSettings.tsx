@@ -6,10 +6,7 @@ import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useLocationSet } from "~/features/common/settings/hooks";
-import { COLOR } from "~/features/common/theme/utils/colors";
-import { buttonClass } from "~/features/common/ui/components/Button";
 import { Pill } from "~/features/common/ui/components/Pill";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useForecast } from "~/features/common/weather/hooks";
 import { teslaQuery } from "~/features/ev/api";
 import { MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
@@ -25,10 +22,6 @@ import { brandSlug, type InverterState } from "~/features/integrations/utils";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "Sungrow SH5.0RS" as "SH5.0RS", when the brand is said beside it. */
-const withoutBrand = (name: string, brand: string | null) =>
-  brand && name.startsWith(`${brand} `) ? name.slice(brand.length + 1) : name;
-
 type GroupId = "energy" | "home" | "vehicles" | "services";
 
 const GROUPS: { id: GroupId; title: string; sub: string }[] = [
@@ -39,8 +32,8 @@ const GROUPS: { id: GroupId; title: string; sub: string }[] = [
 ];
 
 /**
- * One integration on the hub: whether it's connected (and if so, working), how it's read, and how it's shown: as a
- * card under Connected, or as a tile to connect it under Available.
+ * One integration on the hub: whether it's connected (and if so, working), and how it's shown: as a card under
+ * Connected, or as a tile to connect it under Available.
  */
 type Entry = {
   id: string;
@@ -49,8 +42,6 @@ type Entry = {
   connected: boolean;
   /** Connected, but not working: signed out, not answering, not updating. */
   attention: boolean;
-  /** Read on the home network, over Bluetooth or from public data: not through a company's cloud. */
-  local: boolean;
   /** One of the inverter brands offered until an inverter's connected: they count as one integration. */
   brand?: boolean;
   /** A smart-home brand that's connected: counted, but shown inside the one Smart home card. */
@@ -114,7 +105,6 @@ function useInverterEntries(): Entry[] {
         name: "Inverters",
         connected: true,
         attention,
-        local: true,
         view: (
           <IntegrationLink
             card
@@ -141,7 +131,6 @@ function useInverterEntries(): Entry[] {
         name: "Inverters",
         connected: true,
         attention: true,
-        local: true,
         view: (
           <IntegrationLink
             card
@@ -162,7 +151,6 @@ function useInverterEntries(): Entry[] {
     name: b.brand,
     connected: false,
     attention: false,
-    local: true,
     brand: true,
     view: (
       <IntegrationLink
@@ -189,7 +177,6 @@ function useWeatherEntry(): Entry {
     name: "Weather",
     connected,
     attention: connected && forecast === null,
-    local: true,
     view: connected ? (
       <IntegrationLink
         card
@@ -241,7 +228,6 @@ function useAmberEntry(): Entry {
     name: "Amber Electric",
     connected,
     attention: connected && !on,
-    local: false,
     view: connected ? (
       <IntegrationLink
         card
@@ -293,7 +279,6 @@ function useGridEntry(): Entry {
     name: "Grid",
     connected,
     attention: !!out?.error,
-    local: true,
     view: connected ? (
       <IntegrationLink
         card
@@ -337,7 +322,6 @@ function useTeslaEntry(): Entry {
     name: "Tesla",
     connected,
     attention: connected && !on,
-    local: status?.provider === "bluetooth",
     view: connected ? (
       <IntegrationLink
         card
@@ -384,7 +368,6 @@ function homeEntry(i: HomeIntegration): Entry {
     name: i.name,
     connected: !!a,
     attention,
-    local: reach !== "cloud",
     rolled: !!a,
     view: (
       <IntegrationLink
@@ -417,7 +400,6 @@ function smartHomeEntry(integrations: HomeIntegration[]): Entry | null {
     name: "Smart home",
     connected: true,
     attention: !!trouble,
-    local: !reaches.includes("cloud"),
     view: (
       <IntegrationLink
         card
@@ -436,62 +418,6 @@ function smartHomeEntry(integrations: HomeIntegration[]): Entry | null {
       />
     ),
   };
-}
-
-/** What's connected at a glance: how many, whether any need a look, the main inverter, the smart home's devices, and
- * how much is read on the home network rather than through a cloud. */
-function Summary({ entries, devices }: { entries: Entry[]; devices: number }) {
-  const { inverters } = useInverters();
-  const connected = entries.filter((e) => e.connected);
-  const attention = connected.filter((e) => e.attention);
-  const local = connected.filter((e) => e.local).length;
-  const main = inverters.find((i) => i.hybrid);
-  const homes = connected.filter((e) => e.group === "home").length;
-  return (
-    <SummaryCard
-      icon="plug"
-      color={attention.length || !main ? COLOR.warn : COLOR.brand}
-      label="Your integrations"
-      footer={
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-          <span className="min-w-0 flex-1">
-            {!main && entries.some((e) => e.brand)
-              ? "Nothing is recorded until your main inverter is connected: it's first under Available to connect."
-              : attention.length
-                ? `${attention.map((e) => e.name).join(", ")} ${attention.length === 1 ? "needs" : "need"} a look.`
-                : "Everything connected is answering."}
-          </span>
-          <a href="#available" className={buttonClass("outline", "sm")}>
-            Connect another
-          </a>
-        </div>
-      }
-    >
-      <SummaryStat label="Connected" value={connected.length} sub={`of ${plural(entries.length, "integration")}`} />
-      <SummaryStat
-        label="Need a look"
-        value={attention.length}
-        color={attention.length ? COLOR.warn : undefined}
-        sub={attention.length ? attention.map((e) => e.name).join(", ") : "All working"}
-      />
-      <SummaryStat
-        label="Main inverter"
-        value={main ? withoutBrand(main.name, main.device.brand) : "None yet"}
-        color={main ? undefined : COLOR.warn}
-        sub={
-          main
-            ? [main.device.brand, inverters.length > 1 && "+1 more"].filter(Boolean).join(", ")
-            : "Connect one to record"
-        }
-      />
-      <SummaryStat label="Smart home" value={plural(devices, "device")} sub={`from ${plural(homes, "integration")}`} />
-      <SummaryStat
-        label="On your network"
-        value={`${local} of ${connected.length}`}
-        sub={connected.length - local ? `${connected.length - local} through a cloud` : "No clouds"}
-      />
-    </SummaryCard>
-  );
 }
 
 /** A top-level section of the hub: its heading with a count, a line under it, then what's in it. */
@@ -523,8 +449,8 @@ function Section({
 }
 
 /**
- * Manage → Integrations: a summary, then what's connected (each card opening to its own page, any needing a look
- * first), then everything else that can be connected, grouped by what it's for, as tiles that say Connect.
+ * Manage → Integrations: what's connected (each card opening to its own page, any needing a look first), then
+ * everything else that can be connected, grouped by what it's for, as tiles that say Connect.
  */
 export function IntegrationSettings() {
   const { data: home, error: homeError } = useQuery(homeQuery);
@@ -536,7 +462,6 @@ export function IntegrationSettings() {
     useAmberEntry(),
     useWeatherEntry(),
   ];
-  const devices = (home?.integrations ?? []).reduce((n, i) => n + (i.account?.devices ?? 0), 0);
   const order = (e: Entry) => GROUPS.findIndex((g) => g.id === e.group);
   const smartHome = smartHomeEntry(home?.integrations ?? []);
   const connected = [...entries.filter((e) => e.connected && !e.rolled), ...(smartHome ? [smartHome] : [])].sort(
@@ -548,7 +473,6 @@ export function IntegrationSettings() {
   const counted = [...entries.filter((e) => !e.brand), ...(firstBrand ? [firstBrand] : [])];
   return (
     <div className="flex flex-col gap-10">
-      <Summary entries={counted} devices={devices} />
       <Section
         id="connected"
         title="Connected"
@@ -565,6 +489,11 @@ export function IntegrationSettings() {
           </div>
         ) : (
           <p className="m-0 text-sm text-ink-muted">Nothing yet. Start with your inverter, below.</p>
+        )}
+        {connected.length > 0 && firstBrand && (
+          <p className="m-0 text-sm text-warn">
+            Nothing is recorded until your main inverter is connected: it's first under Available to connect.
+          </p>
         )}
       </Section>
       {homeError && <p className="m-0 text-sm text-bad">{errorMessage(homeError)}</p>}

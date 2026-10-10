@@ -1,11 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { errorMessage } from "~/features/common/api/utils";
-import { hhmm } from "~/features/common/formatting/utils/date";
-import { useLive } from "~/features/common/live/hooks/useLive";
-import { COLOR } from "~/features/common/theme/utils/colors";
-import { ButtonLink } from "~/features/common/ui/components/Button";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInverters";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { ReachTag, UntestedTag } from "~/features/integrations/components/ReachTag";
@@ -78,79 +73,6 @@ function InverterRow({ inverter: { device, name, status, on, reading, hybrid } }
   );
 }
 
-/** A brand's inverters at a glance: its main and second inverter, how they're doing, and connecting one. */
-function Summary({ brand }: { brand: Brand }) {
-  const { data, isPending, error, inverters } = useInverters();
-  const live = useLive();
-  const shown = brand.inverters;
-  const main = shown.find((i) => i.hybrid);
-  const second = shown.find((i) => !i.hybrid);
-  const canConnect = !!data?.available && !data.read_only;
-  const anyMain = inverters.some((i) => i.hybrid);
-  return (
-    <SummaryCard
-      icon="sun"
-      color={main && !main.on ? COLOR.warn : COLOR.solar}
-      label={`Your ${brand.name} inverters`}
-      footer={
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-          <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span>
-              {isPending
-                ? "Checking what's connected…"
-                : error
-                  ? errorMessage(error)
-                  : data && !data.available
-                    ? data.error
-                    : !shown.length
-                      ? `No ${brand.name} inverter is connected.`
-                      : !main
-                        ? `A second inverter: the main one is ${inverters.find((i) => i.hybrid)?.name ?? "not connected yet"}.`
-                        : main.frozen
-                          ? `Readings frozen since ${hhmm(main.frozen)}: the dongle isn't refreshing them.`
-                          : main.last
-                            ? `Last read at ${hhmm(main.last)}, every ${live?.poll_interval ?? 60} seconds.`
-                            : "Waiting for its first reading."}
-            </span>
-            <span className="flex flex-wrap gap-3">
-              <ReachTag reach="local" />
-              {!brand.verified && <UntestedTag />}
-            </span>
-          </span>
-          {canConnect && (
-            <ButtonLink
-              to="/integrations/inverters/$brand/connect"
-              params={{ brand: brand.slug }}
-              variant={anyMain ? "outline" : "primary"}
-              size="sm"
-            >
-              {anyMain ? `Add a ${brand.name}` : `Connect a ${brand.name}`}
-            </ButtonLink>
-          )}
-        </div>
-      }
-    >
-      <SummaryStat
-        label="Main inverter"
-        value={main?.name ?? "None"}
-        sub={main ? main.status : "With the meter and battery"}
-      />
-      <SummaryStat
-        label="Second inverter"
-        value={second?.name ?? "None"}
-        sub={second ? (second.device.behind_meter ? "Behind the main meter" : "Counted as export") : "Optional"}
-      />
-      <SummaryStat
-        label="Status"
-        value={main?.status ?? second?.status ?? "Not connected"}
-        color={(main ?? second) && !(main ?? second)?.on ? COLOR.warn : undefined}
-        sub={(main ?? second)?.reading}
-      />
-      <SummaryStat label="It reads" value={brand.kinds.length} sub={brand.kinds.map((k) => k.label).join(", ")} />
-    </SummaryCard>
-  );
-}
-
 /**
  * Manage → Integrations → Inverters: each brand WattsMyPower reads (connected first), saying how its inverters are
  * doing, each opening to its own page: its inverters, connecting one, and anything only that brand has.
@@ -214,13 +136,14 @@ export function InverterSettings() {
 }
 
 /**
- * Manage → Integrations → Inverters → a brand: its inverters connected now (each opening to its own page), what of it
- * WattsMyPower reads and how to get one answering, and what only that brand has (a Sungrow's history from
- * iSolarCloud). Old links to an inverter by its role alone (/integrations/inverters/hybrid) land on its page here.
+ * Manage → Integrations → Inverters → a brand: its inverters connected now (each opening to its own page) and
+ * connecting another, what of it WattsMyPower reads and how to get one answering, and what only that brand has (a
+ * Sungrow's history from iSolarCloud). Old links to an inverter by its role alone (/integrations/inverters/hybrid)
+ * land on its page here.
  */
 export function InverterBrand({ slug }: { slug: string }) {
   const navigate = useNavigate();
-  const { data, isPending, inverters } = useInverters();
+  const { data, isPending, error, inverters } = useInverters();
   const brand = useBrands().find((b) => b.slug === slug);
   const role = asRole(slug);
 
@@ -256,10 +179,13 @@ export function InverterBrand({ slug }: { slug: string }) {
       />
     );
   const about = BRAND_ABOUT[brand.name];
+  const canConnect = !!data?.available && !data.read_only;
+  const anyMain = inverters.some((i) => i.hybrid);
   return (
     <>
       <SubPageHeader back={back} id="h-brand" title={brand.name} sub={about?.about ?? ""} />
-      <Summary brand={brand} />
+      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {data && !data.available && <p className="m-0 text-sm leading-[22px] text-ink-muted">{data.error}</p>}
       <SettingsSection
         id="h-brand-connected"
         title="Connected"
@@ -269,11 +195,24 @@ export function InverterBrand({ slug }: { slug: string }) {
             : `No ${brand.name} inverter is connected yet.`
         }
       >
-        {brand.inverters.length > 0 && (
+        {(brand.inverters.length > 0 || canConnect) && (
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
             {brand.inverters.map((i) => (
               <InverterRow key={i.device.role} inverter={i} />
             ))}
+            {canConnect && (
+              <IntegrationLink
+                to="/integrations/inverters/$brand/connect"
+                params={{ brand: brand.slug }}
+                icon="plus"
+                name={anyMain ? `Add a ${brand.name}` : `Connect a ${brand.name}`}
+                detail={
+                  anyMain
+                    ? "A second solar inverter, or a new one to replace yours"
+                    : "Your main inverter, with the meter and the battery: nothing is recorded until it's connected"
+                }
+              />
+            )}
           </div>
         )}
         {data?.available && data.read_only && <ReadOnlyNote />}

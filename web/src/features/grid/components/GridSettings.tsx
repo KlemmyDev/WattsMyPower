@@ -15,9 +15,7 @@ import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { gridQuery } from "~/features/grid/api";
 import { RADII } from "~/features/grid/components/OutagesCard";
-import { LEVEL, REGIONS, listed, wholesaleCents } from "~/features/grid/utils";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { REGIONS, listed } from "~/features/grid/utils";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { useGeocode } from "~/features/settings/hooks/useGeocode";
@@ -383,67 +381,6 @@ function Market() {
   );
 }
 
-/** What the Grid page follows, at a glance: the network (or networks), outages around the house now and planned,
- * the radius, AEMO's region and its price now, and the grid's outlook. */
-function GridSummary() {
-  const { data: grid } = useQuery(gridQuery);
-  if (!grid) return null;
-  const out = grid.outages;
-  const networks = out?.networks?.length ? out.networks : out?.network ? [out.network] : [];
-  const level = LEVEL[grid.outlook.level];
-  const updated = out?.fetched_at ? `Outages fetched ${hhmm(out.fetched_at)}` : null;
-  return (
-    <SummaryCard
-      icon="grid"
-      color={grid.outlook.level === "normal" ? COLOR.grid : level.color}
-      label="What the Grid page follows"
-      footer={
-        <div className="border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-          {out?.error ? (
-            <span className="text-bad">{out.error}</span>
-          ) : (
-            [updated, "Every network's public outage map, matched on this server: your street is never sent anywhere."]
-              .filter(Boolean)
-              .join(". ")
-          )}
-        </div>
-      }
-    >
-      <SummaryStat
-        label={networks.length > 1 ? "Networks" : "Network"}
-        value={networks.length ? networks.map((n) => n.name).join(" + ") : "None"}
-        sub={out?.network_auto ? "From where your house is" : networks.length ? "Chosen" : "No outages followed"}
-      />
-      <SummaryStat
-        label="Outages near you"
-        value={out ? out.summary.outages : "—"}
-        color={out?.summary.outages ? COLOR.warn : undefined}
-        sub={
-          out?.summary.customers
-            ? `${out.summary.customers.toLocaleString()} homes off`
-            : `Within ${out?.radius_km ?? "—"} km`
-        }
-      />
-      <SummaryStat
-        label="Planned work"
-        value={out ? out.planned.length : "—"}
-        sub={out?.street ? `Matched to ${out.street}` : "No street set"}
-      />
-      <SummaryStat
-        label="Wholesale now"
-        value={grid.enabled && grid.market?.price != null ? wholesaleCents(grid.market.price) : "—"}
-        sub={grid.enabled ? `AEMO, ${grid.region_name}` : "Not following AEMO"}
-      />
-      <SummaryStat
-        label="Outlook"
-        value={level.word}
-        color={grid.outlook.level === "normal" ? undefined : level.color}
-        sub={level.sub}
-      />
-    </SummaryCard>
-  );
-}
-
 /** Manage → Integrations → Grid: the electricity network's outages, the street they're matched to, and AEMO. */
 export function GridSettings() {
   const system = useLive()?.system;
@@ -461,7 +398,6 @@ export function GridSettings() {
           Outages, warnings and your region are worked out from where your house is, so they need your location.
         </LocationPrompt>
       )}
-      <GridSummary />
       {/* Started afresh once the saved street is known, and after it's saved. */}
       <Network />
       <Street key={`${system?.home_street},${system?.home_suburb}`} />

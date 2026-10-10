@@ -1,21 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { amberQuery } from "~/features/amber/api";
-import { useAmberChange, useAmberPrices } from "~/features/amber/hooks";
+import { useAmberChange } from "~/features/amber/hooks";
 import type { AmberStatus } from "~/features/amber/types";
-import { priceLabel, syncLine } from "~/features/amber/utils";
+import { syncLine } from "~/features/amber/utils";
 import { errorMessage } from "~/features/common/api/utils";
-import { hhmm, longDate } from "~/features/common/formatting/utils/date";
+import { longDate } from "~/features/common/formatting/utils/date";
 import { tariffQuery } from "~/features/common/tariffs/api";
-import { COLOR } from "~/features/common/theme/utils/colors";
-import { useNow } from "~/features/common/time/hooks";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { ConfirmAction } from "~/features/integrations/components/ConfirmAction";
-import { REACH } from "~/features/integrations/components/ReachTag";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
@@ -120,72 +116,46 @@ export function AmberConnect({ onReady }: { onReady: () => void }) {
   );
 }
 
-/** The connection at a glance: whether prices are coming in, the prices now, how often they change, and when they
- * were last fetched; then the key, the prices kept, and disconnecting. */
-function AmberSummary({ status }: { status: AmberStatus }) {
-  const now = useNow();
-  const prices = useAmberPrices(now);
+/** The connection: the key it uses and when prices were last fetched, with disconnecting on the right. */
+function AmberConnection({ status }: { status: AmberStatus }) {
   const { disconnect } = useAmberChange();
   const toast = useToast();
-  const ready = !!status.site_id;
-  const site = status.sites.find((s) => s.id === status.site_id);
   return (
-    <SummaryCard
-      icon="dollar"
-      color={status.error || !ready ? COLOR.warn : COLOR.export}
-      label="Amber Electric"
-      footer={
-        <div className="flex flex-wrap items-start justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-          <span className="min-w-0 flex-1">
-            {status.error ? <span className="text-bad">{status.error}</span> : `API key ${status.key}`}
-            {ready && <span className="block text-ink-faint">{syncLine(status, day)}</span>}
-          </span>
-          <ConfirmAction
-            label="Disconnect"
-            doing="Disconnecting…"
-            note="The API key and Amber's prices are removed from this server. If your rates use Amber prices, they go back to a single rate at your fallback rates."
-            pending={disconnect.isPending}
-            error={disconnect.error}
-            run={(done) =>
-              disconnect.mutate(undefined, {
-                onSuccess: () => {
-                  done();
-                  toast("Disconnected from Amber.");
-                },
-              })
-            }
-          />
-        </div>
+    <SettingsSection
+      id="h-amber-connection"
+      title="Connection"
+      sub={
+        <>
+          API key {status.key}, through the internet.
+          {status.site_id && <span className="block text-ink-faint">{syncLine(status, day)}</span>}
+        </>
+      }
+      aside={
+        <ConfirmAction
+          label="Disconnect"
+          doing="Disconnecting…"
+          note="The API key and Amber's prices are removed from this server. If your rates use Amber prices, they go back to a single rate at your fallback rates."
+          pending={disconnect.isPending}
+          error={disconnect.error}
+          run={(done) =>
+            disconnect.mutate(undefined, {
+              onSuccess: () => {
+                done();
+                toast("Disconnected from Amber.");
+              },
+            })
+          }
+        />
       }
     >
-      <SummaryStat
-        label="Status"
-        value={!ready ? "Choose a site" : status.error ? "Not updating" : "Connected"}
-        color={status.error || !ready ? COLOR.warn : undefined}
-        sub={site?.network ?? REACH.cloud.label}
-      />
-      <SummaryStat
-        label="From the grid now"
-        value={prices?.now.general != null ? priceLabel(prices.now.general) : "—"}
-        sub="per kWh"
-      />
-      <SummaryStat
-        label="Feed-in now"
-        value={prices?.now.feed_in != null ? priceLabel(prices.now.feed_in) : "—"}
-        sub="per kWh"
-      />
-      <SummaryStat
-        label="Prices change"
-        value={status.interval_length ? `every ${status.interval_length} min` : "—"}
-        sub={status.last_sync ? `Fetched ${hhmm(status.last_sync)}` : "Not fetched yet"}
-      />
-    </SummaryCard>
+      {null}
+    </SettingsSection>
   );
 }
 
 /**
  * Manage → Integrations → Amber Electric: connecting with an API key (optional: until one's pasted here, nothing calls
- * Amber and no cost uses its prices), then the connection at a glance, the site, and whether the rates use its prices.
+ * Amber and no cost uses its prices), then the site, whether the rates use its prices, and the connection itself.
  */
 export function AmberSettings() {
   const { data: status, isPending, error } = useQuery(amberQuery);
@@ -212,7 +182,7 @@ export function AmberSettings() {
       )}
       {status?.connected && (
         <>
-          <AmberSummary status={status} />
+          {status.error && <p className="m-0 text-sm text-bad">Not updating: {status.error}</p>}
           {(status.sites.length > 1 || !status.site_id) && (
             <SettingsSection id="h-amber-site" title="Site" sub="Which of your account's sites the prices are for.">
               <SitePicker status={status} />
@@ -239,6 +209,7 @@ export function AmberSettings() {
               </p>
             </SettingsSection>
           )}
+          <AmberConnection status={status} />
         </>
       )}
     </>
