@@ -151,6 +151,7 @@ def parse_cap(xml: str) -> dict[str, Any] | None:
                     continue
             if len(ring) >= 3:
                 polygons.append(ring)
+    web = (info.findtext("c:web", "", CAP) or "").strip()
     return {
         "id": (root.findtext("c:identifier", "", CAP) or "").strip(),
         "event": event,
@@ -160,6 +161,8 @@ def parse_cap(xml: str) -> dict[str, Any] | None:
         "effective": _time(info.findtext("c:effective", None, CAP)),
         "expires": _time(info.findtext("c:expires", None, CAP)),
         "areas": [a for a in areas if a],
+        # The Bureau's page for it (its warnings page, as it gives it), over https.
+        "url": re.sub(r"^http://", "https://", web) if web.startswith(("http://", "https://")) else None,
         "codes": codes,
         "polygons": polygons,
     }

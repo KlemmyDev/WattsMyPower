@@ -4,6 +4,7 @@ import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
 import { sameDay } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { buttonClass } from "~/features/common/ui/components/Button";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
@@ -56,10 +57,16 @@ function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
           )}
         />
       </button>
-      {open && w.description && (
-        <p className="m-0 pt-1 pb-1.5 pl-[34px] text-[12.5px] leading-[18px] whitespace-pre-wrap text-ink-muted">
-          {w.description}
-        </p>
+      {open && (w.description || w.url) && (
+        <div className="flex flex-col items-start gap-2 pt-1 pb-1.5 pl-[34px] text-[12.5px] leading-[18px]">
+          {w.description && <p className="m-0 whitespace-pre-wrap text-ink-muted">{w.description}</p>}
+          {w.url && (
+            <a href={w.url} target="_blank" rel="noreferrer" className={buttonClass("link", "sm", "gap-1")}>
+              More from the Bureau
+              <Icon name="external" size={13} />
+            </a>
+          )}
+        </div>
       )}
     </li>
   );

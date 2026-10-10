@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime as dt
 import urllib.parse
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,8 +40,11 @@ from app.features.grid.outages.base import (
     ask,
     in_bounds,
     inside,
+    job,
     rings_of,
     split,
+    suburb_of,
+    with_query,
 )
 
 QLD_TIME = dt.timezone(dt.timedelta(hours=10))  # Queensland has no daylight saving
@@ -138,6 +142,18 @@ class EnergyQueensland(Provider):
         for f in (data.get("features") or []) if isinstance(data, dict) else []:
             rings += rings_of(f.get("geometry"))[1]
         return rings
+
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Energex's outage finder opens an outage now by its number; its planned work, and all of Ergon's, only as
+        the list filtered to the suburb (Ergon's "next 5 days" list, which has its planned work too)."""
+        suburb = suburb_of(o)
+        if self.prefix == "ex":
+            finder = f"{self.site}/outages/outage-finder"
+            if not o["planned"]:
+                return with_query(f"{finder}/emergency-outages-text-view", event=job(o)), True
+            return with_query(f"{finder}/planned-outages-text-view", **{"suburb-postcode": suburb}), False
+        finder = f"{self.site}/network/outages/outage-finder/outage-finder-text-view"
+        return with_query(finder, suburb=suburb, source="1074971" if suburb else ""), False
 
     def serves(self, house: House, where: Any) -> bool | None:
         if where:
