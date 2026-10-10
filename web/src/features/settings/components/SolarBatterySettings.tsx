@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { SystemInfo } from "~/features/common/live/types";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
@@ -6,23 +6,27 @@ import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { SYSTEM_SETTINGS, type Settings, type SystemSettingKey } from "~/features/common/settings/types";
 import { saveSettingsError } from "~/features/common/settings/utils";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { inverterName } from "~/features/common/live/utils";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, Input } from "~/features/common/ui/components/Field";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { SaveBar, SettingsSection } from "~/features/settings/components/SettingsSection";
+import {
+  NumberRow,
+  OptionList,
+  OptionRow,
+  SaveBanner,
+  SettingsSection,
+  SettingsSplit,
+} from "~/features/settings/components/SettingsSection";
+import { SystemDiagram, type DiagramFigures } from "~/features/settings/components/SystemDiagram";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Settings → Solar and battery: what the inverters report about the installation at the top, then the details
- * they can't.
+ * Settings → Solar and battery: the installation as a diagram on the left (figures not saved yet drawn as they'd be),
+ * and on the right what the inverters report and the details they can't, saved together.
  */
 export function SolarBatterySettings() {
   const live = useLive();
-  const s = live?.system;
-  const last = live?.last_success;
-  const overridden = !!s?.battery_kwh_override;
   return (
     <>
       <SubPageHeader
@@ -31,55 +35,135 @@ export function SolarBatterySettings() {
         title="Solar and battery"
         sub="What your inverters report about your system, and the details they can't."
       />
-      <SummaryCard
-        icon="sun"
-        color={COLOR.solar}
-        label="Your system"
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-            <span className="min-w-0 flex-1">
-              {last ? `Read from your inverter at ${hhmm(last)}` : "Not read from your inverter yet"}
-              {s?.serial && <span className="text-ink-faint"> · Serial {s.serial}</span>}
-            </span>
+      {/* Mounted once the status has loaded, so the fields start from the saved values. */}
+      {live && <SolarBattery system={live.system} last={live.last_success} />}
+    </>
+  );
+}
+
+/** A read-only fact in an OptionList: what it is, and its value on the right. */
+function Fact({ label, help, children }: { label: string; help?: ReactNode; children: ReactNode }) {
+  return (
+    <OptionRow label={label} help={help}>
+      <span className="max-w-[16rem] text-right text-[15px] break-words text-ink-muted tabular-nums">{children}</span>
+    </OptionRow>
+  );
+}
+
+function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | null }) {
+  const toast = useToast();
+  const form = useSystemDetails(s);
+  const v = (k: SystemSettingKey) => (form.values[k].trim() === "" ? null : Number(form.values[k]) || null);
+  const override = v("battery_kwh_override");
+  const figures: DiagramFigures = {
+    pvKw: v("pv_kw") ?? s.pv_kw,
+    batteryKwh: override ?? s.inverter_battery_kwh ?? null,
+    reservePct: s.inverter_reserve ?? v("battery_reserve_fallback"),
+    maxKw: v("battery_max_kw"),
+  };
+  const reportedKwh = s.inverter_battery_kwh;
+  const reportedReserve = s.inverter_reserve;
+  const row = (key: SystemSettingKey, label: string, help: ReactNode, unit: string, step: string) => (
+    <NumberRow
+      label={label}
+      help={help}
+      unit={unit}
+      step={step}
+      value={form.values[key]}
+      onChange={(value) => form.set(key, value)}
+    />
+  );
+
+  return (
+    <SettingsSplit
+      visual={
+        <SettingsSection
+          id="h-diagram"
+          title="Your system"
+          sub={last ? `Read from your inverter at ${hhmm(last)}.` : "Not read from your inverter yet."}
+          aside={
             <ButtonLink to="/integrations/sungrow" variant="outline" size="sm">
               Manage inverters
             </ButtonLink>
-          </div>
-        }
+          }
+        >
+          <SystemDiagram system={s} figures={figures} />
+        </SettingsSection>
+      }
+    >
+      <SettingsSection
+        id="h-sys-details"
+        title="Details"
+        sub="What your inverter can't tell us. The forecast and bills use them as soon as they're saved."
       >
-        <SummaryStat
-          label="Inverter"
-          value={s?.model ?? "—"}
-          sub={[s?.brand, "hybrid", s?.nominal_kw && `${s.nominal_kw} kW`].filter(Boolean).join(" · ")}
+        <OptionList>
+          {row(
+            "pv_kw",
+            "Solar array size",
+            "All your panels, on every inverter. The forecast starts from it, then learns.",
+            "kW",
+            "0.01",
+          )}
+          {row(
+            "battery_kwh_override",
+            "Battery capacity",
+            reportedKwh
+              ? `0 uses what your inverter reports (${reportedKwh} kWh). Set it only if that's wrong.`
+              : "Your inverter doesn't report one, so set it here.",
+            "kWh",
+            "0.1",
+          )}
+          {row(
+            "battery_reserve_fallback",
+            "Backup reserve",
+            reportedReserve != null
+              ? `Your inverter reports ${pct(reportedReserve)}, which is used instead.`
+              : "The charge kept for blackouts.",
+            "%",
+            "1",
+          )}
+          {row(
+            "battery_max_kw",
+            "Charge and discharge rate",
+            "How fast the battery fills and empties, for the forecast.",
+            "kW",
+            "0.1",
+          )}
+        </OptionList>
+        <SaveBanner
+          dirty={form.changed.length > 0}
+          pending={form.pending}
+          error={form.error}
+          onDiscard={form.reset}
+          onSave={() => form.submit(() => toast("System details saved. Updating the forecast."))}
         />
-        <SummaryStat label="Solar array" value={s?.pv_kw ? `${s.pv_kw} kW` : "Not set"} sub="All your panels" />
-        <SummaryStat
-          label="Battery"
-          value={s?.battery_kwh ? `${s.battery_kwh} kWh` : "—"}
-          sub={overridden ? "Set by you" : "From the inverter"}
-        />
-        <SummaryStat
-          label="Backup reserve"
-          value={s?.battery_reserve != null ? pct(s.battery_reserve) : "—"}
-          sub={s?.inverter_reserve != null ? "From the inverter" : "Set by you"}
-        />
-        <SummaryStat label="Grid" value={s?.phases ?? "—"} sub="Connection" />
-        {s?.pv2 && (
-          <SummaryStat
-            label="Second inverter"
-            value={s.pv2.model ?? "Not read yet"}
-            sub={s.pv2.behind_meter ? "Behind the hybrid's meter" : "Counted as export"}
-            title={
-              s.pv2.behind_meter
-                ? "Behind the hybrid's meter"
-                : "Outside the hybrid's meter: its output is counted as export"
-            }
-          />
-        )}
-      </SummaryCard>
-      {/* Mounted once the status has loaded, so the fields start from the saved values. */}
-      {s && <SystemForm system={s} />}
-    </>
+      </SettingsSection>
+      <SettingsSection id="h-equipment" title="From your inverter" sub="Read over your local network.">
+        <OptionList>
+          <Fact label="Inverter">
+            {s.model ? `${inverterName(s)}${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"}
+          </Fact>
+          <Fact label="Serial number">{s.serial || "—"}</Fact>
+          <Fact label="Battery">{reportedKwh ? `${reportedKwh} kWh` : "Not reported"}</Fact>
+          <Fact label="Backup reserve">{reportedReserve != null ? pct(reportedReserve) : "Not reported"}</Fact>
+          <Fact label="Grid connection">{s.phases || "—"}</Fact>
+          {s.pv2 && (
+            <Fact
+              label="Second inverter"
+              help={
+                s.pv2.behind_meter
+                  ? "Behind the hybrid's meter."
+                  : "Outside the hybrid's meter, so its output counts as export."
+              }
+            >
+              {s.pv2.model
+                ? `${inverterName(s.pv2)}${s.pv2.nominal_kw ? `, ${s.pv2.nominal_kw} kW` : ""}`
+                : "Not read yet"}
+            </Fact>
+          )}
+        </OptionList>
+      </SettingsSection>
+    </SettingsSplit>
   );
 }
 
@@ -127,7 +211,12 @@ export function useSystemDetails(s: SystemInfo, blank: SystemSettingKey[] = []) 
   };
 
   const set = (key: SystemSettingKey, value: string) => setValues((v) => ({ ...v, [key]: value }));
-  return { values, set, changed, submit, error, pending: save.isPending };
+  /** Back to what's saved. */
+  const reset = () => {
+    setValues(valuesOf(s));
+    setError("");
+  };
+  return { values, set, reset, changed, submit, error, pending: save.isPending };
 }
 
 export type SystemDetails = ReturnType<typeof useSystemDetails>;
@@ -193,29 +282,5 @@ export function SystemDetailsFields({ system: s, form }: { system: SystemInfo; f
         "How fast the battery can charge or discharge. The forecast uses it to work out when the battery fills and empties.",
       )}
     </div>
-  );
-}
-
-/** The details the inverter can't report, or that override what it does. */
-function SystemForm({ system: s }: { system: SystemInfo }) {
-  const toast = useToast();
-  const form = useSystemDetails(s);
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    form.submit(() => toast("System details saved. Updating the forecast."));
-  };
-
-  return (
-    <SettingsSection
-      id="h-sys-details"
-      title="Details your inverter can't tell us"
-      sub="Changes apply straight away across the dashboard, and the forecast updates."
-    >
-      <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
-        <SystemDetailsFields system={s} form={form} />
-        <SaveBar label="Save details" pending={form.pending} disabled={!form.changed.length} error={form.error} />
-      </form>
-    </SettingsSection>
   );
 }

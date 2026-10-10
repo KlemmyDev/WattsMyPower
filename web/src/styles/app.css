@@ -157,6 +157,8 @@
 
   --animate-pulse-soft: wmpPulse 2s ease-in-out infinite;
   --animate-ring-drain: ringDrain 2.4s ease-in-out infinite;
+  /* A dashed line's dashes creeping along it: the way power runs, in Settings' system diagram. */
+  --animate-dash: wmpDash 1.4s linear infinite;
 
   /* Entrances: a section rising into place, a quiet fade, a tooltip popping in, bars growing up from
      their baseline, a fill sweeping across its track, and a chart drawing in from the left. Each fills
@@ -960,6 +962,11 @@
 @keyframes wmpDrain {
   to {
     stroke-dashoffset: -1;
+  }
+}
+@keyframes wmpDash {
+  to {
+    stroke-dashoffset: -12;
   }
 }
 @keyframes wmpSpin {
