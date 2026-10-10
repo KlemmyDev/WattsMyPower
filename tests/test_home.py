@@ -575,3 +575,20 @@ def test_devices_that_cant_be_switched_say_so_and_the_demo_tv_can(client: TestCl
     assert next(d for d in paused["devices"] if d["id"] == tv_id)["rule"]["paused_until"] > time.time()
     cleared = client.delete(f"/api/home/devices/{tv_id}/rule").json()
     assert next(d for d in cleared["devices"] if d["id"] == tv_id)["rule"] is None
+
+
+def test_a_connected_tesla_shows_the_car_without_the_dashboards_cars() -> None:
+    from types import SimpleNamespace
+
+    from app.features.home.router import _car
+
+    def svc(connected: bool) -> Any:
+        return SimpleNamespace(
+            car=SimpleNamespace(ids=lambda: []),
+            tesla=SimpleNamespace(connected=connected, history=SimpleNamespace(charged_w=lambda s, e: {T0: 7000.0})),
+            home=SimpleNamespace(repo=None),
+            readings=None,
+        )
+
+    assert _car(svc(True), T0, T0 + 3600) == {T0: 7000.0}  # what the Tesla measured, with no Electric vehicle car
+    assert _car(svc(False), T0, T0 + 3600) is None  # no EV connected at all

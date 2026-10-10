@@ -825,6 +825,26 @@ def test_a_car_can_be_left_out(svc: TeslaService, provider: str) -> None:
         svc.remove(VIN)
 
 
+def test_a_tesla_needs_no_dashboard_car(svc: TeslaService, provider: str, tessie: FakeTessie, live: FakeLive,
+                                        clock: Clock) -> None:  # fmt: skip
+    connect(svc, provider)
+    car = svc.status()["vehicles"][0]["car"]
+    assert svc.cars.delete(car)  # Manage → Integrations → Electric vehicle → disconnect
+    tessie.charge(battery_level=64)
+    minutes(svc, live, clock, 2, grid=500)
+    v = svc.status()["vehicles"][0]
+    # Its model's figures instead (a Model Y: 5 A on three phases), and its battery's size; its level kept by VIN.
+    assert v["car"] is None and v["min_w"] == 5 * 230 * 3
+    model = "tesla-model-y-lr" if provider == "tessie" else "tesla-model-y-rwd"
+    assert svc._battery_kwh(VIN) == {"tesla-model-y-lr": 75, "tesla-model-y-rwd": 57.5}[model]
+    assert svc.car_levels(VIN, int(clock()) - 3600, int(clock()) + 1)["points"][-1]["soc"] == 64
+    assert svc.history.last_read(VIN, int(clock()))[1] == 64  # type: ignore[index]
+    # Tied to a car again, and untied.
+    made = svc.cars.create({"name": "Zappy", "model": model})["id"]
+    assert svc.configure(VIN, {"car": made})["vehicles"][0]["car"] == made
+    assert svc.configure(VIN, {"car": None})["vehicles"][0]["car"] is None
+
+
 def test_the_api_never_shows_the_token(config: Config, tessie: FakeTessie, radio: FakeRadio) -> None:
     app = create_app(config, poll=False, serve_dashboard=False)
     tesla = app.state.services.tesla
