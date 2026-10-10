@@ -8,8 +8,8 @@ Electricity network. An outage "affects you" when it lists the house's street in
 the street's name only, no number, entered there), or, for an outage drawn as an area, when the area covers the
 house's location.
 
-Fetched every 15 minutes (the networks refresh as often), planned work to come every hour, a network's service area
-once a day. Kept in memory only.
+Fetched about every 15 minutes (the networks refresh as often; give or take a few, at random), planned work to come
+every hour, a network's service area once a day. Kept in memory only.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import asyncio
 import contextlib
 import logging
 import math
+import random
 import re
 import threading
 import time
@@ -30,6 +31,7 @@ from app.features.settings.store import SettingsStore
 log = logging.getLogger(__name__)
 
 EVERY = 15 * 60
+JITTER = 0.2  # each wait is EVERY give or take this much, so the fetches don't land like clockwork
 FUTURE_EVERY = 3600
 AREA_EVERY = 24 * 3600
 PLANNED_AHEAD = 14 * 86400  # planned work nearby is listed this far ahead (work at the house's street, however far)
@@ -75,6 +77,11 @@ def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
         )
     )
     return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][round(((deg + 360) % 360) / 45) % 8]
+
+
+def next_wait(rand: Callable[[float, float], float] = random.uniform) -> float:
+    """Seconds until the next fetch: EVERY, give or take JITTER (12 to 18 minutes)."""
+    return EVERY * rand(1 - JITTER, 1 + JITTER)
 
 
 def inside(lat: float, lon: float, ring: Ring) -> bool:
@@ -164,7 +171,7 @@ class OutageService:
                 log.exception("Fetching power outages failed")
             assert self._wake is not None
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._wake.wait(), timeout=EVERY)
+                await asyncio.wait_for(self._wake.wait(), timeout=next_wait())
             self._wake.clear()
 
     def refresh(self) -> None:

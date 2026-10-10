@@ -10,7 +10,7 @@ import pytest
 from app.core.config import Config
 from app.core.database import Database
 from app.features.grid.outages.energyq import CHROME, browser_headers, outage, qld_time
-from app.features.grid.outages.service import OutageService, bearing, distance_km, inside, street_key
+from app.features.grid.outages.service import OutageService, bearing, distance_km, inside, next_wait, street_key
 from app.features.settings.store import SettingsStore
 
 HOME = (-27.6215, 153.1350)  # Springwood
@@ -185,3 +185,9 @@ def test_compressed_answers_are_unpacked(monkeypatch: pytest.MonkeyPatch) -> Non
     resp.headers["Content-Encoding"] = "gzip"
     monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: resp)
     assert http.get_json("https://example.invalid/x.geojson") == {"features": []}
+
+
+def test_fetches_are_spread_out() -> None:
+    assert next_wait(lambda lo, hi: lo) == 12 * 60 and next_wait(lambda lo, hi: hi) == 18 * 60
+    waits = {next_wait() for _ in range(20)}
+    assert len(waits) > 1 and all(12 * 60 <= w <= 18 * 60 for w in waits)
