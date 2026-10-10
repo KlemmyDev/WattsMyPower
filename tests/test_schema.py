@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
+import pytest
+
+from app.core import database
 from app.core.database import Database
 from app.core.schema import MIGRATIONS, ROLLUP_SQL, SAMPLE_COLUMNS, add_missing_sample_columns
 
@@ -12,13 +16,75 @@ def test_migrate_creates_every_table(db: Database) -> None:
     with db.reading() as conn:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-    assert {"samples", "samples_5m", "settings", "kv", "users", "sessions",
-            "alert_channels", "alert_rules", "alert_state", "alert_history", "prices"} <= tables  # fmt: skip
+    assert {"samples", "samples_5m", "settings", "kv", "users", "sessions", "prices"} <= tables
+    assert not {t for t in tables if t.startswith("alert_") or t == "push_subscriptions"}
     assert version == len(MIGRATIONS)
 
 
 def test_migrate_is_idempotent(db: Database) -> None:
     assert db.migrate() == db.migrate() == len(MIGRATIONS)
+
+
+def test_a_step_that_fails_part_way_is_undone_and_runs_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Python's sqlite3 runs CREATE and ALTER outside any transaction unless one is opened: without one, a step that
+    failed after its ALTER would fail on "duplicate column" on every start after."""
+    db = Database(str(tmp_path / "half.db"))
+    db.migrate()
+    disk_full = True
+
+    def _add_a_column(conn: sqlite3.Connection) -> None:
+        conn.execute("ALTER TABLE kv ADD COLUMN note TEXT")
+        conn.execute("INSERT INTO kv (key, value) VALUES ('x', 'y')")
+        if disk_full:
+            raise sqlite3.OperationalError("database or disk is full")
+
+    monkeypatch.setattr(database, "MIGRATIONS", [*MIGRATIONS, _add_a_column])
+    with pytest.raises(sqlite3.OperationalError, match="disk is full"):
+        db.migrate()
+    assert f"Database migration {len(MIGRATIONS) + 1} of {len(MIGRATIONS) + 1} (add_a_column) failed" in caplog.text
+    with db.reading() as c:
+        assert "note" not in {r[1] for r in c.execute("PRAGMA table_info(kv)")}
+        assert c.execute("SELECT COUNT(*) FROM kv WHERE key = 'x'").fetchone() == (0,)
+        assert c.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+
+    disk_full = False
+    assert db.migrate() == len(MIGRATIONS) + 1
+    with db.reading() as c:
+        assert "note" in {r[1] for r in c.execute("PRAGMA table_info(kv)")}
+        assert c.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) + 1
+
+
+def test_a_database_from_a_newer_version_is_used_with_a_warning(db: Database, caplog: pytest.LogCaptureFixture) -> None:
+    """Going back to an older channel's version leaves the newer one's schema: it starts, but says so."""
+    with db.writing() as conn:
+        conn.execute(f"PRAGMA user_version = {len(MIGRATIONS) + 2}")
+    with caplog.at_level(logging.WARNING):
+        db.migrate()
+    [warning] = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert "newer version of WattsMyPower" in warning.getMessage()
+    with db.reading() as c:
+        assert c.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) + 2  # left as it was
+
+
+def test_the_removed_alerts_tables_and_their_secrets_go(tmp_path: Path) -> None:
+    path = str(tmp_path / "alerts.db")
+    drop_at = next(i for i, m in enumerate(MIGRATIONS) if m.__name__ == "_drop_alerts")
+    with sqlite3.connect(path) as conn:
+        for m in MIGRATIONS[:drop_at]:
+            m(conn)
+        conn.execute(f"PRAGMA user_version = {drop_at}")
+        conn.execute("INSERT INTO alert_channels VALUES ('pushover', 1, '{\"token\": \"secret\"}', 1)")
+        conn.execute("INSERT INTO push_subscriptions (id, endpoint, p256dh, auth, name, created_at)"
+                     " VALUES ('a', 'https://push.example/x', 'k', 's', 'Phone', 1)")  # fmt: skip
+        conn.executemany("INSERT INTO kv VALUES (?, ?)", [("webpush_vapid", '{"private": "k"}'), ("tariff", "{}")])
+    Database(path).migrate()
+    with sqlite3.connect(path) as c:
+        tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master")}
+        assert not {"alert_channels", "alert_rules", "alert_state", "alert_history", "alert_history_ts",
+                    "push_subscriptions"} & tables  # fmt: skip
+        assert c.execute("SELECT key FROM kv").fetchall() == [("tariff",)]
 
 
 def test_upgrades_a_database_from_before_migrations(tmp_path: Path) -> None:

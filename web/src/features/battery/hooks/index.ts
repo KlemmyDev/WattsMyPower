@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { batteryQuery, startControl, stopControl } from "~/features/battery/api";
+import { batteryQuery, setExperimental, startControl, stopControl } from "~/features/battery/api";
 import { liveQuery } from "~/features/common/live/api";
 import type { BatteryView } from "~/features/battery/types";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import type { BatteryMode } from "~/features/common/live/types";
 
-/** Start or stop a battery control; each answers with the battery as it now is. */
+/** Start or stop a battery control, or turn the controls on for an untried model; each answers with the battery as it
+ * now is. */
 export function useBatteryChange() {
   const qc = useQueryClient();
   const done = (view: BatteryView) => {
@@ -17,6 +18,7 @@ export function useBatteryChange() {
   return {
     start: useMutation({ mutationFn: startControl, onSuccess: done }),
     stop: useMutation({ mutationFn: stopControl, onSuccess: done }),
+    experiment: useMutation({ mutationFn: setExperimental, onSuccess: done }),
   };
 }
 

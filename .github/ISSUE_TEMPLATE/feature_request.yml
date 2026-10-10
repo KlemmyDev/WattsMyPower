@@ -1,0 +1,38 @@
+name: Feature request
+description: An idea for something WattsMyPower could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Saying what you're trying to do, rather than only how, helps find the best way to do it.
+        For a new inverter or device, use **New inverter or hardware** instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you'd like to do
+      description: What you're trying to find out or get done, and what gets in the way now.
+      placeholder: I'd like to know before a storm whether the battery will last the night if the power goes out.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work
+      description: Where it would go in the dashboard and what it would show or do. Sketches and screenshots welcome.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now
+      description: Any workaround, or another app that does it.
+
+  - type: checkboxes
+    id: local
+    attributes:
+      label: Before you send it
+      options:
+        - label: I've checked the open issues for the same idea.
+          required: true

@@ -34,6 +34,8 @@ export type UpdateStatus = {
   error: string | null;
   repo: string;
   branch: string;
+  /** It runs on Windows (in WSL), so it's installed and updated by hand with install.ps1. */
+  windows: boolean;
   /** Updating from here, by updater.sh on the machine it's installed on. */
   install: Installer;
 };
