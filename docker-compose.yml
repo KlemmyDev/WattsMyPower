@@ -52,6 +52,9 @@ services:
       COLLECTOR_URL: http://collector:8081
       COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}
       COLLECTOR_WRITES: ${COLLECTOR_WRITES:-true}
+      # Loggers to turn up to DEBUG, comma-separated (tesla_fleet_api, bleak_retry_connector, bleak): what the car
+      # says over Bluetooth, message by message, when a read fails and the INFO log doesn't say why.
+      LOG_DEBUG: ${LOG_DEBUG:-}
       PV2_BEHIND_METER: ${PV2_BEHIND_METER:-true}
       POLL_INTERVAL: ${POLL_INTERVAL:-60}
       RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}

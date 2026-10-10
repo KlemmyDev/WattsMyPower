@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -129,4 +130,8 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# LOG_DEBUG: loggers to turn up to DEBUG, comma-separated ("tesla_fleet_api,bleak"), to see what a device says
+# message by message when the INFO log doesn't say why something failed.
+for _name in filter(None, (n.strip() for n in os.environ.get("LOG_DEBUG", "").split(","))):
+    logging.getLogger(_name).setLevel(logging.DEBUG)
 app = create_app()

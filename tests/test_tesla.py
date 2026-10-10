@@ -1713,3 +1713,36 @@ def test_the_spare_power_shows_without_waiting_a_turn_of_the_loop(svc: TeslaServ
     assert status["vehicles"][0]["spare_w"] == 4000
     # And changing who gets the sun first starts the average afresh, with a figure straight away too.
     assert svc.configure(VIN, {"first": "battery"})["vehicles"][0]["spare_w"] is not None
+
+
+def test_failed_reads_are_spaced_out_even_while_the_car_is_followed_closely(ble: TeslaService, radio: FakeRadio,
+                                                                            tessie: FakeTessie, live: FakeLive,
+                                                                            clock: Clock) -> None:  # fmt: skip
+    # Charging at home: followed closely, read every 15 s. Then it stops answering its charge.
+    radio.asleep = False
+    tessie.state["charge_state"].update(charging_state="Charging", charger_actual_current=8)
+    ble._next_read = 0
+    ble.read()
+    assert ble.status()["vehicles"][0]["follow"] == "active"
+    radio.fail = TeslaError("The car didn't answer over Bluetooth in time while reading its charge.")
+    waits = []
+    for _ in range(4):
+        clock.t += 1
+        ble._next_read = 0
+        ble.read()
+        ble.tick()  # would otherwise bring the next read forward to the 15 s of a car charging at home
+        waits.append(ble.status()["next_read"] - int(clock.t))
+    assert waits == [60, 120, 300, 300]
+    # A command from the page still goes (the car takes commands), but doesn't bring the read forward either.
+    ble.command(VIN, {"action": "amps", "amps": 6})
+    assert ble.status()["vehicles"][0]["state"]["amps"] == 6
+    assert ble.status()["next_read"] - int(clock.t) == 300
+    # Answering again: back to the usual pace at once.
+    radio.fail = None
+    clock.t += 1
+    ble._next_read = 0
+    ble.read()
+    ble.tick()
+    assert ble.status()["error"] is None and ble._retry_at == 0
+    assert ble.status()["vehicles"][0]["hold"]  # (the command from the page put it on hold: read every five minutes)
+    assert ble.status()["next_read"] - int(clock.t) <= POLL_IDLE
