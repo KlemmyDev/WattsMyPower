@@ -56,7 +56,8 @@ function house(s: SystemInfo | undefined) {
   return join([
     HOUSE_STYLES.find((st) => st.value === h.style)?.name,
     h.storeys === 2 ? "double storey" : "single storey",
-    h.garage ? `${h.garage === 2 ? "double" : "single"} garage` : null,
+    h.garage ? `${h.garage === 2 ? "double" : "single"} ${h.garageKind}` : null,
+    h.pool ? "pool" : null,
   ]);
 }
 

@@ -33,6 +33,8 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "hazard_warnings": 1,
         "house_storeys": 1,
         "garage_spaces": 0,
+        "house_panels": 0,
+        "house_pool": 0,
         "system_cost": 0,
         "system_installed": 0,
         "battery_installed": 0,
@@ -44,6 +46,11 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "weather_model": "best_match",
         "bill_discount_on": "usage",
         "house_style": "estate",
+        "garage_kind": "garage",
+        "house_walls": "auto",
+        "house_roof": "auto",
+        "house_fence": "auto",
+        "house_garden": "auto",
         "nem_region": "auto",
         "power_network": "auto",
         "inverter_places": [],
@@ -61,6 +68,54 @@ def test_where_each_inverter_and_battery_is_is_a_list_of_places(db: Database, co
     for bad in (["roof"], ["wall"] * 4, "wall"):
         with pytest.raises(ValueError, match="inverter_places must be a list"):
             store.save({"inverter_places": bad})
+
+
+def test_the_house_keeps_its_look_and_a_house_saved_before_it_could_gets_its_styles_own(
+    db: Database, config: Config
+) -> None:
+    store = SettingsStore(db, config)
+    store.load()
+    # A house saved before there was more to choose: its style and garage stay, the rest is the style's own.
+    store.save({"house_style": "queenslander", "garage_spaces": 1})
+    fresh = SettingsStore(db, config)
+    fresh.load()
+    values = fresh.all_values()
+    assert (values["house_style"], values["garage_spaces"], values["garage_kind"]) == ("queenslander", 1, "garage")
+    assert (values["house_walls"], values["house_roof"], values["house_panels"], values["house_pool"]) == (
+        "auto",
+        "auto",
+        0,
+        0,
+    )
+    saved = store.save(
+        {
+            "house_style": "townhouse",
+            "garage_kind": "carport",
+            "house_walls": "brick_blonde",
+            "house_roof": "terracotta",
+            "house_fence": "slat",
+            "house_garden": "native",
+            "house_panels": 18,
+            "house_pool": 1,
+        }
+    )
+    assert saved["house_style"] == "townhouse" and saved["garage_kind"] == "carport"
+    assert (saved["house_walls"], saved["house_roof"], saved["house_fence"], saved["house_garden"]) == (
+        "brick_blonde",
+        "terracotta",
+        "slat",
+        "native",
+    )
+    assert (saved["house_panels"], saved["house_pool"]) == (18, 1)
+    for bad, message in (
+        ({"house_style": "castle"}, "house_style must be one of"),
+        ({"house_roof": "purple"}, "house_roof must be one of"),
+        ({"house_panels": 61}, "house_panels must be between 0 and 60"),
+        ({"house_panels": 2.5}, "house_panels must be a whole number"),
+        ({"house_pool": 2}, "house_pool must be between 0 and 1"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            store.save(bad)
 
 
 def test_a_choice_takes_only_its_values_and_its_default_isnt_stored(db: Database, config: Config) -> None:

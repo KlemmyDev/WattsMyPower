@@ -3,13 +3,20 @@ import { farmhouseLevels, type Layout } from "~/features/overview/utils/house/la
 import {
   flat,
   front,
+  frontWall,
+  LIT,
   litFront,
-  panel,
+  lookOf,
+  meterBox,
+  panelRows,
   porchLight,
+  rowsDown,
   shrub,
   side,
-  tree,
+  sideGable,
+  sideWall,
   WARM,
+  type Style,
   type StyleParts,
 } from "~/features/overview/utils/house/parts";
 
@@ -19,21 +26,9 @@ import {
  * doors onto a timber deck under a pergola, and lavender and an olive tree in the garden.
  */
 
-const CLAD = "#3a3d42";
-const CLAD_SIDE = "#2f3236";
-const BATTEN = "#4b4f56";
-const ROOF = "#2a2c30";
-const ROOF_BACK = "#232528";
 const CEDAR = "#b67d4f";
 const BLACK = "#1f2125";
 const DECK = "#b08a5f";
-
-/** Battens every so often up a wall: `at(u)` gives the batten's bottom and top at u along it. */
-const battens = (at: (u: number) => [P3, P3], u0: number, u1: number): Kid[] =>
-  Array.from({ length: Math.floor((u1 - u0) / 0.34) }, (_, i) => {
-    const [a, b] = at(u0 + (i + 1) * 0.34);
-    return ln(a, b, { stroke: BATTEN, strokeWidth: 1.2 });
-  });
 
 /** A black-framed window or glass door on the street side, with mullions. */
 function blackFront(y: number, x0: number, x1: number, z0: number, z1: number, panes: number): Kid[] {
@@ -48,15 +43,16 @@ function blackFront(y: number, x0: number, x1: number, z0: number, z1: number, p
   return out;
 }
 
-export function farmhouse(l: Layout): StyleParts {
+function draw(l: Layout): StyleParts {
   const { wallTop: W, eave: E, ridge: R, floor } = farmhouseLevels(l.options.storeys);
+  const { walls, roof: RF } = lookOf(l, farmhouse.look);
   const house: Kid[] = [];
   const roof: Kid[] = [];
   const night: Kid[] = [];
   const doorTop = floor ? floor - 0.4 : W - 0.6;
-  /** A point on the street-side roof plane: u along the ridge, v down the slope (0..1). */
-  const plane = (u: number, v: number): P3 => [u, 4 + 4.4 * v, R - (R - E) * v];
-  const lift = (p: P3): P3 => [p[0], p[1] - 0.05, (p[2] ?? 0) + 0.1];
+  const slope = Math.hypot(4.4, R - E);
+  /** A point just above the street-side roof plane: u along the ridge, v down the slope from it. */
+  const plane = (u: number, v: number): P3 => [u, 4 + (4.4 * v) / slope - 0.05, R - ((R - E) * v) / slope + 0.1];
 
   // The back slope, the cladding, and the gable end with its glass.
   house.push(
@@ -67,25 +63,10 @@ export function farmhouse(l: Layout): StyleParts {
         [10.3, -0.4, E],
         [-0.3, -0.4, E],
       ],
-      ROOF_BACK,
+      RF.back,
     ),
-    side(10, 0, 8, 0, W, CLAD_SIDE),
-    poly(
-      [
-        [10, 0, W],
-        [10, 8, W],
-        [10, 4, R],
-      ],
-      CLAD_SIDE,
-    ),
-    ...battens(
-      (y) => [
-        [10.01, y, 0],
-        [10.01, y, W + (R - W) * (1 - Math.abs(y - 4) / 4)],
-      ],
-      0,
-      8,
-    ),
+    ...sideWall(walls, 10, 0, 8, 0, W),
+    ...sideGable(walls, 10, 0, 8, W, 4, R),
     poly(
       [
         [10.02, 1.7, W + 0.35],
@@ -103,15 +84,7 @@ export function farmhouse(l: Layout): StyleParts {
       "url(#glassR)",
     ),
     ln([10.04, 4, W + 0.45], [10.04, 4, R - 1.15], { stroke: BLACK, strokeWidth: 2 }),
-    front(8, 0, 10, 0, W, CLAD),
-    ...battens(
-      (x) => [
-        [x, 8.01, 0],
-        [x, 8.01, W],
-      ],
-      0,
-      10,
-    ),
+    ...frontWall(walls, 8, 0, 10, 0, W),
   );
   // A cedar panel round the black front door; glass doors (and windows upstairs) across the rest.
   house.push(
@@ -121,7 +94,7 @@ export function farmhouse(l: Layout): StyleParts {
     ),
     front(8.03, 1.5, 2.5, 0, Math.min(2.8, doorTop), BLACK),
     ln([2.35, 8.04, 0.9], [2.35, 8.04, 1.9], { stroke: "#c9a96b", strokeWidth: 2 }),
-    front(8.03, 0.6, 1.1, 2.0, 2.7, "#e6e6e6", { stroke: "#b5b5b5", strokeWidth: 0.8 }),
+    meterBox(8.01, 0.6, 2.0),
     ...blackFront(8, 4.2, 9.4, 0.1, Math.min(2.9, doorTop), 4),
   );
   if (floor)
@@ -147,26 +120,19 @@ export function farmhouse(l: Layout): StyleParts {
         [10.3, 8.4, E],
         [-0.3, 8.4, E],
       ],
-      ROOF,
+      RF.face,
     ),
   );
-  for (let x = 0; x < 10.3; x += 0.4)
-    roof.push(ln([x, 4, R], [x, 8.4, E], { stroke: "rgba(255,255,255,0.07)", strokeWidth: 1 }));
-  for (let r = 0; r < 2; r++)
-    for (let c = 0; c < 5; c++) {
-      const u0 = 0.6 + c * 1.9;
-      const v0 = 0.12 + r * 0.4;
-      roof.push(
-        ...panel(
-          lift(plane(u0, v0 + 0.36)),
-          lift(plane(u0 + 1.75, v0 + 0.36)),
-          lift(plane(u0 + 1.75, v0)),
-          lift(plane(u0, v0)),
-        ),
-      );
-    }
+  for (let x = 0; x < 10.3; x += 0.4) roof.push(ln([x, 4, R], [x, 8.4, E], { stroke: RF.line, strokeWidth: 1 }));
   roof.push(
-    ln([-0.3, 4, R], [10.3, 4, R], { stroke: "#1a1b1e", strokeWidth: 3.5 }),
+    ...panelRows(
+      plane,
+      rowsDown(0.35, slope - 0.35, 1.6, () => [0.2, 9.8]),
+      l.options.panels,
+    ).kids,
+  );
+  roof.push(
+    ln([-0.3, 4, R], [10.3, 4, R], { stroke: RF.cap, strokeWidth: 3.5 }),
     ln([-0.3, 8.4, E], [10.3, 8.4, E], { stroke: BLACK, strokeWidth: 3 }),
     ln([10.3, 4, R], [10.3, 8.4, E], { stroke: BLACK, strokeWidth: 3 }),
     ln([10.3, 4, R], [10.3, -0.4, E], { stroke: BLACK, strokeWidth: 3 }),
@@ -210,9 +176,9 @@ export function farmhouse(l: Layout): StyleParts {
         [10.03, 6.05, W + 0.45],
         [10.03, 4, R - 1.15],
       ],
-      "#f5c46e",
+      LIT,
     ),
-    ...l.sideWindows.map((w) => side(10.03, w.y0, w.y1, w.z0, w.z1, "#f5c46e")),
+    ...l.sideWindows.map((w) => side(10.04, w.y0, w.y1, w.z0, w.z1, LIT)),
     ...light.glow,
   );
   for (let x = deck.x0 + 0.4; x < deck.x1; x += 0.55) {
@@ -227,7 +193,8 @@ export function farmhouse(l: Layout): StyleParts {
     house,
     roof,
     night,
-    yard: [...[0.5, 0.95, 1.4, 2.6, 3.05, 3.5].map((x) => shrub(x, 8.5, 4.5, "#a98bc4")), tree(0.3, 10.2, 17)],
+    yard: [...[0.5, 0.95, 1.4, 2.6, 3.05, 3.5].map((x) => shrub(x, 8.5, 4.5, "#a98bc4"))],
+    trees: [[0.3, 10.2, 17]],
     paths: [
       flat(1.5, 2.5, 8, l.ground.y1, 0.01, "#d9d6cf"),
       poly(
@@ -242,3 +209,8 @@ export function farmhouse(l: Layout): StyleParts {
     ],
   };
 }
+
+export const farmhouse: Style = {
+  draw,
+  look: { walls: "cladding_charcoal", roof: "night_sky", fence: "none", garden: "leafy" },
+};

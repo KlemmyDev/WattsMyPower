@@ -164,6 +164,7 @@ export function HouseScene({
   const solar = pvEach(flows, l.inverters.length);
   const ch = l.charger;
   const chLed = I(ch.x + 0.15, mid(ch), ch.z1 - 0.2);
+  const charger = group(box(ch.x, ch.x + 0.14, ch.y0, ch.y1, ch.z0, ch.z1, "#fafafa", "#f1f1f1", "#d9d9d9"));
   const inside = (u: Unit) => l.ghostGarage && u.x === 10 && !!l.garage;
   const equipment = (where: (u: Unit) => boolean, glow = false) =>
     group(
@@ -219,11 +220,13 @@ export function HouseScene({
           {S.house}
           {S.garageInside}
           {equipment(inside)}
+          {/* under a carport, the charger is too */}
+          {inside(ch) && charger}
           {parkedCars(true)}
           {S.garageShell}
           {S.roof}
           {equipment((u) => !inside(u))}
-          {group(box(ch.x, ch.x + 0.14, ch.y0, ch.y1, ch.z0, ch.z1, "#fafafa", "#f1f1f1", "#d9d9d9"))}
+          {!inside(ch) && charger}
           {S.yard}
           {/* the charger's light: lit, and breathing, while it charges a car */}
           {h("circle", {

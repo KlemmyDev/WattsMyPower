@@ -1,3 +1,5 @@
+import type { RoofColour, WallFinish } from "~/features/overview/utils/house/palette";
+
 /** Settings editable from the dashboard (GET/PUT /api/settings). */
 export type Settings = {
   /** Where the house is: null until it's chosen (the set-up guide, Manage → Integrations → Weather). Nothing that
@@ -42,9 +44,19 @@ export type Settings = {
   update_check: number;
   /**
    * The house as the Overview draws it (Settings → Your house): its style; 1 or 2 storeys; car spaces in the garage
-   * (0 = no garage); and where each inverter and battery is, in the order they're connected (missing = outside).
+   * (0 = no garage) and whether it's a garage or a carport; its walls, roof colour, fence and trees ("auto": the
+   * style's own); how many solar panels (0 = as many as the array's size needs); a pool (1); and where each inverter
+   * and battery is, in the order they're connected (missing = outside).
    */
-  house_style: "estate" | "modern" | "queenslander" | "federation" | "farmhouse";
+  house_style:
+    "estate" | "brick" | "modern" | "coastal" | "queenslander" | "federation" | "bungalow" | "farmhouse" | "townhouse";
+  garage_kind: "garage" | "carport";
+  house_walls: "auto" | WallFinish;
+  house_roof: "auto" | RoofColour;
+  house_fence: "auto" | "none" | "picket" | "slat" | "hedge";
+  house_garden: "auto" | "leafy" | "native" | "tropical" | "minimal";
+  house_panels: number;
+  house_pool: number;
   /** The NEM region the Grid page follows AEMO for: worked out from the location, one region, or none. */
   nem_region: "auto" | "QLD1" | "NSW1" | "VIC1" | "SA1" | "TAS1" | "none";
   /** The electricity network whose outages the Grid page follows, and the house's street (name only) and suburb to
