@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
 import { energyToday, ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
+import { centsShort, DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot } from "~/features/common/live/types";
 import { costsQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
@@ -18,6 +18,8 @@ import { cn } from "~/features/common/ui/utils";
 import type { Forecast } from "~/features/common/weather/types";
 import { dailyQuery } from "~/features/history/api";
 import { buildDays, hasData, type DataDay } from "~/features/history/utils/year";
+import { RateRow, RateStrip, rateAt } from "~/features/home/components/RateStrip";
+import { useRates } from "~/features/home/hooks";
 
 const HOME = COLOR.teal;
 const USUAL = alpha(COLOR.fg, 0.45);
@@ -57,7 +59,8 @@ function sourcesOf(series: HistorySeries | undefined) {
 
 /**
  * The whole house, from the inverter (no plugs needed): what it's using now and where that's coming from, today so far
- * against a usual day by now, where it should end up by midnight, today's peak, and what today's grid power has cost.
+ * against a usual day by now, where it should end up by midnight, today's peak, what grid power costs now, and what
+ * today's has cost.
  */
 export function HomeNow({
   p,
@@ -95,6 +98,8 @@ export function HomeNow({
   const { data: costs } = useQuery(costsQuery(midnight(now)));
   const today = costs?.days.find((d) => d.date === dateKey(now));
   const diff = sofar != null && usual ? sofar / usual - 1 : null;
+  const rates = useRates(midnight(now));
+  const rate = rateAt(rates, now);
   return (
     <SummaryCard icon="home" color={HOME} className="col-span-12">
       <SummaryStat
@@ -139,6 +144,11 @@ export function HomeNow({
       />
       <SummaryStat label="Peak today" value={peak ? kW(peak.w) : DASH} sub={peak ? `At ${hhmm(peak.t)}` : undefined} />
       <SummaryStat
+        label="Power costs now"
+        value={rate ? `${centsShort(rate.rate)}/kWh` : DASH}
+        sub={rate ? (rates!.length > 1 ? `${rate.name} until ${hhmm(rate.to)}` : rate.name) : undefined}
+      />
+      <SummaryStat
         label="Grid power today"
         value={today ? money(today.import_cost) : DASH}
         sub={today && today.saved > 0 ? `${money(today.saved)} saved` : undefined}
@@ -147,7 +157,10 @@ export function HomeNow({
   );
 }
 
-/** Today's home use through the day, against a usual day's (the forecast's typical day, dashed). */
+/**
+ * Today's home use through the day, against a usual day's (the forecast's typical day, dashed), with what grid power
+ * costs through the day under it.
+ */
 export function HomeTodayCard({
   series,
   f,
@@ -163,6 +176,7 @@ export function HomeTodayCard({
   const profile = f?.load_basis?.profile_kw;
   const usual: LinePoint[] =
     profile?.length === 24 ? profile.map((kw, h) => ({ t: start + h * 3600 + 1800, v: kw * 1000 })) : [];
+  const rates = useRates(start);
   return (
     <Card className="col-span-7 max-xl:col-span-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -206,8 +220,10 @@ export function HomeTodayCard({
               <span className="font-medium text-ink">{hhmm(pt.t)}</span>
               {pt.v != null && <TooltipRow label="Today" value={kW(pt.v)} color={HOME} />}
               {other?.v != null && <TooltipRow label="Usual" value={kW(other.v)} color={USUAL} />}
+              <RateRow runs={rates} t={pt.t} />
             </>
           )}
+          under={rates?.length ? (from, to) => <RateStrip runs={rates} start={from} end={to} now={now} /> : undefined}
         />
       ) : (
         <Skeleton className="h-[210px] rounded-2xl" />

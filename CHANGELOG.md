@@ -29,7 +29,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
   each string; where the home's power goes, from the inverter and from connected plugs and appliances; the battery's
   level, health, warranty and whether it's the right size; the grid's state, AEMO's wholesale prices and notices,
-  voltage and frequency at the house.
+  voltage and frequency at the house. Under Solar's day the sun's arc shows sunrise, solar noon and sunset against
+  what the panels made, and under Home's day your rates (or Amber's prices) show what power cost through it, with
+  today's daylight and what power costs now in their summaries.
 - **Battery controls:** standby, a floor it won't discharge below, or charging from the grid, for a set time, then
   back to normal. They stand aside while iSolarCloud has the battery.
 - **Outages and warnings:** power outages and planned work near you from your electricity network, matched to your

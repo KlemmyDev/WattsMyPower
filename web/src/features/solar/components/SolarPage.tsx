@@ -14,6 +14,7 @@ import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
+import { dayLength, sunDay } from "~/features/common/time/utils/sun";
 import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
@@ -26,6 +27,7 @@ import { useFahrenheit, useForecast, useForecastAccuracy } from "~/features/comm
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { codeIcon, codeName, degrees, liveWeather } from "~/features/common/weather/utils";
 import { solarInsightsQuery } from "~/features/solar/api";
+import { DaylightStrip, sunAt } from "~/features/solar/components/DaylightStrip";
 import { SolarPerformance, SolarTrend } from "~/features/solar/components/SolarHealth";
 import { weatherDayQuery } from "~/features/weather/api";
 import type { WeatherDay } from "~/features/weather/types";
@@ -33,6 +35,13 @@ import type { WeatherDay } from "~/features/weather/types";
 const SOLAR = COLOR.solar;
 const EXPECTED = alpha(COLOR.fg, 0.45);
 const FIELDS = ["pv_power", "pv1_power", "pv2_power", "mppt1_v", "mppt1_a", "mppt2_v", "mppt2_a"];
+
+/** Where the system is, once it's been set (not the 0, 0 it starts at). */
+function place(s: SystemInfo | undefined): { lat: number; lon: number } | null {
+  const lat = s?.latitude;
+  const lon = s?.longitude;
+  return lat != null && lon != null && (lat !== 0 || lon !== 0) ? { lat, lon } : null;
+}
 
 /**
  * Solar: what the panels are making now and through today against what the forecast expected, where today's went,
@@ -58,7 +67,7 @@ export function SolarPage() {
         <SolarNow p={p} s={s} f={f} acc={acc} series={series} now={now} />
         <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
           <div className="flex min-w-0 flex-col gap-5">
-            <TodayCard series={series} f={f} weather={weather} start={start} now={now} />
+            <TodayCard series={series} f={f} weather={weather} start={start} now={now} at={place(s)} />
             <LastDays acc={acc} />
             {insights ? (
               <SolarPerformance performance={insights.performance} />
@@ -80,7 +89,10 @@ export function SolarPage() {
 
 // ---------------------------------------------------------------------------------------------- now
 
-/** Solar now, big: how much of the array it is, then today so far, where it should end up, its peak, and the sky. */
+/**
+ * Solar now, big: how much of the array it is, then today so far, where it should end up, its peak, today's daylight
+ * and the sky.
+ */
 function SolarNow({
   p,
   s,
@@ -119,6 +131,8 @@ function SolarNow({
   const producing = pv != null && pv > ON;
   // The sun's orange while the panels make power; resting, the moon's blue.
   const tint = producing ? SOLAR : COLOR.moon;
+  const at = place(s);
+  const sun = at ? sunDay(midnight(now) + 43_200, at.lat, at.lon) : null;
   return (
     <SummaryCard icon={producing ? "sun" : "moon"} color={tint} wash={producing ? 0.13 : 0.08}>
       <SummaryStat
@@ -150,6 +164,13 @@ function SolarNow({
         })()}
         sub="Forecast"
       />
+      {sun && (
+        <SummaryStat
+          label="Daylight"
+          value={dayLength(sun.hours, true)}
+          sub={sun.rise != null && sun.set != null ? `${hhmm(sun.rise)} to ${hhmm(sun.set)}` : undefined}
+        />
+      )}
       <SummaryStat label="The sky" value={sky ? sky.name : DASH} sub={sky?.temp ?? undefined} />
     </SummaryCard>
   );
@@ -176,12 +197,15 @@ function TodayCard({
   weather,
   start,
   now,
+  at,
 }: {
   series: HistorySeries | undefined;
   f: Forecast | null | undefined;
   weather: WeatherDay | undefined;
   start: number;
   now: number;
+  /** Where the system is, for the day's sun under the chart. */
+  at: { lat: number; lon: number } | null;
 }) {
   const actual: LinePoint[] = series ? series.t.map((t, i) => ({ t, v: series.pv_power?.[i] ?? null })) : [];
   const expected = expectedToday(weather, f, now);
@@ -227,8 +251,12 @@ function TodayCard({
               <span className="font-medium text-ink">{hhmm(pt.t)}</span>
               {pt.v != null && <TooltipRow label="Solar" value={kW(pt.v)} color={SOLAR} />}
               {other?.v != null && <TooltipRow label="Expected" value={kW(other.v)} color={EXPECTED} />}
+              {at && <TooltipRow label="Sun" value={sunAt(pt.t, at.lat, at.lon)} />}
             </>
           )}
+          under={
+            at ? (from, to) => <DaylightStrip start={from} end={to} now={now} lat={at.lat} lon={at.lon} /> : undefined
+          }
         />
       ) : (
         <Skeleton className="h-[220px] rounded-2xl" />

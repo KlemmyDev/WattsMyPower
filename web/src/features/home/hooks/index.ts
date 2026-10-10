@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useAmberPrices } from "~/features/amber/hooks";
 import { kW } from "~/features/common/formatting/utils/number";
 import type { NavPage } from "~/features/common/layout/utils";
+import { useSystem } from "~/features/common/live/hooks/useSystem";
+import { rateRuns, type RateRun } from "~/features/common/tariffs/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { addDays } from "~/features/common/time/utils";
 import {
   clearDeviceRule,
   connectHome,
@@ -78,4 +84,26 @@ export function useHomeNavPages(enabled: boolean): NavPage[] {
       active: here === `/home/${d.id}`,
     };
   });
+}
+
+/**
+ * What grid power costs through the day starting `day` (midnight), from the rates in Settings → Bills: each
+ * time-of-use band, the single rate, or on Amber its price for each 5 or 30 minutes (the fallback rate where there's
+ * none yet). Undefined until the tariff's known.
+ */
+export function useRates(day: number): RateRun[] | undefined {
+  const tariff = useSystem()?.tariff;
+  const amber = useAmberPrices(day, tariff?.type === "amber");
+  return useMemo(() => {
+    if (!tariff) return undefined;
+    const prices = (amber?.general ?? []).filter((p) => p.end > day && p.start < addDays(day, 1));
+    if (tariff.type !== "amber" || !prices.length) return rateRuns(tariff, day);
+    return prices.map((p) => ({
+      from: p.start,
+      to: p.end,
+      rate: p.rate,
+      name: p.actual ? "Amber" : "Amber forecast",
+      color: COLOR.import,
+    }));
+  }, [tariff, amber, day]);
 }
