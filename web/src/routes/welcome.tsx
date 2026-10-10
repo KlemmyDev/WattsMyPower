@@ -5,14 +5,16 @@ import { LiveProvider } from "~/features/common/live/components/LiveProvider";
 import { useSiteZone } from "~/features/common/time/hooks";
 import { onboardingQuery } from "~/features/onboarding/api";
 import { WelcomePage } from "~/features/onboarding/components/WelcomePage";
-import type { StepId } from "~/features/onboarding/types";
+import type { GuidePage } from "~/features/onboarding/types";
 import { isStep } from "~/features/onboarding/utils";
 
-type Search = { step?: StepId };
+type Search = { step?: GuidePage };
 
 /** The first-run set-up guide: signed in only, without the dashboard's top bar and dock. */
 export const Route = createFileRoute("/welcome")({
-  validateSearch: (s: Record<string, unknown>): Search => ({ step: isStep(s.step) ? s.step : undefined }),
+  validateSearch: (s: Record<string, unknown>): Search => ({
+    step: isStep(s.step) || s.step === "start" || s.step === "finish" ? s.step : undefined,
+  }),
   beforeLoad: async ({ context, location }) => {
     const session = await context.queryClient.ensureQueryData(sessionQuery);
     if (!session.authenticated) throw redirect({ to: "/login", search: { redirect: location.href }, replace: true });
@@ -29,7 +31,7 @@ function WelcomeRoute() {
   const { step } = Route.useSearch();
   return (
     <LiveProvider>
-      <WelcomePage step={step} />
+      <WelcomePage page={step} />
     </LiveProvider>
   );
 }
