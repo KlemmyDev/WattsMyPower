@@ -4,7 +4,7 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
 import { partsOf, siteTime } from "~/features/common/time/utils";
 import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/components/ChartHover";
-import { dayLength, sunDay, type SunDay } from "~/features/settings/utils/sun";
+import { dayLength, sunDay, type SunDay } from "~/features/common/time/utils/sun";
 
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 

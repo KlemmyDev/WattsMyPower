@@ -261,7 +261,8 @@ function runs(points: LinePoint[]) {
  * tooltip. `signed` fills above zero in one colour and below in another (the grid: from it, to it); `band` shades the
  * range a value should stay in; `marks` are reference lines with a label. `fill` shades under the line; `compare` draws
  * a second line (dashed: what was expected) on the same scale, and the tooltip is given both. With `onRange`, dragging
- * across it picks a stretch to look at more closely (the caller then shows just that, as `start` and `end`).
+ * across it picks a stretch to look at more closely (the caller then shows just that, as `start` and `end`). `under`
+ * draws a layer under the plot, above the time marks, for the stretch shown (zoomed in with it).
  */
 export function TimeLine({
   points,
@@ -284,6 +285,7 @@ export function TimeLine({
   onRange,
   zoom = true,
   label,
+  under,
 }: {
   points: LinePoint[];
   start: number;
@@ -314,6 +316,8 @@ export function TimeLine({
   zoom?: boolean;
   /** What the chart shows, for a screen reader (the drawing itself is hidden from one): "Battery level". */
   label?: string;
+  /** A layer under the plot on the same time scale (the day's sun), given the stretch shown. */
+  under?: (start: number, end: number) => ReactNode;
 }) {
   const H = height;
   const own = useZoom(whole, wholeEnd);
@@ -623,6 +627,7 @@ export function TimeLine({
           </>
         )}
       </div>
+      {under?.(start, end)}
       <TimeTicks ticks={ticks} />
     </div>
   );

@@ -1,7 +1,7 @@
 /*
  * Where the sun is, worked out from a place's latitude and longitude (the sunrise equation, after NOAA's): when it
- * rises, sets and is highest on a day, and how long the day is. Good to about a minute, which is plenty for showing
- * daylight; times are unix seconds.
+ * rises, sets and is highest on a day, how long the day is, and how high it is at any moment. Good to about a minute,
+ * which is plenty for showing daylight; times are unix seconds.
  */
 
 const RAD = Math.PI / 180;
@@ -41,9 +41,24 @@ export function sunDay(ts: number, lat: number, lon: number): SunDay {
   return { rise: toTs(transit - w), set: toTs(transit + w), noon: toTs(transit), hours: w * 48 };
 }
 
-/** "10 h 54 min". */
-export const dayLength = (hours: number) => {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  return m === 60 ? `${h + 1} h` : `${h} h ${m} min`;
+/** How high the sun is at `ts` at `lat`, `lon`: degrees above the horizon, negative below it. */
+export function sunHeight(ts: number, lat: number, lon: number): number {
+  const d = ts / 86_400 + J1970 - J2000;
+  const m = (357.5291 + 0.98560028 * d) * RAD;
+  const c = (1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m)) * RAD;
+  const l = m + c + 102.9372 * RAD + Math.PI;
+  const dec = Math.asin(Math.sin(l) * Math.sin(TILT));
+  const ra = Math.atan2(Math.sin(l) * Math.cos(TILT), Math.cos(l));
+  const hour = (280.16 + 360.9856235 * d + lon) * RAD - ra;
+  const phi = lat * RAD;
+  return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(hour)) / RAD;
+}
+
+/** "10 h 54 min", or `short`, "10h 54m" (for a summary's figure). */
+export const dayLength = (hours: number, short = false) => {
+  let h = Math.floor(hours);
+  let m = Math.round((hours - h) * 60);
+  if (m === 60) [h, m] = [h + 1, 0];
+  if (short) return m ? `${h}h ${m}m` : `${h}h`;
+  return m ? `${h} h ${m} min` : `${h} h`;
 };

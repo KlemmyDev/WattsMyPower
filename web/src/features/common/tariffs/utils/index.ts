@@ -1,5 +1,5 @@
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
-import { isWeekend, partsOf } from "~/features/common/time/utils";
+import { isWeekend, partsOf, siteTime } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
 /**
@@ -71,6 +71,38 @@ export function bandAt(t: Tariff, ts: number): { name: string; rate: number } {
   const { bands, tab } = bandTable(t, isWeekend(ts) ? "weekend" : "weekday");
   const b = bands[tab[p.hour * 60 + p.minute]];
   return { name: b.name, rate: num(b.rate) };
+}
+
+/** A moment's date on the site's clock: [year, month, day]. */
+const ymd = (ts: number) => {
+  const p = partsOf(ts);
+  return [p.year, p.month, p.day] as const;
+};
+
+/** A stretch of a day at one rate ($/kWh), named and coloured as the rates are in Settings. */
+export type RateRun = { from: number; to: number; rate: number; name: string; color: string };
+
+/**
+ * The rates through the day starting `day` (midnight), as stretches of each: each time-of-use band in its colour, or
+ * the single rate (Amber's fallback) all day.
+ */
+export function rateRuns(t: Tariff, day: number): RateRun[] {
+  if (t.type !== "tou") {
+    const name = t.type === "amber" ? "Fallback" : "Any time";
+    return [{ from: day, to: siteTime(...ymd(day), 24), rate: num(t.flat_rate), name, color: COLOR.import }];
+  }
+  const { bands, tab } = bandTable(t, isWeekend(day) ? "weekend" : "weekday");
+  // On the site's clock, so a daylight-saving day's rates still change when they say.
+  const at = (min: number) => siteTime(...ymd(day), 0, min);
+  const out: RateRun[] = [];
+  let a = 0;
+  for (let m = 1; m <= 1440; m++)
+    if (m === 1440 || tab[m] !== tab[a]) {
+      const b = bands[tab[a]];
+      out.push({ from: at(a), to: at(m), rate: num(b.rate), name: b.name, color: bandColor(tab[a]) });
+      a = m;
+    }
+  return out;
 }
 
 /** When a time-of-use band applies: "16:00 to 21:00", "Weekdays 07:00 to 09:00", or "All other times". */
