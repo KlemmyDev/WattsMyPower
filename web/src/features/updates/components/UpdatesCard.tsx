@@ -14,6 +14,7 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
 import type { Channel, UpdateStatus } from "~/features/updates/types";
 
@@ -57,13 +58,28 @@ function changesUrl(s: UpdateStatus) {
   return `https://github.com/${repo}/commits/${s.branch}`;
 }
 
+/** Manage → System → Updates. */
+export function UpdatesSettings() {
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/system">System</BackLink>}
+        id="h-updates-page"
+        title="Updates"
+        sub="The version you're running, the release channel it follows, and installing newer ones."
+      />
+      <UpdatesCard />
+    </>
+  );
+}
+
 /**
- * Updates (Manage → System): the release channel followed, the version running, the channel's on GitHub and whether
+ * Updates (Manage → System → Updates): the release channel followed, the version running, the channel's on GitHub and whether
  * it's newer (or older, after moving to a channel behind this version), checking now, and turning the checks every few
  * hours off. With the updater set up on the machine it's installed on, Update now (or going back); else how to update
  * by hand.
  */
-export function UpdatesCard() {
+function UpdatesCard() {
   const qc = useQueryClient();
   const toast = useToast();
   // Every few seconds while an update is under way (and while the dashboard restarts, when it can't answer).
@@ -120,7 +136,9 @@ export function UpdatesCard() {
     <SettingsCard padded aria-labelledby="h-updates" id="updates" className="scroll-mt-6 gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 id="h-updates">Updates</h2>
+          <h3 id="h-updates" className="text-[15px] font-semibold">
+            Check for updates
+          </h3>
           <span className="text-sm text-pretty text-ink-muted">
             Every few hours WattsMyPower asks GitHub, where it's published, whether there's a newer version. Nothing
             about your home is sent.
