@@ -197,9 +197,8 @@ def test_each_outage_says_where_to_see_it_and_its_area(settings: SettingsStore) 
     v = _service(settings).view()
     ours, underway = v["now"]
     # Energex opens an outage now by its number; planned work only as the list for its suburb.
-    assert ours["url"] == (
-        "https://www.energex.com.au/outages/outage-finder/emergency-outages-text-view?event=INCD-1"
-    ) and ours["url_exact"]
+    assert ours["url"] == "https://www.energex.com.au/outages/outage-finder/emergency-outages-text-view?event=INCD-1"
+    assert ours["url_exact"]
     assert underway["url"].endswith("planned-outages-text-view?suburb-postcode=UNDERWOOD")
     assert not underway["url_exact"]
     # The area comes along, roughly, for the radar: [lon, lat] corners.
