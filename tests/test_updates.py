@@ -175,6 +175,17 @@ def test_a_channel_with_nothing_released(svc: UpdateService, monkeypatch: pytest
     assert status["unreleased"] is True and status["latest"] is None and status["move"] is None
 
 
+def test_the_channel_is_saved_for_install_sh_to_read(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    """In Docker the dashboard's files are its alone (umask 077), but install.sh reads the channel as whoever runs it."""
+    _answer(monkeypatch, _github(NEWER, "2026.10.9") | {"tags": _tags("v2026.10.8-beta")}, HERE)
+    old = os.umask(0o077)
+    try:
+        svc.set_channel("beta")
+    finally:
+        os.umask(old)
+    assert (svc.folder / "channel").stat().st_mode & 0o777 == 0o644
+
+
 def test_a_check_for_another_channel_isnt_shown(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
     _answer(monkeypatch, _github(NEWER, "2026.10.9", {"ahead_by": 2, "behind_by": 0}), HERE)
     assert svc.check()["available"] is True
