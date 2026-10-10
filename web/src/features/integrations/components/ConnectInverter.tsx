@@ -53,7 +53,7 @@ function FoundRow({
       : found.rescan
         ? "An inverter you removed"
         : found.driver
-          ? `${found.brand ?? "Sungrow"} device`
+          ? `${found.brand ?? "Inverter"} device`
           : "Something else";
   const sub = [
     found.host,
@@ -104,8 +104,15 @@ function FoundRow({
         <span className="text-[13px] text-ink-muted tabular-nums">{sub}</span>
         {found.untested && found.supported && !found.connected_as && (
           <span className="text-xs text-ink-muted">
-            Not a model WattsMyPower knows by name yet. Sungrow&apos;s hybrids share their registers, so it should read
-            fine: if anything looks wrong, an issue with its type code gets it sorted.
+            Not a model WattsMyPower knows by name yet. {found.brand ?? "Its maker"}&apos;s models in this family share
+            their registers, so it should read fine: if anything looks wrong, an issue with its type code gets it
+            sorted.
+          </span>
+        )}
+        {found.verified === false && found.supported && !found.connected_as && (
+          <span className="text-xs text-ink-muted">
+            Read from {found.brand ?? "its maker"}&apos;s documented registers, but not yet tried on a real one. If
+            anything looks off, an issue saying so gets it checked.
           </span>
         )}
         {confirming && replaces && (
@@ -153,7 +160,8 @@ function Scan({
       <div className="flex flex-col gap-1">
         <h3 className="text-[15px] font-semibold">Find inverters on your network</h3>
         <span className="text-[13px] text-ink-muted">
-          Checks each address for Sungrow's Modbus port, then asks what's there. Takes up to a minute.
+          Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle), then asks what's there. Takes up
+          to a minute.
         </span>
       </div>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
@@ -199,14 +207,20 @@ function Scan({
       {found.length > 0 && (
         <div className="rounded-2xl border border-line-subtle px-5">
           {found.map((f) => (
-            <FoundRow key={f.host} found={f} devices={overview.devices} busy={busy} onConnect={onConnect} />
+            <FoundRow
+              key={`${f.host}:${f.port}`}
+              found={f}
+              devices={overview.devices}
+              busy={busy}
+              onConnect={onConnect}
+            />
           ))}
         </div>
       )}
       {done && !running && found.length === 0 && !scan.error && (
         <div className="rounded-xl bg-canvas px-[18px] py-4 text-sm leading-[22px] text-ink-muted">
-          Nothing on {scan.network} answered on the Modbus port. Check the inverter's dongle is on this network (its
-          address is in your router's device list or the iSolarCloud app), or enter its address below.
+          Nothing on {scan.network} answered like an inverter. Check the inverter's dongle is on this network (its
+          address is in your router's device list or the inverter's app), or enter its address below.
         </div>
       )}
     </div>
@@ -249,7 +263,8 @@ function Manual({
       <div className="flex flex-col gap-1">
         <h3 className="text-[15px] font-semibold">Or enter its address</h3>
         <span className="text-[13px] text-ink-muted">
-          The dongle's IP address is in your router's list of connected devices, or in the iSolarCloud app.
+          The dongle's IP address is in your router's list of connected devices, or in the inverter's app (iSolarCloud,
+          SEMS).
         </span>
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-4">
@@ -257,7 +272,7 @@ function Manual({
           <Select value={driver} onChange={(e) => setDriver(e.target.value)}>
             {overview.kinds.map((k) => (
               <option key={k.driver} value={k.driver}>
-                {k.brand} {k.label} ({ROLE_NAME[k.role]})
+                {k.brand} {k.label} ({ROLE_NAME[k.role]}){k.verified === false ? ", untested" : ""}
               </option>
             ))}
           </Select>

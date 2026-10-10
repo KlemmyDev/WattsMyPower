@@ -124,6 +124,14 @@ def test_connecting_checks_the_kind_matches_the_role(service: IntegrationsServic
     assert collector.requests[-1][1]["settings"] == {}
 
 
+def test_goodwe_connects_on_its_own_port_and_unit(service: IntegrationsService, collector: FakeCollector) -> None:
+    collector.answers["192.168.0.30"] = {}
+    service.connect("hybrid", {"driver": "goodwe.et", "host": "192.168.0.30"})
+    assert {k: collector.requests[-1][1][k] for k in ("port", "unit")} == {"port": 8899, "unit": 0xF7}
+    service.connect("hybrid", {"driver": "goodwe.et", "host": "192.168.0.30", "port": 502})  # a newer LAN dongle
+    assert collector.requests[-1][1]["port"] == 502
+
+
 def test_a_second_inverter_says_where_it_connects(service: IntegrationsService, collector: FakeCollector) -> None:
     pv2 = {"driver": "sungrow.sg_d", "host": "192.168.0.10", "check": False}
     assert service.connect("pv2", pv2)["behind_meter"] is True  # the usual setup

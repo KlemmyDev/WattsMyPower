@@ -12,6 +12,9 @@ Sign conventions for the power values in a snapshot - positive always means
     load_power     W  house consumption (>= 0)
     grid_power     W  + importing from grid, - exporting to grid
     battery_power  W  + discharging into house, - charging
+
+`running_state` is kept in Sungrow's state codes, the first brand supported (sungrow/sh_rs.py RUNNING_STATE): other
+drivers map their own states onto them, 0x1000 being "running the house without the grid".
 """
 
 from __future__ import annotations

@@ -113,7 +113,10 @@ def test_without_devices_nothing_is_read(client: TestClient) -> None:
     assert client.get("/v1/status", headers=AUTH).json()["devices"] == {}
     assert client.get("/healthz").json() == {"ok": True, "fresh": False}
     body = client.get("/v1/devices", headers=AUTH).json()
-    assert body == {"devices": [], "drivers": {"sungrow.sh_rs": "hybrid", "sungrow.sg_d": "pv2"}}
+    assert body == {
+        "devices": [],
+        "drivers": {"sungrow.sh_rs": "hybrid", "sungrow.sg_d": "pv2", "goodwe.et": "hybrid", "goodwe.dt": "pv2"},
+    }
 
 
 def test_connecting_a_device_checks_it_and_reads_it_from_the_next_poll(client: TestClient, probed: Probed) -> None:
