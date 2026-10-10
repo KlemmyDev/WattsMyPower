@@ -474,7 +474,8 @@ class TeslaService:
         return self.status()
 
     def configure(self, vin: str, body: dict[str, Any]) -> dict[str, Any]:
-        """Change a car's mode, whether the home battery fills first, how far short it may run, which dashboard car
+        """Change a car's mode, whether the home battery fills first, how far short it may run, the most it may draw
+        (max_amps: the socket's limit; null: the car's own), which dashboard car
         it is (null for none: its model's figures), or its home ({"home": "here"}: where it is now; null: the system's location). Raises TeslaSetupError."""
         with self._lock:
             c = self._conn()
@@ -610,15 +611,24 @@ class TeslaService:
         car = self._car_of(v)
         return (self.cars, car) if car is not None else (self.history, vin)
 
+    def _car_max(self, vin: str, d: dict[str, Any] | None = None) -> int:
+        """The most a car can draw, as it says: what it can ask for (Tesla works that out from the car and the
+        charger it's plugged into), else its details' figure. That's a guess from its model's charging power on the
+        model's phases (a Model Y's 11 kW on three is 16 A), so it doesn't hold the car below what it says."""
+        s = self._states.get(vin)
+        if s is not None and s.max_amps:
+            return s.max_amps
+        return int((d or self._figures(vin))["car_amps"])
+
     def _charger(self, vin: str) -> Charger | None:
         d = self._figures(vin)
         # What the car last measured charging at home wins over the car's details.
         m = self._conn()["vehicles"].get(vin, {}).get("measured") or {}
-        # The most it can draw: what the car says it can ask for (Tesla works that out from the car and the charger
-        # it's plugged into), else its details' figure. That's a guess from its model's charging power on the
-        # model's phases (a Model Y's 11 kW on three is 16 A), so it doesn't hold the car below what it says.
-        s = self._states.get(vin)
-        top = s.max_amps if s is not None and s.max_amps else int(d["car_amps"])
+        top = self._car_max(vin, d)
+        # Held to what it's set to draw at most (the socket's or circuit's limit), when that's set.
+        cap = (self._conn()["vehicles"].get(vin, {}).get("control") or {}).get("max_amps")
+        if cap:
+            top = min(top, int(cap))
         return Charger(
             phases=int(m.get("phases") or d["car_phases"]),
             volts=float(m.get("volts") or d["car_voltage"]),
@@ -1364,6 +1374,8 @@ class TeslaService:
             "share": self._share_brief() if v["control"]["first"] == "shared" else None,
             "min_w": round(spec.watts(spec.min_amps)) if spec else None,
             "max_amps": spec.max_amps if spec else None,
+            # The most the car says it can draw, before what it's set to draw at most (control.max_amps).
+            "car_max_amps": self._car_max(vin) if spec else None,
             "min_amps": spec.min_amps if spec else None,
             "phases": spec.phases if spec else None,
             "volts": spec.volts if spec else None,
