@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import type { SystemInfo } from "~/features/common/live/types";
 import { useSaveSettings } from "~/features/common/settings/hooks";
@@ -7,13 +7,7 @@ import { saveSettingsError } from "~/features/common/settings/utils";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { dateKey, fromDateKey } from "~/features/common/time/utils";
 import { CostVisual } from "~/features/settings/components/CostVisual";
-import {
-  NumberRow,
-  OptionList,
-  SaveBanner,
-  SettingsSection,
-  SettingsSplit,
-} from "~/features/settings/components/SettingsSection";
+import { NumberRow, OptionList, SaveBanner, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 type Values = Record<OwnershipKey, string>;
@@ -46,8 +40,9 @@ const LABELS: Record<OwnershipKey, [label: string, help: string, unit?: string]>
 };
 
 /**
- * Settings → Cost and warranty: what the system has paid back and its life so far on the left, as they'd be with what's
- * typed; on the right what it cost and when it went in (for payback on Bills) and the battery's warranty (for Battery).
+ * Settings → Cost and warranty: what the system has paid back and its life so far across the top, as they'd be with
+ * what's typed; under it what it cost and when it went in (for payback on Bills) beside the battery's warranty (for
+ * Battery), saved together.
  */
 export function OwnershipSettings() {
   const s = useLive()?.system;
@@ -106,29 +101,29 @@ function Ownership({ system: s }: { system: SystemInfo }) {
   };
 
   return (
-    <SettingsSplit
-      visual={
-        <SettingsSection id="h-own-return" title="Return on your system" sub="What it has saved against the grid.">
-          <CostVisual
-            figures={{
-              cost: num("system_cost"),
-              installed: num("system_installed"),
-              batteryInstalled: num("battery_installed"),
-              warrantyYears: num("battery_warranty_years"),
-              warrantyMwh: num("battery_warranty_mwh"),
-            }}
-          />
-        </SettingsSection>
-      }
-    >
-      <SettingsSection id="h-own-system" title="The system" sub="For when it pays for itself, on Bills.">
-        <OptionList>{(["system_cost", "system_installed"] as OwnershipKey[]).map(row)}</OptionList>
+    <>
+      <SettingsSection id="h-own-return" title="Return on your system" sub="What it has saved against the grid.">
+        <CostVisual
+          figures={{
+            cost: num("system_cost"),
+            installed: num("system_installed"),
+            batteryInstalled: num("battery_installed"),
+            warrantyYears: num("battery_warranty_years"),
+            warrantyMwh: num("battery_warranty_mwh"),
+          }}
+        />
       </SettingsSection>
-      <SettingsSection id="h-own-battery" title="The battery" sub="For how much of its warranty is used, on Battery.">
-        <OptionList>
-          {(["battery_installed", "battery_warranty_years", "battery_warranty_mwh"] as OwnershipKey[]).map(row)}
-        </OptionList>
-        {/* Saves both sections' changes, at the foot of the last. */}
+      <SettingsSection id="h-own-details" title="Details" sub="Changes show in the picture above as you type.">
+        <div className="@container">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-6 @3xl:grid-cols-2">
+            <Group title="The system" sub="For when it pays for itself, on Bills.">
+              {(["system_cost", "system_installed"] as OwnershipKey[]).map(row)}
+            </Group>
+            <Group title="The battery" sub="For how much of its warranty is used, on Battery.">
+              {(["battery_installed", "battery_warranty_years", "battery_warranty_mwh"] as OwnershipKey[]).map(row)}
+            </Group>
+          </div>
+        </div>
         <SaveBanner
           dirty={changed.length > 0}
           pending={save.isPending}
@@ -140,6 +135,19 @@ function Ownership({ system: s }: { system: SystemInfo }) {
           onSave={submit}
         />
       </SettingsSection>
-    </SettingsSplit>
+    </>
+  );
+}
+
+/** Some of the details, under a small heading of their own. */
+function Group({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-col gap-0.5 px-1">
+        <h3 className="text-[15px] font-semibold">{title}</h3>
+        <span className="text-[13px] text-ink-muted">{sub}</span>
+      </div>
+      <OptionList>{children}</OptionList>
+    </div>
   );
 }

@@ -9,10 +9,10 @@ import { saveSettingsError } from "~/features/common/settings/utils";
 import { inverterName } from "~/features/common/live/utils";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { useToast } from "~/features/common/ui/components/Toast";
+import { cn } from "~/features/common/ui/utils";
 import {
   NumberRow,
   OptionList,
-  OptionRow,
   SaveBanner,
   SettingsSection,
   SettingsSplit,
@@ -21,8 +21,8 @@ import { SystemDiagram, type DiagramFigures } from "~/features/settings/componen
 import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Settings → Solar and battery: the installation as a diagram on the left (figures not saved yet drawn as they'd be),
- * and on the right what the inverters report and the details they can't, saved together.
+ * Settings → Solar and battery: the installation as a diagram on the left (figures not saved yet drawn as they'd be)
+ * with what the inverter reports under it, and on the right the details it can't, saved together.
  */
 export function SolarBatterySettings() {
   const live = useLive();
@@ -38,12 +38,24 @@ export function SolarBatterySettings() {
   );
 }
 
-/** A read-only fact in an OptionList: what it is, and its value on the right. */
-function Fact({ label, help, children }: { label: string; help?: ReactNode; children: ReactNode }) {
+/** A read-only figure from the inverter, under the diagram: what it is, and its value. */
+function Fact({
+  label,
+  title,
+  wide,
+  children,
+}: {
+  label: string;
+  title?: string;
+  /** Two columns across, for a name. */
+  wide?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <OptionRow label={label} help={help}>
-      <span className="max-w-[16rem] text-right text-[15px] break-words text-ink-muted tabular-nums">{children}</span>
-    </OptionRow>
+    <div title={title} className={cn("flex min-w-0 flex-col gap-0.5", wide && "col-span-2")}>
+      <dt className="truncate text-xs text-ink-muted">{label}</dt>
+      <dd className="truncate text-sm text-ink tabular-nums">{children}</dd>
+    </div>
   );
 }
 
@@ -67,6 +79,31 @@ function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | 
           }
         >
           <SystemDiagram system={s} figures={diagramFigures(s, form)} />
+          <dl
+            aria-label="From your inverter"
+            className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-5 gap-y-3 rounded-2xl bg-canvas/60 px-4 py-3.5 light:bg-canvas"
+          >
+            <Fact label="Inverter" title={inverterLine(s)} wide>
+              {inverterLine(s)}
+            </Fact>
+            <Fact label="Serial number">{s.serial || "—"}</Fact>
+            <Fact label="Battery reported">{reportedKwh ? `${reportedKwh} kWh` : "Not reported"}</Fact>
+            <Fact label="Reserve reported">{reportedReserve != null ? pct(reportedReserve) : "Not reported"}</Fact>
+            <Fact label="Grid connection">{s.phases || "—"}</Fact>
+            {s.pv2 && (
+              <Fact
+                label="Second inverter"
+                wide
+                title={
+                  s.pv2.behind_meter
+                    ? "Behind the hybrid's meter."
+                    : "Outside the hybrid's meter, so its output counts as export."
+                }
+              >
+                {s.pv2.model ? inverterLine(s.pv2) : "Not read yet"}
+              </Fact>
+            )}
+          </dl>
         </SettingsSection>
       }
     >
@@ -84,34 +121,13 @@ function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | 
           onSave={() => form.submit(() => toast("System details saved. Updating the forecast."))}
         />
       </SettingsSection>
-      <SettingsSection id="h-equipment" title="From your inverter" sub="Read over your local network.">
-        <OptionList>
-          <Fact label="Inverter">
-            {s.model ? `${inverterName(s)}${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"}
-          </Fact>
-          <Fact label="Serial number">{s.serial || "—"}</Fact>
-          <Fact label="Battery">{reportedKwh ? `${reportedKwh} kWh` : "Not reported"}</Fact>
-          <Fact label="Backup reserve">{reportedReserve != null ? pct(reportedReserve) : "Not reported"}</Fact>
-          <Fact label="Grid connection">{s.phases || "—"}</Fact>
-          {s.pv2 && (
-            <Fact
-              label="Second inverter"
-              help={
-                s.pv2.behind_meter
-                  ? "Behind the hybrid's meter."
-                  : "Outside the hybrid's meter, so its output counts as export."
-              }
-            >
-              {s.pv2.model
-                ? `${inverterName(s.pv2)}${s.pv2.nominal_kw ? `, ${s.pv2.nominal_kw} kW` : ""}`
-                : "Not read yet"}
-            </Fact>
-          )}
-        </OptionList>
-      </SettingsSection>
     </SettingsSplit>
   );
 }
+
+/** "Sungrow SH5.0RS, 5 kW", or a dash before it's been read. */
+const inverterLine = (i: { brand?: string | null; model?: string | null; nominal_kw?: number | null }) =>
+  i.model ? `${inverterName(i)}${i.nominal_kw ? `, ${i.nominal_kw} kW` : ""}` : "—";
 
 type Values = Record<SystemSettingKey, string>;
 
