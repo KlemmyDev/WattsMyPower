@@ -50,6 +50,7 @@ class Bluetti(Integration):
         "what they're charging from and powering, read over this server's Bluetooth without Bluetti's cloud."
     )
     icon = "battery"
+    category = "batteries"
     kinds = ("power_station",)
     fields = (
         Field(

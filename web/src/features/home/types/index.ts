@@ -30,6 +30,8 @@ export type HomeIntegration = {
   name: string;
   via: string;
   about: string;
+  /** The sort of device it brings (an id from HomeOverview's categories): what Smart home lists it under. */
+  category: string;
   icon: string;
   kinds: DeviceKind[];
   fields: HomeField[];
@@ -147,8 +149,12 @@ export type HomeRuleSettings = Pick<HomeRule, "enabled" | "start_w" | "stop_w" |
 export type HomeOverview = {
   integrations: HomeIntegration[];
   kinds: { id: DeviceKind; label: string; cycles: boolean }[];
+  /** The sorts of device the integrations bring, in the order they're shown ("Smart plugs and meters"). */
+  categories: HomeCategory[];
   devices: HomeDevice[];
 };
+
+export type HomeCategory = { id: string; label: string; about: string };
 
 /** The home's use by the hour or day, each visible device's share, and what no device measured (kWh). */
 export type HomeUsage = {

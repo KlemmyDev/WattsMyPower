@@ -123,6 +123,7 @@ class Tapo(Integration):
         "every 15 seconds, without TP-Link's cloud."
     )
     icon = "plug"
+    category = "plugs"
     kinds = ("plug",)
     fields = (
         Field(

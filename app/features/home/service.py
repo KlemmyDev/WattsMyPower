@@ -33,7 +33,7 @@ from app.features.home import estimate, rules
 from app.features.home.energy import MAX_W, Meter, step
 from app.features.home.registry import INTEGRATIONS
 from app.features.home.repository import Account, Device, HomeRepository
-from app.features.home.types import KINDS, Hints, Integration, IntegrationError, Reading
+from app.features.home.types import CATEGORIES, KINDS, Hints, Integration, IntegrationError, Reading
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +103,7 @@ class HomeService:
                 self._integration_view(cls, accounts.get(cls.id), devices) for cls in self.available().values()
             ],
             "kinds": [{"id": k, "label": v.label, "cycles": v.cycles} for k, v in KINDS.items()],
+            "categories": [{"id": k, "label": v.label, "about": v.about} for k, v in CATEGORIES.items()],
             "devices": [self._device_view(d, accounts, last.get(d.id), usual.get(d.id)) for d in devices],
         }
 
@@ -114,6 +115,7 @@ class HomeService:
             "name": cls.name,
             "via": cls.via,
             "about": cls.about,
+            "category": cls.category,
             "icon": cls.icon,
             "kinds": list(cls.kinds),
             "fields": [

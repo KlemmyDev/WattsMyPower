@@ -45,6 +45,32 @@ KINDS: dict[str, Kind] = {
 
 
 @dataclass(frozen=True)
+class Category:
+    """A sort of device the integrations bring, as Manage → Integrations → Smart home groups them."""
+
+    label: str
+    about: str  # what it covers, in a line under its heading
+
+
+# In the order they're shown.
+CATEGORIES: dict[str, Category] = {
+    "plugs": Category(
+        "Smart plugs and meters",
+        "Plugs, relays and meters that measure whatever's plugged into them or wired through them.",
+    ),
+    "appliances": Category(
+        "Appliances",
+        "White goods that report on themselves: washers, dryers, dishwashers, fridges, ovens and air conditioners.",
+    ),
+    "batteries": Category(
+        "Portable batteries",
+        "Power stations in a room: their charge, and what they're charging from and powering.",
+    ),
+    "hubs": Category("Home hubs", "Whatever your smart-home hub already measures, whatever the brand."),
+}
+
+
+@dataclass(frozen=True)
 class Battery:
     """A device that holds charge (a portable power station): how full it is and where its power is going. Its
     Reading's power_w is what it's drawing from the house; these are the rest."""
@@ -128,6 +154,7 @@ class Integration(ABC):
     name: ClassVar[str]  # the brand, as the household knows it ("Hisense")
     via: ClassVar[str]  # how it's reached, in words ("the ConnectLife app")
     about: ClassVar[str]  # a line on what it brings
+    category: ClassVar[str]  # the sort of device it brings, a key of CATEGORIES: what it's listed under
     icon: ClassVar[str] = "plug"  # one of the web app's icons
     kinds: ClassVar[tuple[str, ...]]  # the kinds of device it can bring
     fields: ClassVar[tuple[Field, ...]]  # what the connect form asks for

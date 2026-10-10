@@ -36,6 +36,7 @@ class EcoFlow(Integration):
         "what they're charging from and powering, through EcoFlow's cloud."
     )
     icon = "battery"
+    category = "batteries"
     kinds = ("power_station",)
     fields = (
         Field(

@@ -61,6 +61,7 @@ class HomeAssistant(Integration):
         "energy sensors every 30 seconds. Those with a switch there can be switched from here too."
     )
     icon = "bolt"
+    category = "hubs"
     kinds = KINDS
     fields = (
         Field(

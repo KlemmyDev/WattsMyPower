@@ -22,6 +22,7 @@ class ConnectLife(Integration):
         "uses."
     )
     icon = "washer"
+    category = "appliances"
     kinds = ("washer", "dryer", "dishwasher")
     fields = (
         Field(

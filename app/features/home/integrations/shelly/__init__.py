@@ -52,6 +52,7 @@ class Shelly(Integration):
         "2.5), read straight from each on your network every 20 seconds, without Shelly's cloud."
     )
     icon = "plug"
+    category = "plugs"
     kinds = ("plug",)
     fields = (
         Field(

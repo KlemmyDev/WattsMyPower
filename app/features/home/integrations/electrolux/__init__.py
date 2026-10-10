@@ -58,6 +58,7 @@ class Electrolux(Integration):
         "cloud: there's no local way to reach them."
     )
     icon = "fridge"
+    category = "appliances"
     kinds = ("fridge", "freezer", "washer", "dryer", "washer_dryer", "dishwasher", "oven", "air_conditioner")
     fields = (
         Field(

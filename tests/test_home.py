@@ -17,8 +17,9 @@ from app.core.schema import ROLLUP
 from app.features.home import estimate, usage
 from app.features.home.energy import GAP, QUIET, TAIL, Meter, spread, step
 from app.features.home.integrations.demo import Demo
+from app.features.home.registry import INTEGRATIONS
 from app.features.home.service import BACKOFF_MAX, HomeService, HomeSetupError
-from app.features.home.types import Field, Hints, Integration, IntegrationError, Reading
+from app.features.home.types import CATEGORIES, Field, Hints, Integration, IntegrationError, Reading
 from app.features.readings.repository import ReadingsRepository
 from app.main import create_app
 
@@ -146,6 +147,7 @@ class Fake(Integration):
     name = "Fakebrand"
     via = "the tests"
     about = "Made up."
+    category = "appliances"
     kinds = ("washer",)
     fields = (Field("email", "Email", "email"), Field("password", "Password", "password", secret=True))
     poll_seconds = 60
@@ -515,6 +517,12 @@ def client(config: Config) -> Iterator[TestClient]:
         yield c
 
 
+def test_every_integration_has_a_category() -> None:
+    assert all(cls.category in CATEGORIES for cls in INTEGRATIONS.values())
+    # And no category is left empty.
+    assert {cls.category for cls in INTEGRATIONS.values()} == set(CATEGORIES)
+
+
 def test_home_through_the_api(client: TestClient) -> None:
     assert [i["id"] for i in client.get("/api/home").json()["integrations"]] == [
         "tapo",
@@ -529,6 +537,10 @@ def test_home_through_the_api(client: TestClient) -> None:
     # Those read through a company's cloud say so, for Manage → Integrations.
     clouds = [i["id"] for i in client.get("/api/home").json()["integrations"] if i["cloud"]]
     assert clouds == ["connectlife", "electrolux", "ecoflow"]
+    # Smart home lists them by what they are: each says its category, and the categories come in the order shown.
+    home = client.get("/api/home").json()
+    assert [c["id"] for c in home["categories"]] == ["plugs", "appliances", "batteries", "hubs"]
+    assert {i["id"]: i["category"] for i in home["integrations"]}["bluetti"] == "batteries"
     assert client.post("/api/home/integrations/nothing", json={}).status_code == 404
     view = client.post("/api/home/integrations/demo", json={}).json()
     demo = next(i for i in view["integrations"] if i["id"] == "demo")
