@@ -18,16 +18,18 @@ import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { ProviderChip } from "~/features/ev/components/ProviderChip";
 import { carTitle, evTitle } from "~/features/ev/utils";
 
-/** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), how it charges,
- * its day (its charge, what went into it and from where, and everything the dashboard did with it, day by day), its
- * in and out, and everything else it says about itself. */
+/** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), its day (its charge,
+ * what went into it and from where, and everything the dashboard did with it, day by day), how it charges beside its
+ * in and out (stacked on a narrower screen), and everything else it says about itself. */
 function Car({ v, provider, now }: { v: EvVehicle; provider: TeslaProvider | null; now: number }) {
   return (
     <div className="flex flex-col gap-5">
       <EvPanel v={v} provider={provider} />
-      <EvCharging v={v} />
       <EvDayChart v={v} now={now} />
-      <EvInOut vin={v.vin} now={now} />
+      <div className="grid grid-cols-2 items-start gap-5 max-lg:grid-cols-1">
+        <EvCharging v={v} className="min-w-0" />
+        <EvInOut vin={v.vin} now={now} className="min-w-0" />
+      </div>
       <EvDetails vin={v.vin} name={v.name ?? "The car"} />
     </div>
   );

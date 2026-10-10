@@ -1,11 +1,18 @@
-import { useMemo, useState, type PointerEvent, type ReactNode } from "react";
+import { useId, useMemo, useState, type PointerEvent, type ReactNode } from "react";
 import { priceLabel } from "~/features/amber/utils";
 import type { HistorySeries } from "~/features/common/readings/types";
 import type { ForecastHour } from "~/features/common/weather/types";
 import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
-import { cn } from "~/features/common/ui/utils";
-import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import {
+  DragBand,
+  TimeTicks,
+  timeTicks,
+  useDragRange,
+  useZoom,
+  ZoomOut,
+} from "~/features/common/ui/components/TimeLine";
+import { hhmm } from "~/features/common/formatting/utils/date";
 import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
 import { addDays } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -68,11 +75,25 @@ function plot(
   range: [number, number] | null,
   recordedSky: WeatherHour[] | undefined,
   overlay: Overlay | null,
+  view: [number, number],
 ) {
   const start = day.start;
   const span = addDays(start, 1) - start;
   const from = day.today ? now : start;
-  const X = (t: number) => ((Math.min(start + span, Math.max(start, t)) - start) / span) * W;
+  // Across the plot: the stretch shown, the whole day or the part of it zoomed into.
+  const [v0, v1] = view;
+  const zoomed = v0 > start || v1 < start + span;
+  const X = (t: number) => ((Math.min(v1, Math.max(v0, t)) - v0) / (v1 - v0)) * W;
+  const Xd = (t: number) => (zoomed ? ((t - v0) / (v1 - v0)) * W : X(t)); // zoomed, not held to it: clipped instead
+  // Zoomed, what's drawn takes in the point either side of the stretch shown, so a line runs on to its edges.
+  const within = (pts: P[]) => {
+    if (!zoomed) return pts;
+    const a = pts.findIndex((p) => p.t >= v0);
+    if (a < 0) return [];
+    let b = pts.findIndex((p) => p.t > v1);
+    if (b < 0) b = pts.length;
+    return pts.slice(Math.max(0, a - 1), Math.min(pts.length, b + 1));
+  };
 
   // The grid and battery bars, a half hour each: those gone (today) from the readings, the rest from the forecast.
   // The forecast is hourly, so each hour is shared over its halves (the part of one it covers, for the half hour under
@@ -89,6 +110,14 @@ function plot(
       flows.push({ grid: h.grid_kwh * share, bat: bat * share, forecast: true });
     } else flows.push({ grid: null, bat: null });
   }
+  // Those in the stretch shown (any partly in it clipped at its edges), placed on its scale.
+  const i0 = Math.max(0, Math.floor((v0 - start) / HALF_HOUR));
+  const i1 = Math.min(flows.length, Math.ceil((v1 - start) / HALF_HOUR));
+  const bars = {
+    slots: flows.slice(i0, i1),
+    left: ((start + i0 * HALF_HOUR - v0) / (v1 - v0)) * 100,
+    width: (((i1 - i0) * HALF_HOUR) / (v1 - v0)) * 100,
+  };
 
   // Recorded lines from the 5-minute readings before now.
   const past = (field: string, scale: number): P[] =>
@@ -131,26 +160,31 @@ function plot(
 
   const top = Math.max(
     1,
-    ...[...pvPast, ...loadPast, ...loadAhead, ...pvWas, ...loadWas].map((p) => p.v),
-    ...pvAhead.map((p) => p.v * (range ? range[1] : 1)),
+    ...[pvPast, loadPast, loadAhead, pvWas, loadWas].flatMap((pts) => within(pts)).map((p) => p.v),
+    ...within(pvAhead).map((p) => p.v * (range ? range[1] : 1)),
   );
   const mx = top * 1.1;
   const py = (v: number) => PH - 2 - (v / mx) * (PH - 10);
   const by = (v: number) => BH - 2 - (v / 100) * (BH - 4);
   const path = (pts: P[], fy: (v: number) => number) =>
-    pts.map((p, k) => `${k ? "L" : "M"}${X(p.t).toFixed(1)} ${fy(p.v).toFixed(1)}`).join(" ");
-  const area = (pts: P[]) =>
-    pts.length
-      ? `${path(pts, py)} L${X(pts[pts.length - 1].t).toFixed(1)} ${PH - 2} L${X(pts[0].t).toFixed(1)} ${PH - 2} Z`
+    within(pts)
+      .map((p, k) => `${k ? "L" : "M"}${Xd(p.t).toFixed(1)} ${fy(p.v).toFixed(1)}`)
+      .join(" ");
+  const area = (all: P[]) => {
+    const pts = within(all);
+    return pts.length
+      ? `${path(pts, py)} L${Xd(pts[pts.length - 1].t).toFixed(1)} ${PH - 2} L${Xd(pts[0].t).toFixed(1)} ${PH - 2} Z`
       : "";
+  };
+  const likely = within(pvAhead);
   const band =
-    range && pvAhead.length
+    range && likely.length
       ? `${path(
-          pvAhead.map((p) => ({ t: p.t, v: p.v * range[1] })),
+          likely.map((p) => ({ t: p.t, v: p.v * range[1] })),
           py,
-        )} ${[...pvAhead]
+        )} ${[...likely]
           .reverse()
-          .map((p) => `L${X(p.t).toFixed(1)} ${py(p.v * range[0]).toFixed(1)}`)
+          .map((p) => `L${Xd(p.t).toFixed(1)} ${py(p.v * range[0]).toFixed(1)}`)
           .join(" ")} Z`
       : "";
 
@@ -204,17 +238,20 @@ function plot(
     };
   };
 
-  // The weather every three hours: the forecast's, or (earlier today) what was recorded.
+  // The weather every three hours: the forecast's, or (earlier today) what was recorded. Its row spans the whole day,
+  // stretched (and clipped) to the stretch shown.
   const sky = skyEvery3h(start, day.hours, recordedSky);
+  const skyAt = { left: ((start - v0) / (v1 - v0)) * 100, width: (span / (v1 - v0)) * 100 };
 
   return {
     start,
     span,
     point,
-    flows,
+    bars,
     sky,
+    skyAt,
     X,
-    nowX: day.today ? X(now) : null,
+    nowX: day.today && (!zoomed || (now >= v0 && now <= v1)) ? X(now) : null,
     pvPast: path(pvPast, py),
     pvPastArea: area(pvPast),
     loadPast: path(loadPast, py),
@@ -321,7 +358,8 @@ function PointTooltip({
  * A day of the plan, midnight to midnight: solar and home use, the battery level, and the grid and battery as bars
  * every half hour. Today shows what's been recorded up to now and the forecast after it; solar's likely range is
  * shaded around its forecast, and the day's best times are marked across the top, with its key moments numbered above
- * them. The pointer reads out five minutes at a time, as History does, with a dot on each line.
+ * them. The pointer reads out five minutes at a time, as History does, with a dot on each line. Dragging across it
+ * picks a stretch of the day to look at more closely, all of it zoomed together.
  */
 export function PlanChart({
   day,
@@ -357,12 +395,21 @@ export function PlanChart({
    * the Overview steps through days) stay the same height. */
   markerRow?: boolean;
 }) {
+  const zoom = useZoom(day.start, addDays(day.start, 1)); // a stretch of the day dragged across, shown on its own
+  const { from, to } = zoom;
   const c = useMemo(
-    () => plot(day, series, now, soc0, range, recordedSky, overlay),
-    [day, series, now, soc0, range, recordedSky, overlay],
+    () => plot(day, series, now, soc0, range, recordedSky, overlay, [from, to]),
+    [day, series, now, soc0, range, recordedSky, overlay, from, to],
   );
   const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(0);
+  const drag = useDragRange(from, to, (a, b) => {
+    zoom.zoom(a, b);
+    setHover(null);
+  });
+  const shown = drag.dragging ? null : hover;
+  const clip = useId().replace(/:/g, "");
+  const clipped = zoom.zoomed ? `url(#${clip})` : undefined; // lines past the stretch shown, cut at its edges
   const left = (t: number) => (c.X(t) / W) * 100;
   // Comparing with the earlier forecast: what was recorded steps back, so the forecast's dashed lines over it read.
   const comparing = !!(c.pvWas || c.loadWas);
@@ -372,7 +419,7 @@ export function PlanChart({
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
-    const t = c.start + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * c.span;
+    const t = from + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * (to - from);
     // The five minutes it's in, as History reads them out (the bars stay half-hourly).
     setHover(c.point(c.start + Math.floor((t - c.start) / STEP) * STEP));
   };
@@ -409,31 +456,51 @@ export function PlanChart({
             Likely solar range
           </span>
         )}
-        {legendExtra && <span className="ml-auto flex items-center">{legendExtra}</span>}
+        {(legendExtra || zoom.zoomed) && (
+          <span className="ml-auto flex items-center gap-2">
+            {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} />}
+            {legendExtra}
+          </span>
+        )}
       </div>
-      <WeatherRow sky={c.sky} />
+      <div className="overflow-x-clip">
+        <div style={{ marginLeft: `${c.skyAt.left}%`, width: `${c.skyAt.width}%` }}>
+          <WeatherRow sky={c.sky} />
+        </div>
+      </div>
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
         style={{ paddingTop: top + 22 }}
-        onPointerMove={onPoint}
-        onPointerDown={onPoint}
+        onPointerMove={(e) => {
+          onPoint(e);
+          drag.handlers.onPointerMove?.(e);
+        }}
+        onPointerDown={(e) => {
+          onPoint(e);
+          drag.handlers.onPointerDown?.(e);
+        }}
+        onPointerUp={drag.handlers.onPointerUp}
+        onPointerCancel={drag.handlers.onPointerCancel}
         onPointerLeave={() => setHover(null)}
       >
+        <DragBand band={drag.band} />
         {/* The day's best times, as labelled strips across the top and a faint wash behind the plots. */}
-        {windows.map((w) => (
-          <div
-            key={`${w.kind}${w.start}`}
-            aria-hidden
-            className="pointer-events-none absolute bottom-0"
-            style={{ top, left: `${left(w.start)}%`, width: `${left(w.end) - left(w.start)}%` }}
-          >
-            <div className="h-1.5 rounded-full" style={{ background: WINDOW_COLOR[w.kind] }} />
+        {windows
+          .filter((w) => w.end > from && w.start < to)
+          .map((w) => (
             <div
-              className="absolute inset-x-0 top-[22px] bottom-0 rounded-md"
-              style={{ background: alpha(WINDOW_COLOR[w.kind], 0.07) }}
-            />
-          </div>
-        ))}
+              key={`${w.kind}${w.start}`}
+              aria-hidden
+              className="pointer-events-none absolute bottom-0"
+              style={{ top, left: `${left(w.start)}%`, width: `${left(w.end) - left(w.start)}%` }}
+            >
+              <div className="h-1.5 rounded-full" style={{ background: WINDOW_COLOR[w.kind] }} />
+              <div
+                className="absolute inset-x-0 top-[22px] bottom-0 rounded-md"
+                style={{ background: alpha(WINDOW_COLOR[w.kind], 0.07) }}
+              />
+            </div>
+          ))}
         {c.nowX != null && (
           <div
             aria-hidden
@@ -446,15 +513,15 @@ export function PlanChart({
             <span className="absolute top-2 bottom-0 left-0 border-l border-dashed border-line-strong" />
           </div>
         )}
-        <MomentMarkers moments={moments} left={left} />
-        {hover && (
+        <MomentMarkers moments={moments.filter((m) => !zoom.zoomed || (m.t >= from && m.t <= to))} left={left} />
+        {shown && (
           <div
             aria-hidden
             className="pointer-events-none absolute bottom-0 rounded-[3px] bg-fg/8"
             style={{
               top: top + 22,
-              left: `${left(hover.t)}%`,
-              width: `max(3px, ${(left(hover.t + STEP) - left(hover.t)).toFixed(3)}%)`,
+              left: `${left(shown.t)}%`,
+              width: `max(3px, ${(left(shown.t + STEP) - left(shown.t)).toFixed(3)}%)`,
             }}
           />
         )}
@@ -468,32 +535,39 @@ export function PlanChart({
             aria-hidden="true"
             className="absolute inset-0 size-full animate-reveal-x overflow-visible"
           >
-            {c.band && <path d={c.band} style={{ fill: alpha(COLOR.solar, 0.16) }} />}
-            {c.pvPastArea && (
-              <path d={c.pvPastArea} style={{ fill: alpha(COLOR.solarWash, comparing ? 0.14 : 0.32) }} />
-            )}
-            {c.pvAheadArea && <path d={c.pvAheadArea} style={{ fill: alpha(COLOR.solarWash, 0.16) }} />}
-            <path
-              d={c.pvPast}
-              {...STROKE}
-              strokeWidth="2"
-              style={{ stroke: COLOR.solar, opacity: comparing ? FADED : 1 }}
-            />
-            <path d={c.pvAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
-            <path
-              d={c.loadPast}
-              {...STROKE}
-              strokeWidth="1.5"
-              style={{ stroke: COLOR.ink, opacity: comparing ? FADED : 1 }}
-            />
-            {/* The earlier forecast for the hours gone, drawn as the forecast is: the legend's "Forecast" covers both. */}
-            {c.pvWas && (
-              <path d={c.pvWas} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
-            )}
-            {c.loadWas && (
-              <path d={c.loadWas} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
-            )}
-            <path d={c.loadAhead} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
+            <defs>
+              <clipPath id={clip}>
+                <rect x="0" y={-PH} width={W} height={PH * 3} />
+              </clipPath>
+            </defs>
+            <g clipPath={clipped}>
+              {c.band && <path d={c.band} style={{ fill: alpha(COLOR.solar, 0.16) }} />}
+              {c.pvPastArea && (
+                <path d={c.pvPastArea} style={{ fill: alpha(COLOR.solarWash, comparing ? 0.14 : 0.32) }} />
+              )}
+              {c.pvAheadArea && <path d={c.pvAheadArea} style={{ fill: alpha(COLOR.solarWash, 0.16) }} />}
+              <path
+                d={c.pvPast}
+                {...STROKE}
+                strokeWidth="2"
+                style={{ stroke: COLOR.solar, opacity: comparing ? FADED : 1 }}
+              />
+              <path d={c.pvAhead} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
+              <path
+                d={c.loadPast}
+                {...STROKE}
+                strokeWidth="1.5"
+                style={{ stroke: COLOR.ink, opacity: comparing ? FADED : 1 }}
+              />
+              {/* The earlier forecast for the hours gone, drawn as the forecast is: the legend's "Forecast" covers both. */}
+              {c.pvWas && (
+                <path d={c.pvWas} {...STROKE} strokeWidth="2" strokeDasharray="6 5" style={{ stroke: COLOR.solar }} />
+              )}
+              {c.loadWas && (
+                <path d={c.loadWas} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
+              )}
+              <path d={c.loadAhead} {...STROKE} strokeWidth="1.5" strokeDasharray="6 5" style={{ stroke: COLOR.ink }} />
+            </g>
             <line
               x1="0"
               x2={W}
@@ -503,10 +577,10 @@ export function PlanChart({
               style={{ stroke: alpha(COLOR.fg, 0.12) }}
             />
           </svg>
-          {hover && (
+          {shown && (
             <>
-              <Dot left={left(hover.t + STEP / 2)} top={hover.pvTop} color={COLOR.solar} />
-              <Dot left={left(hover.t + STEP / 2)} top={hover.loadTop} color={COLOR.ink} />
+              <Dot left={left(shown.t + STEP / 2)} top={shown.pvTop} color={COLOR.solar} />
+              <Dot left={left(shown.t + STEP / 2)} top={shown.loadTop} color={COLOR.ink} />
             </>
           )}
         </div>
@@ -537,14 +611,17 @@ export function PlanChart({
               vectorEffect="non-scaling-stroke"
               style={{ stroke: alpha(COLOR.fg, 0.3) }}
             />
-            <path d={c.socPast} {...STROKE} strokeWidth="2.25" style={{ stroke: COLOR.battery }} />
-            <path
-              d={c.socAhead}
-              {...STROKE}
-              strokeWidth="2.25"
-              strokeDasharray="6 5"
-              style={{ stroke: COLOR.battery }}
-            />
+            {/* Cut by the plot above's clip: the same units across, and tall enough for this one too. */}
+            <g clipPath={clipped}>
+              <path d={c.socPast} {...STROKE} strokeWidth="2.25" style={{ stroke: COLOR.battery }} />
+              <path
+                d={c.socAhead}
+                {...STROKE}
+                strokeWidth="2.25"
+                strokeDasharray="6 5"
+                style={{ stroke: COLOR.battery }}
+              />
+            </g>
             <line
               x1="0"
               x2={W}
@@ -554,40 +631,30 @@ export function PlanChart({
               style={{ stroke: alpha(COLOR.fg, 0.12) }}
             />
           </svg>
-          {hover && <Dot left={left(hover.t + STEP / 2)} top={hover.socTop} color={COLOR.battery} />}
+          {shown && <Dot left={left(shown.t + STEP / 2)} top={shown.socTop} color={COLOR.battery} />}
         </div>
-        <FlowBars slots={c.flows} className="relative mt-1 h-[64px] compact:h-12" />
-        {hover && (
+        <div className="relative mt-1 h-[64px] overflow-x-clip compact:h-12">
+          <div className="absolute inset-y-0" style={{ left: `${c.bars.left}%`, width: `${c.bars.width}%` }}>
+            <FlowBars slots={c.bars.slots} className="relative h-full" />
+          </div>
+        </div>
+        {shown && (
           <PointTooltip
-            p={hover}
-            left={left(hover.t + STEP / 2)}
+            p={shown}
+            left={left(shown.t + STEP / 2)}
             width={width}
             rates={rates}
             marked={top > 0}
-            was={overlay && hover.recorded ? hourOf(overlay, Math.floor((hover.t - c.start) / 3600)) : null}
+            was={overlay && shown.recorded ? hourOf(overlay, Math.floor((shown.t - c.start) / 3600)) : null}
             sky={
-              hover.h ??
-              recordedSky?.find((x) => x.ts === c.start + Math.floor((hover.t - c.start) / 3600) * 3600) ??
+              shown.h ??
+              recordedSky?.find((x) => x.ts === c.start + Math.floor((shown.t - c.start) / 3600) * 3600) ??
               null
             }
           />
         )}
       </div>
-      <div className="relative h-3.5">
-        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h, i, all) => (
-          <span
-            key={h}
-            className={cn(
-              "absolute font-mono text-[11px] text-ink-faint",
-              i === 0 ? "" : i === all.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
-              i % 2 === 1 && "max-md:hidden",
-            )}
-            style={{ left: `${(h / 24) * 100}%` }}
-          >
-            {hourLabel(h)}
-          </span>
-        ))}
-      </div>
+      <TimeTicks ticks={timeTicks(from, to, 3)} />
     </div>
   );
 }

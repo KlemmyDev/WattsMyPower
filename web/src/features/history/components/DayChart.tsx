@@ -1,6 +1,14 @@
-import { useMemo, useState, type PointerEvent, type ReactNode } from "react";
+import { useId, useMemo, useState, type PointerEvent, type ReactNode } from "react";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { ChartTooltip, nearest, TooltipRow } from "~/features/common/ui/components/ChartHover";
+import {
+  DragBand,
+  TimeTicks,
+  timeTicks,
+  useDragRange,
+  useZoom,
+  ZoomOut,
+} from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, pct } from "~/features/common/formatting/utils/number";
@@ -42,7 +50,8 @@ function segments(rows: Row[], k: Key): Row[][] {
   return out;
 }
 
-function plot(series: HistorySeries) {
+/** A day's readings as rows, and the day they're on. */
+function dayOf(series: HistorySeries) {
   const rows: Row[] = series.t.map((t, i) => ({
     t,
     pv: series.pv_power?.[i] ?? null,
@@ -53,29 +62,42 @@ function plot(series: HistorySeries) {
   }));
   // The chart's day comes from its own readings, so the previous day stays drawn while the next one loads.
   const start = rows.length ? midnight(rows[0].t) : 0;
-  const span = addDays(start, 1) - start;
-  const values = rows.flatMap((r) => [r.pv, r.load]).filter((v) => v != null);
+  return {
+    rows,
+    start,
+    end: addDays(start, 1),
+    step: rows.length > 1 ? rows[1].t - rows[0].t : 300,
+    recorded: rows.some((r) => r.pv != null || r.load != null || r.soc != null),
+  };
+}
+
+/** The lines from `from` to `to` (the whole day, or a stretch of it dragged across), on a scale to fit them. */
+function plot(rows: Row[], from: number, to: number) {
+  // What's drawn takes in the reading either side of the stretch, so a line runs on to its edges (clipped there).
+  const a = rows.findIndex((r) => r.t >= from);
+  let b = rows.findIndex((r) => r.t > to);
+  if (b < 0) b = rows.length;
+  const drawn = a < 0 ? [] : rows.slice(Math.max(0, a - 1), Math.min(rows.length, b + 1));
+  const shown = rows.filter((r) => r.t >= from && r.t <= to);
+  const span = to - from;
+  const values = shown.flatMap((r) => [r.pv, r.load]).filter((v) => v != null);
   const mx = Math.max(1000, ...values) * 1.1;
-  const X = (t: number) => (((t - start) / span) * W).toFixed(1);
+  const X = (t: number) => (((t - from) / span) * W).toFixed(1);
   const Yk = (v: number) => (H - (Math.max(0, v) / mx) * (H - 10)).toFixed(1);
   const Ys = (v: number) => (BH - 2 - (v / 100) * (BH - 4)).toFixed(1);
-  const step = rows.length > 1 ? rows[1].t - rows[0].t : 300;
   const line = (pts: Row[], k: Key, fy: (v: number) => string) =>
     pts.map((r, i) => `${i ? "L" : "M"}${X(r.t)} ${fy(r[k] ?? 0)}`).join(" ");
   return {
-    start,
-    span,
-    solar: segments(rows, "pv").map((sg) => {
+    solar: segments(drawn, "pv").map((sg) => {
       const d = line(sg, "pv", Yk);
       return { d, area: `${d} L${X(sg[sg.length - 1].t)} ${H} L${X(sg[0].t)} ${H} Z` };
     }),
-    home: segments(rows, "load").map((sg) => line(sg, "load", Yk)),
-    soc: segments(rows, "soc").map((sg) => line(sg, "soc", Ys)),
-    readings: rows.filter((r) => r.pv != null || r.load != null || r.soc != null),
-    step,
+    home: segments(drawn, "load").map((sg) => line(sg, "load", Yk)),
+    soc: segments(drawn, "soc").map((sg) => line(sg, "soc", Ys)),
+    readings: shown.filter((r) => r.pv != null || r.load != null || r.soc != null),
     /** Where a reading sits, as percentages of the plot: across, and down to each line. */
     at: (r: Row) => ({
-      left: ((r.t - start) / span) * 100,
+      left: ((r.t - from) / span) * 100,
       pv: r.pv == null ? null : (+Yk(r.pv) / H) * 100,
       load: r.load == null ? null : (+Yk(r.load) / H) * 100,
       soc: r.soc == null ? null : (+Ys(r.soc) / BH) * 100,
@@ -133,6 +155,7 @@ const Dot = ({ left, top, color }: { left: number; top: number | null; color: st
 /**
  * One day hour by hour: solar, home use and battery level from the 5-minute readings, the grid
  * as bars (from it above the line, to it below), and the 5-minute reading under the pointer in a tooltip.
+ * Dragging across it shows just that stretch, its bars finer, with a button back out to the whole day.
  */
 export function DayChart({
   series,
@@ -147,21 +170,76 @@ export function DayChart({
   /** The battery's backup reserve (%), marked on its strip. */
   reserve?: number;
 }) {
-  const chart = useMemo(() => series && plot(series), [series]);
-  // The grid and battery bars, every half hour.
-  const flows = useMemo(() => (series && chart ? slotsOf(series, chart.start, HALF_HOUR) : []), [series, chart]);
+  const day = useMemo(() => series && dayOf(series), [series]);
+  const zoom = useZoom(day?.start ?? 0, day?.end ?? 0); // a stretch of the day dragged across, shown on its own
+  const { from, to } = zoom;
+  const chart = useMemo(() => day && plot(day.rows, from, to), [day, from, to]);
+  // The grid and battery bars, every half hour; zoomed in, finer (down to the 5-minute readings), at most 48 across.
+  const every = zoom.zoomed ? ([300, 600, 900].find((s) => (to - from) / s <= 48) ?? HALF_HOUR) : HALF_HOUR;
+  const flows = useMemo(() => (series && day ? slotsOf(series, day.start, every) : []), [series, day, every]);
   const [hover, setHover] = useState<Row | null>(null);
   const [width, setWidth] = useState(0);
   const by = (v: number) => BH - 2 - (v / 100) * (BH - 4);
+  const clip = useId().replace(/:/g, "");
+  const range = useDragRange(
+    from,
+    to,
+    day?.recorded
+      ? (a, b) => {
+          setHover(null);
+          zoom.zoom(a, b);
+        }
+      : undefined,
+  );
+  const hovered = range.dragging ? null : hover;
 
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
-    if (!chart?.readings.length) return;
-    const t = chart.start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * chart.span;
+    if (!day || !chart?.readings.length) return;
+    const t = from + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (to - from);
     const best = nearest(chart.readings, t);
-    setHover(best && Math.abs(best.t - t) <= 2 * chart.step ? best : null);
+    setHover(best && Math.abs(best.t - t) <= 2 * day.step ? best : null);
   };
+
+  // Zoomed in, the lines are held to the plot (they run on past it, to the readings either side).
+  const clipTo = (id: string, h: number) => (
+    <defs>
+      <clipPath id={`${clip}-${id}`}>
+        <rect x="0" y={-h} width={W} height={h * 3} />
+      </clipPath>
+    </defs>
+  );
+  const clipped = (id: string) => (zoom.zoomed ? `url(#${clip}-${id})` : undefined);
+
+  // Zoomed in, only the slots in the stretch, placed by time (the ones at its ends cut off at the plot's edges).
+  const first = Math.floor((from - (day?.start ?? 0)) / every);
+  const last = Math.ceil((to - (day?.start ?? 0)) / every);
+  const bars = zoom.zoomed ? (
+    <div className="relative mt-1 h-[72px] overflow-hidden compact:h-14">
+      <div
+        className="absolute inset-y-0"
+        style={{
+          left: `${((((day?.start ?? 0) + first * every - from) / (to - from)) * 100).toFixed(3)}%`,
+          width: `${((((last - first) * every) / (to - from)) * 100).toFixed(3)}%`,
+        }}
+      >
+        <FlowBars slots={flows.slice(first, last)} className="relative h-full" />
+      </div>
+    </div>
+  ) : (
+    <FlowBars slots={flows} className="relative mt-1 h-[72px] compact:h-14" />
+  );
+
+  // The whole day's hours as ever; zoomed in, finer marks through the stretch.
+  const ticks = zoom.zoomed
+    ? timeTicks(from, to, 3)
+    : [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h, i) => ({
+        t: from + h * 3600,
+        left: (h / 24) * 100,
+        label: hourLabel(h),
+        odd: i % 2 === 1,
+      }));
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -187,22 +265,33 @@ export function DayChart({
             {label}
           </span>
         ))}
+        {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} className="-my-[5px] ml-auto" />}
       </div>
-      {top}
+      {/* Lined up with the whole day, so left out while zoomed in. */}
+      {!zoom.zoomed && top}
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
-        onPointerMove={onPoint}
-        onPointerDown={onPoint}
+        onPointerMove={(e) => {
+          onPoint(e);
+          range.handlers.onPointerMove?.(e);
+        }}
+        onPointerDown={(e) => {
+          onPoint(e);
+          range.handlers.onPointerDown?.(e);
+        }}
+        onPointerUp={range.handlers.onPointerUp}
+        onPointerCancel={range.handlers.onPointerCancel}
         onPointerLeave={() => setHover(null)}
       >
+        <DragBand band={range.band} />
         {/* The hovered 5 minutes, as a soft band behind the lines and grid bars: the tooltip sums it up. */}
-        {hover && chart && (
+        {hovered && chart && day && (
           <div
             aria-hidden
             className="pointer-events-none absolute inset-y-0 -translate-x-1/2 rounded-[3px] bg-fg/8"
             style={{
-              left: `${chart.at(hover).left.toFixed(3)}%`,
-              width: `max(4px, ${((chart.step / chart.span) * 100).toFixed(3)}%)`,
+              left: `${chart.at(hovered).left.toFixed(3)}%`,
+              width: `max(4px, ${((day.step / (to - from)) * 100).toFixed(3)}%)`,
             }}
           />
         )}
@@ -210,10 +299,10 @@ export function DayChart({
           {["0%", "33%", "66%", "100%"].map((top) => (
             <div key={top} className="absolute right-0 left-0 border-t border-fg/5" style={{ top }} />
           ))}
-          {chart && (
+          {chart && day && (
             // Keyed by day, so picking another day draws it in afresh.
             <svg
-              key={chart.start}
+              key={day.start}
               viewBox={`0 0 ${W} ${H}`}
               preserveAspectRatio="none"
               aria-hidden="true"
@@ -225,26 +314,29 @@ export function DayChart({
                   <stop offset="1" stopOpacity="0" style={{ stopColor: COLOR.solarWash }} />
                 </linearGradient>
               </defs>
-              {chart.solar.map((s, i) => (
-                <g key={i}>
-                  <path d={s.area} fill="url(#hyPv)" />
-                  <path d={s.d} {...STROKE} strokeWidth="2" style={{ stroke: SOLAR }} />
-                </g>
-              ))}
-              {chart.home.map((d, i) => (
-                <path key={i} d={d} {...STROKE} strokeWidth="1.5" style={{ stroke: HOME }} />
-              ))}
+              {clipTo("kw", H)}
+              <g clipPath={clipped("kw")}>
+                {chart.solar.map((s, i) => (
+                  <g key={i}>
+                    <path d={s.area} fill="url(#hyPv)" />
+                    <path d={s.d} {...STROKE} strokeWidth="2" style={{ stroke: SOLAR }} />
+                  </g>
+                ))}
+                {chart.home.map((d, i) => (
+                  <path key={i} d={d} {...STROKE} strokeWidth="1.5" style={{ stroke: HOME }} />
+                ))}
+              </g>
             </svg>
           )}
-          {chart && !placeholder && !chart.readings.length && (
+          {day && !placeholder && !day.recorded && (
             <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-faint">
               No readings were recorded on this day.
             </div>
           )}
-          {hover &&
+          {hovered &&
             chart &&
             (() => {
-              const at = chart.at(hover);
+              const at = chart.at(hovered);
               return (
                 <>
                   <Dot left={at.left} top={at.pv} color={SOLAR} />
@@ -260,9 +352,9 @@ export function DayChart({
         )}
         {/* The battery level on a strip of its own, as the Plan chart draws it: full at the top, the reserve dashed. */}
         <div className={cn("relative h-16 compact:h-12", reserve == null && "mt-1")}>
-          {chart && (
+          {chart && day && (
             <svg
-              key={chart.start}
+              key={day.start}
               viewBox={`0 0 ${W} ${BH}`}
               preserveAspectRatio="none"
               aria-hidden="true"
@@ -287,9 +379,12 @@ export function DayChart({
                   style={{ stroke: alpha(COLOR.fg, 0.3) }}
                 />
               )}
-              {chart.soc.map((d, i) => (
-                <path key={i} d={d} {...STROKE} strokeWidth="2.25" style={{ stroke: BATTERY }} />
-              ))}
+              {clipTo("soc", BH)}
+              <g clipPath={clipped("soc")}>
+                {chart.soc.map((d, i) => (
+                  <path key={i} d={d} {...STROKE} strokeWidth="2.25" style={{ stroke: BATTERY }} />
+                ))}
+              </g>
               <line
                 x1="0"
                 x2={W}
@@ -300,26 +395,14 @@ export function DayChart({
               />
             </svg>
           )}
-          {hover && chart && <Dot left={chart.at(hover).left} top={chart.at(hover).soc} color={BATTERY} />}
+          {hovered && chart && <Dot left={chart.at(hovered).left} top={chart.at(hovered).soc} color={BATTERY} />}
         </div>
-        <FlowBars slots={flows} className="relative mt-1 h-[72px] compact:h-14" />
-        {hover && chart && <ReadingTooltip r={hover} step={chart.step} left={chart.at(hover).left} width={width} />}
+        {bars}
+        {hovered && chart && day && (
+          <ReadingTooltip r={hovered} step={day.step} left={chart.at(hovered).left} width={width} />
+        )}
       </div>
-      <div className="relative h-3.5">
-        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h, i, all) => (
-          <span
-            key={h}
-            className={cn(
-              "absolute font-mono text-[11px] text-ink-faint",
-              i === 0 ? "" : i === all.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
-              i % 2 === 1 && "max-md:hidden",
-            )}
-            style={{ left: `${(h / 24) * 100}%` }}
-          >
-            {hourLabel(h)}
-          </span>
-        ))}
-      </div>
+      <TimeTicks ticks={ticks} />
     </div>
   );
 }

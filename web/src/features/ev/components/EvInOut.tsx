@@ -89,19 +89,22 @@ export function EvInOut({ vin, now, className }: { vin: string; now: number; cla
         <Segmented label="Period" options={[...RANGES]} value={days} onChange={setDays} />
       </div>
       {t && (
-        <div className="grid grid-cols-4 gap-3 max-md:grid-cols-2">
-          <Stat label="Charged at home" value={kWh(t.charged_kwh)}>
-            {t.solar_share != null ? `${Math.round(t.solar_share * 100)}% solar or battery` : `${t.charges} charges`}
-          </Stat>
-          <Stat label="From the grid" value={kWh(t.grid_kwh)}>
-            {t.charges} {t.charges === 1 ? "charge" : "charges"}
-          </Stat>
-          <Stat label="Driven" value={t.km != null ? `${t.km.toLocaleString("en-AU")} km` : "—"}>
-            {t.trips} {t.trips === 1 ? "trip" : "trips"}
-          </Stat>
-          <Stat label="Used" value={t.kwh_per_100km != null ? `${t.kwh_per_100km}` : "—"}>
-            kWh per 100 km
-          </Stat>
+        // Four across when the card has room for them, two by two when it doesn't (beside Charging, or on a phone).
+        <div className="@container">
+          <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+            <Stat label="Charged at home" value={kWh(t.charged_kwh)}>
+              {t.solar_share != null ? `${Math.round(t.solar_share * 100)}% solar or battery` : `${t.charges} charges`}
+            </Stat>
+            <Stat label="From the grid" value={kWh(t.grid_kwh)}>
+              {t.charges} {t.charges === 1 ? "charge" : "charges"}
+            </Stat>
+            <Stat label="Driven" value={t.km != null ? `${t.km.toLocaleString("en-AU")} km` : "—"}>
+              {t.trips} {t.trips === 1 ? "trip" : "trips"}
+            </Stat>
+            <Stat label="Used" value={t.kwh_per_100km != null ? `${t.kwh_per_100km}` : "—"}>
+              kWh per 100 km
+            </Stat>
+          </div>
         </div>
       )}
       {h && h.battery_kwh == null && (
