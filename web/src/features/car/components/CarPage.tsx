@@ -61,7 +61,7 @@ export function CarPage({ carId }: { carId: number }) {
         title="Remove this car"
         sub={
           vehicle
-            ? "Its recorded levels go with it. The Tesla carries on with its model's figures."
+            ? `Its recorded levels go with it. The Tesla carries on with ${vehicle.model ?? "its model's"} figures.`
             : "Its recorded levels go with it."
         }
         aside={
