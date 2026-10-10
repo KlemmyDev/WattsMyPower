@@ -58,6 +58,16 @@ async def start_control(svc: ServicesDep, body: JsonBody):
         await svc.battery.publish()  # every page shows the new mode (or that something else has the battery)
 
 
+@router.put("/experimental")
+async def set_experimental(svc: ServicesDep, body: JsonBody):
+    """Turn the controls on for this inverter though they haven't been tried on its model, or back off: {"on": true}.
+    Kept to this inverter (its model and serial): another one connected starts with them off."""
+    try:
+        return await _run(svc.battery.set_experimental, body.get("on"))
+    finally:
+        await svc.battery.publish()  # the Overview's shortcuts follow
+
+
 @router.delete("/control")
 async def stop_control(svc: ServicesDep):
     """End the control in effect and put the battery back to normal."""

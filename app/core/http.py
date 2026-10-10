@@ -1,5 +1,5 @@
 """Outbound HTTP for the services the app calls (Open-Meteo, Energy Made Easy, OpenStreetMap, Amber,
-alert channels, smart-home clouds)."""
+smart-home clouds)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ from collections.abc import Mapping
 from http.client import HTTPResponse
 from typing import Any
 
-USER_AGENT = "WattsMyPower/1.0 (self-hosted solar dashboard)"
+from app.core.version import VERSION
+
+# Who's asking, as services like OpenStreetMap's Nominatim want it said: the app, its version, and where it's from.
+USER_AGENT = f"WattsMyPower/{VERSION} (+https://github.com/KlemmyDev/WattsMyPower)"
 
 
 def _body(resp: HTTPResponse) -> bytes:

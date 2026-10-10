@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/KlemmyDev/WattsMyPower/security/policy
+    about: Please report security problems privately, as the security policy explains, not in a public issue.
+  - name: Installing and setting up
+    url: https://github.com/KlemmyDev/WattsMyPower#install
+    about: The README walks through installing on Linux, a Mac or Windows, and connecting your inverter.

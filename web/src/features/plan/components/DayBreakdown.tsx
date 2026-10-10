@@ -212,7 +212,7 @@ function Solar({ day, forecast, system }: { day: PlanDay; forecast: Forecast; sy
       </About>
       <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-ink-muted">
         <span>Solar array: {system?.pv_kw ? `${system.pv_kw} kW` : "not set"}</span>
-        <ButtonLink to="/system" variant="link" size="sm">
+        <ButtonLink to="/system/solar-battery" variant="link" size="sm">
           Change
         </ButtonLink>
       </div>

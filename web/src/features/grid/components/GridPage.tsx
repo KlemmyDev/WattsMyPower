@@ -116,7 +116,9 @@ function GridSummary({
   const steady = grid
     ? grid.enabled
       ? "No warnings from AEMO, no storms forecast, and the grid's steady at your house."
-      : "The grid's steady at your house. Choose your region below for AEMO's warnings too."
+      : grid.location_set
+        ? "The grid's steady at your house. Choose your region below for AEMO's warnings too."
+        : "The grid's steady at your house. Set your location, or choose your region below, for AEMO's warnings too."
     : undefined;
   return (
     <SummaryCard
@@ -158,7 +160,9 @@ function GridSummary({
           market
             ? `${perMWh(market.price)} · ${grid?.region_name}`
             : grid && !grid.enabled
-              ? "Not following AEMO"
+              ? grid.region_auto && !grid.location_set
+                ? "Needs your location"
+                : "Not following AEMO"
               : "Waiting for AEMO"
         }
       />
@@ -333,8 +337,15 @@ function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
       setBusy(false);
     }
   };
-  const chosen = grid.enabled ? (grid.region_auto ? "auto" : grid.region!) : "none";
-  const autoName = grid.region_auto && grid.region_name ? `Automatic (${grid.region_name})` : "Automatic";
+  // Automatic, without a location yet, works out no region: it's still what's chosen.
+  const waiting = grid.region_auto && !grid.location_set;
+  const chosen = grid.enabled ? (grid.region_auto ? "auto" : grid.region!) : waiting ? "auto" : "none";
+  const autoName =
+    grid.region_auto && grid.region_name
+      ? `Automatic (${grid.region_name})`
+      : waiting
+        ? "Automatic (needs your location)"
+        : "Automatic";
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">

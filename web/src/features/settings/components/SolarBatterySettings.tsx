@@ -3,94 +3,82 @@ import type { SystemInfo } from "~/features/common/live/types";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { pct } from "~/features/common/formatting/utils/number";
 import { useLive } from "~/features/common/live/hooks/useLive";
-import { inverterName } from "~/features/common/live/utils";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { SYSTEM_SETTINGS, type Settings, type SystemSettingKey } from "~/features/common/settings/types";
 import { saveSettingsError } from "~/features/common/settings/utils";
-import { Button, ButtonLink } from "~/features/common/ui/components/Button";
-import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
-import { cn } from "~/features/common/ui/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { ButtonLink } from "~/features/common/ui/components/Button";
+import { Field, Input } from "~/features/common/ui/components/Field";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { HouseSettings } from "~/features/settings/components/HouseSettings";
-import { OwnershipSettings } from "~/features/settings/components/OwnershipSettings";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
-import { UpdatesCard } from "~/features/updates/components/UpdatesCard";
+import { SaveBar, SettingsSection } from "~/features/settings/components/SettingsSection";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
-  const model = pv2.model
-    ? `${inverterName(pv2)}${pv2.nominal_kw ? `, ${pv2.nominal_kw} kW` : ""}`
-    : `At ${pv2.host}, not read yet`;
-  return (
-    model +
-    (pv2.behind_meter ? ", behind the hybrid's meter" : ", outside the hybrid's meter (output counted as export)")
-  );
-}
-
-const SECOND = "Second inverter";
-
-function systemRows(s: SystemInfo | undefined): [string, string][] {
-  return [
-    ["Site name", "Home"],
-    ["Inverter", s?.model ? `${inverterName(s)} hybrid${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"],
-    ["Serial number", s?.serial || "—"],
-    ["Battery", s?.inverter_battery_kwh ? `${s.inverter_battery_kwh} kWh` : "—"],
-    ["Backup reserve", s?.inverter_reserve != null ? pct(s.inverter_reserve) : "—"],
-    ["Grid connection", s?.phases || "—"],
-    ...(s?.pv2 ? [[SECOND, secondInverter(s.pv2)] satisfies [string, string]] : []),
-  ];
-}
-
-/** Manage → System: what the inverters report about the installation, the details they can't, and the house. */
-export function SystemSettings() {
+/**
+ * Manage → System → Solar and battery: what the inverters report about the installation at the top, then the details
+ * they can't.
+ */
+export function SolarBatterySettings() {
   const live = useLive();
+  const s = live?.system;
   const last = live?.last_success;
+  const overridden = !!s?.battery_kwh_override;
   return (
     <>
-      <SettingsCard aria-labelledby="h-sys">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle p-6">
-          <SettingsTitle
-            id="h-sys"
-            title="Solar and battery system"
-            sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
+      <SubPageHeader
+        back={<BackLink to="/system">System</BackLink>}
+        id="h-solar-battery"
+        title="Solar and battery"
+        sub="What your inverters report about your system, and the details they can't."
+      />
+      <SummaryCard
+        icon="sun"
+        color={COLOR.solar}
+        label="Your system"
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+            <span className="min-w-0 flex-1">
+              {last ? `Read from your inverter at ${hhmm(last)}` : "Not read from your inverter yet"}
+              {s?.serial && <span className="text-ink-faint"> · Serial {s.serial}</span>}
+            </span>
+            <ButtonLink to="/integrations/sungrow" variant="outline" size="sm">
+              Manage inverters
+            </ButtonLink>
+          </div>
+        }
+      >
+        <SummaryStat
+          label="Inverter"
+          value={s?.model ?? "—"}
+          sub={[s?.brand, "hybrid", s?.nominal_kw && `${s.nominal_kw} kW`].filter(Boolean).join(" · ")}
+        />
+        <SummaryStat label="Solar array" value={s?.pv_kw ? `${s.pv_kw} kW` : "Not set"} sub="All your panels" />
+        <SummaryStat
+          label="Battery"
+          value={s?.battery_kwh ? `${s.battery_kwh} kWh` : "—"}
+          sub={overridden ? "Set by you" : "From the inverter"}
+        />
+        <SummaryStat
+          label="Backup reserve"
+          value={s?.battery_reserve != null ? pct(s.battery_reserve) : "—"}
+          sub={s?.inverter_reserve != null ? "From the inverter" : "Set by you"}
+        />
+        <SummaryStat label="Grid" value={s?.phases ?? "—"} sub="Connection" />
+        {s?.pv2 && (
+          <SummaryStat
+            label="Second inverter"
+            value={s.pv2.model ?? "Not read yet"}
+            sub={s.pv2.behind_meter ? "Behind the hybrid's meter" : "Counted as export"}
+            title={
+              s.pv2.behind_meter
+                ? "Behind the hybrid's meter"
+                : "Outside the hybrid's meter: its output is counted as export"
+            }
           />
-        </div>
-        {/* Tiles: 2, 3 or 6 across, which the six always fill; a second inverter, a longer line, gets a row of
-            its own. Each draws its own lines on the right and below, and the edge ones are clipped. */}
-        <div className="overflow-hidden border-b border-line-subtle">
-          <dl className="m-0 -mr-px -mb-px grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-            {systemRows(live?.system).map(([label, value]) => (
-              <div
-                key={label}
-                className={cn(
-                  "flex min-w-0 flex-col gap-1 border-r border-b border-line-subtle px-6 py-4 max-sm:px-5",
-                  label === SECOND && "col-span-full",
-                )}
-              >
-                <dt className="text-xs text-ink-muted">{label}</dt>
-                <dd className="m-0 text-[15px] font-medium break-words tabular-nums">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-        <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-          These details come from your inverters over the local network. Inverters are connected in Manage →
-          Integrations → Sungrow.
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-6 py-4">
-          <span className="min-w-[200px] flex-1 text-[13px] leading-5 text-ink-muted">
-            The set-up guide walks through connecting your inverter, these system details, your electricity plan,
-            location and billing.
-          </span>
-          <ButtonLink to="/welcome" variant="outline" size="sm">
-            Open the set-up guide
-          </ButtonLink>
-        </div>
-      </SettingsCard>
+        )}
+      </SummaryCard>
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
-      {live && <SystemForm system={live.system} />}
-      {live && <OwnershipSettings system={live.system} />}
-      {live && <HouseSettings system={live.system} />}
-      <UpdatesCard />
+      {s && <SystemForm system={s} />}
     </>
   );
 }
@@ -219,23 +207,15 @@ function SystemForm({ system: s }: { system: SystemInfo }) {
   };
 
   return (
-    <SettingsCard padded aria-labelledby="h-sys-details">
-      <SettingsTitle
-        id="h-sys-details"
-        title="Your system's details"
-        sub="What your inverter can't tell us. Changes apply straight away across the app."
-      />
+    <SettingsSection
+      id="h-sys-details"
+      title="Details your inverter can't tell us"
+      sub="Changes apply straight away across the dashboard, and the forecast updates."
+    >
       <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
         <SystemDetailsFields system={s} form={form} />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" size="sm" disabled={!form.changed.length || form.pending}>
-            {form.pending ? "Saving…" : "Save details"}
-          </Button>
-          <HelpText tone="bad" role="alert">
-            {form.error}
-          </HelpText>
-        </div>
+        <SaveBar label="Save details" pending={form.pending} disabled={!form.changed.length} error={form.error} />
       </form>
-    </SettingsCard>
+    </SettingsSection>
   );
 }

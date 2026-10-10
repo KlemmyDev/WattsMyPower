@@ -16,10 +16,6 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     sessions     signed-in browsers (only a hash of each token is stored)
     meter_imports    smart-meter (NEM12) files imported from Bills → Rates & settings
     meter_intervals  their readings: grid import or export per meter interval, in kWh
-    alert_channels   where alerts are sent (ntfy, a webhook, Pushover), one row per kind, with its secrets
-    alert_rules      alert rules switched on or off, or with changed thresholds (defaults aren't stored)
-    alert_state      each rule's progress: a problem seen but not yet reported, an alert out, its cooldown
-    alert_history    alerts sent and resolved, daily summaries, and whether each reached its channels
     prices           dynamic electricity prices (from Amber), one row per channel and interval
     weather_hours    the weather each hour (Open-Meteo): the latest forecast for hours to come, and the
                      best estimate of what it was for hours past, kept so History can show it and the
@@ -28,8 +24,6 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                      what the panels really made
     car_levels   each car's battery level (%), as read from the car (app.features.tesla)
     cars         the electric cars connected: name, the model chosen, and their details (JSON)
-    push_subscriptions  browsers that turned on notifications: where their push service takes them, and
-                 the keys to encrypt for them (app.features.alerts.webpush)
     home_accounts    smart-home integrations connected (a Hisense account, smart plugs…): what each keeps to
                      sign in, and how its polling is going (app.features.home)
     home_devices     the devices they brought: washer, dryer, fridge, plug…, what each is set as, its group, and its
@@ -38,7 +32,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
     home_runs        each run of an appliance that runs in cycles (a wash, a dry): when, how long, how much
     ev_energy    what each connected Tesla drew from the house while charging at home, Wh per 5 minutes (and of it
                  from the grid), as the car measured it: the Home page's car line (app.features.tesla)
-    ev_wakes     each time the dashboard woke a Tesla, and why (to see it isn't woken too often, at night)
+    ev_wakes     each time the dashboard woke a Tesla, and why (to see it isn't woken too often, at night): 90 days
     ev_events    what the dashboard did with each Tesla and what it saw done (the activity), for its day's chart
     ev_levels    the battery level (%) of each Tesla not tied to one of the dashboard's cars, as read from it
     ev_sessions  each Tesla's time away (its level and odometer leaving and coming back) and each charge at home
@@ -47,7 +41,8 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                      stretch something else had the battery (iSolarCloud…): when it started and ended, and how
                      it was set, for the Battery page's chart (app.features.battery)
 
-`ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap.
+`ts INTEGER PRIMARY KEY` keeps rows physically ordered by time, so range scans are cheap. Alerts and browser
+notifications had tables too (alert_*, push_subscriptions) until they were taken out: see _drop_alerts.
 """
 
 from __future__ import annotations
@@ -101,24 +96,38 @@ ROLLUP_KEEPING_SQL = (
 # a 32-bit register pair read across an update turns -600 W into +64,936 W. Such values are dropped
 # as readings are decoded (app.features.inverters.limits), and were cleaned out of older history by
 # the migration below. Columns not listed aren't checked.
-MAX_W = 30_000  # more than any home inverter, battery or grid connection here can carry
-_POWER = (-MAX_W, MAX_W)
-_OUTPUT = (0, MAX_W)
+#
+# Power is held to what the house's grid connection could carry. A single-phase one is at most about 19 kW (80 A),
+# so 30 kW leaves room and still catches a torn read (near ±65,536 W) from anything up to 35 kW. A three-phase one
+# carries up to about 58 kW (80 A a phase: an SH20T or SH25T with a car charging can draw well over 30 kW from the
+# grid), so 60 kW: torn reads still land past it from anything up to 5 kW, which is where they happen (a value
+# crossing zero between the two words). Until the inverter has said it's three-phase, the single-phase figure holds.
+MAX_W = 30_000  # single phase (and not known yet)
+MAX_W_THREE_PHASE = 60_000
 _TEMP = (-40, 100)
 _DAY_KWH = (0, 500)
 _TOTAL_KWH = (0, 10_000_000)
-SAMPLE_BOUNDS: dict[str, tuple[float, float]] = {
-    "pv_power": _OUTPUT, "pv1_power": _OUTPUT, "pv2_power": _OUTPUT,
-    "load_power": _POWER, "load_hybrid": _POWER, "grid_power": _POWER, "grid_hybrid": _POWER,
-    "battery_power": _POWER,
-    "battery_soc": (0, 100), "battery_soh": (0, 100),
-    "battery_voltage": (0, 1000), "battery_current": (-500, 500),
-    "battery_temp": _TEMP, "inverter_temp": _TEMP, "pv2_temp": _TEMP,
-    "grid_freq": (40, 70), "grid_voltage": (0, 400),
-    "mppt1_v": (0, 1500), "mppt2_v": (0, 1500), "mppt1_a": (0, 100), "mppt2_a": (0, 100),
-    **{c: _DAY_KWH for c in SAMPLE_COLUMNS if c.startswith("daily_")},
-    **{c: _TOTAL_KWH for c in SAMPLE_COLUMNS if c.startswith("total_")},
-}  # fmt: skip
+
+
+def sample_bounds(max_w: float) -> dict[str, tuple[float, float]]:
+    """SAMPLE_BOUNDS for a system whose power is held to `max_w` (W) either way."""
+    power, output = (-max_w, max_w), (0, max_w)
+    return {
+        "pv_power": output, "pv1_power": output, "pv2_power": output,
+        "load_power": power, "load_hybrid": power, "grid_power": power, "grid_hybrid": power,
+        "battery_power": power,
+        "battery_soc": (0, 100), "battery_soh": (0, 100),
+        "battery_voltage": (0, 1000), "battery_current": (-500, 500),
+        "battery_temp": _TEMP, "inverter_temp": _TEMP, "pv2_temp": _TEMP,
+        "grid_freq": (40, 70), "grid_voltage": (0, 400),
+        "mppt1_v": (0, 1500), "mppt2_v": (0, 1500), "mppt1_a": (0, 100), "mppt2_a": (0, 100),
+        **{c: _DAY_KWH for c in SAMPLE_COLUMNS if c.startswith("daily_")},
+        **{c: _TOTAL_KWH for c in SAMPLE_COLUMNS if c.startswith("total_")},
+    }  # fmt: skip
+
+
+SAMPLE_BOUNDS = sample_bounds(MAX_W)
+THREE_PHASE_BOUNDS = sample_bounds(MAX_W_THREE_PHASE)
 
 _SAMPLES = "ts INTEGER PRIMARY KEY, " + ", ".join(f"{c} REAL" for c in SAMPLE_COLUMNS)
 
@@ -177,7 +186,7 @@ def _meter_data(conn: sqlite3.Connection) -> None:
 
 
 def _alerts(conn: sqlite3.Connection) -> None:
-    """Alerts and notifications (app.features.alerts). New tables only: nothing existing changes."""
+    """Alerts and notifications (since taken out: _drop_alerts). New tables only: nothing existing changes."""
     conn.execute(
         "CREATE TABLE IF NOT EXISTS alert_channels (kind TEXT PRIMARY KEY, enabled INTEGER NOT NULL,"
         " config TEXT NOT NULL, updated_at INTEGER NOT NULL)"
@@ -318,7 +327,7 @@ def _cars(conn: sqlite3.Connection) -> None:
 
 
 def _push_subscriptions(conn: sqlite3.Connection) -> None:
-    """Browser notifications (app.features.alerts.webpush): one row per browser subscribed. `endpoint` is the
+    """Browser notifications (since taken out: _drop_alerts): one row per browser subscribed. `endpoint` is the
     address at its push service, `p256dh` and `auth` its keys (base64url); `id` a short hash of the endpoint, for
     the page. `last_sent` / `last_error`: how the last notification to it went."""
     conn.execute(
@@ -455,6 +464,15 @@ def _ev_levels(conn: sqlite3.Connection) -> None:
     )
 
 
+def _drop_alerts(conn: sqlite3.Connection) -> None:
+    """Alerts and browser notifications were taken out (#96), leaving their tables behind with nothing to read them:
+    where alerts went (ntfy topics, webhook addresses and Pushover keys), the rules, their progress and history, the
+    browsers subscribed, and the server's Web Push key pair (kv webpush_vapid). They go, secrets and all."""
+    for table in ("alert_channels", "alert_rules", "alert_state", "alert_history", "push_subscriptions"):
+        conn.execute(f"DROP TABLE IF EXISTS {table}")
+    conn.execute("DELETE FROM kv WHERE key = 'webpush_vapid'")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -483,6 +501,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _ev_wakes,
     _ev_events,
     _ev_levels,
+    _drop_alerts,
 ]
 
 

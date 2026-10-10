@@ -25,5 +25,6 @@ export function friendly(detail: string | null): string {
   return detail && /^[A-Z].*\.$/.test(detail) ? detail : "Invalid value.";
 }
 
-/** Why saving settings failed: the range error as a sentence, or that the server couldn't be reached. */
-export const saveSettingsError = (err: unknown) => (err instanceof ApiError ? friendly(err.detail) : errorMessage(err));
+/** Why saving settings failed: the range error as a sentence, or that the server failed or couldn't be reached. */
+export const saveSettingsError = (err: unknown) =>
+  err instanceof ApiError && err.status < 500 ? friendly(err.detail) : errorMessage(err);

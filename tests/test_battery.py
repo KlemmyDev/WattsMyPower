@@ -14,7 +14,7 @@ from app.core.config import Config
 from app.core.database import Database
 from app.features.battery import plan
 from app.features.battery.service import GRACE, BatteryError, BatteryService
-from app.features.inverters.sungrow import sh_control
+from app.features.inverters.sungrow import sh_control, sh_rs
 from app.features.live.client import CollectorError
 from app.features.live.service import LiveService
 from app.main import create_app
@@ -81,6 +81,14 @@ class FakeLive(SimpleNamespace):
     def reserve(self) -> float:
         return 5.0
 
+    @property
+    def model(self) -> str | None:
+        return cast(str | None, self.info.get("model"))
+
+
+SH5 = {"reserve": 5.0, "model": "SH5.0RS", "device_type": 0x0D0F, "serial": "A23A0903744"}
+SH10RT = {"reserve": 5.0, "model": "SH10RT", "device_type": 0x0E03, "serial": "B2310000001"}
+
 
 class FlatPlanner:
     """Sunless and steady: 1 kW of home use and grid power at 30c, always."""
@@ -97,7 +105,7 @@ class FlatPlanner:
 
 @pytest.fixture
 def live() -> Any:
-    return FakeLive(driver="sungrow.sh_rs", info={"reserve": 5.0}, latest={"battery_soc": 60.0, "battery_power": 800})
+    return FakeLive(driver="sungrow.sh_rs", info=dict(SH5), latest={"battery_soc": 60.0, "battery_power": 800})
 
 
 @pytest.fixture
@@ -272,12 +280,15 @@ def test_decode_reads_the_sh5_0rs_as_found() -> None:
 
 def test_the_mode_every_page_shows(svc: BatteryService, regs: FakeRegisters, live: Any, clock: Clock) -> None:
     asyncio.run(svc.publish(svc._cycle()))
-    assert live.battery_mode == {"owner": "normal", "min_soc": 5.0, "max_soc": 100.0} and live.published == 1
+    assert (
+        live.battery_mode == {"owner": "normal", "untried": None, "min_soc": 5.0, "max_soc": 100.0}
+        and live.published == 1
+    )
     asyncio.run(svc.publish(svc._cycle()))
     assert live.published == 1  # sent only when it changes
     svc.start({"kind": "standby", "until": NOW + HOUR})
     asyncio.run(svc.publish())
-    assert live.battery_mode == {"owner": "dashboard", "min_soc": 5.0, "max_soc": 100.0, "kind": "standby", "until": NOW + HOUR,
+    assert live.battery_mode == {"owner": "dashboard", "untried": None, "min_soc": 5.0, "max_soc": 100.0, "kind": "standby", "until": NOW + HOUR,
                                  "floor": None, "target": None, "power_w": None, "ending": None}  # fmt: skip
     svc.stop()
     regs.isolarcloud_charge()
@@ -285,6 +296,7 @@ def test_the_mode_every_page_shows(svc: BatteryService, regs: FakeRegisters, liv
     asyncio.run(svc.publish(svc._cycle()))
     assert live.battery_mode == {
         "owner": "isolarcloud",
+        "untried": None,
         "min_soc": 5.0,
         "max_soc": 100.0,
         "command": "charge",
@@ -447,8 +459,17 @@ def client(config: Config) -> Iterator[TestClient]:
         yield c
 
 
+def mock_inverter(client: TestClient, **info: Any) -> Any:
+    """The mock inverter's details and driver in the live status, as the simulator sets them on start (with `info`
+    changed, to stand in for another model)."""
+    services = client.app.state.services  # type: ignore[attr-defined]
+    services.live.info = {**services.source.inverter.info, **info}
+    services.live.driver = "sungrow.sh_rs"
+    return services
+
+
 def test_the_api_in_mock_mode(client: TestClient) -> None:
-    client.app.state.services.live.driver = "sungrow.sh_rs"  # type: ignore[attr-defined]  # set by the simulator
+    mock_inverter(client)
     assert client.get("/api/battery").json()["owner"] == "normal"
     r = client.post("/api/battery/control", json={"kind": "standby", "until": None})
     assert r.status_code == 200 and r.json()["owner"] == "dashboard"
@@ -460,3 +481,93 @@ def test_the_api_in_mock_mode(client: TestClient) -> None:
     assert client.get("/api/battery/log", params={"limit": 1}).json()["events"][0]["kind"] == "standby"
     assert client.delete("/api/battery/control").json()["owner"] == "normal"
     assert client.app.state.services.live.status()["battery_mode"]["owner"] == "normal"  # type: ignore[attr-defined]
+
+
+# -- only on models the controls have been tried on ------------------------------------------------------------------
+
+
+def test_an_sh_rs_hybrid_can_be_controlled(svc: BatteryService) -> None:
+    v = svc.view()
+    assert v["verified"] and not v["experimental"] and v["untried"] is None and v["model"] == "SH5.0RS"
+    assert svc.summary()["untried"] is None  # type: ignore[index]
+
+
+@pytest.mark.parametrize("code", sorted(sh_control.VERIFIED_TYPES))
+def test_the_models_the_controls_suit_are_all_sh_rs(code: int) -> None:
+    assert sh_rs.DEVICE_TYPES[code].endswith("RS")
+
+
+@pytest.mark.parametrize(
+    ("info", "says"),
+    [
+        (SH10RT, "so they're off for this SH10RT"),
+        ({"model": "SH hybrid (type 0x0E2A)", "device_type": 0x0E2A, "serial": "X"}, "this SH hybrid (type 0x0E2A)"),
+        ({"model": "Unknown (0x2435)", "device_type": 0x2435, "serial": "X"}, "this inverter (model 0x2435)"),
+        ({}, "hasn't said which model it is yet"),
+    ],
+)
+def test_other_models_are_turned_away_before_anything_is_written(
+    svc: BatteryService, live: Any, regs: FakeRegisters, info: dict[str, Any], says: str
+) -> None:
+    live.info = dict(info)
+    v = svc.view()
+    assert not v["verified"] and not v["experimental"] and says in v["untried"]
+    assert says in svc.summary()["untried"]  # type: ignore[index]  # the Overview's shortcuts say so too
+    for body in ({"kind": "standby", "until": None}, {"kind": "charge", "until": None}):
+        with pytest.raises(BatteryError) as e:
+            svc.start(body)
+        assert e.value.status == 409 and says in e.value.detail
+        with pytest.raises(BatteryError):
+            svc.preview(body)
+    assert regs.writes == []
+
+
+def test_turned_on_for_one_inverter_the_controls_work_there_and_it_is_kept(
+    svc: BatteryService, db: Database, live: Any, regs: FakeRegisters, clock: Clock
+) -> None:
+    live.info = dict(SH10RT)
+    v = svc.set_experimental(True)
+    assert v["experimental"] and v["untried"] is None and not v["verified"]
+    assert "untried on its model" in v["log"][0]["text"]
+    svc.start({"kind": "standby", "until": None})
+    assert regs.writes == [(13051, 0xCC), (13050, 2)]
+    # Kept in the database: after a restart it's still on for this inverter...
+    again = BatteryService(db, cast(LiveService, live), regs, clock, planner=FlatPlanner())
+    assert again.view()["experimental"]
+    # ...but not for another one, even of the same model.
+    live.info = {**SH10RT, "serial": "B2310000002"}
+    assert again.view()["untried"] and not again.view()["experimental"]
+
+
+def test_turning_it_off_still_lets_a_control_end(svc: BatteryService, live: Any, regs: FakeRegisters) -> None:
+    live.info = dict(SH10RT)
+    svc.set_experimental(True)
+    svc.start({"kind": "standby", "until": None})
+    v = svc.set_experimental(False)
+    assert v["untried"] and v["log"][0]["text"] == "Experimental battery controls turned off"
+    regs.writes.clear()
+    assert svc.stop()["control"] is None and regs.writes == [(13051, 0xCC), (13050, 0)]  # put back as normal
+
+
+def test_the_experiment_needs_a_model_and_a_yes_or_no(svc: BatteryService, live: Any) -> None:
+    with pytest.raises(BatteryError):
+        svc.set_experimental("yes")
+    live.info = {}
+    with pytest.raises(BatteryError) as e:
+        svc.set_experimental(True)
+    assert e.value.status == 409
+    live.info = dict(SH5)
+    v = svc.set_experimental(True)  # a model they've been tried on: nothing to turn on
+    assert v["verified"] and not v["experimental"] and v["log"] == []
+
+
+def test_the_api_turns_the_controls_on_for_an_untried_model(client: TestClient) -> None:
+    services = mock_inverter(client, model="SH10RT", device_type=0x0E03)
+    r = client.post("/api/battery/control", json={"kind": "charge", "until": None})
+    assert r.status_code == 409 and "SH10RT" in r.json()["detail"]
+    assert services.source.inverter.holding[13050] == 0
+    assert "SH10RT" in services.live.status()["battery_mode"]["untried"]
+    assert client.put("/api/battery/experimental", json={"on": True}).json()["experimental"]
+    assert services.live.status()["battery_mode"]["untried"] is None
+    assert client.post("/api/battery/control", json={"kind": "standby", "until": None}).status_code == 200
+    assert client.put("/api/battery/experimental", json={"on": "maybe"}).status_code == 422

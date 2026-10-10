@@ -29,7 +29,6 @@ GROUPS: dict[str, tuple[str, str]] = {
         "or dryer.",
     ),
     "battery": ("Battery controls", "Each standby, floor or charge from the grid started on the Battery page."),
-    "alerts": ("Alerts", "Where alerts go, the rules, their progress, and the alerts sent."),
     "settings": ("Settings and account", "Your settings, rates, the dashboard's account and signed-in browsers."),
     "devices": ("Connected inverters", "The inverters the collector reads, connected in Manage → Integrations."),
     "sqlite": ("SQLite's own", "The database's description of its tables, kept by SQLite itself."),
@@ -197,9 +196,10 @@ DASHBOARD: dict[str, Table] = {
         "cars",
         "Wakes",
         "Each time the dashboard woke a connected Tesla, and why: to see that it isn't woken too often.",
-        "Kept for good",
+        "90 days",
         Spec("ts"),
         grows=True,
+        retention=90,
     ),
     "ev_events": Table(
         "cars",
@@ -255,39 +255,6 @@ DASHBOARD: dict[str, Table] = {
         "Kept for good",
         Spec("started_at"),
         grows=True,
-    ),
-    "alert_history": Table(
-        "alerts",
-        "Alerts sent",
-        "Alerts sent and resolved, daily summaries, and whether each was delivered.",
-        "The latest 500",
-        Spec(
-            "ts",
-            "SELECT CASE kind WHEN 'alert' THEN 'Alerts' WHEN 'resolved' THEN 'Resolved'"
-            " WHEN 'summary' THEN 'Daily summaries' WHEN 'test' THEN 'Tests' ELSE kind END, COUNT(*), COUNT(*)"
-            " FROM alert_history GROUP BY kind ORDER BY COUNT(*) DESC",
-        ),
-        grows=True,
-        cap=500,
-    ),
-    "push_subscriptions": Table(
-        "alerts",
-        "Browsers notified",
-        "Browsers that turned on notifications: the address their push service gave, and the keys to encrypt for them.",
-        "Kept until turned off",
-        Spec("created_at"),
-    ),
-    "alert_channels": Table(
-        "alerts", "Alert channels", "Where alerts are sent: ntfy, a webhook or Pushover.", "Kept until removed"
-    ),
-    "alert_rules": Table(
-        "alerts", "Alert rules", "Rules switched on or off, or with changed thresholds.", "Kept until changed back"
-    ),
-    "alert_state": Table(
-        "alerts",
-        "Alert progress",
-        "Each rule's progress: a problem seen, an alert out, its cooldown.",
-        "Replaced as it changes",
     ),
     "settings": Table(
         "settings",

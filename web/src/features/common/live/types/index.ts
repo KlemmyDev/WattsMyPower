@@ -69,6 +69,8 @@ export type BatteryMode = {
   /** normal: self-consumption; dashboard: a control here; isolarcloud: a command from its app (VPP mode); external: an
    * energy manager; elsewhere: forced mode set outside the dashboard; unknown: a mode not known; null: not read yet. */
   owner: "normal" | "dashboard" | "isolarcloud" | "external" | "elsewhere" | "unknown" | null;
+  /** Why the controls are off for this inverter's model (they haven't been tried on it); null when they can be used. */
+  untried?: string | null;
   min_soc: number | null;
   max_soc?: number | null;
   kind?: "standby" | "floor" | "charge";

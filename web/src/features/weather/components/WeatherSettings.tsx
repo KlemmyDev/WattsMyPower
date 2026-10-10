@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm, longDate, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { intAU, kWh, plural } from "~/features/common/formatting/utils/number";
 import { useLive } from "~/features/common/live/hooks/useLive";
-import { useSaveSettings } from "~/features/common/settings/hooks";
+import { useLocationSet, useSaveSettings } from "~/features/common/settings/hooks";
 import type { Settings, WeatherModel } from "~/features/common/settings/types";
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { Button } from "~/features/common/ui/components/Button";
@@ -19,7 +19,7 @@ import { retrain, weatherStatusQuery } from "~/features/weather/api";
 import type { WeatherStatus } from "~/features/weather/types";
 import { useFetchWeather, WeatherFetchProgress } from "~/features/weather/components/WeatherFetch";
 import { LocationForm } from "~/features/settings/components/LocationForm";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { CardTitle, SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const MODELS: { value: WeatherModel; label: string; help: string }[] = [
@@ -44,21 +44,6 @@ const DIRECTIONS = [
   ["North-west", 315],
 ] as const;
 
-/** A card's heading with a line of explanation, at the size cards on a sub-page use. */
-function CardTitle({ id, title, sub, aside }: { id: string; title: string; sub: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h3 id={id} className="text-[15px] font-semibold">
-          {title}
-        </h3>
-        <span className="text-sm text-pretty text-ink-muted">{sub}</span>
-      </div>
-      {aside}
-    </div>
-  );
-}
-
 /** Save a setting straight away, with a toast to say so. */
 function useSaveNow() {
   const save = useSaveSettings();
@@ -73,16 +58,21 @@ function useSaveNow() {
 /** Where the forecast is for, and changing it. */
 export function WeatherLocation() {
   const system = useLive()?.system;
+  const located = useLocationSet();
   return (
     <SettingsCard padded aria-labelledby="h-location" className="gap-4">
       <CardTitle
         id="h-location"
         title="Location"
         sub={
-          <>
-            The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
-            to change it.
-          </>
+          located === false ? (
+            "No location is set yet, so there's no forecast, and no power outages or warnings near you. Search for your suburb to set it."
+          ) : (
+            <>
+              The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
+              to change it.
+            </>
+          )
         }
       />
       {/* Started afresh once the location is known, and again when it's changed. */}

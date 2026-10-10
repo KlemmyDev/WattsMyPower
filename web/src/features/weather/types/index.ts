@@ -74,7 +74,7 @@ export type WeatherStatus = {
   };
   /** The first day past weather can be filled in for (Open-Meteo's archive starts in 1940). */
   archive_from: string;
-  /** Whether the location was chosen (past weather is only fetched once it is). */
+  /** Whether the location was chosen (the forecast and past weather are only fetched once it is). */
   location_set: boolean;
   learning: {
     on: boolean;

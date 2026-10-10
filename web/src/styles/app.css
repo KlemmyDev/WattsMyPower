@@ -367,6 +367,13 @@
   .live-dot[data-state="error"] {
     --dot: var(--color-danger);
   }
+  /* Reconnecting to the server: amber, fading in and out until it's back. */
+  .live-dot[data-state="reconnecting"] {
+    --dot: var(--color-solar);
+  }
+  .live-dot[data-state="reconnecting"]::before {
+    animation: wmpPulse 1.2s ease-in-out infinite;
+  }
   .live-dot:not([data-state="live"])::after {
     display: none;
   }
