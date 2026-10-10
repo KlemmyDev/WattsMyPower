@@ -19,6 +19,7 @@ import type { Forecast, ForecastHour, WeatherTiming } from "~/features/common/we
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { clock, duration, hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import { hourOf } from "~/features/common/time/utils";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { batteryState, batteryTone, gridVerb, ON } from "~/features/common/energy/utils";
@@ -303,7 +304,7 @@ const AHEAD = 4;
 const MODEL_NAMES: Record<string, string> = { ecmwf_ifs025: "ECMWF", gfs_seamless: "GFS", icon_seamless: "ICON" };
 
 /** An hour's label, short: "15:00", or "3pm". */
-const shortHour = (ts: number) => hourLabel(new Date(ts * 1000).getHours()).replace(" ", "");
+const shortHour = (ts: number) => hourLabel(hourOf(ts)).replace(" ", "");
 
 /**
  * The hours ahead, a column each: the hour, its weather, the temperature, the chance of rain when it's worth a mention,

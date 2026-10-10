@@ -7,7 +7,7 @@ import type { Snapshot } from "~/features/common/live/types";
 import { costsQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, dateKey, midnight } from "~/features/common/time/utils";
+import { addDays, dateKey, isWeekend, midnight } from "~/features/common/time/utils";
 import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
@@ -282,7 +282,7 @@ export function HomeDaysCard({ days }: { days: DataDay[] }) {
   if (!whole.length) return null;
   const top = Math.max(1, ...whole.map((d) => d.home)) * 1.05;
   const avg = (list: DataDay[]) => (list.length ? list.reduce((a, d) => a + d.home, 0) / list.length : null);
-  const weekend = (d: DataDay) => [0, 6].includes(new Date(d.ts * 1000).getDay());
+  const weekend = (d: DataDay) => isWeekend(d.ts);
   const weekdays = avg(whole.filter((d) => !weekend(d)));
   const weekends = avg(whole.filter(weekend));
   const biggest = whole.reduce((a, d) => (d.home > a.home ? d : a), whole[0]);

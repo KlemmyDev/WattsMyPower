@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
 import { gridVerb, ON, reserveOf } from "~/features/common/energy/utils";
-import { duration, hhmm } from "~/features/common/formatting/utils/date";
+import { duration, hhmm, weekdayShort } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
@@ -556,7 +556,7 @@ function NoticeRow({ n }: { n: MarketNotice }) {
   const [open, setOpen] = useState(false);
   const color =
     !n.active || n.level === "info" ? alpha(COLOR.fg, 0.25) : n.level === "critical" ? COLOR.danger : COLOR.warn;
-  const when = new Date(n.at * 1000).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  const when = `${weekdayShort.format(n.at * 1000)} ${hhmm(n.at)}`;
   return (
     <li className="border-b border-line-subtle py-1 last:border-0">
       <button

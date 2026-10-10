@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type PointerEvent, type ReactNode } from "react";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import { hourOf, offsetAt, partsOf } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { ChartTooltip, HoverLine } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
@@ -20,18 +21,20 @@ export function timeTicks(start: number, end: number, every: number) {
   const fine = span < every * HOUR * 2;
   const step = !fine ? every * HOUR : ([5, 10, 15, 30, 60, 120, 180].find((m) => span / (m * 60) <= 8) ?? 360) * 60;
   const out: { t: number; left: number; label: string; odd: boolean }[] = [];
+  // Marks fall on the site's clock (on the hour in Adelaide too, half an hour off UTC's).
+  const off = offsetAt(start);
   if (!fine) {
-    for (let t = Math.ceil(start / HOUR) * HOUR; t <= end; t += HOUR) {
-      const h = new Date(t * 1000).getHours();
+    for (let t = Math.ceil((start + off) / HOUR) * HOUR - off; t <= end; t += HOUR) {
+      const h = hourOf(t);
       if (h % every) continue;
       out.push({ t, left: ((t - start) / span) * 100, label: hourLabel(h), odd: (h / every) % 2 === 1 });
     }
     return out;
   }
-  for (let t = Math.ceil(start / step) * step, i = 0; t <= end; t += step, i++) {
-    const d = new Date(t * 1000);
-    const label = d.getMinutes() === 0 ? hourLabel(d.getHours()) : hhmm(t);
-    out.push({ t, left: ((t - start) / span) * 100, label, odd: Math.round(t / step) % 2 === 1 });
+  for (let t = Math.ceil((start + off) / step) * step - off; t <= end; t += step) {
+    const p = partsOf(t);
+    const label = p.minute === 0 ? hourLabel(p.hour) : hhmm(t);
+    out.push({ t, left: ((t - start) / span) * 100, label, odd: Math.round((t + off) / step) % 2 === 1 });
   }
   return out;
 }

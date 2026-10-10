@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type PointerEvent } from "react";
 import { hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, nowS } from "~/features/common/time/utils";
+import { addDays, hourOf, mondayFirst, nowS, partsOf } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { ChartTooltip, HoverLine, TooltipRow } from "~/features/common/ui/components/ChartHover";
@@ -40,16 +40,16 @@ function niceMax(v: number) {
 }
 
 function bucketLabel(t: number, bucket: "hour" | "day") {
-  const d = new Date(t * 1000);
-  return bucket === "hour" ? `${hourLabel(d.getHours())}–${hourLabel((d.getHours() + 1) % 24)}` : shortDay.format(d);
+  const h = hourOf(t);
+  return bucket === "hour" ? `${hourLabel(h)}–${hourLabel((h + 1) % 24)}` : shortDay.format(t * 1000);
 }
 
 /** Every few bars gets an axis label: each hour's 3rd, each day for a week, every 5th day for a month. */
 function axisLabel(t: number, i: number, n: number, bucket: "hour" | "day") {
-  const d = new Date(t * 1000);
-  if (bucket === "hour") return d.getHours() % 6 === 0 ? hourLabel(d.getHours()) : null;
-  if (n <= 8) return WEEKDAY_SHORT[(d.getDay() + 6) % 7];
-  return i % 5 === 0 || i === n - 1 ? String(d.getDate()) : null;
+  const d = partsOf(t);
+  if (bucket === "hour") return d.hour % 6 === 0 ? hourLabel(d.hour) : null;
+  if (n <= 8) return WEEKDAY_SHORT[mondayFirst(t)];
+  return i % 5 === 0 || i === n - 1 ? String(d.day) : null;
 }
 
 /** "a, b and c". */

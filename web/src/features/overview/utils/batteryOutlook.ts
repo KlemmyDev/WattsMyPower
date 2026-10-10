@@ -21,7 +21,7 @@ function forcedCharge(
   return {
     secs,
     headline: soc >= target - 0.5 ? "Nearly there" : secs == null ? "Starting" : duration(secs),
-    at: secs == null ? "" : ` at about ${hhmm(now + secs)} ${tzName}`,
+    at: secs == null ? "" : ` at about ${hhmm(now + secs)} ${tzName()}`,
   };
 }
 
@@ -82,7 +82,7 @@ export function batteryOutlook(
       eyebrow: ours === "floor" ? "Estimated time to floor" : "Estimated time to reserve",
       headline: secs == null ? "—" : above ? duration(secs) : ours === "floor" ? "At the floor" : "At reserve",
       detail:
-        (above ? `Reaches the ${pct(reserve)} ${word} at about ${hhmm(now + secs)} ${tzName} at this rate. ` : "") +
+        (above ? `Reaches the ${pct(reserve)} ${word} at about ${hhmm(now + secs)} ${tzName()} at this rate. ` : "") +
         parts.join(" "),
     };
   }
@@ -92,7 +92,7 @@ export function batteryOutlook(
     return {
       eyebrow: "Estimated time to full",
       headline: duration(f.summary.full_at - now),
-      detail: `Full at about ${hhmm(f.summary.full_at)} ${tzName}, based on forecast solar and home use.`,
+      detail: `Full at about ${hhmm(f.summary.full_at)} ${tzName()}, based on forecast solar and home use.`,
     };
   }
   if (f) {
@@ -101,7 +101,7 @@ export function batteryOutlook(
     const detail = sunLeft.length
       ? `Forecast solar will bring the battery to ${pct(Math.max(...sunLeft.map((h) => h.soc)))} before sunset.`
       : f.summary.full_at
-        ? `Forecast solar should fill it tomorrow at about ${hhmm(f.summary.full_at)} ${tzName}.`
+        ? `Forecast solar should fill it tomorrow at about ${hhmm(f.summary.full_at)} ${tzName()}.`
         : "Forecast solar will not fill the battery in the next day.";
     return { eyebrow: "Estimated time to full", headline: "Not today", detail };
   }
