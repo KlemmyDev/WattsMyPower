@@ -230,7 +230,7 @@ An update installs the channel's version, so moving to a channel behind the one 
 
 **Going back.** Each update that changes the version keeps the one it replaced (its images, tagged `:previous`, and in `data/update/previous` its commit and the backup made before it). `bash install.sh --rollback` goes back to it and puts that backup back, after backing up the databases as they are; updating again brings the newer version back.
 
-**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year. `install.sh` keeps `data/` and `.env` readable by you alone.
+**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year. The collector's keeps a year of the inverters' raw registers (`COLLECTOR_RETENTION_DAYS`, so readings can be rebuilt from them): with a second inverter that's about 550 MB once it's full, a little less with one, and it stays about that size after. `install.sh` keeps `data/` and `.env` readable by you alone.
 
 ### Backups and restoring
 
