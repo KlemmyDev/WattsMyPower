@@ -806,6 +806,21 @@ def test_what_the_car_measures_sets_the_amps(svc: TeslaService, provider: str, t
     assert "Charging on 1 phase at 240 V" in svc.log()[0]["text"]
 
 
+def test_the_most_it_draws_is_what_the_car_says(svc: TeslaService, provider: str, tessie: FakeTessie) -> None:
+    connect(svc, provider)  # a Model Y from the catalog: 11 kW on three phases, 16 A in its details
+    tessie.charge(charge_current_request_max=20)  # its charger offers more
+    svc.read()
+    assert svc.status()["vehicles"][0]["max_amps"] == 20
+    svc.command(VIN, {"action": "amps", "amps": 20})
+    assert tessie.commands[-1] == ("set_charging_amps", {"amps": 20})
+    with pytest.raises(TeslaSetupError):
+        svc.command(VIN, {"action": "amps", "amps": 21})
+    # Until the car says, it's its details' figure.
+    tessie.charge(charge_current_request_max=None)
+    svc.read()
+    assert svc.status()["vehicles"][0]["max_amps"] == 16
+
+
 def test_a_command_from_the_page_holds_and_resume_lets_go(svc: TeslaService, provider: str,
                                                           tessie: FakeTessie) -> None:  # fmt: skip
     connect(svc, provider)

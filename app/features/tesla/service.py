@@ -614,11 +614,16 @@ class TeslaService:
         d = self._figures(vin)
         # What the car last measured charging at home wins over the car's details.
         m = self._conn()["vehicles"].get(vin, {}).get("measured") or {}
+        # The most it can draw: what the car says it can ask for (Tesla works that out from the car and the charger
+        # it's plugged into), else its details' figure. That's a guess from its model's charging power on the
+        # model's phases (a Model Y's 11 kW on three is 16 A), so it doesn't hold the car below what it says.
+        s = self._states.get(vin)
+        top = s.max_amps if s is not None and s.max_amps else int(d["car_amps"])
         return Charger(
             phases=int(m.get("phases") or d["car_phases"]),
             volts=float(m.get("volts") or d["car_voltage"]),
-            min_amps=int(min(d["car_min_amps"], d["car_amps"])),
-            max_amps=int(d["car_amps"]),
+            min_amps=int(min(d["car_min_amps"], top)),
+            max_amps=top,
         )
 
     def _parse(self, vin: str, v: dict[str, Any]) -> CarState:
@@ -1358,11 +1363,7 @@ class TeslaService:
             # by the end of the day's sun.
             "share": self._share_brief() if v["control"]["first"] == "shared" else None,
             "min_w": round(spec.watts(spec.min_amps)) if spec else None,
-            "max_amps": min(spec.max_amps, s.max_amps or spec.max_amps)
-            if spec and s
-            else spec.max_amps
-            if spec
-            else None,
+            "max_amps": spec.max_amps if spec else None,
             "min_amps": spec.min_amps if spec else None,
             "phases": spec.phases if spec else None,
             "volts": spec.volts if spec else None,
