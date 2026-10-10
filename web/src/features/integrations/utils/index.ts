@@ -93,3 +93,26 @@ export function inverterState(
     reading,
   };
 }
+
+/** A brand in a URL: "Sungrow" → "sungrow", "GoodWe" → "goodwe". */
+export const brandSlug = (brand: string | null | undefined) => (brand ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+/** What the dashboard says about each brand it reads: a line on what it reads, and how to get one answering. */
+export const BRAND_ABOUT: Record<string, { about: string; setup: string }> = {
+  Sungrow: {
+    about: "SH-series hybrids with their battery and meter, and SG-D string inverters, over Modbus on your network.",
+    setup:
+      "Through its WiNet-S or WiNet-S2 dongle (or the inverter's own network port), over Modbus TCP. Nothing to turn on.",
+  },
+  GoodWe: {
+    about: "ET-family hybrids (ET, EH, BT, BH) with their battery and meter, and DT-family string inverters.",
+    setup:
+      "Through its Wi-Fi or LAN dongle, over Modbus on UDP port 8899 (newer LAN dongles take Modbus TCP on 502 too). Nothing to turn on.",
+  },
+  Fronius: {
+    about:
+      "A GEN24 (with its battery), or a Symo or Primo with a Fronius Smart Meter, and any Fronius as a second system.",
+    setup:
+      "Through its Solar API on the inverter's network port. A GEN24 ships with it off: turn it on in the inverter's web page, under Communication → Solar API. A main inverter needs a Fronius Smart Meter.",
+  },
+};
