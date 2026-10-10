@@ -1,5 +1,6 @@
 """
-The first-run guide (/welcome): whether it's finished or put off, and which steps were done or skipped.
+The first-run guide (/welcome): whether it's finished or put off, which steps were done or skipped, and the extras
+picked in its last step (a car, smart plugs…) for its finish page to offer connecting.
 
 Stored as JSON in the kv table. An install that was already set up before the guide existed (an
 inverter connected, readings recorded, or rates, location or billing period saved) is marked finished
@@ -21,8 +22,10 @@ from app.core.schema import SAMPLE_TABLES
 from app.features.integrations.service import IntegrationsService
 
 KEY = "onboarding"
-STEPS = ("inverter", "system", "plan", "location", "billing")
+STEPS = ("inverter", "system", "house", "location", "plan", "billing", "cost", "extras")
 MARKS = ("done", "skipped")
+# What else is at the place, picked in the guide's last step.
+EXTRAS = ("ev", "home", "inverter", "grid")
 # Settings rows only a person saving from the dashboard writes: the forecast location, the billing
 # period, and older versions' flat rates and system cost. Not any row: values copied in automatically
 # at startup (such as system details seeded from the environment) are there on a new install too.
@@ -87,6 +90,7 @@ class OnboardingService:
             # Send signed-in visits to the guide.
             "show": not complete and not dismissed,
             "steps": {k: v for k, v in (state.get("steps") or {}).items() if k in STEPS},
+            "extras": [x for x in state.get("extras") or [] if x in EXTRAS],
         }
 
     def state(self) -> dict[str, Any]:
@@ -94,8 +98,8 @@ class OnboardingService:
             return self._view(self._current()[0])
 
     def update(self, changes: dict[str, Any]) -> dict[str, Any]:
-        """Mark steps ({"steps": {"plan": "done"}}), finish ({"complete": true}) or put it off
-        ({"dismissed": true}). Raises ValueError naming the first bad value."""
+        """Mark steps ({"steps": {"plan": "done"}}), pick extras ({"extras": ["ev"]}), finish ({"complete": true})
+        or put it off ({"dismissed": true}). Raises ValueError naming the first bad value."""
         steps = changes.get("steps") or {}
         if not isinstance(steps, dict):
             raise ValueError("steps must be an object.")
@@ -104,6 +108,9 @@ class OnboardingService:
                 raise ValueError(f"No step {step!r}.")
             if mark not in MARKS and mark is not None:
                 raise ValueError(f"Mark a step {' or '.join(MARKS)}.")
+        extras = changes.get("extras")
+        if extras is not None and (not isinstance(extras, list) or any(x not in EXTRAS for x in extras)):
+            raise ValueError(f"extras must be a list of {', '.join(EXTRAS)}.")
         for flag in ("complete", "dismissed"):
             if flag in changes and not isinstance(changes[flag], bool):
                 raise ValueError(f"{flag} must be true or false.")
@@ -114,6 +121,7 @@ class OnboardingService:
                 **state,
                 "steps": {k: v for k, v in marked.items() if v is not None},
                 **{f: changes[f] for f in ("complete", "dismissed") if f in changes},
+                **({"extras": list(dict.fromkeys(extras))} if extras is not None else {}),
                 "updated_at": int(time.time()),
             }
             self._store(state)

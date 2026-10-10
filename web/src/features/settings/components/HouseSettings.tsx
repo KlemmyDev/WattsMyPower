@@ -37,7 +37,7 @@ const PLACES: { value: Place; label: string }[] = [
 export const THUMB_FLOWS: HouseFlows = { pv: 0, grid: 0, bat: 0, soc: 0.6, tesla: 0, conn: false };
 
 /** A choice's picture: the house with it, still. */
-function Thumb({ house }: { house: HouseOptions }) {
+export function Thumb({ house }: { house: HouseOptions }) {
   return (
     <span className="relative block aspect-[2/1] w-full bg-[#dcebff]">
       <HouseScene flows={THUMB_FLOWS} sky="sunny" house={house} />
@@ -46,7 +46,7 @@ function Thumb({ house }: { house: HouseOptions }) {
 }
 
 /** What the preview shows: the live readings if there are some, else a sunny afternoon charging the battery. */
-function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFlows {
+export function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFlows {
   if (!p) return { pv: 4.2, grid: -1.1, bat: 1.6, soc: 0.62, tesla: 0, conn: false };
   return {
     pv: (p.pv_power || 0) / 1000,
@@ -77,11 +77,13 @@ export function HouseSettings() {
   );
 }
 
-function HouseCard({ system }: { system: SystemInfo }) {
+/**
+ * The house's choices as they're being made: each shows straight away and saves in the background. With the house to
+ * draw from them, and each inverter and battery with where it is (wall or garage) and how to move it.
+ */
+export function useHouseChoices(system: SystemInfo) {
   const save = useSaveSettings();
   const toast = useToast();
-  const snapshot = useSnapshot();
-  // Changes show straight away and save in the background.
   const [values, setValues] = useState<HouseValues>(() => ({
     house_style: system.house_style,
     house_storeys: system.house_storeys,
@@ -94,11 +96,10 @@ function HouseCard({ system }: { system: SystemInfo }) {
     save.mutate(changes, { onError: (e) => toast(saveSettingsError(e)) });
   };
   const house = houseOptions({ ...system, ...values });
-  const garage = values.garage_spaces > 0;
-
   const units = [
     ...house.inverters.map((p, i) => ({
       key: `inverter-${i}`,
+      battery: false,
       name:
         i === 0
           ? `${system.model ? inverterName(system) : "Main"} inverter`
@@ -108,11 +109,48 @@ function HouseCard({ system }: { system: SystemInfo }) {
     })),
     ...house.batteries.map((p, i) => ({
       key: `battery-${i}`,
+      battery: true,
       name: house.batteries.length > 1 ? `Battery ${i + 1}` : "Battery",
       value: p,
       onChange: (to: Place) => set({ battery_places: house.batteries.map((q, k) => (k === i ? to : q)) }),
     })),
   ];
+  return { values, set, house, units, garage: values.garage_spaces > 0 };
+}
+
+/** Where each inverter and battery is: a switch between wall and garage each, or just "Outside wall" with no garage. */
+export function UnitPlaces({ choices }: { choices: ReturnType<typeof useHouseChoices> }) {
+  return (
+    <OptionList>
+      {choices.units.map((u) => (
+        <OptionRow
+          key={u.key}
+          label={u.name}
+          icon={u.battery ? "battery" : "bolt"}
+          color={u.battery ? COLOR.battery : COLOR.solar}
+        >
+          {choices.garage ? (
+            <Segmented
+              label={u.name}
+              options={PLACES}
+              value={u.value}
+              onChange={u.onChange}
+              className="w-fit max-w-full max-sm:w-full"
+              buttonClassName="max-sm:flex-1 max-sm:justify-center max-sm:px-2.5"
+            />
+          ) : (
+            <span className="text-sm text-ink-muted">Outside wall</span>
+          )}
+        </OptionRow>
+      ))}
+    </OptionList>
+  );
+}
+
+function HouseCard({ system }: { system: SystemInfo }) {
+  const snapshot = useSnapshot();
+  const choices = useHouseChoices(system);
+  const { values, set, house, garage } = choices;
 
   return (
     <div className="@container">
@@ -182,29 +220,7 @@ function HouseCard({ system }: { system: SystemInfo }) {
                 : "They're on the house's outside wall. Add a garage to put any of them inside it."
             }
           >
-            <OptionList>
-              {units.map((u) => (
-                <OptionRow
-                  key={u.key}
-                  label={u.name}
-                  icon={u.key.startsWith("battery") ? "battery" : "bolt"}
-                  color={u.key.startsWith("battery") ? COLOR.battery : COLOR.solar}
-                >
-                  {garage ? (
-                    <Segmented
-                      label={u.name}
-                      options={PLACES}
-                      value={u.value}
-                      onChange={u.onChange}
-                      className="w-fit max-w-full max-sm:w-full"
-                      buttonClassName="max-sm:flex-1 max-sm:justify-center max-sm:px-2.5"
-                    />
-                  ) : (
-                    <span className="text-sm text-ink-muted">Outside wall</span>
-                  )}
-                </OptionRow>
-              ))}
-            </OptionList>
+            <UnitPlaces choices={choices} />
           </SettingsSection>
         </div>
       </div>

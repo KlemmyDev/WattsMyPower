@@ -220,7 +220,7 @@ export function SettingsHub() {
                 icon="check"
                 color={COLOR.warn}
                 label="Set-up guide"
-                detail="Your inverter, plan, location and billing, step by step"
+                detail="Your inverter, house, plan, location and more, step by step"
               />
             </SettingsGroup>
           </div>

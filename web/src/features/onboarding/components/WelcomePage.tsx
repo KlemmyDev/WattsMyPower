@@ -11,29 +11,36 @@ import { useToast } from "~/features/common/ui/components/Toast";
 import { onboardingQuery } from "~/features/onboarding/api";
 import { BillingStep } from "~/features/onboarding/components/BillingStep";
 import { Confetti } from "~/features/onboarding/components/Confetti";
+import { CostStep } from "~/features/onboarding/components/CostStep";
+import { EXTRAS, ExtrasStep, useConnectedExtras } from "~/features/onboarding/components/ExtrasStep";
+import { HouseStep } from "~/features/onboarding/components/HouseStep";
 import { InverterStep } from "~/features/onboarding/components/InverterStep";
 import { LocationStep } from "~/features/onboarding/components/LocationStep";
 import { PlanStep } from "~/features/onboarding/components/PlanStep";
 import { Overall, StepDots, StepRail, type StepNav, type StepProps } from "~/features/onboarding/components/StepParts";
 import { SystemStep } from "~/features/onboarding/components/SystemStep";
 import { useMarkOnboarding } from "~/features/onboarding/hooks/useMarkOnboarding";
-import type { GuidePage, StepId, StepMark } from "~/features/onboarding/types";
+import type { ExtraId, GuidePage, StepId, StepMark } from "~/features/onboarding/types";
 import { notStarted, resumeAt, STEPS } from "~/features/onboarding/utils";
 
 const BODIES: Record<StepId, ComponentType<StepProps>> = {
   inverter: InverterStep,
   system: SystemStep,
-  plan: PlanStep,
+  house: HouseStep,
   location: LocationStep,
+  plan: PlanStep,
   billing: BillingStep,
+  cost: CostStep,
+  extras: ExtrasStep,
 };
 
 /**
  * The set-up guide (/welcome), shown after the account is created on a new install: connect the inverter, the
- * system details it can't report (the solar array's size), the electricity plan, the location and the billing
- * period. It opens on a welcome listing the steps, then the steps themselves beside a list of them (across the top on
- * a phone), and ends on a celebration with what was done and what was skipped. Every step can be skipped, and the
- * whole thing put off. The page is in the URL, so Back in the browser goes to the previous one.
+ * system details it can't report (the solar array's size), the house the Overview draws, the location, the electricity
+ * plan, the billing period, what the system cost, and what else is at the place (a car, smart plugs…). It opens on a
+ * welcome listing the steps, then the steps themselves beside a list of them (across the top on a phone), and ends on a
+ * celebration with what was done and what was skipped, and links to connect the extras picked. Every step can be
+ * skipped, and the whole thing put off. The page is in the URL, so Back in the browser goes to the previous one.
  */
 export function WelcomePage({ page }: { page: GuidePage | undefined }) {
   const { data: onboarding } = useQuery(onboardingQuery);
@@ -71,7 +78,7 @@ export function WelcomePage({ page }: { page: GuidePage | undefined }) {
         {view === "start" ? (
           <Start name={name} onStart={() => go(STEPS[0].id)} />
         ) : view === "finish" ? (
-          <Finish steps={onboarding?.steps ?? {}} />
+          <Finish steps={onboarding?.steps ?? {}} extras={onboarding?.extras ?? []} />
         ) : (
           <Steps
             key="steps"
@@ -109,14 +116,14 @@ function Start({ name, onStart }: { name: string; onStart: () => void }) {
           >
             <Icon name="sparkles" size={14} />
           </span>
-          Set-up guide · about 5 minutes
+          Set-up guide · about 10 minutes
         </span>
         <h1 className="text-[52px] leading-[58px] tracking-[-1.6px] text-balance wrap-anywhere max-sm:text-[38px] max-sm:leading-[44px]">
           Welcome{name ? `, ${name}` : ""}
         </h1>
         <p className="m-0 max-w-[480px] text-[17px] leading-7 text-pretty text-ink-muted">
-          Let's make this dashboard yours. Five quick steps and it'll show your system, what your power costs, and
-          tomorrow's solar. Skip anything you'd rather do later: it's all in Settings too.
+          Let's make this dashboard yours. A few quick steps and it'll show your system and your house, what your power
+          costs, and tomorrow's solar. Skip anything you'd rather do later: it's all in Settings too.
         </p>
         <Button size="lg" className="mt-2" onClick={onStart}>
           Let's go
@@ -125,12 +132,12 @@ function Start({ name, onStart }: { name: string; onStart: () => void }) {
       </div>
       <div className="flex min-w-0 flex-col gap-3">
         <AuthScene className="animate-rise [animation-delay:80ms]" />
-        <ol className="m-0 grid list-none grid-cols-5 gap-2.5 p-0 max-sm:gap-1.5">
+        <ol className="m-0 grid list-none grid-cols-4 gap-2.5 p-0 max-sm:gap-1.5">
           {STEPS.map((s, k) => (
             <li
               key={s.id}
               className="glass flex animate-rise flex-col items-center gap-2.5 rounded-[20px] border border-line-subtle px-2 pt-3.5 pb-3 text-center transition-transform duration-300 ease-out hover:-translate-y-1 max-sm:rounded-2xl max-sm:px-1 max-sm:pt-2.5"
-              style={{ animationDelay: `${180 + k * 70}ms` }}
+              style={{ animationDelay: `${180 + k * 50}ms` }}
             >
               <span
                 className="flex size-10 items-center justify-center rounded-[13px] max-sm:size-8 max-sm:rounded-[10px]"
@@ -200,7 +207,7 @@ function Steps({
         <section
           key={current}
           aria-labelledby="h-step"
-          className="glass flex animate-rise flex-col overflow-hidden rounded-3xl border border-line-subtle shadow-[0_24px_60px_-34px_var(--color-shadow-pop)] max-sm:rounded-[22px]"
+          className="glass flex animate-rise flex-col overflow-clip rounded-3xl border border-line-subtle shadow-[0_24px_60px_-34px_var(--color-shadow-pop)] max-sm:rounded-[22px]"
         >
           <Body nav={nav} />
         </section>
@@ -209,9 +216,14 @@ function Steps({
   );
 }
 
-/** The end: confetti, what was set up, the skipped steps' links to set them up later, and into the dashboard. */
-function Finish({ steps }: { steps: Partial<Record<StepId, StepMark>> }) {
+/**
+ * The end: confetti, the extras picked in the last step to connect next, what was set up (the skipped steps with links
+ * to set them up later), and into the dashboard.
+ */
+function Finish({ steps, extras }: { steps: Partial<Record<StepId, StepMark>>; extras: ExtraId[] }) {
   const skipped = STEPS.filter((s) => steps[s.id] !== "done").length;
+  const connected = useConnectedExtras();
+  const next = EXTRAS.filter((e) => extras.includes(e.id) && !connected[e.id]);
   return (
     <div className="mx-auto flex max-w-[600px] flex-col items-center gap-8 pt-6 text-center">
       <span className="relative flex size-24 items-center justify-center">
@@ -238,6 +250,35 @@ function Finish({ steps }: { steps: Partial<Record<StepId, StepMark>> }) {
             : "Your dashboard has everything it needs. Enjoy the sunshine."}
         </p>
       </div>
+      {next.length > 0 && (
+        <section
+          aria-labelledby="h-next"
+          className="flex w-full animate-rise flex-col gap-3 text-left [animation-delay:250ms]"
+        >
+          <h2 id="h-next" className="px-1 text-[15px] font-semibold">
+            Next, connect what you picked
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {next.map((e) => (
+              <ButtonLink
+                key={e.id}
+                to={e.href}
+                variant="outline"
+                className="h-auto justify-start gap-3 rounded-2xl border-line-subtle px-4 py-3.5 text-left whitespace-normal"
+              >
+                <span
+                  className="flex size-9 flex-none items-center justify-center rounded-full"
+                  style={{ background: alpha(e.color, 0.16), color: e.color }}
+                >
+                  <Icon name={e.icon} size={17} />
+                </span>
+                <span className="min-w-0 flex-1 text-[15px] font-medium">{e.connect}</span>
+                <Icon name="chevR" size={15} className="flex-none text-ink-faint" />
+              </ButtonLink>
+            ))}
+          </div>
+        </section>
+      )}
       <ul className="glass m-0 flex w-full animate-rise list-none flex-col divide-y divide-line-subtle overflow-hidden rounded-3xl border border-line-subtle p-0 text-left [animation-delay:300ms]">
         {STEPS.map((s) => {
           const done = steps[s.id] === "done";

@@ -1,6 +1,9 @@
 /** The first-run set-up guide's progress (GET/PATCH /api/onboarding). */
 
-export type StepId = "inverter" | "system" | "plan" | "location" | "billing";
+export type StepId = "inverter" | "system" | "house" | "location" | "plan" | "billing" | "cost" | "extras";
+
+/** What else is at the place, picked in the last step, for the finish to offer connecting. */
+export type ExtraId = "ev" | "home" | "inverter" | "grid";
 
 export type StepMark = "done" | "skipped";
 
@@ -15,10 +18,12 @@ export type Onboarding = {
   /** Send signed-in visits to the guide: neither finished nor put off. */
   show: boolean;
   steps: Partial<Record<StepId, StepMark>>;
+  extras: ExtraId[];
 };
 
 export type OnboardingChanges = {
   steps?: Partial<Record<StepId, StepMark | null>>;
+  extras?: ExtraId[];
   complete?: boolean;
   dismissed?: boolean;
 };
