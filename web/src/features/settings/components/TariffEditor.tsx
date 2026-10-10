@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Dispatch, ReactNode, Ref } from "react";
+import type { Dispatch } from "react";
 import { amberQuery } from "~/features/amber/api";
 import { useSaveTariff } from "~/features/common/tariffs/hooks";
 import { tariffQuery } from "~/features/common/tariffs/api";
@@ -10,23 +10,21 @@ import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import type { IconName } from "~/features/common/ui/components/Icon";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { ChoiceTiles } from "~/features/settings/components/SettingsSection";
-import { cn } from "~/features/common/ui/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { MAX_BANDS, usedBands } from "~/features/common/tariffs/utils";
 import { nowS } from "~/features/common/time/utils";
 import { BandEditor, numberInput } from "~/features/settings/components/BandEditor";
 import { failure } from "~/features/common/settings/utils";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 import type { EditorAction, EditorState, TariffEdit } from "~/features/settings/utils";
 import { TariffTimeline } from "~/features/settings/components/TariffTimeline";
 
-const RATE_TYPES: { value: Tariff["type"]; label: string; icon: IconName }[] = [
+export const RATE_TYPES: { value: Tariff["type"]; label: string; icon: IconName }[] = [
   { value: "flat", label: "Single rate", icon: "bolt" },
   { value: "tou", label: "Time of use", icon: "clock" },
   { value: "amber", label: "Amber", icon: "dollar" },
 ];
 
-const RATE_HELP: Record<Tariff["type"], string> = {
+export const RATE_HELP: Record<Tariff["type"], string> = {
   flat: "One price for grid electricity at any time of day.",
   tou: "Different rates at different times of day, for example peak, shoulder, and off-peak.",
   amber:
@@ -85,7 +83,7 @@ function ImportNote({ plan, saveLabel }: { plan: PlanTariff; saveLabel: string }
   );
 }
 
-function SourceLine({ source }: { source: NonNullable<Tariff["source"]> }) {
+export function SourceLine({ source }: { source: NonNullable<Tariff["source"]> }) {
   return (
     <div className="rounded-2xl bg-canvas/60 px-4 py-3 text-[13px] leading-5 text-ink-muted light:bg-canvas">
       Imported from {source.brand} · {source.plan_name} (plan {source.plan_id}), published {source.updated || "—"}. Edit
@@ -94,7 +92,16 @@ function SourceLine({ source }: { source: NonNullable<Tariff["source"]> }) {
   );
 }
 
-function ImportRates({ draft, edit }: { draft: Tariff; edit: (e: TariffEdit) => void }) {
+export function ImportRates({
+  draft,
+  edit,
+  timeline = true,
+}: {
+  draft: Tariff;
+  edit: (e: TariffEdit) => void;
+  /** The day drawn under the rates (not where a chart beside them draws it). */
+  timeline?: boolean;
+}) {
   const used = usedBands(draft);
   return (
     <div className="flex flex-col gap-4">
@@ -122,7 +129,7 @@ function ImportRates({ draft, edit }: { draft: Tariff; edit: (e: TariffEdit) => 
           Add rate
         </Button>
       )}
-      <TariffTimeline tariff={draft} />
+      {timeline && <TariffTimeline tariff={draft} />}
     </div>
   );
 }
@@ -248,59 +255,5 @@ export function RatesLoading({ failed }: { failed: boolean }) {
     <div className="text-sm text-ink-muted">
       {failed ? "The rates could not be loaded. Reload the page to try again." : "Loading rates…"}
     </div>
-  );
-}
-
-/** The "Electricity rates" card: edits a draft of the server's tariff and saves it with Save rates. */
-export function TariffEditor({
-  ref,
-  state,
-  dispatch,
-}: {
-  ref: Ref<HTMLElement>;
-  state: EditorState;
-  dispatch: Dispatch<EditorAction>;
-}) {
-  const { query, draft, dirty } = useRatesDraft(state);
-  const save = useSaveRates(dispatch);
-
-  let body: ReactNode;
-  if (!draft) {
-    body = <RatesLoading failed={query.isError} />;
-  } else {
-    const discard = () => {
-      dispatch({ type: "discard" });
-      void query.refetch();
-    };
-
-    body = (
-      <>
-        <SettingsTitle
-          id="h-rates"
-          title="Electricity rates"
-          sub="Used to calculate savings, grid cost, and feed-in credit. Find these on your electricity bill."
-        />
-        <RatesFields draft={draft} state={state} dispatch={dispatch} />
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4">
-          <span className={cn("min-h-5 text-[13px]", state.status?.bad ? "text-bad" : "text-ink-faint")}>
-            {state.status?.text}
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={!dirty} onClick={discard}>
-              Discard changes
-            </Button>
-            <Button size="sm" disabled={!dirty} onClick={() => save.save(draft)}>
-              Save rates
-            </Button>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <SettingsCard padded ref={ref} aria-labelledby="h-rates">
-      {body}
-    </SettingsCard>
   );
 }
