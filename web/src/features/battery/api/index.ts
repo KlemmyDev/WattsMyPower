@@ -43,6 +43,9 @@ export const startControl = (body: ControlRequest) => apiSend<BatteryView>("POST
 
 export const stopControl = () => apiSend<BatteryView>("DELETE", "battery/control");
 
+/** Turn the controls on for this inverter though they haven't been tried on its model, or back off. */
+export const setExperimental = (on: boolean) => apiSend<BatteryView>("PUT", "battery/experimental", { on });
+
 /** The battery's health, cycles, warranty and sizing: worked out from history, so refreshed every few minutes. */
 export const insightsQuery = queryOptions({
   queryKey: ["insights"],

@@ -85,6 +85,14 @@ export type BatteryEvent = { ts: number; text: string; kind: ControlKind | Outsi
 export type BatteryView =
   | {
       supported: true;
+      /** The inverter's model, as it reports it. */
+      model: string | null;
+      /** A model the controls have been tried on (Sungrow's SH-RS hybrids). */
+      verified: boolean;
+      /** Not one of those, but the controls were turned on for this inverter anyway. */
+      experimental: boolean;
+      /** Why the controls are off for this model; null when they can be used. */
+      untried: string | null;
       settings: BatterySettings | null;
       read_at: number | null;
       error: string | null;
