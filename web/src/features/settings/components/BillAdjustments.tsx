@@ -150,7 +150,7 @@ function Effect() {
   const total = exp.net_cost;
   const over = budget ? total - budget : 0;
   return (
-    <div className="rounded-xl bg-canvas px-[18px] py-4 text-sm leading-[22px] text-pretty text-ink-muted">
+    <div className="rounded-2xl bg-canvas/60 px-5 py-4 text-sm leading-[22px] text-pretty text-ink-muted light:bg-canvas">
       {off.length
         ? `${capital(off.join(" and "))} come off the current bill (${spanLabel(bills.period)}). It's`
         : `The current bill (${spanLabel(bills.period)}) is`}{" "}

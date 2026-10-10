@@ -4,15 +4,16 @@ import { useSaveSettings } from "~/features/common/settings/hooks";
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { Field, HelpText, Select } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { cn } from "~/features/common/ui/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { ChoiceTiles } from "~/features/settings/components/SettingsSection";
 import { dayMonth } from "~/features/common/formatting/utils/date";
 import { addDays, nowS, partsOf, siteTime } from "~/features/common/time/utils";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 const FREQUENCIES = [
-  { value: "1", label: "Monthly" },
-  { value: "2", label: "Every 2 months" },
-  { value: "3", label: "Quarterly" },
+  { value: "1", title: "Monthly", sub: "12 bills a year", icon: "calendar" as const },
+  { value: "2", title: "Every 2 months", sub: "6 bills a year", icon: "calendar" as const },
+  { value: "3", title: "Quarterly", sub: "4 bills a year", icon: "calendar" as const },
 ];
 
 /** Bills → Rates & settings: how often bills come and when a period starts, so estimates line up with the retailer's. */
@@ -53,13 +54,14 @@ export function BillingFields() {
     <>
       <div className="flex flex-col gap-2">
         <span className="text-[13px] font-semibold">How often you are billed</span>
-        <Segmented
+        <ChoiceTiles
           label="How often you are billed"
+          min="10rem"
+          phone={3}
+          color={COLOR.good}
           options={FREQUENCIES}
           value={String(months)}
           onChange={(v) => save.mutate({ bill_months: Number(v), bill_anchor: from.month })}
-          className="grid max-w-[520px] grid-cols-3"
-          buttonClassName="justify-center px-3.5 py-2.5"
         />
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-5">
@@ -79,33 +81,22 @@ export function BillingFields() {
         {months > 1 && (
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold">Current period started on</span>
-            <div className="flex flex-wrap gap-2">
-              {starts.map((d) => {
+            <Segmented
+              label="Current period started on"
+              options={starts.map((d) => {
                 const { month, year } = partsOf(d);
-                const on = month === from.month;
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => save.mutate({ bill_anchor: month })}
-                    className={cn(
-                      "h-11 rounded-full border px-[18px] text-sm font-semibold tabular-nums transition-colors",
-                      on
-                        ? "border-ink bg-ink text-ink-inverse"
-                        : "border-line bg-transparent text-ink-muted hover:text-ink",
-                    )}
-                  >
-                    {dayMonth(d)} {year}
-                  </button>
-                );
+                return { value: String(month), label: `${dayMonth(d)} ${year}` };
               })}
-            </div>
+              value={String(from.month)}
+              onChange={(v) => save.mutate({ bill_anchor: Number(v) })}
+              className="w-fit max-w-full max-sm:w-full"
+              buttonClassName="tabular-nums max-sm:flex-1 max-sm:justify-center max-sm:px-2"
+            />
             <span className="text-xs text-ink-muted">Check the dates at the top of your latest bill</span>
           </div>
         )}
       </div>
-      <div className="rounded-xl bg-canvas px-[18px] py-4 text-sm leading-[22px] text-pretty text-ink-muted">
+      <div className="rounded-2xl bg-canvas/60 px-5 py-4 text-sm leading-[22px] text-pretty text-ink-muted light:bg-canvas">
         Your current billing period is {dayMonth(start)} to {dayMonth(last)} ({length} days). The next one starts on{" "}
         {dayMonth(next)}. Bill estimates across the app use these dates.
       </div>
