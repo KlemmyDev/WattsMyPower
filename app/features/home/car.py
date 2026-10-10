@@ -8,7 +8,8 @@ at least CHARGING_MIN minutes, each 5 minutes at least 85% of the slowest any co
 current, on its phases), and no more than the fastest. A car on a three-phase charger draws more than anything else
 in a home for that long; on a single phase (1.4 kW at 6 A) it can't be told from other loads, so it isn't counted.
 
-Only with a car connected (Manage → Integrations → Electric vehicle).
+Only with the details of a car (Manage → Integrations → Electric vehicle): what a connected Tesla measured itself
+is added without them (app.features.home.router).
 """
 
 from __future__ import annotations

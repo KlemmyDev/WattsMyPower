@@ -12,7 +12,9 @@ One at a time. Switching keeps each car's settings (its mode, its dashboard car,
 
 Optional: nothing here reaches a car until one is connected. Each Tesla is tied to one of the dashboard's cars
 (app.features.car), made for it when it's connected, so its details (phases, the lowest and highest current) are the
-ones charging works with; its level is recorded from the car from then on.
+ones charging works with; its level is recorded from the car from then on. A Tesla whose dashboard car was
+disconnected (or that chose none) needn't have one: its model's figures are worked with instead, and its levels
+kept by its VIN (History).
 
 A background loop reads the cars and, after each reading of the inverters, works out the spare power and tells each
 car in solar mode what to do. How often depends on whether a car could charge soon (control.readiness): each minute
@@ -40,6 +42,7 @@ from typing import Any
 
 from app.core.config import Config
 from app.core.database import Database
+from app.features.car import service as car_service
 from app.features.car.service import CarService, NoSuchCar
 from app.features.live.service import LiveService
 from app.features.settings.store import SettingsStore
@@ -284,7 +287,7 @@ class TeslaService:
                 if vin in self._bluetooth._charge:
                     at, charge = self._bluetooth._charge[vin]
                     charge = {**charge, "timestamp": int(at * 1000)}
-                elif logged := self._logged_level(v):
+                elif logged := self._logged_level(vin, v):
                     charge = {"battery_level": logged["given"], "timestamp": int(logged["given_at"]) * 1000}
                 else:
                     continue
@@ -467,7 +470,7 @@ class TeslaService:
 
     def configure(self, vin: str, body: dict[str, Any]) -> dict[str, Any]:
         """Change a car's mode, whether the home battery fills first, how far short it may run, which dashboard car
-        it is, or its home ({"home": "here"}: where it is now; null: the system's location). Raises TeslaSetupError."""
+        it is (null for none: its model's figures), or its home ({"home": "here"}: where it is now; null: the system's location). Raises TeslaSetupError."""
         with self._lock:
             c = self._conn()
             v = c["vehicles"].get(vin)
@@ -477,7 +480,9 @@ class TeslaService:
                 v["control"] = control.clean(body, v.get("control"))
             except ValueError as e:
                 raise TeslaSetupError(str(e)) from e
-            if "car" in body:
+            if "car" in body and body["car"] is None:  # none: its model's figures
+                v["car"] = None
+            elif "car" in body:
                 if body["car"] not in self.cars.ids():
                     raise TeslaSetupError("Choose one of the cars on the dashboard.")
                 if any(o.get("car") == body["car"] for k, o in c["vehicles"].items() if k != vin):
@@ -578,14 +583,30 @@ class TeslaService:
         h = v.get("home")
         return (float(h[0]), float(h[1])) if h else self.home()
 
+    def _car_of(self, v: dict[str, Any]) -> int | None:
+        """The dashboard car a Tesla's tied to, if it's still connected."""
+        car = v.get("car")
+        return car if car is not None and car in self.cars.ids() else None
+
+    def _figures(self, vin: str) -> dict[str, Any]:
+        """A Tesla's details (app.features.car's): its dashboard car's, else its model's figures, guessed from what
+        Tesla calls it (else its VIN), over the defaults."""
+        car = self._car_of(self._conn()["vehicles"].get(vin, {}))
+        if car is not None:
+            with contextlib.suppress(NoSuchCar):
+                return self.cars.details(car)
+        vc = (self._raw.get(vin, {}).get("last_state") or {}).get("vehicle_config") or {}
+        model = guess_model(vc.get("car_type") or bluetooth.car_type(vin), vc.get("trim_badging"))
+        return car_service.defaults() | car_service.from_model(model)
+
+    def _levels(self, vin: str, v: dict[str, Any]) -> tuple[Any, Any]:
+        """Where a Tesla's levels are kept, and under what: with its dashboard car, else by its VIN (History). Both
+        take the same calls (level, record_level, last_read, levels)."""
+        car = self._car_of(v)
+        return (self.cars, car) if car is not None else (self.history, vin)
+
     def _charger(self, vin: str) -> Charger | None:
-        car = self._conn()["vehicles"].get(vin, {}).get("car")
-        if car is None:
-            return None
-        try:
-            d = self.cars.details(car)
-        except NoSuchCar:
-            return None
+        d = self._figures(vin)
         # What the car last measured charging at home wins over the car's details.
         m = self._conn()["vehicles"].get(vin, {}).get("measured") or {}
         return Charger(
@@ -698,7 +719,7 @@ class TeslaService:
         self._states[vin] = self._parse(vin, c["vehicles"][vin])
         if row.get("in_range") is not False:  # heard (or read through Tessie)
             self._seen[vin] = int(self.clock())
-        self._level(vin, c["vehicles"][vin].get("car"))
+        self._level(vin, c["vehicles"][vin])
         self._measure(vin, c)
         self._merge_details(vin, row.get("details") or {})
         if row.get("woke"):
@@ -902,17 +923,18 @@ class TeslaService:
             v["measured"] = new
             self._put(CONN_KEY, c)
 
-    def _level(self, vin: str, car: int | None) -> None:
-        """Record the car's level for its dashboard car, as it changes (and now and then while it doesn't); and while
-        it's asleep, the level it holds every half hour (LEVEL_ASLEEP)."""
+    def _level(self, vin: str, v: dict[str, Any]) -> None:
+        """Record the car's level (for its dashboard car, else by its VIN), as it changes (and now and then while it
+        doesn't); and while it's asleep, the level it holds every half hour (LEVEL_ASLEEP)."""
         s = self._states[vin]
-        if car is None or s.soc is None:
+        if s.soc is None:
             return
         now = int(self.clock())
         ts = s.as_of or now
         source = self._conn().get("provider") or "tesla"
+        store, key = self._levels(vin, v)
         try:
-            last = self.cars.level(car, ts)
+            last = store.level(key, ts)
         except NoSuchCar:
             return
         if not (
@@ -920,11 +942,11 @@ class TeslaService:
             and last.get("given_at")
             and (ts <= last["given_at"] or (abs(last["given"] - s.soc) < 1 and ts - last["given_at"] < LEVEL_EVERY))
         ):
-            self.cars.record_level(car, ts, s.soc, source)
+            store.record_level(key, ts, s.soc, source)
         if s.asleep:
-            held = self.cars.level(car, now)
+            held = store.level(key, now)
             if held and now - held["given_at"] >= LEVEL_ASLEEP:
-                self.cars.record_level(car, now, held["given"], source + ASLEEP)
+                store.record_level(key, now, held["given"], source + ASLEEP)
 
     # -- following the sun ---------------------------------------------------------------------
     def _spare(self, vin: str, s: CarState, cfg: dict[str, Any], mem: Memory, spec: Charger) -> float | None:
@@ -1081,10 +1103,9 @@ class TeslaService:
         return int(g.get("as_of") or 0), (g.get("data") or {}).get("odometer_km")
 
     def _battery_kwh(self, vin: str) -> float | None:
-        car = self._conn()["vehicles"].get(vin, {}).get("car")
         try:
-            return float(self.cars.details(car)["car_battery_kwh"]) if car is not None else None
-        except (NoSuchCar, KeyError, TypeError, ValueError):
+            return float(self._figures(vin)["car_battery_kwh"])
+        except (KeyError, TypeError, ValueError):
             return None
 
     def _track(self, vin: str, v: dict[str, Any]) -> None:
@@ -1209,9 +1230,9 @@ class TeslaService:
             raise TeslaSetupError("No such car.", 404)
         if end <= start or end - start > 8 * 86400:
             raise TeslaSetupError("Choose up to 8 days.")
-        car = c["vehicles"][vin].get("car")
+        store, key = self._levels(vin, c["vehicles"][vin])
         try:
-            points = self.cars.levels(car, start, end) if car is not None else []
+            points = store.levels(key, start, end)
         except NoSuchCar:
             points = []
         now = int(self.clock())
@@ -1288,7 +1309,7 @@ class TeslaService:
         follow, chance, wake_at = self._follow(vin, v)
         status, doing = self._doing(s, v, mem, spec) if s else ("unknown", "Not read yet")
         # Not read since the dashboard started (an asleep car isn't woken for it): the level last logged, and when.
-        logged = self._logged_level(v) if s is not None and s.soc is None else None
+        logged = self._logged_level(vin, v) if s is not None and s.soc is None else None
         return {
             "vin": vin,
             "make": MAKE,
@@ -1296,7 +1317,7 @@ class TeslaService:
             "model": control.MODEL_NAMES.get((s.model if s else None) or bluetooth.car_type(vin) or ""),
             "year": control.model_year(vin),
             "name": v.get("name") or (s.name if s else None),
-            "car": v.get("car"),
+            "car": self._car_of(v),
             # With each timing (control.TIMING) as set, or its default.
             "control": {**v["control"], **asdict(control.Timing.of(v["control"]))},
             "home": v.get("home"),
@@ -1358,12 +1379,12 @@ class TeslaService:
             },
         }
 
-    def _logged_level(self, v: dict[str, Any]) -> dict[str, Any] | None:
-        """The level last read for a Tesla's dashboard car, as logged ({given, given_at}), if any."""
-        if v.get("car") is None:
-            return None
+    def _logged_level(self, vin: str, v: dict[str, Any]) -> dict[str, Any] | None:
+        """The level last read for a Tesla (its dashboard car's, else its own), as logged ({given, given_at}), if
+        any."""
+        store, key = self._levels(vin, v)
         try:
-            read = self.cars.last_read(v["car"], int(self.clock()))
+            read = store.last_read(key, int(self.clock()))
         except NoSuchCar:
             return None
         return {"given": read[1], "given_at": read[0]} if read else None

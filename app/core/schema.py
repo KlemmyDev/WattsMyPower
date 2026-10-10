@@ -40,6 +40,7 @@ The SQLite schema: every table the app uses, and the migrations that create and 
                  from the grid), as the car measured it: the Home page's car line (app.features.tesla)
     ev_wakes     each time the dashboard woke a Tesla, and why (to see it isn't woken too often, at night)
     ev_events    what the dashboard did with each Tesla and what it saw done (the activity), for its day's chart
+    ev_levels    the battery level (%) of each Tesla not tied to one of the dashboard's cars, as read from it
     ev_sessions  each Tesla's time away (its level and odometer leaving and coming back) and each charge at home
                  (levels, energy from the house and from the grid), for the EV page's in and out
     battery_controls each battery control from the dashboard (standby, a floor, a charge from the grid), and each
@@ -444,6 +445,16 @@ def _drop_car_charges(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE IF EXISTS car_charges")
 
 
+def _ev_levels(conn: sqlite3.Connection) -> None:
+    """A Tesla's battery level (%) as read from it, by VIN, while it isn't tied to one of the dashboard's cars (whose
+    levels are car_levels): a car needn't be told about in Manage → Integrations → Electric vehicle to keep its day.
+    `source` as car_levels' ("tessie", "bluetooth", ending ":asleep" for a level held while it slept)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ev_levels (vin TEXT NOT NULL, ts INTEGER NOT NULL, soc REAL NOT NULL,"
+        " source TEXT NOT NULL, PRIMARY KEY (vin, ts))"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -471,6 +482,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _ev_history,
     _ev_wakes,
     _ev_events,
+    _ev_levels,
 ]
 
 

@@ -166,6 +166,16 @@ DASHBOARD: dict[str, Table] = {
         grows=True,
         retention=90,
     ),
+    "ev_levels": Table(
+        "cars",
+        "Tesla battery levels",
+        "The battery level of each connected Tesla that isn't tied to a car in Integrations → Electric vehicle, as "
+        "read from the car.",
+        "90 days",
+        Spec("ts"),
+        grows=True,
+        retention=90,
+    ),
     "ev_energy": Table(
         "cars",
         "Charging energy",

@@ -121,9 +121,9 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
           className="w-48"
           value={v.car ?? ""}
           disabled={configure.isPending}
-          onChange={(e) => configure.mutate({ vin: v.vin, car: Number(e.target.value) })}
+          onChange={(e) => configure.mutate({ vin: v.vin, car: e.target.value ? Number(e.target.value) : null })}
         >
-          {v.car == null && <option value="">Choose a car</option>}
+          <option value="">Its model's figures</option>
           {cars?.map((c) => (
             <option key={c.id} value={c.id}>
               {carName(c)}
@@ -248,8 +248,9 @@ export function TeslaSettings() {
         </SettingsCard>
       )}
       <HelpText className="text-[13px]">
-        Each Tesla is tied to a car in Integrations → Electric vehicle, and keeps how it charges when you switch: its
-        phases and lowest and highest current there are used until the car has charged at home and reported its own.
+        Each Tesla keeps how it charges when you switch. Its model's phases and lowest and highest current are used
+        until the car has charged at home and reported its own, or a car's from Integrations → Electric vehicle if you
+        tie it to one.
       </HelpText>
     </>
   );

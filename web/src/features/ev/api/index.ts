@@ -41,7 +41,10 @@ export const disconnectTesla = () => apiSend<TeslaStatus>("DELETE", "tesla");
 
 export const removeEv = (vin: string) => apiSend<TeslaStatus>("DELETE", `tesla/vehicles/${vin}`);
 
-export const configureEv = ({ vin, ...body }: EvControlChange & { vin: string; car?: number; home?: "here" | null }) =>
+export const configureEv = ({
+  vin,
+  ...body
+}: EvControlChange & { vin: string; car?: number | null; home?: "here" | null }) =>
   apiSend<TeslaStatus>("PUT", `tesla/vehicles/${vin}`, body);
 
 export const commandEv = ({ vin, ...body }: EvCommand & { vin: string }) =>

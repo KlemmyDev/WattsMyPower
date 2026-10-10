@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.database import Database
+from app.features.car.service import LEVELS_KEPT
 
 ROLLUP = 300
 AWAY_AFTER = 600  # seconds a car must be gone before it's away (one missed Bluetooth reading isn't a trip)
@@ -93,6 +94,44 @@ class History:
                 (vin, start, end),
             ).fetchall()
         return [{"ts": int(ts), "vin": vin, "text": text, "kind": kind} for ts, text, kind in rows]
+
+    # -- levels ---------------------------------------------------------------------------------
+    # A Tesla's level by its VIN, while it isn't tied to one of the dashboard's cars (whose levels CarService keeps):
+    # the same calls as CarService's, so either keeps a car's levels (TeslaService._levels).
+    def record_level(self, vin: str, ts: int, soc: float, source: str) -> None:
+        with self.db.writing() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO ev_levels (vin, ts, soc, source) VALUES (?, ?, ?, ?)", (vin, ts, soc, source)
+            )
+            conn.execute("DELETE FROM ev_levels WHERE vin = ? AND ts < ?", (vin, ts - LEVELS_KEPT))
+
+    def level(self, vin: str, now: int) -> dict[str, Any] | None:
+        """The level last recorded at or before `now`, as {given, given_at}; None if never recorded."""
+        with self.db.reading() as conn:
+            row = conn.execute(
+                "SELECT ts, soc FROM ev_levels WHERE vin = ? AND ts <= ? ORDER BY ts DESC LIMIT 1", (vin, now)
+            ).fetchone()
+        return {"given": float(row[1]), "given_at": int(row[0])} if row else None
+
+    def last_read(self, vin: str, now: int) -> tuple[int, float] | None:
+        """When the level was last read from the car itself (not held while it slept), and what."""
+        with self.db.reading() as conn:
+            row = conn.execute(
+                "SELECT ts, soc FROM ev_levels WHERE vin = ? AND ts <= ? AND source NOT LIKE '%:asleep'"
+                " ORDER BY ts DESC LIMIT 1",
+                (vin, now),
+            ).fetchone()
+        return (int(row[0]), float(row[1])) if row else None
+
+    def levels(self, vin: str, start: int, end: int) -> list[tuple[int, float, str]]:
+        """The levels recorded in [start, end), oldest first, each with where it came from, with the one either
+        side (so a line can reach both edges)."""
+        cols = "SELECT ts, soc, source FROM ev_levels WHERE vin = ?"
+        with self.db.reading() as conn:
+            before = conn.execute(f"{cols} AND ts < ? ORDER BY ts DESC LIMIT 1", (vin, start)).fetchall()
+            within = conn.execute(f"{cols} AND ts >= ? AND ts < ? ORDER BY ts", (vin, start, end)).fetchall()
+            after = conn.execute(f"{cols} AND ts >= ? ORDER BY ts LIMIT 1", (vin, end)).fetchall()
+        return [(int(ts), float(soc), str(src)) for ts, soc, src in [*before, *within, *after]]
 
     # -- sessions -------------------------------------------------------------------------------
     def _row(self, row: tuple[Any, ...]) -> dict[str, Any]:
