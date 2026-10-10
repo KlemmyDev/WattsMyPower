@@ -14,23 +14,31 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
+import { ChannelDot } from "~/features/updates/components/ChannelBadge";
+import { CHANNEL } from "~/features/updates/utils";
 import type { Channel, UpdateStatus } from "~/features/updates/types";
 
 const short = (commit: string) => commit.slice(0, 7);
 const titled = (release: string | null) => (release ? release.charAt(0).toUpperCase() + release.slice(1) : null);
 const UNDER_WAY = new Set(["requested", "running"]);
 
-const CHANNELS: { value: Channel; label: string; about: string }[] = [
-  {
-    value: "nightly",
-    label: "Nightly",
-    about: "Every change as soon as it's merged. The newest, and the least tried.",
-  },
-  { value: "beta", label: "Beta", about: "Pre-releases to try before they're stable, and every stable release." },
-  { value: "stable", label: "Stable", about: "Releases only, once they've been tried. Updates less often." },
-];
-const channelName = (c: Channel) => CHANNELS.find((o) => o.value === c)!.label;
+const ABOUT: Record<Channel, string> = {
+  nightly: "Every change as soon as it's merged. The newest, and the least tried.",
+  beta: "Pre-releases to try before they're stable, and every stable release.",
+  stable: "Releases only, once they've been tried. Updates less often.",
+};
+const CHANNELS = (Object.keys(CHANNEL) as Channel[]).map((value) => ({
+  value,
+  label: (
+    <span className="flex items-center gap-1.5">
+      <ChannelDot channel={value} />
+      {CHANNEL[value].label}
+    </span>
+  ),
+}));
+const channelName = (c: Channel) => CHANNEL[c].label;
 
 /** "10:42" today, else "Mon 6 Oct, 10:42". */
 const when = (ts: number) => (sameDay(ts, nowS()) ? hhmm(ts) : `${shortDay.format(new Date(ts * 1000))}, ${hhmm(ts)}`);
@@ -57,13 +65,28 @@ function changesUrl(s: UpdateStatus) {
   return `https://github.com/${repo}/commits/${s.branch}`;
 }
 
+/** Manage → System → Updates. */
+export function UpdatesSettings() {
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/system">System</BackLink>}
+        id="h-updates-page"
+        title="Updates"
+        sub="The version you're running, the release channel it follows, and installing newer ones."
+      />
+      <UpdatesCard />
+    </>
+  );
+}
+
 /**
- * Updates (Manage → System): the release channel followed, the version running, the channel's on GitHub and whether
+ * Updates (Manage → System → Updates): the release channel followed, the version running, the channel's on GitHub and whether
  * it's newer (or older, after moving to a channel behind this version), checking now, and turning the checks every few
  * hours off. With the updater set up on the machine it's installed on, Update now (or going back); else how to update
  * by hand.
  */
-export function UpdatesCard() {
+function UpdatesCard() {
   const qc = useQueryClient();
   const toast = useToast();
   // Every few seconds while an update is under way (and while the dashboard restarts, when it can't answer).
@@ -120,7 +143,9 @@ export function UpdatesCard() {
     <SettingsCard padded aria-labelledby="h-updates" id="updates" className="scroll-mt-6 gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 id="h-updates">Updates</h2>
+          <h3 id="h-updates" className="text-[15px] font-semibold">
+            Check for updates
+          </h3>
           <span className="text-sm text-pretty text-ink-muted">
             Every few hours WattsMyPower asks GitHub, where it's published, whether there's a newer version. Nothing
             about your home is sent.
@@ -155,9 +180,7 @@ export function UpdatesCard() {
             onChange={(c) => c !== following && channel.mutate(c)}
             className="w-fit max-w-full"
           />
-          <span className="text-[13px] text-pretty text-ink-muted">
-            {CHANNELS.find((o) => o.value === following)!.about}
-          </span>
+          <span className="text-[13px] text-pretty text-ink-muted">{ABOUT[following]}</span>
         </div>
       )}
 
@@ -370,21 +393,47 @@ function Version({
   );
 }
 
-/** How to update by hand, while updating from here isn't set up (or can't run), and why not. */
+/**
+ * How to update by hand, while updating from here isn't set up (or can't run), and why not. On Windows, install.ps1
+ * again (it runs install.sh in WattsMyPower's WSL distribution), or install.sh in there.
+ */
 function HowToUpdate({ s }: { s: UpdateStatus }) {
+  const what = `It installs ${channelName(s.channel)}'s version, backs up your data and rebuilds; your settings and history are kept.`;
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-line-subtle bg-surface-inset p-4 text-sm">
       <span className="font-medium">
         {s.move === "older" ? `To go back to v${s.latest!.version}` : `To update to ${newerWords(s)}`}
       </span>
-      <span className="text-pretty text-ink-muted">
-        On the machine WattsMyPower runs on, run this in its folder. It installs {channelName(s.channel)}'s version,
-        backs up your data and rebuilds; your settings and history are kept.
-      </span>
-      <code className="w-fit rounded-lg bg-canvas px-3 py-1.5 font-mono text-[13px] text-ink select-all">
-        bash install.sh
-      </code>
+      {s.windows ? (
+        <>
+          <span className="text-pretty text-ink-muted">
+            On the Windows PC WattsMyPower runs on, run the installer again in PowerShell. {what}
+          </span>
+          <Command>{`irm https://raw.githubusercontent.com/${s.repo}/${s.branch}/install.ps1 | iex`}</Command>
+          <span className="text-[13px] text-pretty text-ink-muted">
+            Or in its Linux distribution (<code className="font-mono">wsl -d WattsMyPower</code>, then{" "}
+            <code className="font-mono">cd ~/wattsmypower</code>):
+          </span>
+          <Command>bash install.sh</Command>
+        </>
+      ) : (
+        <>
+          <span className="text-pretty text-ink-muted">
+            On the machine WattsMyPower runs on, run this in its folder. {what}
+          </span>
+          <Command>bash install.sh</Command>
+        </>
+      )}
       {s.install.why && <span className="text-[13px] text-pretty text-ink-faint">{s.install.why}</span>}
     </div>
+  );
+}
+
+/** A command to copy (selected whole with a click). */
+function Command({ children }: { children: string }) {
+  return (
+    <code className="w-fit max-w-full rounded-lg bg-canvas px-3 py-1.5 font-mono text-[13px] break-all text-ink select-all">
+      {children}
+    </code>
   );
 }

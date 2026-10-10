@@ -31,7 +31,7 @@ Snapshot = dict[str, Any]
 SolarValues = dict[str, float | None]
 
 # Details about a device that rarely change. Hybrids: brand, model, serial, nominal_kw, phases,
-# battery_kwh, reserve (%). Second inverters: brand, model, nominal_kw, running_hours. Keys the
+# battery_kwh, reserve (%), device_type (the model's code). Second inverters: brand, model, nominal_kw, running_hours. Keys the
 # device can't report are left out.
 Info = dict[str, Any]
 
@@ -81,6 +81,8 @@ class ControlDriver(Protocol):
     """How a hybrid's battery is controlled: reading its settings registers, and what to write for each control."""
 
     FLOOR_RANGE: tuple[float, float]  # the floors (min SOC, %) it accepts
+    VERIFIED_TYPES: frozenset[int]  # the models (device types, Info's `device_type`) the controls have been tried on
+    VERIFIED_LABEL: str  # those models, in words
 
     def decode(self, words: Mapping[int, int]) -> BatterySettings: ...
 

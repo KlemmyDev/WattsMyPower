@@ -2,8 +2,10 @@
 name = "wattsmypower"
 # The date it was released (a second release that day adds .1, .2…).
 version = "2026.10.9"
-description = "Self-hosted dashboard for a Sungrow hybrid inverter and battery"
+description = "Local-first, self-hosted home energy dashboard: Sungrow solar and battery, the grid, EVs and smart-home devices, live and on your own network"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
     "fastapi==0.141.1",
