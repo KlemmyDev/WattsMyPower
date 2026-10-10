@@ -180,7 +180,7 @@ export function OptionRow({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3.5">
-      <div className="flex max-w-[620px] min-w-[200px] flex-1 items-center gap-3 max-sm:min-w-0">
+      <div className="flex max-w-[620px] min-w-[160px] flex-1 items-center gap-3 max-sm:min-w-0">
         {icon && (
           <span
             aria-hidden
@@ -227,14 +227,14 @@ export function SaveBar({
 }
 
 /**
- * A settings page's two halves from a wide screen: a picture of what's set on the left (kept in view while it fits),
- * and the options on the right. Stacked, picture first, where there isn't room.
+ * A settings page's two halves from a wide screen: a picture of what's set on the left, and the options on the right,
+ * both scrolling with the page. Stacked, picture first, where there isn't room.
  */
 export function SettingsSplit({ visual, children }: { visual: ReactNode; children: ReactNode }) {
   return (
     <div className="@container">
       <div className="grid grid-cols-1 items-start gap-5 @4xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,1fr)]">
-        <div className="flex min-w-0 flex-col gap-5 @4xl:sticky @4xl:top-6">{visual}</div>
+        <div className="flex min-w-0 flex-col gap-5">{visual}</div>
         <div className="flex min-w-0 flex-col gap-5">{children}</div>
       </div>
     </div>
@@ -281,7 +281,7 @@ export function NumberRow({
         onChange={(e) => onChange(e.target.value)}
         boxClassName={cn(
           "h-10 bg-surface light:bg-surface",
-          type === "date" ? "w-[11.5rem] max-sm:w-[9.5rem]" : "w-[9.5rem] max-sm:w-[7rem]",
+          type === "date" ? "w-[10.5rem] max-sm:w-[9.5rem]" : "w-[8.5rem] max-sm:w-[7rem]",
         )}
         className="text-right"
       />
@@ -290,8 +290,8 @@ export function NumberRow({
 }
 
 /**
- * What's changed and not saved yet, as a bar that rises at the bottom of the options while there's something to save
- * (or a save that failed): Discard and Save.
+ * What's changed and not saved yet: a line at the foot of the section, under a hairline, while there's something to
+ * save (or a save that failed), with Discard and Save. It sits in the page, where the changes are, not over it.
  */
 export function SaveBanner({
   dirty,
@@ -301,7 +301,6 @@ export function SaveBanner({
   onDiscard,
   saveLabel = "Save",
   what = "Unsaved changes",
-  inline,
 }: {
   dirty: boolean;
   pending: boolean;
@@ -310,23 +309,18 @@ export function SaveBanner({
   onDiscard: () => void;
   saveLabel?: string;
   what?: ReactNode;
-  /** In its place under the options, rather than held at the bottom of the screen while they scroll. */
-  inline?: boolean;
 }) {
   if (!dirty && !error) return null;
   return (
     <div
       role="region"
       aria-label="Unsaved changes"
-      className={cn(
-        "flex animate-pop flex-wrap items-center gap-3 rounded-2xl border border-line-subtle bg-popover px-4 py-3",
-        !inline && "sticky bottom-4 z-10 shadow-[0_12px_32px_var(--color-shadow-pop)]",
-      )}
+      className="flex animate-fade flex-wrap items-center gap-x-3 gap-y-2.5 border-t border-line-subtle pt-4"
     >
       <span className={cn("min-w-0 flex-1 text-[13px]", error ? "text-bad" : "text-ink-muted")} role="status">
         {error || what}
       </span>
-      <Button variant="outline" size="sm" disabled={pending || !dirty} onClick={onDiscard}>
+      <Button variant="muted-link" size="md" className="px-2" disabled={pending || !dirty} onClick={onDiscard}>
         Discard
       </Button>
       <Button size="sm" disabled={pending || !dirty} onClick={onSave}>

@@ -13,7 +13,7 @@ import type { HouseOptions, HouseStyle, Place } from "~/features/overview/utils/
 import { houseOptions } from "~/features/overview/utils/house/options";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { ChoiceTiles, OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 type HouseValues = Pick<
   Settings,
@@ -67,9 +67,7 @@ export function HouseSettings() {
   const live = useLive();
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-house"
+      <SettingsPageHeader
         title="Your house"
         sub="How the Overview draws your home. Choose what's closest: it's only the picture, nothing's worked out from it."
       />

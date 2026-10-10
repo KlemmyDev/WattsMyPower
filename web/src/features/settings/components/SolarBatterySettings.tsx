@@ -18,7 +18,7 @@ import {
   SettingsSplit,
 } from "~/features/settings/components/SettingsSection";
 import { SystemDiagram, type DiagramFigures } from "~/features/settings/components/SystemDiagram";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
  * Settings → Solar and battery: the installation as a diagram on the left (figures not saved yet drawn as they'd be),
@@ -28,9 +28,7 @@ export function SolarBatterySettings() {
   const live = useLive();
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-solar-battery"
+      <SettingsPageHeader
         title="Solar and battery"
         sub="What your inverters report about your system, and the details they can't."
       />
