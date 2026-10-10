@@ -13,13 +13,7 @@ import {
   SaveBanner,
   SettingsSection,
 } from "~/features/settings/components/SettingsSection";
-import {
-  ImportRates,
-  RATE_HELP,
-  RATE_TYPES,
-  SourceLine,
-  useSaveRates,
-} from "~/features/settings/components/TariffEditor";
+import { ImportRates, RATE_HELP, RATE_TYPES, useSaveRates } from "~/features/settings/components/TariffEditor";
 import type { EditorAction, EditorState, TariffEdit } from "~/features/settings/utils";
 
 /**
@@ -42,6 +36,31 @@ export function RatesOptions({
 }) {
   const toast = useToast();
   const save = useSaveRates(dispatch);
+  return (
+    <SettingsSection
+      id="rates"
+      className="scroll-mt-6"
+      title="Rates"
+      sub="Find these on your electricity bill. Savings, grid cost and feed-in credit on every page use them."
+    >
+      <RateRows draft={draft} dispatch={dispatch} />
+      <SaveBanner
+        dirty={dirty}
+        pending={save.isPending}
+        error={state.status?.bad ? state.status.text : undefined}
+        saveLabel="Save rates"
+        onDiscard={onDiscard}
+        onSave={() => save.save(draft, () => toast("Rates saved. Savings on every page now use them."))}
+      />
+    </SettingsSection>
+  );
+}
+
+/**
+ * The rates as tiles and rows, without a card or a way to save (the set-up guide shows them too): the rate type, the
+ * time-of-use rates when that's the type, then grid power, feed-in and the supply charge. Edits go to the draft.
+ */
+export function RateRows({ draft, dispatch }: { draft: Tariff; dispatch: Dispatch<EditorAction> }) {
   const amber = useQuery(amberQuery).data;
   const tou = draft.type === "tou";
   const dynamic = draft.type === "amber";
@@ -61,13 +80,7 @@ export function RatesOptions({
   );
 
   return (
-    <SettingsSection
-      id="rates"
-      className="scroll-mt-6"
-      title="Rates"
-      sub="Find these on your electricity bill. Savings, grid cost and feed-in credit on every page use them."
-    >
-      {draft.source && !state.imported && <SourceLine source={draft.source} />}
+    <>
       <ChoiceTiles
         label="Rate type"
         min="13rem"
@@ -104,14 +117,6 @@ export function RatesOptions({
           "/day",
         )}
       </OptionList>
-      <SaveBanner
-        dirty={dirty}
-        pending={save.isPending}
-        error={state.status?.bad ? state.status.text : undefined}
-        saveLabel="Save rates"
-        onDiscard={onDiscard}
-        onSave={() => save.save(draft, () => toast("Rates saved. Savings on every page now use them."))}
-      />
-    </SettingsSection>
+    </>
   );
 }

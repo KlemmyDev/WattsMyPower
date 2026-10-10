@@ -6,7 +6,7 @@ A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (the SH se
 
 WattsMyPower is in **beta**. It runs a real home's system every day, but it's new to everyone else's: expect rough edges, keep the backups it makes, and tell us what goes wrong. An install follows the beta channel, so it gets each beta as it's released (see [Switching channel](#switching-channel)).
 
-**Australia only.** It's built around Australian services: AEMO's wholesale prices and notices, the electricity networks' outage maps (every state and the ACT), the Bureau of Meteorology's warnings, retailers' plans from Energy Made Easy, NEM12 smart meter files and Amber Electric. Money is in AUD and everything is written in Australian English. Outside Australia the live readings, history and forecast may still work, but nobody has tried.
+**Australia only.** It's built around Australian services: AEMO's wholesale prices and notices, the electricity networks' outage maps (every state and the ACT), the Bureau of Meteorology's warnings, NEM12 smart meter files and Amber Electric. Money is in AUD and everything is written in Australian English. Outside Australia the live readings, history and forecast may still work, but nobody has tried.
 
 **Tested on:**
 
@@ -20,7 +20,7 @@ The other SH hybrids in [Supported inverters](#supported-inverters) share the SH
 
 | | |
 |---|---|
-| **Expected to work** | Readings from the hybrid, battery and grid meter, and a second SG-D inverter; Overview, Solar, Home, Battery and Grid pages; History and CSV downloads; costs, Bills, rates and plans from Energy Made Easy; NEM12 imports; the forecast and Plan; AEMO prices and notices, outages and weather warnings; updates and backups. TP-Link Tapo plugs, Hisense (ConnectLife) washers and dryers, and a Tesla over Bluetooth are used at home every day. **Battery controls** (standby, a floor, charging from the grid) on the SH-RS hybrids they were written for, used at home on an SH5.0RS. |
+| **Expected to work** | Readings from the hybrid, battery and grid meter, and a second SG-D inverter; Overview, Solar, Home, Battery and Grid pages; History and CSV downloads; costs, Bills and rates; NEM12 imports; the forecast and Plan; AEMO prices and notices, outages and weather warnings; updates and backups. TP-Link Tapo plugs, Hisense (ConnectLife) washers and dryers, and a Tesla over Bluetooth are used at home every day. **Battery controls** (standby, a floor, charging from the grid) on the SH-RS hybrids they were written for, used at home on an SH5.0RS. |
 | **Experimental** | **Battery controls on other hybrids** (SH-RT, SH-T and the rest): they're off until you turn them on for that inverter on the Battery page, as they change what the inverter does and haven't been tried there. Tesla through Tessie. Bluetti (Bluetooth) and EcoFlow (cloud) portable batteries. Electrolux, AEG and +home appliances (cloud). Shelly plugs and meters. Home Assistant. Amber Electric prices. Importing history from iSolarCloud. These work as far as we know, on little or no hardware beyond our own. |
 
 **Known limitations:**
@@ -186,7 +186,7 @@ curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install
 
 - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
 - **Your system:** the solar array's size (the forecast starts from it, and it's 6.6 kW until it's entered), and the battery details your inverter can't report.
-- **Your electricity plan:** load your rates from Energy Made Easy with **Find your plan**, or enter them by hand.
+- **Your electricity plan:** enter the rates from your bill (or connect Amber Electric), beside a chart of them through the day.
 - **Where you live:** your suburb, for the weather forecast.
 - **Your billing period:** how often you're billed and when a period starts.
 
@@ -289,17 +289,6 @@ The dashboard has a dark theme and a light one (**Manage → Account → Appeara
 - **Discounts, credits and budget:** a retailer's discount (such as for paying on time), as a percentage off usage or off usage and the supply charge; credits a year, such as a concession or government rebate, spread over each bill by its days; and a budget a bill. Bill totals across the app take off the discount and credits (each day on the Bills page stays at the rates alone), and the current bill is shown against the budget.
 
 The rates take either a **single rate** or **time of use**. Time of use has up to six named rates (peak, shoulder, off-peak, and so on). Each rate has a price and one or more time windows, and each window applies every day, on weekdays only, or on weekends only. One rate is marked for **all other times**. Windows can cross midnight (21:00 to 07:00). Overlapping windows are rejected with a message naming the clash. A 24-hour timeline shows weekdays and weekends before you save. Feed-in and the daily supply charge are flat.
-
-**Find your plan.** Above the rates, enter your postcode and retailer to search the plans retailers currently publish to [Energy Made Easy](https://www.energymadeeasy.gov.au). The data comes from the AER's public Consumer Data Right product reference data APIs at `cdr.energymadeeasy.gov.au`; no account or key is needed. Results show each plan's rate type and prices, so plans with the same name can be told apart. Plans with controlled load are hidden unless you tick the box. Choosing **Use this plan** fills in the rates form for you to check; nothing is saved until you select **Save rates**. Imported prices have 10% GST added (CDR prices exclude GST; feed-in doesn't attract GST). A note lists anything that couldn't be carried over:
-- seasonal rates (the current season is used)
-- stepped rates (the first step is used)
-- demand charges
-- controlled load
-- conditional discounts
-- time-varying feed-in (the highest rate is used)
-- government feed-in schemes like the Queensland Solar Bonus Scheme, which only apply to customers already on them
-
-Plan lists are cached for 6 hours and plan details for a day. The retailer list is `app/features/plans/retailers.json`, taken from the AER's "Energy Retailer Base URIs" PDF (January 2026) and limited to retailers that currently publish electricity plans. Refresh it when the AER updates that list.
 
 Costs are worked out on the server for every 5-minute reading, so each kWh is priced at the rate in force at that moment. Each day's totals are then scaled to match the inverter's own daily import and export counters. The whole history is priced with the current tariff, so saving new rates reprices past days too. "Today so far" shows the day's bill so far: grid usage (per rate on time of use), plus the daily supply charge, minus the feed-in credit, giving a cost (or credit) for today. History's "Saved" uses the same per-day figures.
 
@@ -486,15 +475,11 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/bills/grid-hours` | grid use and its cost by hour of an average day, for each of the last 12 months |
 | `GET /api/bills/payback` | what the system has saved so far and a year, and when it pays for itself |
 | `GET /api/savings` | this quarter's bill (so far and estimated) and system payback |
-| `GET /api/plans/compare?brand=&postcode=` | a year of your usage priced on each of a retailer's current plans, cheapest first |
 | `GET /api/tariff`, `PUT /api/tariff` | read or replace the tariff (JSON; validated, including overlapping windows) |
 | `GET /api/costs?start=&end=` | per-day import, export, cost, and savings, split by rate |
 | `POST /api/meter/preview?filename=` | what a NEM12 file (the raw request body) holds, without importing it |
 | `POST /api/meter/imports?filename=`, `GET /api/meter/imports`, `DELETE /api/meter/imports/{id}` | import a NEM12 file, list imports, remove one |
 | `GET /api/meter/reconcile?start=&end=` | each day's import and export from the meter against the dashboard's |
-| `GET /api/plans/brands` | retailers that publish plans |
-| `GET /api/plans/search?brand=&postcode=&q=` | a retailer's current residential electricity plans for a postcode, with prices incl. GST |
-| `GET /api/plans/tariff?brand=&plan=` | one plan converted to a tariff, plus notes (not saved) |
 | `GET /api/settings`, `PUT /api/settings` | read or change the forecast location (coordinates and place name) and system cost |
 | `GET /api/geocode?q=` | suburbs, towns and addresses matching q (OpenStreetMap), for choosing the forecast location |
 | `GET /api/stats`, `GET /healthz` | row counts / DB size, health |
@@ -573,7 +558,6 @@ app/
     forecast/           Open-Meteo forecast, self-calibration, battery projection
     insights/           longer-term figures: the battery's health and sizing, solar performance, the battery's run
     savings/            quarterly bill, payback, plan comparison
-    plans/              Energy Made Easy / CDR plan search and plan-to-tariff conversion (retailers.json)
     auth/               sign-in: the household account, sessions, and the /api guard
     onboarding/         the first-run set-up guide's progress, and spotting installs already set up
     storage/            Manage → Data: both databases measured table by table (measure.py) and

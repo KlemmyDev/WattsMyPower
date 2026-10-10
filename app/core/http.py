@@ -1,4 +1,4 @@
-"""Outbound HTTP for the services the app calls (Open-Meteo, Energy Made Easy, OpenStreetMap, Amber,
+"""Outbound HTTP for the services the app calls (Open-Meteo, OpenStreetMap, Amber,
 smart-home clouds)."""
 
 from __future__ import annotations
