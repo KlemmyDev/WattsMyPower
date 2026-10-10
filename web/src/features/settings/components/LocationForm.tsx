@@ -13,7 +13,7 @@ type LocationChanges = Pick<Partial<Settings>, "latitude" | "longitude" | "locat
 
 /**
  * Pick the forecast location by place search, or by typing coordinates. In Settings it's mounted while
- * open, with a Cancel button (`onClose`); the set-up guide shows it as a step and moves on when it's saved.
+ * open, with a Cancel button (`onClose`); the set-up guide shows it beside the place's daylight.
  */
 export function LocationForm({
   system,
