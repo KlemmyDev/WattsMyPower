@@ -4,7 +4,8 @@ import { useState } from "react";
 import { carsQuery } from "~/features/car/api";
 import { CarDetailsForm } from "~/features/car/components/CarDetailsForm";
 import { useCarChange } from "~/features/car/hooks";
-import { carName } from "~/features/car/utils";
+import { BODY, carName } from "~/features/car/utils";
+import { lookOf } from "~/features/ev/utils/looks";
 import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { HelpText } from "~/features/common/ui/components/Field";
@@ -37,6 +38,9 @@ export function CarPage({ carId }: { carId: number }) {
       </>
     );
   const c = view.car;
+  // Tied to a Tesla whose model has a shape of its own: the Overview draws it as that, whatever's chosen here.
+  const look = vehicle && lookOf(vehicle.make, vehicle.model);
+  const drawnAs = vehicle && look?.known ? BODY[look.body] : undefined;
   return (
     <>
       <SubPageHeader
@@ -54,7 +58,7 @@ export function CarPage({ carId }: { carId: number }) {
             : "Added by hand, and not tied to a Tesla. The Overview still draws it."
         }
       >
-        <CarDetailsForm key={view.id} id={view.id} car={c} />
+        <CarDetailsForm key={view.id} id={view.id} car={c} drawnAs={drawnAs} />
       </SettingsSection>
       <SettingsSection
         id="h-car-remove"

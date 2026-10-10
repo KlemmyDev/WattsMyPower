@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import type { CarBody } from "~/features/car/types";
 import { group, h, I, ln, poly, type Kid, type P3 } from "~/features/overview/utils/house/iso";
 import type { Spot } from "~/features/overview/utils/house/layout";
 
@@ -6,14 +7,14 @@ import type { Spot } from "~/features/overview/utils/house/layout";
  * Cars parked in the drawing. Each is drawn from its side view: the body's outline from the back of the car to the
  * front, and the cabin's (the glasshouse) above the belt line, both stretched across the car's width (the cabin a
  * little narrower), with wheels, tail lights and glass. Some popular models have outlines of their own, close to
- * the real car's length, width, height and roof line; every other car is drawn as a sedan, SUV or hatch.
+ * the real car's length, width, height and roof line; every other car is drawn as a sedan, SUV or hatch. Which shape
+ * a connected EV gets, from its make and model, is in features/ev/utils/looks.ts.
  *
  * Cars park nose in, along y: the back of the car faces the street (+y) and its right side faces +x, which are the
  * sides the drawing shows. Outline points are [along, up]: along from the back (0) to the front (1), up in metres.
  */
 
-export type CarBody =
-  "model3" | "modelY" | "atto3" | "dolphin" | "seal" | "sealion7" | "ioniq5" | "sedan" | "suv" | "hatch";
+export type { CarBody };
 
 type Pt = [along: number, up: number];
 
@@ -35,6 +36,11 @@ type Shape = {
   roofRails?: boolean;
   /** A line pressed into the side (the Ioniq 5's diagonal). */
   crease?: [Pt, Pt];
+  /**
+   * A cabin in the body's colour with these side windows in it (the Cybertruck's steel sail over its tray), rather
+   * than one all glass.
+   */
+  windows?: Pt[];
 };
 
 const SHAPES: Record<CarBody, Shape> = {
@@ -92,6 +98,90 @@ const SHAPES: Record<CarBody, Shape> = {
     glassRoof: true,
     lights: "split",
     lightsAt: [0.86, 0.96],
+  },
+  // A long, low liftback: the Model 3's look, stretched, with a longer, gentler slope down the back.
+  modelS: {
+    size: [5.02, 1.96, 1.44],
+    body: [
+      [0, 0.24],
+      [0, 0.8],
+      [0.02, 0.9],
+      [0.1, 0.93],
+      [0.76, 0.88],
+      [0.93, 0.76],
+      [0.99, 0.6],
+      [1, 0.45],
+      [1, 0.24],
+    ],
+    cabin: [
+      [0.09, 0.93],
+      [0.24, 1.2],
+      [0.4, 1.42],
+      [0.54, 1.44],
+      [0.62, 1.33],
+      [0.77, 0.88],
+    ],
+    axles: [0.17, 0.8],
+    wheel: 0.36,
+    glassRoof: true,
+    lights: "split",
+    lightsAt: [0.78, 0.88],
+  },
+  // The big one: a Model Y's look, longer and taller, its roof in the body's colour (over the falcon-wing doors).
+  modelX: {
+    size: [5.06, 2.0, 1.68],
+    body: [
+      [0, 0.24],
+      [0, 0.9],
+      [0.02, 0.97],
+      [0.07, 1.0],
+      [0.75, 0.98],
+      [0.93, 0.86],
+      [0.99, 0.72],
+      [1, 0.55],
+      [1, 0.24],
+    ],
+    cabin: [
+      [0.05, 1.0],
+      [0.12, 1.38],
+      [0.25, 1.6],
+      [0.42, 1.68],
+      [0.56, 1.65],
+      [0.64, 1.52],
+      [0.78, 0.98],
+    ],
+    axles: [0.18, 0.8],
+    wheel: 0.39,
+    lights: "split",
+    lightsAt: [0.88, 0.97],
+  },
+  // A wedge of steel: a straight line up from the tail to the peak over the front seats, and straight down again to
+  // the nose, a light bar across the back, big wheels and high off the ground.
+  cybertruck: {
+    size: [5.68, 2.2, 1.79],
+    body: [
+      [0, 0.44],
+      [0, 1.14],
+      [0.02, 1.16],
+      [0.74, 1.22],
+      [1, 0.98],
+      [1, 0.44],
+    ],
+    cabin: [
+      [0.02, 1.16],
+      [0.48, 1.79],
+      [0.74, 1.22],
+    ],
+    axles: [0.17, 0.83],
+    wheel: 0.43,
+    lights: "bar",
+    lightsAt: [1.03, 1.1],
+    windows: [
+      [0.32, 1.22],
+      [0.465, 1.68],
+      [0.5, 1.68],
+      [0.7, 1.26],
+    ],
   },
   atto3: {
     size: [4.455, 1.875, 1.615],
@@ -446,24 +536,36 @@ export function drawCar(spot: Spot, body: CarBody, paint: string): ReactElement 
       }),
     );
 
-  // The cabin: glass at the back and sides, the roof glass or paint.
-  const roof = s.glassRoof ? GLASS_TOP : top;
-  out.push(...extrude(s.cabin, xl + TUMBLE, xr - TUMBLE, at, (up, i) => (up > 0.75 && i > 0 ? roof : GLASS), GLASS));
-  // The pillar between the side windows, in the body's colour, and a glint on the glass.
-  const roofLine = s.cabin.slice(1, -1);
-  const mid = (s.cabin[0][0] + s.cabin[s.cabin.length - 1][0]) / 2;
-  const roofAt = roofLine.reduce((a, p) => (Math.abs(p[0] - mid) < Math.abs(a[0] - mid) ? p : a), roofLine[0]);
-  out.push(
-    ln([xr - TUMBLE + 0.01, ...at([mid, s.cabin[0][1]])], [xr - TUMBLE + 0.01, ...at([mid, roofAt[1]])], {
-      stroke: side,
-      strokeWidth: 2.2,
-    }),
-    ln(
-      [xr - TUMBLE + 0.01, ...at([mid + 0.04, s.cabin[0][1] + 0.12])],
-      [xr - TUMBLE + 0.01, ...at([mid + 0.12, roofAt[1] - 0.12])],
-      { stroke: "rgba(255,255,255,0.18)", strokeWidth: 1.2 },
-    ),
-  );
+  if (s.windows) {
+    // A cabin in the body's colour, lit as the body is, its windows set in its side.
+    out.push(
+      ...extrude(s.cabin, xl + TUMBLE, xr - TUMBLE, at, (up) => (up > 0.5 ? top : rear), side),
+      poly(
+        s.windows.map((p) => [xr - TUMBLE + 0.01, ...at(p)] as P3),
+        GLASS,
+        { stroke: "rgba(0,0,0,0.25)", strokeWidth: 0.6 },
+      ),
+    );
+  } else {
+    // The cabin: glass at the back and sides, the roof glass or paint.
+    const roof = s.glassRoof ? GLASS_TOP : top;
+    out.push(...extrude(s.cabin, xl + TUMBLE, xr - TUMBLE, at, (up, i) => (up > 0.75 && i > 0 ? roof : GLASS), GLASS));
+    // The pillar between the side windows, in the body's colour, and a glint on the glass.
+    const roofLine = s.cabin.slice(1, -1);
+    const mid = (s.cabin[0][0] + s.cabin[s.cabin.length - 1][0]) / 2;
+    const roofAt = roofLine.reduce((a, p) => (Math.abs(p[0] - mid) < Math.abs(a[0] - mid) ? p : a), roofLine[0]);
+    out.push(
+      ln([xr - TUMBLE + 0.01, ...at([mid, s.cabin[0][1]])], [xr - TUMBLE + 0.01, ...at([mid, roofAt[1]])], {
+        stroke: side,
+        strokeWidth: 2.2,
+      }),
+      ln(
+        [xr - TUMBLE + 0.01, ...at([mid + 0.04, s.cabin[0][1] + 0.12])],
+        [xr - TUMBLE + 0.01, ...at([mid + 0.12, roofAt[1] - 0.12])],
+        { stroke: "rgba(255,255,255,0.18)", strokeWidth: 1.2 },
+      ),
+    );
+  }
   if (s.roofRails) {
     const [a, b] = [s.cabin[2], s.cabin[s.cabin.length - 3]];
     for (const x of [xl + TUMBLE + 0.12, xr - TUMBLE - 0.12])

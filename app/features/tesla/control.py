@@ -76,6 +76,13 @@ MODEL_NAMES = {
     "modelx": "Model X",
     "cybertruck": "Cybertruck",
 }
+# The car's paint as Tesla names it (vehicle_config.exterior_color, through Tessie), as the Overview draws it.
+PAINTS = {
+    "pearlwhite": "#ecebe6", "ultrawhite": "#f1f1ee", "solidblack": "#1d1e21", "obsidianblack": "#1f2024",
+    "diamondblack": "#17181b", "midnightsilver": "#50555c", "stealthgrey": "#3e4247", "silvermetallic": "#b3b7bc",
+    "quicksilver": "#a6aaaf", "deepblue": "#1f3f78", "marineblue": "#22406b", "redmulticoat": "#9b1b22",
+    "ultrared": "#b3161d", "midnightcherryred": "#5b1520", "stainless": "#a9adb1",
+}  # fmt: skip
 # The VIN's 10th character: its model year, 2010 to 2039 (I, O, Q, U and Z aren't used).
 YEARS = {ch: 2010 + i for i, ch in enumerate("ABCDEFGHJKLMNPRSTVWXY123456789")}
 
@@ -134,6 +141,12 @@ def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[s
 def model_year(vin: str) -> int | None:
     """The car's model year, from its VIN (a 2022 Model Y's 10th character is N)."""
     return YEARS.get(vin[9].upper()) if len(vin) == 17 else None
+
+
+def paint(last: dict[str, Any]) -> str | None:
+    """The car's paint (#rrggbb) from its `last_state`, when Tesla gives it (through Tessie; not over Bluetooth)."""
+    name = str((last.get("vehicle_config") or {}).get("exterior_color") or "")
+    return PAINTS.get("".join(ch for ch in name.lower() if ch.isalnum()))
 
 
 def distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:

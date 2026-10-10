@@ -2,7 +2,6 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { Link } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { carsQuery } from "~/features/car/api";
-import { carName, paintOf } from "~/features/car/utils";
 import { homeQuery } from "~/features/home/api";
 import {
   CAR_COLOR,
@@ -42,6 +41,7 @@ import { ARC_SMALL, BatteryArc } from "~/features/overview/components/BatteryArc
 import { BatteryPower } from "~/features/overview/components/BatteryPower";
 import { HouseScene } from "~/features/overview/components/HouseScene";
 import { houseOptions } from "~/features/overview/utils/house/options";
+import { houseCars } from "~/features/overview/utils/houseCars";
 
 /** The drawing's frame: rounded, its own; what's over it (the weather card) can reach past it, onto the readout. */
 const FRAME =
@@ -78,7 +78,8 @@ function Scene({
   now: number;
 }) {
   const wx = liveWeather(p, f, now, !!s?.temp_unit_f);
-  const { data: cars } = useQuery(carsQuery);
+  const { data: records } = useQuery(carsQuery);
+  const cars = houseCars(useLive()?.ev, records);
   const carW = useHomeCharging();
   const flows = {
     pv: (p.pv_power || 0) / 1000,
@@ -86,7 +87,7 @@ function Scene({
     bat: -(p.battery_power || 0) / 1000,
     soc: (p.battery_soc || 0) / 100,
     tesla: carW / 1000,
-    conn: carW > 0,
+    conn: carW > 0 || cars.some((c) => c.charging),
     // With a second inverter, each one's own share, so each gets its own line from the roof.
     pvEach: p.pv2_power != null ? [(p.pv1_power ?? 0) / 1000, p.pv2_power / 1000] : undefined,
   };
@@ -105,14 +106,9 @@ function Scene({
             cover={wx.cover}
             house={houseOptions(
               s,
-              (cars ?? []).map((c) => c.car.car_park),
+              cars.map((c) => c.park),
             )}
-            cars={(cars ?? []).map((c) => ({
-              body: c.car.car_body,
-              paint: paintOf(c.car.car_colour).hex,
-              label: [carName(c), c.level && `${Math.round(c.level.soc)}%`].filter(Boolean).join(" · "),
-              href: `/integrations/ev/tesla/car/${c.id}`,
-            }))}
+            cars={cars}
             links
           />
         </div>

@@ -20,7 +20,10 @@ from typing import Any
 VOLTS = 230.0
 
 # The shapes the Overview can draw a car as: some popular models of their own, and three of every other.
-BODIES = ("model3", "modelY", "atto3", "dolphin", "seal", "sealion7", "ioniq5", "sedan", "suv", "hatch")
+BODIES = (
+    "model3", "modelY", "modelS", "modelX", "cybertruck", "atto3", "dolphin", "seal", "sealion7", "ioniq5",
+    "sedan", "suv", "hatch",
+)  # fmt: skip
 # Each model's shape, by the start of its id; any other is an SUV.
 _BODY_BY_ID = {
     "tesla-model-3": "model3", "tesla-model-y": "modelY", "byd-atto-3": "atto3", "byd-dolphin": "dolphin",

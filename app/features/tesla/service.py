@@ -416,7 +416,8 @@ class TeslaService:
         self.wake()
 
     def _claim(self, vin: str, last: dict[str, Any], claimed: set[Any]) -> int | None:
-        """The dashboard car for a Tesla: a Tesla not tied to another, else a new one with its model's details."""
+        """The dashboard car for a Tesla: a Tesla not tied to another, else a new one with its model's details (and
+        its paint, when Tesla says)."""
         for view in self.cars.views():
             model = view.get("model") or {}
             if view["id"] not in claimed and str(model.get("id", "")).startswith("tesla-"):
@@ -424,7 +425,10 @@ class TeslaService:
         vc = last.get("vehicle_config") or {}
         model = guess_model(vc.get("car_type"), vc.get("trim_badging"))
         try:
-            made = self.cars.create({"name": last.get("display_name") or "Tesla", "model": model})
+            paint = control.paint(last)
+            made = self.cars.create(
+                {"name": last.get("display_name") or "Tesla", "model": model} | ({"car_colour": paint} if paint else {})
+            )
         except ValueError as e:  # six cars already
             log.warning("Tesla %s: no car to tie it to: %s", vin[-6:], e)
             return None
@@ -1322,6 +1326,8 @@ class TeslaService:
             # Which model and its model year: what Tesla calls it, else from the VIN (as is the year).
             "model": control.MODEL_NAMES.get((s.model if s else None) or bluetooth.car_type(vin) or ""),
             "year": control.model_year(vin),
+            # Its paint, when Tesla says (through Tessie): the Overview draws it in it.
+            "colour": control.paint(self._raw.get(vin, {}).get("last_state") or {}),
             "name": v.get("name") or (s.name if s else None),
             "car": self._car_of(v),
             # With each timing (control.TIMING) as set, or its default.
@@ -1437,7 +1443,7 @@ class TeslaService:
         for vin, v in c["vehicles"].items():
             full = self.vehicle(vin, v)
             st = full["state"] or {}
-            out.append({k: full[k] for k in ("vin", "make", "model", "year", "name", "car", "status", "doing")} | {
+            out.append({k: full[k] for k in ("vin", "make", "model", "year", "colour", "name", "car", "status", "doing")} | {
                 "mode": v["control"]["mode"], "soc": st.get("soc"), "limit": st.get("limit"),
                 "power_kw": st.get("power_kw"), "amps": st.get("amps"), "at_home": st.get("at_home"),
             })  # fmt: skip

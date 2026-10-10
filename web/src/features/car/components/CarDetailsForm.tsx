@@ -61,7 +61,10 @@ export function CarDetailsForm({
   submitLabel = "Save car details",
   onSaved,
   footer,
+  drawnAs,
 }: {
+  /** The shape it's drawn as whatever's chosen here (its connected EV's model, which has one of its own). */
+  drawnAs?: string;
   car: CarDetails;
   id: number;
   identity?: { name: string | null; model: string | null };
@@ -173,15 +176,23 @@ export function CarDetailsForm({
             {v.colour.startsWith("#") ? ` (${v.colour})` : ""}
           </span>
         </div>
-        <Field label="Drawn as" help="Its own shape for some popular models; a sedan, SUV or hatch for the rest.">
-          <Select value={v.body} onChange={(e) => setV((o) => ({ ...o, body: e.target.value as CarBody }))}>
-            {BODIES.map((b) => (
-              <option key={b} value={b}>
-                {BODY[b]}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {drawnAs ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold">Drawn as</span>
+            <span className="text-[15px]">{drawnAs}</span>
+            <span className="text-xs text-ink-muted">What the car says it is.</span>
+          </div>
+        ) : (
+          <Field label="Drawn as" help="Its own shape for some popular models; a sedan, SUV or hatch for the rest.">
+            <Select value={v.body} onChange={(e) => setV((o) => ({ ...o, body: e.target.value as CarBody }))}>
+              {BODIES.map((b) => (
+                <option key={b} value={b}>
+                  {BODY[b]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] font-semibold">Parks</span>
           <Segmented
