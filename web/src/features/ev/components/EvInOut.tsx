@@ -109,7 +109,7 @@ export function EvInOut({ vin, now, className }: { vin: string; now: number; cla
       )}
       {h && h.battery_kwh == null && (
         <p className="m-0 text-[13px] text-ink-muted">
-          Set the car's battery size (Integrations → Electric vehicle) to see what it used in kWh.
+          Set the car's battery size (Integrations → Tesla → Details) to see what it used in kWh.
         </p>
       )}
       {!isPending && h?.sessions.length === 0 && (

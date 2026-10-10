@@ -595,5 +595,5 @@ def test_a_connected_tesla_shows_the_car_without_the_dashboards_cars() -> None:
             readings=None,
         )
 
-    assert _car(svc(True), T0, T0 + 3600) == {T0: 7000.0}  # what the Tesla measured, with no Electric vehicle car
+    assert _car(svc(True), T0, T0 + 3600) == {T0: 7000.0}  # what the Tesla measured, with no car details of its own
     assert _car(svc(False), T0, T0 + 3600) is None  # no EV connected at all

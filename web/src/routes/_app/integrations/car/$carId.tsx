@@ -1,10 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CarPage } from "~/features/car/components/CarSettings";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** A car's details moved under Tesla: old links (and the Overview's from before) land there. */
 export const Route = createFileRoute("/_app/integrations/car/$carId")({
-  head: () => ({ meta: [{ title: "Car · Integrations · WattsMyPower" }] }),
-  component: function Car() {
-    const { carId } = Route.useParams();
-    return <CarPage carId={Number(carId)} />;
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/integrations/tesla/car/$carId", params: { carId: params.carId }, replace: true });
   },
 });

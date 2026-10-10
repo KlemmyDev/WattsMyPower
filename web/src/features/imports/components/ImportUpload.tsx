@@ -16,7 +16,7 @@ import { previewImport, runImport } from "~/features/imports/api";
 import type { ColumnChoices, ImportPreview } from "~/features/imports/types";
 import { dayStatus, fileKey, intervalLabel, mergeDays, replacing, toWriteOn } from "~/features/imports/utils";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { weatherStatusQuery } from "~/features/weather/api";
 import { useFetchWeather, WeatherFetchProgress } from "~/features/weather/components/WeatherFetch";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -197,13 +197,11 @@ export function ImportUpload() {
   });
 
   return (
-    <SettingsCard padded aria-labelledby="h-import">
-      <SettingsTitle
-        id="h-import"
-        title="Import history"
-        sub="Add the days before WattsMyPower was set up, or fill gaps when it was offline, from iSolarCloud exports."
-      />
-
+    <SettingsSection
+      id="h-import"
+      title="Import history"
+      sub="Add the days before WattsMyPower was set up, or fill gaps when it was offline, from iSolarCloud exports."
+    >
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -473,6 +471,6 @@ export function ImportUpload() {
         <WeatherFetchProgress since={importedAt} className="border-t border-line-subtle pt-5" />
       )}
       {fetchWeather.isError && <HelpText tone="bad">{errorMessage(fetchWeather.error)}</HelpText>}
-    </SettingsCard>
+    </SettingsSection>
   );
 }

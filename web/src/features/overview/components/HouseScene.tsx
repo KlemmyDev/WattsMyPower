@@ -307,8 +307,8 @@ function SpotLinks({
       <g transform={transform}>
         {l.spots.map((sp, k) => {
           const c = cars[k];
-          const label = c ? c.label : anyCar ? "Connect another EV" : "Connect an EV";
-          const href = c ? c.href : "/integrations/car";
+          const label = c ? c.label : anyCar ? "Connect another Tesla" : "Connect your Tesla";
+          const href = c ? c.href : "/integrations/tesla";
           const lit = on === k;
           const [tx, ty] = spotTop(sp);
           const w = label.length * 6.6 + 34;

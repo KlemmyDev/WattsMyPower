@@ -1,5 +1,6 @@
 """
-The cars: each one's details (Manage → Integrations → Electric vehicle) and its battery level.
+The cars: each one's details (Manage → Integrations → Tesla → Details) and its battery level. Each connected Tesla
+brings its own; they aren't added by hand any more (ones that were before stay until removed).
 
 A car's level is what was last recorded for it: read from the car itself when it's a connected Tesla
 (app.features.tesla). Its details (the phases it charges on, the fewest and most amps) are what charging

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { buttonClass } from "~/features/common/ui/components/Button";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 
 const SUNGROW_GUIDE =
   "https://service.sungrowpower.com.au/files/Web_Files/FAQ/TD_202004_iSolarCloud_Export%20the%20parameter%20report%20via%20iSolarCloud%20portal_V1.0.pdf";
@@ -68,12 +68,11 @@ function Steps({ title, badge, children }: { title: string; badge?: string; chil
 /** Manage → Integrations → Inverters → Import: which iSolarCloud export holds the 5-minute data, and how to get it. */
 export function ExportGuide() {
   return (
-    <SettingsCard padded aria-labelledby="h-export-guide">
-      <SettingsTitle
-        id="h-export-guide"
-        title="What to export from iSolarCloud"
-        sub="History needs the plant's power curve: a reading every 5 minutes. iSolarCloud's Report page only has daily and monthly totals, which aren't enough."
-      />
+    <SettingsSection
+      id="h-export-guide"
+      title="What to export from iSolarCloud"
+      sub="History needs the plant's power curve: a reading every 5 minutes. iSolarCloud's Report page only has daily and monthly totals, which aren't enough."
+    >
       <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4">
         <Steps title="Many days at once: the Curve page" badge="Best for a lot of history">
           <li>Sign in to iSolarCloud in a web browser on a computer, and open your plant.</li>
@@ -149,6 +148,6 @@ export function ExportGuide() {
           import can be removed again.
         </li>
       </ul>
-    </SettingsCard>
+    </SettingsSection>
   );
 }

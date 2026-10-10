@@ -60,5 +60,5 @@ export type CarView = {
   level: CarLevel | null;
 };
 
-/** A car as connected or changed (POST /api/cars, PUT /api/cars/{id}): its name, model and any of its details. */
+/** A car's changes (PUT /api/cars/{id}): its name, model and any of its details. */
 export type CarChanges = Partial<CarDetails> & { name?: string | null; model?: string | null };

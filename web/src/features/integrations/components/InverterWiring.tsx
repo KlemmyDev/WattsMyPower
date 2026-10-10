@@ -15,10 +15,13 @@ const METER = [
 export function InverterWiring({
   device,
   readOnly,
+  bare,
 }: {
   device: ConnectedInverter;
   /** Following another server's collector: shown, not changed. */
   readOnly: boolean;
+  /** Without its own label: it's in a section that names it. */
+  bare?: boolean;
 }) {
   const qc = useQueryClient();
   const toast = useToast();
@@ -33,7 +36,7 @@ export function InverterWiring({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[13px] font-semibold">Where it's wired</span>
+      {!bare && <span className="text-[13px] font-semibold">Where it's wired</span>}
       {readOnly ? (
         <span className="text-sm font-medium">{METER[behind ? 0 : 1].label}</span>
       ) : (

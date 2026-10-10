@@ -13,13 +13,15 @@ import { Field, HelpText, Input, Select } from "~/features/common/ui/components/
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { retrain, weatherStatusQuery } from "~/features/weather/api";
 import type { WeatherStatus } from "~/features/weather/types";
 import { useFetchWeather, WeatherFetchProgress } from "~/features/weather/components/WeatherFetch";
 import { LocationForm } from "~/features/settings/components/LocationForm";
-import { CardTitle, SettingsCard } from "~/features/settings/components/SettingsCard";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const MODELS: { value: WeatherModel; label: string; help: string }[] = [
@@ -60,21 +62,20 @@ export function WeatherLocation() {
   const system = useLive()?.system;
   const located = useLocationSet();
   return (
-    <SettingsCard padded aria-labelledby="h-location" className="gap-4">
-      <CardTitle
-        id="h-location"
-        title="Location"
-        sub={
-          located === false ? (
-            "No location is set yet, so there's no forecast, and no power outages or warnings near you. Search for your suburb to set it."
-          ) : (
-            <>
-              The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
-              to change it.
-            </>
-          )
-        }
-      />
+    <SettingsSection
+      id="h-location"
+      title="Location"
+      sub={
+        located === false ? (
+          "No location is set yet, so there's no forecast, and no power outages or warnings near you. Search for your suburb to set it."
+        ) : (
+          <>
+            The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
+            to change it.
+          </>
+        )
+      }
+    >
       {/* Started afresh once the location is known, and again when it's changed. */}
       <LocationForm
         key={`${system?.latitude},${system?.longitude}`}
@@ -82,7 +83,7 @@ export function WeatherLocation() {
         autoFocus={false}
         className="pl-0"
       />
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -92,26 +93,26 @@ function Units() {
   const save = useSaveNow();
   const fahrenheit = save.isPending ? !!save.variables?.temp_unit_f : !!system?.temp_unit_f;
   return (
-    <SettingsCard padded aria-labelledby="h-units" className="gap-4">
-      <CardTitle
-        id="h-units"
-        title="Temperature"
-        sub="How temperatures show across the dashboard, on every device."
-        aside={
-          <Segmented
-            label="Temperature unit"
-            options={[
-              { value: "c", label: "°C" },
-              { value: "f", label: "°F" },
-            ]}
-            value={fahrenheit ? "f" : "c"}
-            onChange={(v) =>
-              save.now({ temp_unit_f: v === "f" ? 1 : 0 }, `Temperatures now show in ${v === "f" ? "°F" : "°C"}.`)
-            }
-          />
-        }
-      />
-    </SettingsCard>
+    <SettingsSection
+      id="h-units"
+      title="Temperature"
+      sub="How temperatures show across the dashboard, on every device."
+      aside={
+        <Segmented
+          label="Temperature unit"
+          options={[
+            { value: "c", label: "°C" },
+            { value: "f", label: "°F" },
+          ]}
+          value={fahrenheit ? "f" : "c"}
+          onChange={(v) =>
+            save.now({ temp_unit_f: v === "f" ? 1 : 0 }, `Temperatures now show in ${v === "f" ? "°F" : "°C"}.`)
+          }
+        />
+      }
+    >
+      {null}
+    </SettingsSection>
   );
 }
 
@@ -122,12 +123,11 @@ function Model({ status }: { status: WeatherStatus | undefined }) {
   const value = (save.isPending ? save.variables?.weather_model : system?.weather_model) ?? "best_match";
   const chosen = MODELS.find((m) => m.value === value) ?? MODELS[0];
   return (
-    <SettingsCard padded aria-labelledby="h-model" className="gap-4">
-      <CardTitle
-        id="h-model"
-        title="Weather model"
-        sub="Where the forecast's sunshine, cloud, rain and temperature come from. Past weather is filled in from the same model."
-      />
+    <SettingsSection
+      id="h-model"
+      title="Weather model"
+      sub="Where the forecast's sunshine, cloud, rain and temperature come from. Past weather is filled in from the same model."
+    >
       <Field label="Model" help={chosen.help} className="max-w-[420px]">
         <Select
           value={value}
@@ -147,7 +147,7 @@ function Model({ status }: { status: WeatherStatus | undefined }) {
           {chosen.label} doesn't cover your location fully, so Open-Meteo's pick is being used instead.
         </Notice>
       )}
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -176,12 +176,11 @@ function Panels() {
   };
 
   return (
-    <SettingsCard padded aria-labelledby="h-panels" className="gap-4">
-      <CardTitle
-        id="h-panels"
-        title="Your panels"
-        sub="How steep the panels are and which way they face. It's optional: the forecast learns your roof from its history either way, and this gives it a head start. Leave the tilt at 0 if you're not sure."
-      />
+    <SettingsSection
+      id="h-panels"
+      title="Your panels"
+      sub="How steep the panels are and which way they face. It's optional: the forecast learns your roof from its history either way, and this gives it a head start. Leave the tilt at 0 if you're not sure."
+    >
       <div className="grid grid-cols-[minmax(0,200px)_minmax(0,240px)_auto] items-start justify-start gap-3 max-sm:grid-cols-1">
         <Field label="Tilt" help="Degrees from flat. Most Australian roofs are 20 to 25.">
           <Input type="number" min="0" max="90" step="1" value={tilt} onChange={(e) => setTilt(e.target.value)} />
@@ -206,7 +205,7 @@ function Panels() {
         </Button>
       </div>
       <HelpText tone="bad">{error}</HelpText>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -222,12 +221,11 @@ function History({ status }: { status: WeatherStatus | undefined }) {
   const start = (refetch: boolean) =>
     fetchWeather.mutate(refetch, { onSuccess: (r) => setStartedAt(r.backfill.started_at ?? 0) });
   return (
-    <SettingsCard padded aria-labelledby="h-history" className="gap-4">
-      <CardTitle
-        id="h-history"
-        title="Weather history"
-        sub={`Each hour's weather is kept, so History can show what it was like on any day and the forecast can learn from it. It's filled in for every day with readings, including imported ones, as far back as they go (Open-Meteo's archive starts in ${status.archive_from.slice(0, 4)}).`}
-      />
+    <SettingsSection
+      id="h-history"
+      title="Weather history"
+      sub={`Each hour's weather is kept, so History can show what it was like on any day and the forecast can learn from it. It's filled in for every day with readings, including imported ones, as far back as they go (Open-Meteo's archive starts in ${status.archive_from.slice(0, 4)}).`}
+    >
       <div className="flex flex-col gap-1 text-sm">
         <span>
           {stored.first_ts
@@ -267,7 +265,7 @@ function History({ status }: { status: WeatherStatus | undefined }) {
         </HelpText>
       )}
       {fetchWeather.isError && <HelpText tone="bad">{errorMessage(fetchWeather.error)}</HelpText>}
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -302,22 +300,21 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
           : "Not in use: the plain forecast has been closer so far. It's tested again every day.";
 
   return (
-    <SettingsCard padded aria-labelledby="h-learning" className="gap-5">
-      <CardTitle
-        id="h-learning"
-        title="Learn from history"
-        sub="The forecast learns how your roof turns sunshine into solar, including its direction, shade at different times of year, heat and the inverter's limit. It's only used once a test on recent days shows it's more accurate than the plain forecast."
-        aside={
-          <Switch
-            on={on}
-            onChange={(v) =>
-              save.now({ forecast_learning: v ? 1 : 0 }, v ? "Learning switched on." : "Learning switched off.")
-            }
-            disabled={save.isPending}
-            label="Learn from history"
-          />
-        }
-      />
+    <SettingsSection
+      id="h-learning"
+      title="Learn from history"
+      sub="The forecast learns how your roof turns sunshine into solar, including its direction, shade at different times of year, heat and the inverter's limit. It's only used once a test on recent days shows it's more accurate than the plain forecast."
+      aside={
+        <Switch
+          on={on}
+          onChange={(v) =>
+            save.now({ forecast_learning: v ? 1 : 0 }, v ? "Learning switched on." : "Learning switched off.")
+          }
+          disabled={save.isPending}
+          label="Learn from history"
+        />
+      }
+    >
       <div className="flex flex-col gap-1.5 text-sm">
         <span className="flex flex-wrap items-center gap-2">
           {learning.in_use && on && (
@@ -389,7 +386,51 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
         )}
       </div>
       {train.isError && <HelpText tone="bad">{errorMessage(train.error)}</HelpText>}
-    </SettingsCard>
+    </SettingsSection>
+  );
+}
+
+/** The forecast at a glance: where it's for, the model, when it was fetched, how much past weather is kept, and the
+ * temperature unit. */
+function WeatherSummary({ status }: { status: WeatherStatus | undefined }) {
+  const system = useLive()?.system;
+  const located = useLocationSet();
+  const model = MODELS.find((m) => m.value === (system?.weather_model ?? "best_match")) ?? MODELS[0];
+  const days = status ? Math.floor(status.stored.hours / 24) : null;
+  return (
+    <SummaryCard
+      icon="cloudSun"
+      color={status?.error || located === false ? COLOR.warn : COLOR.solar}
+      label="The forecast"
+      footer={
+        <div className="border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+          {status?.error ? (
+            <span className="text-bad">{status.error}. The last forecast stored is shown meanwhile.</span>
+          ) : (
+            "From Open-Meteo, a free public weather service: no account, and only your location is sent."
+          )}
+        </div>
+      }
+    >
+      <SummaryStat
+        label="For"
+        value={located === false ? "Not set" : locationLabel(system)}
+        color={located === false ? COLOR.warn : undefined}
+        sub={located === false ? "Choose your location below" : "Where your panels are"}
+      />
+      <SummaryStat label="Model" value={model.label.replace(/ \(recommended\)$/, "")} sub="Open-Meteo" />
+      <SummaryStat
+        label="Updated"
+        value={status?.fetched_at ? hhmm(status.fetched_at) : "—"}
+        sub={status?.error ? "Not updating" : "Every hour"}
+      />
+      <SummaryStat
+        label="Past weather"
+        value={days != null ? `${intAU(days)} ${plural(days, "day")}` : "—"}
+        sub={status?.missing_days ? `${intAU(status.missing_days)} days missing` : "Kept to learn from"}
+      />
+      <SummaryStat label="Temperatures" value={system?.temp_unit_f ? "°F" : "°C"} sub="Across the dashboard" />
+    </SummaryCard>
   );
 }
 
@@ -411,10 +452,12 @@ export function WeatherSettings() {
           </>
         }
       />
-      {status?.error && <Notice>{status.error}. The last forecast stored is shown meanwhile.</Notice>}
+      <WeatherSummary status={status} />
       <WeatherLocation />
-      <Units />
-      <Model status={status} />
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Units />
+        <Model status={status} />
+      </div>
       {/* Started afresh once the saved angle is known, and after it's saved. */}
       <Panels key={system ? `${system.panel_tilt},${system.panel_bearing}` : ""} />
       <History status={status} />
