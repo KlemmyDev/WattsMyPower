@@ -18,8 +18,9 @@
 # Run it again to update. Everything else is done inside the distribution: wsl -d WattsMyPower
 # (the app is in ~/wattsmypower; see the README's Everyday use).
 
+# No [ValidateSet] here: piped into iex, this block runs as a plain assignment in the caller's session, where
+# the attribute rejects the empty default ("The attribute cannot be added because variable Channel ...").
 param(
-    [ValidateSet('nightly', 'beta', 'stable')]
     [string]$Channel = ''
 )
 
@@ -173,6 +174,10 @@ function Install-WattsMyPower {
 }
 
 try {
+    $Channel = "$Channel".Trim().ToLower()
+    if ($Channel -and $Channel -notin 'nightly', 'beta', 'stable') {
+        throw "-Channel must be nightly, beta or stable (not '$Channel')."
+    }
     Install-WattsMyPower -Self $WmpSelf -Channel $Channel
 } catch {
     Write-Host ''
