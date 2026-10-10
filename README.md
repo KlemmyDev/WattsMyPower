@@ -2,6 +2,59 @@
 
 A self-hosted dashboard for a **Sungrow hybrid inverter and battery** (the SH series: SH-RS, SH-RT, SH-T and older). It talks to the inverter directly on your home network (Modbus TCP through its WiNet-S dongle), records a reading every minute in a small SQLite database, and serves a live web dashboard: what your solar, battery, home and grid are doing right now, what today has cost and saved, history, a solar and battery forecast, the system's health, and bills. Nothing goes through Sungrow's cloud, so readings are live rather than delayed.
 
+## Beta
+
+WattsMyPower is in **beta**. It runs a real home's system every day, but it's new to everyone else's: expect rough edges, keep the backups it makes, and tell us what goes wrong. An install follows the beta channel, so it gets each beta as it's released (see [Switching channel](#switching-channel)).
+
+**Australia only.** It's built around Australian services: AEMO's wholesale prices and notices, Energex and Ergon Energy's outage maps (Queensland), the Bureau of Meteorology's warnings, retailers' plans from Energy Made Easy, NEM12 smart meter files and Amber Electric. Money is in AUD and everything is written in Australian English. Outside Australia the live readings, history and forecast may still work, but nobody has tried.
+
+**Tested on:**
+
+- a **Sungrow SH5.0RS** hybrid with a battery, through a **WiNet-S2** dongle (Modbus TCP)
+- a **Sungrow SG5K-D** string inverter as a second, AC-coupled system, through its older Wi-Fi dongle (Sungrow's encrypted Modbus)
+- Docker in a Proxmox LXC container
+
+The other SH hybrids in [Supported inverters](#supported-inverters) share the SH5.0RS's registers, so they should read the same way, but haven't been tried. If yours works (or doesn't), please [say so](https://github.com/KlemmyDev/WattsMyPower/issues/new/choose).
+
+**What to expect:**
+
+| | |
+|---|---|
+| **Expected to work** | Readings from the hybrid, battery and grid meter, and a second SG-D inverter; Overview, Solar, Home, Battery and Grid pages; History and CSV downloads; costs, Bills, rates and plans from Energy Made Easy; NEM12 imports; the forecast and Plan; AEMO prices and notices, outages and weather warnings; updates and backups. TP-Link Tapo plugs, Hisense (ConnectLife) washers and dryers, and a Tesla over Bluetooth are used at home every day. **Battery controls** (standby, a floor, charging from the grid) on the SH-RS hybrids they were written for, used at home on an SH5.0RS. |
+| **Experimental** | **Battery controls on other hybrids** (SH-RT, SH-T and the rest): they're off until you turn them on for that inverter on the Battery page, as they change what the inverter does and haven't been tried there. Tesla through Tessie. Bluetti (Bluetooth) and EcoFlow (cloud) portable batteries. Shelly plugs and meters. Home Assistant. Amber Electric prices. Importing history from iSolarCloud. These work as far as we know, on little or no hardware beyond our own. |
+
+**Known limitations:**
+
+- Only Sungrow inverters: one SH hybrid, plus an optional SG-D string inverter. Other brands need a driver (see [Supported inverters](#supported-inverters)).
+- It's served over plain HTTP with one household account. Keep it on your home network; don't port-forward it.
+- Only one app should talk to the inverter over Modbus at a time (not Home Assistant or SunGather as well).
+- The WiNet-S2 sometimes repeats the same readings for a few minutes; those are left out, so charts show a short gap.
+- Outages and bushfire warnings cover Queensland only so far. Plan comparison leaves out controlled load and demand charges.
+- Hisense ConnectLife, EcoFlow, Tessie and Amber go through those companies' clouds, and ConnectLife has no public API, so it can stop working if Hisense changes it.
+- Bluetooth (Tesla, Bluetti) needs an adapter with BlueZ on the server; in a Proxmox LXC the host needs [setting up once](#bluetooth). Windows 10 isn't supported.
+
+**Found a bug?** [Open an issue](https://github.com/KlemmyDev/WattsMyPower/issues/new/choose): the form asks for the version and commit from **Manage → System → Updates**, how it's installed, your inverter, and the last of the logs (`docker compose logs --tail=200`). Security problems go privately instead: see [SECURITY.md](SECURITY.md). [CHANGELOG.md](CHANGELOG.md) lists what's changed.
+
+**Backups.** Every update backs up both databases to `data/backups/` first. For a copy that survives losing the machine, copy `data/` and `.env` somewhere else now and then. [Backups and restoring](#backups-and-restoring) has the details.
+
+### Switching channel
+
+Choose the channel in **Manage → System → Updates**, or from the `wattsmypower` folder:
+
+```bash
+bash install.sh --channel beta      # or nightly (every change as it's merged), or stable
+```
+
+Moving to a channel that's behind the one you're on (Nightly to Beta, say) goes back to its older version, after backing up both databases. [Everyday use](#everyday-use) explains the channels.
+
+### Screenshots
+
+![The Overview: the house with live power flowing between solar, the battery, home and grid](docs/screenshots/overview.png)
+
+![The Battery page: its level, the controls, and how it's holding up](docs/screenshots/battery.png)
+
+![Bills: the current billing period day by day, with ways to lower it](docs/screenshots/bills.png)
+
 ## What it does
 
 - **Live power flow:** solar, battery, home and grid, updated every minute, drawn as an animated house that follows the weather. Make it look like yours in **Manage → System → Your house**: an estate home, a modern one, a Queenslander, a Federation brick home or a farmhouse, one or two storeys, no garage or a single or double one, and each inverter and battery on an outside wall or in the garage (as many as are connected are drawn).
@@ -157,7 +210,36 @@ An update installs the channel's version, so moving to a channel behind the one 
 
 **Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
-**Your data** lives in `data/wattsmypower.db`. With the default settings it grows to about 20 MB over the first 90 days, then by about 18 MB a year. To restore a backup: `docker compose stop`, copy the backup over `data/wattsmypower.db`, then `docker compose start`.
+**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year.
+
+### Backups and restoring
+
+Every update backs up both databases to `data/backups/` first, named by when they were made (`wattsmypower-20261010-093000.db` and `collector-20261010-093000.db`). They live on the same machine, so for a copy that survives losing it, copy `data/` and `.env` somewhere else now and then (stop it first with `docker compose stop` for a consistent copy, then `docker compose start`).
+
+To restore, from the `wattsmypower` folder, using the pair of backups from the same time:
+
+```bash
+docker compose stop
+# Remove the databases' journals first: left beside a restored database, SQLite would replay them into it.
+rm -f data/wattsmypower.db-wal data/wattsmypower.db-shm data/collector.db-wal data/collector.db-shm
+cp data/backups/wattsmypower-20261010-093000.db data/wattsmypower.db
+cp data/backups/collector-20261010-093000.db data/collector.db
+docker compose start
+```
+
+(Prefix the `rm` and `cp` with `sudo` if they say permission denied.) To restore only the dashboard's database, leave out the collector's lines: the dashboard then catches up on the readings since the backup from the collector's raw registers (it keeps 365 days by default).
+
+### Removing it
+
+On Linux or a Mac, from the `wattsmypower` folder (copy `data/` and `.env` somewhere else first if you want to keep your history; this deletes them):
+
+```bash
+docker compose down --rmi local     # stop it, and remove its containers and the images it built
+crontab -l | grep -v 'WattsMyPower: updates from the dashboard' | crontab -   # stop updating from the dashboard
+cd .. && rm -rf wattsmypower        # its folder, with the databases and settings (sudo if it says permission denied)
+```
+
+Docker itself is left installed. On Windows, see [Windows](#windows).
 
 > **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
@@ -167,7 +249,7 @@ An update installs the channel's version, so moving to a channel behind the one 
 
 ## Pages in detail
 
-The dashboard implements the "Energy Dashboard v5" design from Claude Design: a dark theme with Nunito headings and Geist type. Pages have their own addresses (`/history`, `/bills/rates`), and links from the old dashboard (`#/history`) still work. The side nav groups the pages under Live, Insights and Manage (where everything is set up), with the live power flow at its foot. The EV page only appears in the navigation once an EV is connected (so far a Tesla, over Bluetooth or through Tessie). On the charts through a day (Solar, Home, Battery, Grid, History, Plan, prices, EV), drag across a stretch to look closer at it, down to a few minutes; a button above the chart shows the whole day again.
+The dashboard has a dark theme and a light one (**Manage → Account → Appearance**, where **System** follows your device), with Nunito headings and Geist type. Pages have their own addresses (`/history`, `/bills/rates`), and links from the old dashboard (`#/history`) still work. The side nav groups the pages under Live, Insights and Manage (where everything is set up), with the live power flow at its foot. The EV page only appears in the navigation once an EV is connected (so far a Tesla, over Bluetooth or through Tessie). On the charts through a day (Solar, Home, Battery, Grid, History, Plan, prices, EV), drag across a stretch to look closer at it, down to a few minutes; a button above the chart shows the whole day again.
 
 - **Overview:** a greeting for the time of day, then a wide power-flow scene: an isometric house with animated flows between solar, grid, battery and home, with live readings in pills at the left and right edges. The scene follows the current hour's weather from the forecast: sunny, cloudy, rain or storm by day, and a night sky after dark with clouds or rain if it's cloudy or wet. Live updates arrive every minute (server-sent events).
 - **Mini power flow:** on every page except Overview, a small live bar floats at the bottom. It shows solar, home and grid, with animated flow direction, plus battery charge and whether it's charging or discharging. Select it to open Overview.
@@ -213,11 +295,9 @@ Wherever the meter's data covers a whole day, bills and costs use its import and
 
 Below the imports, **Meter and dashboard compared** sets each day's import and export from the meter against the dashboard's, and lists the days that differ by more than half a kWh and 10%. A dashboard that consistently counts less export than the meter usually means a second inverter is wired outside the main inverter's meter (see below).
 
-Register map and quirks come from [berndverhofstadt/sungrow-poc](https://github.com/berndverhofstadt/sungrow-poc) (MIT).
-
 ## Configuration
 
-All settings are environment variables (see `.env.example`):
+Almost everything is set up in the dashboard (**Manage**, and **Bills → Rates & settings**) and kept in the databases. What's left is in `.env` in the `wattsmypower` folder (see `.env.example`), which `install.sh` writes and `docker-compose.yml` passes to the two services. `bash install.sh --configure` changes the time zone and port; after editing anything else, `docker compose up -d` applies it (and `bash install.sh` for `BLUETOOTH`).
 
 | Variable | Default | |
 |---|---|---|
@@ -232,12 +312,24 @@ All settings are environment variables (see `.env.example`):
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
 | `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
-| `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
-| `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
+| `PV_KW`, `BATTERY_KWH` | `6.6`, `0` | **Only read once:** the solar array's size and the battery's capacity (`0` = read it from the inverter) are set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts, it moves the values here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets the array's size); after that they're ignored, and the log says so. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |
 | `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Manage → Integrations → Weather.** |
-| `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
 | `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
+| `BLUETOOTH` | `auto` | Whether `install.sh` connects the server's Bluetooth through to the dashboard (`auto`: when it finds an adapter with BlueZ running; `on`; `off`). See [Bluetooth](#bluetooth). |
+| `BLUETOOTH_DBUS` | `/run/dbus` | The folder with the D-Bus socket BlueZ is on. `install.sh` sets it to `/mnt/host-dbus` in a Proxmox LXC set up as in [Bluetooth](#bluetooth). |
+| `LOG_DEBUG` | *(empty)* | Loggers to turn up to DEBUG, comma-separated (`tesla_fleet_api`, `bleak`), to see what a device says message by message when the log doesn't say why something failed. |
+
+Running the API or the collector straight from a checkout, without Docker (see [Local development](#local-development)), also reads these, which `docker-compose.yml` sets for you or leaves out:
+
+| Variable | Default | |
+|---|---|---|
+| `DB_PATH` / `COLLECTOR_DB_PATH` | `/data/wattsmypower.db` / `/data/collector.db` | Where each service keeps its database |
+| `COLLECTOR_URL` | `http://collector:8081` | The collector's feed, for the dashboard to follow |
+| `MOCK` / `COLLECTOR_MOCK` | `false` | Simulated readings instead of a collector, or simulated inverters in the collector |
+| `FORECAST` | `true` | `false` turns off the Open-Meteo forecast |
+| `MAX_BACKOFF` | `300` | The longest wait, in seconds, between tries when the collector (or, in the collector, the inverter) isn't answering |
+| `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `10`, `5` | **Only read once**, like `PV_KW`: the backup reserve used when the inverter doesn't report one, and the battery's maximum charge and discharge rate in kW, both set in **Manage → System** |
 
 ### Supported inverters
 
@@ -391,7 +483,7 @@ It builds its own database from the collector's raw history (whatever the collec
 
 **Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
 
-Checks (`uv run …`): `pytest` (tests), `ruff check` and `ruff format` (lint and format), `mypy` (types).
+Checks (`uv run …`): `pytest` (tests), `ruff check` and `ruff format` (lint and format), `mypy` (types). [CONTRIBUTING.md](CONTRIBUTING.md) lists every check CI runs on a pull request.
 
 Dashboard (React, TanStack Start in SPA mode, Tailwind; see [web/README.md](web/README.md)):
 
@@ -460,4 +552,12 @@ updater.sh              run every minute by cron: updates when the dashboard ask
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
 scripts/release.sh      publish a beta or stable release (see Releasing)
+docs/                   screenshots, and release notes (docs/release-notes/)
+.github/                CI (workflows/ci.yml), issue forms and the pull request template
 ```
+
+## Licence
+
+MIT: see [LICENSE](LICENSE).
+
+The Sungrow register map and its quirks come from [berndverhofstadt/sungrow-poc](https://github.com/berndverhofstadt/sungrow-poc) (MIT).

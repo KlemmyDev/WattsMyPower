@@ -14,15 +14,16 @@ npm run dev                                           # http://localhost:5174, /
 ```
 
 To run without an inverter, start the backend in mock mode from the repo root:
-`MOCK=1 DB_PATH=/tmp/mock.db uvicorn app.main:app --port 8080`.
+`MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080`.
 
-| Script              |                                       |
-| ------------------- | ------------------------------------- |
-| `npm run dev`       | dev server with hot reload            |
-| `npm run build`     | production build to `dist/client/`    |
-| `npm run typecheck` | `tsc --noEmit`                        |
-| `npm run lint`      | ESLint                                |
-| `npm run format`    | Prettier (sorts Tailwind classes too) |
+| Script                 |                                       |
+| ---------------------- | ------------------------------------- |
+| `npm run dev`          | dev server with hot reload            |
+| `npm run build`        | production build to `dist/client/`    |
+| `npm run typecheck`    | `tsc --noEmit`                        |
+| `npm run lint`         | ESLint                                |
+| `npm run format`       | Prettier (sorts Tailwind classes too) |
+| `npm run format:check` | Prettier, checking only (as CI does)  |
 
 ## Layout
 

@@ -1,0 +1,134 @@
+name: Bug report
+description: Something isn't working, or shows the wrong figures.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. The more of this you fill in, the quicker it's sorted.
+        A security problem? Please don't post it here: see the [security policy](https://github.com/KlemmyDev/WattsMyPower/security/policy).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. Screenshots help.
+      placeholder: The Bills page shows yesterday's cost as $0.00, but the grid import was 12 kWh.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The steps, if you know them. Which page, and what you selected.
+      placeholder: |
+        1. Open Bills
+        2. Select yesterday on the calendar
+
+  - type: input
+    id: version
+    attributes:
+      label: Version and commit
+      description: From **Manage → System → Updates**, under "This version" (the commit is the short code below it).
+      placeholder: v2026.10.10 · Beta, 99be801
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Release channel
+      description: Also in **Manage → System → Updates**.
+      options:
+        - Beta
+        - Stable
+        - Nightly
+        - I don't know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it's installed
+      options:
+        - install.sh (Docker)
+        - Windows installer (install.ps1, WSL)
+        - Docker Compose by hand
+        - Running from a checkout (uv / npm)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host
+    attributes:
+      label: What it runs on
+      options:
+        - Raspberry Pi
+        - Proxmox LXC container
+        - Linux VM or computer
+        - Mac (Docker Desktop)
+        - Windows 11 (WSL)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: inverter
+    attributes:
+      label: Inverter
+      description: |
+        The model and type code from **Manage → Integrations → Sungrow** (a model WattsMyPower doesn't know by name shows as "SH hybrid (type 0x0E0C)"),
+        and its firmware if you know it (the iSolarCloud app shows it under the device's details). Add a second inverter if you have one.
+      placeholder: SH5.0RS (firmware not known); second inverter SG5K-D
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dongle
+    attributes:
+      label: How the inverter is connected
+      options:
+        - WiNet-S
+        - WiNet-S2
+        - The inverter's own network port
+        - An older Wi-Fi dongle (second inverter)
+        - I don't know
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: integrations
+    attributes:
+      label: Integrations connected
+      description: Tick any that are connected, whether or not they're involved.
+      options:
+        - label: Battery controls (standby, floor, charging from the grid)
+        - label: Tesla over Bluetooth
+        - label: Tesla through Tessie
+        - label: TP-Link Tapo
+        - label: Shelly
+        - label: Home Assistant
+        - label: Hisense ConnectLife
+        - label: Bluetti
+        - label: EcoFlow
+        - label: Amber Electric
+        - label: NEM12 smart meter data
+        - label: History imported from iSolarCloud
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        From the `wattsmypower` folder, run `docker compose logs --tail=200` and paste what it prints.
+        Look it over first: take out anything you'd rather not share (addresses, serial numbers, a VIN).
+      render: text
+
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: When it started, whether it followed an update, or anything else that might be connected.
