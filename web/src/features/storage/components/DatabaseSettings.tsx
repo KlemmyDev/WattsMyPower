@@ -3,10 +3,11 @@ import { errorMessage } from "~/features/common/api/utils";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { measureAgain, storageQuery } from "~/features/storage/api";
+import { BackupCard } from "~/features/storage/components/BackupCard";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
 import { StorageOverview } from "~/features/storage/components/StorageOverview";
 
-/** Manage → Data: everything stored, in both databases, and how much room each part takes. */
+/** Manage → Data: everything stored, in both databases, how much room each part takes, and a backup to download. */
 export function DatabaseSettings() {
   const qc = useQueryClient();
   const report = useQuery(storageQuery);
@@ -31,6 +32,7 @@ export function DatabaseSettings() {
       {measure.isError && (
         <Notice>{errorMessage(measure.error, "The databases couldn't be measured. Try again.")}</Notice>
       )}
+      <BackupCard report={report.data} />
       {report.data.databases.map((db) => (
         <DatabaseCard key={db.id} db={db} />
       ))}

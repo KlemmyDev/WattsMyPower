@@ -109,4 +109,8 @@ transaction, with the same `ts`, so readers never see half a poll.
   "indexes": [{"name", "bytes"}]}]}`. Sizes are bytes; `measured` is false (and the per-table sizes null) when
   SQLite was built without `dbstat`. `oldest` / `newest` / `recent_rows` (rows in the last 7 days) are for
   dated tables; `parts` breaks `readings` down by device.
+- `GET /v1/backup`: a copy of the database (`application/vnd.sqlite3`, with its `Content-Length`), for the
+  dashboard's backups (Manage → Data). It's made with SQLite's online backup, so it's consistent while polls
+  keep writing, and it's one file (no `-wal` to go with it). The copy is made before the first byte is sent, which
+  takes a while on a large database, and deleted once it's sent. 409 while another is being made or sent.
 - `GET /healthz` (no token): `{"ok": true, "fresh": <hybrid read within max(120, poll_interval * 6) s>}`.

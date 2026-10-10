@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import sqlite3
+import tempfile
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import closing
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -187,6 +191,35 @@ def test_storage_measures_the_database(client: TestClient) -> None:
     ]
     assert {c["name"] for c in readings["columns"]} == {"ts", "device", "driver", "input", "holding"}
     assert {"devices", "kv", "sqlite_schema"} <= tables.keys()
+
+
+def test_a_backup_is_a_copy_of_the_database(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GET /v1/backup: the database copied with SQLite's online backup, polls still in the log included, then deleted."""
+    temp = tmp_path / "tmp"
+    temp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temp))
+    assert client.get("/v1/backup").status_code == 401
+    store_of(client).write_polls([(ts, [("hybrid", "sungrow.sh_rs", {5008: ts}, {})]) for ts in range(0, 6000, 60)])
+    r = client.get("/v1/backup", headers=AUTH)
+    assert r.status_code == 200 and r.headers["content-type"] == "application/vnd.sqlite3"
+    assert int(r.headers["content-length"]) == len(r.content) and r.content.startswith(b"SQLite format 3\x00")
+    copy = tmp_path / "copy.db"
+    copy.write_bytes(r.content)
+    with closing(sqlite3.connect(copy)) as conn:
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert conn.execute("SELECT COUNT(*) FROM readings").fetchone()[0] == 100
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    assert list(temp.iterdir()) == []
+
+
+def test_one_backup_at_a_time(client: TestClient) -> None:
+    lock: threading.Lock = client.app.state.backing_up  # type: ignore[attr-defined]
+    with lock:
+        r = client.get("/v1/backup", headers=AUTH)
+        assert r.status_code == 409 and "already making a backup" in r.json()["detail"]
+    assert client.get("/v1/backup", headers=AUTH).status_code == 200
 
 
 # -- battery settings ---------------------------------------------------------------------------------

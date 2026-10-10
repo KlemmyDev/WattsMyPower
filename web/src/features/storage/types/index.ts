@@ -71,3 +71,10 @@ export type StorageReport = {
   disk: { total: number; free: number };
   databases: StorageDatabase[];
 };
+
+/** A backup downloaded (GET /api/storage/backup): the zip's name and size, and why the collector's database isn't in
+ * it when it was asked for. */
+export type BackupSaved = { name: string; bytes: number; skipped: string | null };
+
+/** How far along a backup is: being made on the server, then coming down (`total` unknown without a length). */
+export type BackupProgress = { stage: "making" } | { stage: "downloading"; received: number; total: number | null };
