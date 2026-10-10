@@ -1,5 +1,4 @@
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
-import { centsShort, money } from "~/features/common/formatting/utils/number";
 import { isWeekend, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
