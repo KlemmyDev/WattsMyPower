@@ -64,6 +64,7 @@ class Plug(Integration):
     name = "Plug"
     via = "the network"
     about = "A plug"
+    category = "plugs"
     kinds = ("plug",)
     fields = ()
     can_switch = True

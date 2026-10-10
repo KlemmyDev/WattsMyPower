@@ -106,6 +106,7 @@ class Demo(Integration):
         "account."
     )
     icon = "flask"
+    category = "appliances"
     kinds = ("washer", "dryer", "fridge", "plug", "power_station")
     fields = ()
     poll_seconds = 60

@@ -12,7 +12,7 @@ import { teslaQuery } from "~/features/ev/api";
 import { MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
 import { gridQuery } from "~/features/grid/api";
 import { homeQuery } from "~/features/home/api";
-import type { HomeIntegration } from "~/features/home/types";
+import type { HomeIntegration, HomeOverview } from "~/features/home/types";
 import { integrationIcon, integrationReach } from "~/features/home/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { ReachTag, UntestedTag, type Reach } from "~/features/integrations/components/ReachTag";
@@ -347,8 +347,9 @@ function useTeslaEntry(): Entry {
   };
 }
 
-/** A smart-home integration (Hisense through ConnectLife…): whether it's connected and reading, and its devices. */
-function homeEntry(i: HomeIntegration): Entry {
+/** A smart-home integration (Hisense through ConnectLife…): whether it's connected and reading, and its devices. Its
+ * tile says what sort of device it brings (`category`: "Portable batteries"). */
+function homeEntry(i: HomeIntegration, category?: string): Entry {
   const a = i.account;
   const reach = integrationReach(i);
   const attention = !!a && (a.signed_out || !!a.error);
@@ -381,10 +382,24 @@ function homeEntry(i: HomeIntegration): Entry {
         on={!!a && !a.error && !!a.last_poll && !a.signed_out}
         attention={attention}
         detail={<span className="line-clamp-2">{detail}</span>}
-        tags={tags(reach)}
+        tags={
+          <>
+            {!a && category && <span className="text-xs whitespace-nowrap text-ink-faint">{category}</span>}
+            {tags(reach)}
+          </>
+        }
       />
     ),
   };
+}
+
+/** The smart-home brands in the order Smart home lists them: by sort of device, each with its category's name. */
+function homeEntries(home: HomeOverview | undefined): Entry[] {
+  const categories = home?.categories ?? [];
+  const rank = (i: HomeIntegration) => categories.findIndex((c) => c.id === i.category);
+  return [...(home?.integrations ?? [])]
+    .sort((a, b) => rank(a) - rank(b))
+    .map((i) => homeEntry(i, categories.find((c) => c.id === i.category)?.label));
 }
 
 /** Every connected smart-home brand as one card, opening to Smart home (its brands, each with its devices). */
@@ -456,7 +471,7 @@ export function IntegrationSettings() {
   const { data: home, error: homeError } = useQuery(homeQuery);
   const entries = [
     ...useInverterEntries(),
-    ...(home?.integrations ?? []).map(homeEntry),
+    ...homeEntries(home),
     useTeslaEntry(),
     useGridEntry(),
     useAmberEntry(),

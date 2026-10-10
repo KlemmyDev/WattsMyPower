@@ -21,23 +21,56 @@ export function accountPill(i: HomeIntegration): { status?: string; on: boolean;
   return { status: "Connected", on: true, attention: false };
 }
 
+/** A brand's row: its account at a glance once connected (what it is, its devices, when it was read), else what it
+ * brings. */
+function BrandRow({ i }: { i: HomeIntegration }) {
+  const pill = accountPill(i);
+  const a = i.account;
+  return (
+    <IntegrationLink
+      to="/integrations/home/$integration"
+      params={{ integration: i.id }}
+      icon={integrationIcon(i)}
+      name={i.name}
+      status={pill.status}
+      on={pill.on}
+      attention={pill.attention}
+      detail={
+        <span className="line-clamp-2">
+          {a
+            ? [a.label, plural(a.devices, "device"), a.last_poll && `read ${hhmm(a.last_poll)}`]
+                .filter(Boolean)
+                .join(" · ")
+            : i.about}
+        </span>
+      }
+      tags={<ReachTag reach={integrationReach(i)} />}
+    />
+  );
+}
+
 /**
- * Manage → Integrations → Smart home: each brand WattsMyPower reads (connected first, with any needing a look named at
- * the top), each opening to its own page: its account, and its devices, each opening to theirs.
+ * Manage → Integrations → Smart home: the brands WattsMyPower reads, grouped by what they are (smart plugs,
+ * appliances, portable batteries, home hubs), connected first in each, with any needing a look named at the top. Each
+ * opens to its own page: its account, and its devices, each opening to theirs.
  */
 export function SmartHomeSettings() {
   const { data, isPending, error } = useQuery(homeQuery);
   const integrations = data?.integrations ?? [];
-  const connected = integrations.filter((i) => i.account);
-  const attention = connected.filter((i) => accountPill(i).attention);
-  const order = [...connected, ...integrations.filter((i) => !i.account)];
+  const attention = integrations.filter((i) => accountPill(i).attention);
+  const groups = (data?.categories ?? [])
+    .map((c) => {
+      const brands = integrations.filter((i) => i.category === c.id);
+      return { ...c, brands: [...brands.filter((i) => i.account), ...brands.filter((i) => !i.account)] };
+    })
+    .filter((c) => c.brands.length > 0);
   return (
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-smart-home"
         title="Smart home"
-        sub="Plugs, meters and appliances that say what they use, for the breakdown on the Home page. Connect as many brands as you have."
+        sub="Plugs, appliances and batteries that say what they use, for the breakdown on the Home page. Connect as many brands as you have: each says how it's reached."
       />
       {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
       {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
@@ -46,42 +79,15 @@ export function SmartHomeSettings() {
           {attention.map((i) => i.name).join(", ")} {attention.length === 1 ? "needs" : "need"} a look.
         </p>
       )}
-      <SettingsSection
-        id="h-smart-home-brands"
-        title="Brands"
-        sub="Each one says how it's reached: on your network, over Bluetooth, or through its maker's cloud (only where there's no other way)."
-      >
-        {integrations.length > 0 && (
+      {groups.map((c) => (
+        <SettingsSection key={c.id} id={`h-smart-home-${c.id}`} title={c.label} sub={c.about}>
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
-            {order.map((i) => {
-              const pill = accountPill(i);
-              const a = i.account;
-              return (
-                <IntegrationLink
-                  key={i.id}
-                  to="/integrations/home/$integration"
-                  params={{ integration: i.id }}
-                  icon={integrationIcon(i)}
-                  name={i.name}
-                  status={pill.status}
-                  on={pill.on}
-                  attention={pill.attention}
-                  detail={
-                    <span className="line-clamp-2">
-                      {a
-                        ? [a.label, plural(a.devices, "device"), a.last_poll && `read ${hhmm(a.last_poll)}`]
-                            .filter(Boolean)
-                            .join(" · ")
-                        : i.about}
-                    </span>
-                  }
-                  tags={<ReachTag reach={integrationReach(i)} />}
-                />
-              );
-            })}
+            {c.brands.map((i) => (
+              <BrandRow key={i.id} i={i} />
+            ))}
           </div>
-        )}
-      </SettingsSection>
+        </SettingsSection>
+      ))}
     </>
   );
 }
