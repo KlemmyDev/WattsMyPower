@@ -20,13 +20,13 @@ import {
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-const back = <BackLink to="/integrations/sungrow">Sungrow</BackLink>;
+const back = <BackLink to="/integrations/inverters">Sungrow</BackLink>;
 
 /** Stop reading it, once confirmed; then back to the list. */
 function RemoveInverter({ inverter: { device, name } }: { inverter: InverterState }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
-  const remove = useRemoveInverter(device.role, () => navigate({ to: "/integrations/sungrow" }));
+  const remove = useRemoveInverter(device.role, () => navigate({ to: "/integrations/inverters" }));
 
   return (
     <SettingsCard aria-label="Remove" className="flex-row flex-wrap items-center gap-x-4 gap-y-3 px-6 py-5">
@@ -53,7 +53,7 @@ function RemoveInverter({ inverter: { device, name } }: { inverter: InverterStat
   );
 }
 
-/** Manage → Integrations → Sungrow → one inverter: what it is, how it's doing, where it's wired, and removing it. */
+/** Manage → Integrations → Inverters → one inverter: what it is, how it's doing, where it's wired, and removing it. */
 export function InverterDetail({ role }: { role: string }) {
   const { data, isPending, isFetching, error, inverters } = useInverters();
   const known = asRole(role);
@@ -80,7 +80,7 @@ export function InverterDetail({ role }: { role: string }) {
           }
         />
         {!waiting && (
-          <ButtonLink to="/integrations/sungrow" variant="outline" className="self-start">
+          <ButtonLink to="/integrations/inverters" variant="outline" className="self-start">
             See your inverters
           </ButtonLink>
         )}

@@ -3,10 +3,12 @@ import { useState, type FormEvent } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
@@ -14,7 +16,15 @@ import { deviceRawQuery, homeHintsQuery, homeQuery } from "~/features/home/api";
 import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeIntegration, HomeOverview } from "~/features/home/types";
 import { GroupInput } from "~/features/home/components/GroupInput";
-import { groupNames, integrationIcon, kindIcon, nowLine, suggestedGroup } from "~/features/home/utils";
+import {
+  groupNames,
+  integrationIcon,
+  integrationReach,
+  kindIcon,
+  nowLine,
+  suggestedGroup,
+} from "~/features/home/utils";
+import { REACH } from "~/features/integrations/components/ReachTag";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
@@ -192,6 +202,27 @@ function Account({ integration }: { integration: HomeIntegration }) {
   );
 }
 
+/** The integration at a glance: how it's doing, its devices, when it last read them, and how it reaches them. */
+function Summary({ integration: i, devices }: { integration: HomeIntegration; devices: HomeDevice[] }) {
+  const a = i.account;
+  const [status, on] = a ? accountStatus(i) : ["Not connected", false];
+  const reach = REACH[integrationReach(i)];
+  const every = i.poll_seconds >= 60 ? `${Math.round(i.poll_seconds / 60)} min` : `${i.poll_seconds} s`;
+  const running = devices.filter((d) => d.now?.online && (d.now.power_w ?? 0) > 0).length;
+  return (
+    <SummaryCard icon={integrationIcon(i)} color={a && !on ? COLOR.warn : COLOR.brand} label={i.name}>
+      <SummaryStat label="Status" value={status} color={a && !on ? COLOR.warn : undefined} sub={a?.label} />
+      <SummaryStat
+        label="Devices"
+        value={a ? devices.length : "—"}
+        sub={a ? (running ? `${running} using power now` : "None using power now") : "Once it's connected"}
+      />
+      <SummaryStat label="Last read" value={a?.last_poll ? hhmm(a.last_poll) : "—"} sub={`Every ${every}`} />
+      <SummaryStat label="Reached" value={reach.label} sub={i.via} title={reach.title} />
+    </SummaryCard>
+  );
+}
+
 /** What the integration last sent for a device, to check how its properties are read. */
 function Properties({ device }: { device: HomeDevice }) {
   const { data, isPending, error } = useQuery(deviceRawQuery(device.id));
@@ -350,6 +381,7 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
         title={integration ? `${integration.name}` : "Smart home"}
         sub={integration?.about ?? ""}
       />
+      {integration && <Summary integration={integration} devices={devices} />}
       <SettingsCard aria-labelledby="h-home-integration">
         {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking the connection…</div>}
         {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}

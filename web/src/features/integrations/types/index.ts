@@ -35,6 +35,8 @@ export type ConnectedInverter = {
   error: string | null;
   /** A second inverter: on the house side of the main inverter's meter. */
   behind_meter?: boolean;
+  /** Its driver has been tried on a real inverter. */
+  verified?: boolean;
 };
 
 /** Something a scan found answering on the Modbus port, and what it said it is. */

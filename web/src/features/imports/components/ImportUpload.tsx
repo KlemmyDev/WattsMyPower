@@ -102,7 +102,7 @@ function ColumnPicker({
   );
 }
 
-/** Manage → Integrations → Sungrow → Import: pick iSolarCloud exports, check what they hold, and import them. */
+/** Manage → Integrations → Inverters → Import: pick iSolarCloud exports, check what they hold, and import them. */
 export function ImportUpload() {
   const qc = useQueryClient();
   const toast = useToast();

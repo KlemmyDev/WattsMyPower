@@ -30,6 +30,7 @@ class EcoFlow(Integration):
     id = "ecoflow"
     name = "EcoFlow"
     via = "EcoFlow's Developer API"
+    cloud = True
     about = (
         "EcoFlow power stations as room batteries (RIVER 2 and 3, DELTA 2 and 3, DELTA Pro and Max): their charge, "
         "what they're charging from and powering, through EcoFlow's cloud."

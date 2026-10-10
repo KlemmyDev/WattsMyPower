@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { amberQuery } from "~/features/amber/api";
 import { carsQuery } from "~/features/car/api";
 import { carName } from "~/features/car/utils";
@@ -8,21 +8,58 @@ import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useLocationSet } from "~/features/common/settings/hooks";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { buttonClass } from "~/features/common/ui/components/Button";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useForecast } from "~/features/common/weather/hooks";
-import { homeQuery } from "~/features/home/api";
-import type { HomeIntegration } from "~/features/home/types";
-import { integrationIcon } from "~/features/home/utils";
-import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
-import { useInverters } from "~/features/integrations/hooks";
-import { gridQuery } from "~/features/grid/api";
-import type { InverterState } from "~/features/integrations/utils";
 import { teslaQuery } from "~/features/ev/api";
 import { MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
+import { gridQuery } from "~/features/grid/api";
+import { homeQuery } from "~/features/home/api";
+import type { HomeIntegration } from "~/features/home/types";
+import { integrationIcon, integrationReach } from "~/features/home/utils";
+import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
+import { ReachTag, UntestedTag, type Reach } from "~/features/integrations/components/ReachTag";
+import { useInverters } from "~/features/integrations/hooks";
+import type { InverterKind } from "~/features/integrations/types";
+import type { InverterState } from "~/features/integrations/utils";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** "Sungrow SH5.0RS" as "SH5.0RS", when the brand is said beside it. */
+const withoutBrand = (name: string, brand: string | null) =>
+  brand && name.startsWith(`${brand} `) ? name.slice(brand.length + 1) : name;
+
+type GroupId = "energy" | "home" | "vehicles" | "services";
+
+/**
+ * One integration on the hub: whether it's set up (and if so, working), how it's read, its card for "Connected", and
+ * its tile for "Add an integration" while it isn't.
+ */
+type Entry = {
+  id: string;
+  group: GroupId;
+  name: string;
+  connected: boolean;
+  /** Set up, but not working: signed out, not answering, not updating. */
+  attention: boolean;
+  /** Read on the home network, over Bluetooth or from public data: not through a company's cloud. */
+  local: boolean;
+  card: ReactElement;
+  tile?: ReactElement;
+};
+
+const tags = (reach: Reach | Reach[], untested?: boolean) => (
+  <>
+    {(Array.isArray(reach) ? reach : [reach]).map((r) => (
+      <ReachTag key={r} reach={r} />
+    ))}
+    {untested && <UntestedTag />}
+  </>
+);
+
 /** The inverters at a glance: whether they're all answering, else what isn't. */
-function sungrowStatus(inverters: InverterState[]): { status: string; on: boolean; detail: string } {
+function inverterStatus(inverters: InverterState[]): { status: string; on: boolean; detail: string } {
   if (!inverters.some((i) => i.hybrid))
     return {
       status: "Not connected",
@@ -45,59 +82,119 @@ function sungrowStatus(inverters: InverterState[]): { status: string; on: boolea
           : `${plural(silent.length, "inverter")} not responding`,
     };
   if (waiting.length) return { status: "Connecting", on: false, detail: "Waiting for the first reading" };
-  return { status: "Connected", on: true, detail: `${plural(inverters.length, "inverter")} connected` };
+  return { status: "Connected", on: true, detail: inverters.map((i) => i.name).join(" and ") };
 }
 
-function SungrowLink() {
+/** Each brand the collector can read, with whether its drivers have been tried on a real one. */
+function brandsOf(kinds: InverterKind[]): { brand: string; verified: boolean; labels: string[] }[] {
+  const out = new Map<string, { brand: string; verified: boolean; labels: string[] }>();
+  for (const k of kinds) {
+    const b = out.get(k.brand) ?? { brand: k.brand, verified: true, labels: [] };
+    b.verified &&= k.verified !== false;
+    b.labels.push(k.label);
+    out.set(k.brand, b);
+  }
+  return [...out.values()];
+}
+
+function useInverterEntries(): Entry[] {
   const { data, isPending, error, inverters } = useInverters();
   const summary = isPending
     ? { status: "Checking", on: false, detail: "Checking what's connected…" }
     : error || !data?.available
       ? { status: "Unavailable", on: false, detail: error ? errorMessage(error) : (data?.error ?? "") }
-      : sungrowStatus(inverters);
-  return (
-    <IntegrationLink
-      card
-      to="/integrations/sungrow"
-      icon="sun"
-      name="Sungrow"
-      status={summary.status}
-      on={summary.on}
-      detail={<span className="line-clamp-2">{summary.detail}</span>}
-    />
-  );
+      : inverterStatus(inverters);
+  const connected = inverters.length > 0;
+  const brands = brandsOf(data?.kinds ?? []);
+  const have = new Set(inverters.map((i) => i.device.brand));
+  const entries: Entry[] = [
+    {
+      id: "inverters",
+      group: "energy",
+      name: "Inverters",
+      // Always listed: nothing is recorded without one, so it's where to start.
+      connected: true,
+      attention: connected && !summary.on,
+      local: true,
+      card: (
+        <IntegrationLink
+          card
+          to="/integrations/inverters"
+          icon="sun"
+          name="Inverters"
+          status={summary.status}
+          on={summary.on}
+          detail={<span className="line-clamp-2">{summary.detail}</span>}
+          tags={tags("local")}
+        />
+      ),
+    },
+  ];
+  // Brands not connected yet, to add.
+  for (const b of brands.filter((b) => !have.has(b.brand))) {
+    entries.push({
+      id: `inverter-${b.brand}`,
+      group: "energy",
+      name: b.brand,
+      connected: false,
+      attention: false,
+      local: true,
+      card: <></>,
+      tile: (
+        <IntegrationLink
+          card
+          to="/integrations/inverters/connect"
+          search={{ brand: b.brand }}
+          icon="sun"
+          name={`${b.brand} inverter`}
+          detail={<span className="line-clamp-2">{b.labels.join(", ")}</span>}
+          tags={tags("local", !b.verified)}
+        />
+      ),
+    });
+  }
+  return entries;
 }
 
-function WeatherLink() {
+function useWeatherEntry(): Entry {
   const live = useLive();
   const forecast = useForecast();
   const located = useLocationSet();
-  return (
-    <IntegrationLink
-      card
-      to="/integrations/weather"
-      icon="cloudSun"
-      name="Weather"
-      status={
-        located === false
-          ? "Needs your location"
-          : forecast
-            ? "Connected"
-            : forecast === undefined
-              ? "Checking"
-              : "Unavailable"
-      }
-      on={!!forecast}
-      detail={
-        located === false
-          ? "Choose where your panels are for the solar forecast, from Open-Meteo"
-          : `Forecast for ${locationLabel(live?.system)}, from Open-Meteo`
-      }
-    />
-  );
+  return {
+    id: "weather",
+    group: "services",
+    name: "Weather",
+    connected: true,
+    attention: located === false || forecast === null,
+    local: true,
+    card: (
+      <IntegrationLink
+        card
+        to="/integrations/weather"
+        icon="cloudSun"
+        name="Weather"
+        status={
+          located === false
+            ? "Needs your location"
+            : forecast
+              ? "Connected"
+              : forecast === undefined
+                ? "Checking"
+                : "Unavailable"
+        }
+        on={!!forecast}
+        detail={
+          located === false
+            ? "Choose where your panels are for the solar forecast, from Open-Meteo"
+            : `Forecast for ${locationLabel(live?.system)}, from Open-Meteo`
+        }
+        tags={tags("public")}
+      />
+    ),
+  };
 }
 
-function AmberLink() {
+function useAmberEntry(): Entry {
   const { data: status, isPending, error } = useQuery(amberQuery);
   const site = status?.sites.find((s) => s.id === status.site_id);
   const length = status?.interval_length;
@@ -119,20 +216,32 @@ function AmberLink() {
                 .filter(Boolean)
                 .join(" · "),
             ];
-  return (
+  const on = !!status?.connected && !!status.site_id && !status.error;
+  const link = (
     <IntegrationLink
       card
       to="/integrations/amber"
       icon="dollar"
       name="Amber Electric"
-      status={label}
-      on={!!status?.connected && !!status.site_id && !status.error}
+      status={status?.connected ? label : undefined}
+      on={on}
       detail={detail}
+      tags={tags("cloud")}
     />
   );
+  return {
+    id: "amber",
+    group: "services",
+    name: "Amber Electric",
+    connected: !!status?.connected,
+    attention: !!status?.connected && !on,
+    local: false,
+    card: link,
+    tile: link,
+  };
 }
 
-function CarLink() {
+function useCarEntry(): Entry {
   const { data: cars, isPending, error } = useQuery(carsQuery);
   const [label, detail] = isPending
     ? ["Checking", "Checking for cars…"]
@@ -148,20 +257,30 @@ function CarLink() {
                   .join(" · ")
               : cars.map(carName).join(" and "),
           ];
-  return (
+  const link = (
     <IntegrationLink
       card
       to="/integrations/car"
       icon="car"
       name={cars && cars.length > 1 ? "Electric vehicles" : "Electric vehicle"}
-      status={label}
+      status={cars?.length ? label : undefined}
       on={!!cars?.length}
       detail={detail}
     />
   );
+  return {
+    id: "car",
+    group: "vehicles",
+    name: "Electric vehicle",
+    connected: !!cars?.length,
+    attention: false,
+    local: true,
+    card: link,
+    tile: link,
+  };
 }
 
-function GridLink() {
+function useGridEntry(): Entry {
   const { data: grid, isPending, error } = useQuery(gridQuery);
   const out = grid?.outages;
   const [label, detail] = isPending
@@ -182,27 +301,36 @@ function GridLink() {
             out?.network ? (out.error ? "Not updating" : "Following") : grid.enabled ? "Prices only" : "Not following",
             [
               out?.network
-                ? `${out.network.name} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
+                ? `${(out.networks?.length ? out.networks : [out.network]).map((n) => n.name).join(" and ")} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
                 : "No network's outages",
               grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
             ]
               .filter(Boolean)
               .join(" · "),
           ];
-  return (
-    <IntegrationLink
-      card
-      to="/integrations/grid"
-      icon="grid"
-      name="Grid"
-      status={label}
-      on={!!out?.network && !out.error}
-      detail={<span className="line-clamp-2">{detail}</span>}
-    />
-  );
+  return {
+    id: "grid",
+    group: "services",
+    name: "Grid",
+    connected: true,
+    attention: !!out?.error,
+    local: true,
+    card: (
+      <IntegrationLink
+        card
+        to="/integrations/grid"
+        icon="grid"
+        name="Grid"
+        status={label}
+        on={!!out?.network && !out.error}
+        detail={<span className="line-clamp-2">{detail}</span>}
+        tags={tags("public")}
+      />
+    ),
+  };
 }
 
-function TeslaLink() {
+function useTeslaEntry(): Entry {
   const { data: status, isPending, error } = useQuery(teslaQuery);
   const [label, detail] = isPending
     ? ["Checking", "Checking the connection…"]
@@ -220,21 +348,35 @@ function TeslaLink() {
               )
               .join(", "),
           ];
-  return (
+  const reach: Reach[] = status?.connected
+    ? [status.provider === "bluetooth" ? "bluetooth" : "cloud"]
+    : ["bluetooth", "cloud"];
+  const link = (
     <IntegrationLink
       card
       to="/integrations/tesla"
       icon={status?.provider === "bluetooth" ? "bluetooth" : "bolt"}
       name="Tesla"
-      status={label}
+      status={status?.connected ? label : undefined}
       on={!!status?.connected && !status.error}
       detail={detail}
+      tags={tags(reach)}
     />
   );
+  return {
+    id: "tesla",
+    group: "vehicles",
+    name: "Tesla",
+    connected: !!status?.connected,
+    attention: !!status?.connected && !!status.error,
+    local: status?.provider === "bluetooth",
+    card: link,
+    tile: link,
+  };
 }
 
 /** A smart-home integration (Hisense through ConnectLife…): whether it's connected and reading, and its devices. */
-function HomeLink({ integration: i }: { integration: HomeIntegration }) {
+function homeEntry(i: HomeIntegration): Entry {
   const a = i.account;
   const [label, detail] = !a
     ? ["Not connected", i.about]
@@ -250,28 +392,59 @@ function HomeLink({ integration: i }: { integration: HomeIntegration }) {
             .filter(Boolean)
             .join(" · "),
         ];
-  return (
+  const link = (
     <IntegrationLink
       card
       to="/integrations/home/$integration"
       params={{ integration: i.id }}
       icon={integrationIcon(i)}
       name={i.name}
-      status={label}
+      status={a ? label : undefined}
       on={!!a && !a.error && !!a.last_poll}
       detail={<span className="line-clamp-2">{detail}</span>}
+      tags={tags(integrationReach(i))}
     />
   );
+  return {
+    id: `home-${i.id}`,
+    group: "home",
+    name: i.name,
+    connected: !!a,
+    attention: !!a && (a.signed_out || !!a.error),
+    local: integrationReach(i) !== "cloud",
+    card: link,
+    tile: link,
+  };
 }
 
-function SmartHomeLinks() {
-  const { data, isPending, error } = useQuery(homeQuery);
-  if (isPending) return null;
-  if (error || !data) return <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>;
-  return data.integrations.map((i) => <HomeLink key={i.id} integration={i} />);
-}
+const GROUPS: { id: GroupId; title: string; sub: string; add: string }[] = [
+  {
+    id: "energy",
+    title: "Solar and battery",
+    sub: "Your inverters, and the battery they run",
+    add: "Inverters it reads on your network, by brand",
+  },
+  {
+    id: "home",
+    title: "Smart home",
+    sub: "Appliances and plugs that measure what they use, for the breakdown on the Home page",
+    add: "Plugs, meters and appliances, for the breakdown on the Home page",
+  },
+  {
+    id: "vehicles",
+    title: "Electric vehicles",
+    sub: "Your cars, and charging them from spare solar",
+    add: "Your car, and charging it from spare solar",
+  },
+  {
+    id: "services",
+    title: "Grid, prices and weather",
+    sub: "Outages around you, where your prices come from, and the solar forecast",
+    add: "Where your prices come from",
+  },
+];
 
-/** A group of integration cards under a heading, two across where there's room. */
+/** A group of cards under a heading, two across where there's room. */
 function Group({ id, title, sub, children }: { id: string; title: string; sub: string; children: ReactNode }) {
   return (
     <section id={id} aria-labelledby={`h-${id}`} className="flex scroll-mt-28 flex-col gap-3">
@@ -279,42 +452,135 @@ function Group({ id, title, sub, children }: { id: string; title: string; sub: s
         <h2 id={`h-${id}`}>{title}</h2>
         <span className="text-sm text-ink-muted">{sub}</span>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,480px),1fr))] gap-4">{children}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,420px),1fr))] gap-4">{children}</div>
     </section>
   );
 }
 
+/** What's connected at a glance: how many, whether any need a look, the inverters, the smart home, and how much of
+ * it is read on the home network rather than through a cloud. */
+function Summary({ entries, devices }: { entries: Entry[]; devices: number }) {
+  const { inverters } = useInverters();
+  const connected = entries.filter((e) => e.connected);
+  const attention = connected.filter((e) => e.attention);
+  const local = connected.filter((e) => e.local).length;
+  const main = inverters.find((i) => i.hybrid);
+  const homes = entries.filter((e) => e.group === "home" && e.connected).length;
+  return (
+    <SummaryCard
+      icon="plug"
+      color={attention.length ? COLOR.warn : COLOR.brand}
+      label="Your integrations"
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+          <span className="min-w-0 flex-1">
+            {attention.length
+              ? `${attention.map((e) => e.name).join(", ")} ${attention.length === 1 ? "needs" : "need"} a look.`
+              : "Everything connected is answering."}{" "}
+            <span className="text-ink-faint max-sm:hidden">
+              WattsMyPower reads devices on your own network wherever it can, and a company&apos;s cloud only where
+              there&apos;s no other way.
+            </span>
+          </span>
+          <a href="#add" className={buttonClass("outline", "sm")}>
+            Add an integration
+          </a>
+        </div>
+      }
+    >
+      <SummaryStat label="Connected" value={connected.length} sub={`of ${plural(entries.length, "integration")}`} />
+      <SummaryStat
+        label="Need a look"
+        value={attention.length}
+        color={attention.length ? COLOR.warn : undefined}
+        sub={attention.length ? attention[0].name : "All working"}
+      />
+      <SummaryStat
+        label="Main inverter"
+        value={main ? withoutBrand(main.name, main.device.brand) : "None yet"}
+        sub={
+          main
+            ? [main.device.brand, inverters.length > 1 && "+1 more"].filter(Boolean).join(", ")
+            : "Connect one to record"
+        }
+      />
+      <SummaryStat label="Smart home" value={plural(devices, "device")} sub={`from ${plural(homes, "integration")}`} />
+      <SummaryStat
+        label="On your network"
+        value={`${local} of ${connected.length}`}
+        sub={connected.length - local ? `${connected.length - local} through a cloud` : "No clouds"}
+      />
+    </SummaryCard>
+  );
+}
+
 /**
- * Manage → Integrations: each integration as a card with how it's doing, opening to its own page, grouped by what
- * it's for. Your solar and battery first, then smart appliances, the car, and the services rates and the forecast
- * come from.
+ * Manage → Integrations: a summary of what's connected, then each connected integration as a card with how it's
+ * doing (opening to its own page), grouped by what it's for, then everything else that can be added.
  */
 export function IntegrationSettings() {
+  const { data: home, error: homeError } = useQuery(homeQuery);
+  const entries = [
+    ...useInverterEntries(),
+    ...(home?.integrations ?? []).filter((i) => !i.demo || i.account).map(homeEntry),
+    useCarEntry(),
+    useTeslaEntry(),
+    useGridEntry(),
+    useAmberEntry(),
+    useWeatherEntry(),
+  ];
+  const devices = (home?.integrations ?? []).reduce((n, i) => n + (i.account?.devices ?? 0), 0);
+  const listed = entries.filter((e) => e.connected);
+  const toAdd = entries.filter((e) => !e.connected && e.tile);
   return (
     <div className="flex flex-col gap-8">
-      <Group id="solar-battery" title="Solar and battery" sub="Your inverters, and the battery they run">
-        <SungrowLink />
-      </Group>
-      <Group
-        id="smart-home"
-        title="Smart home"
-        sub="Appliances and plugs that measure what they use, for the breakdown on the Home page"
-      >
-        <SmartHomeLinks />
-      </Group>
-      <Group id="vehicles" title="Electric vehicles" sub="Your cars, and charging them from spare solar">
-        <CarLink />
-        <TeslaLink />
-      </Group>
-      <Group
-        id="prices-weather"
-        title="Grid, prices and weather"
-        sub="Outages around you, where your prices come from, and the solar forecast"
-      >
-        <GridLink />
-        <AmberLink />
-        <WeatherLink />
-      </Group>
+      <Summary entries={entries.filter((e) => !e.id.startsWith("inverter-"))} devices={devices} />
+      {GROUPS.map((g) => {
+        const cards = listed.filter((e) => e.group === g.id);
+        return (
+          cards.length > 0 && (
+            <Group key={g.id} id={g.id} title={g.title} sub={g.sub}>
+              {cards.map((e) => (
+                <div key={e.id} className="contents">
+                  {e.card}
+                </div>
+              ))}
+            </Group>
+          )
+        );
+      })}
+      {homeError && <p className="m-0 text-sm text-bad">{errorMessage(homeError)}</p>}
+      {toAdd.length > 0 && (
+        <section id="add" aria-labelledby="h-add" className="flex scroll-mt-28 flex-col gap-5">
+          <div className="flex flex-col gap-0.5 border-t border-line-subtle pt-7">
+            <h2 id="h-add">Add an integration</h2>
+            <span className="text-sm text-ink-muted">
+              Everything else WattsMyPower can read. Each says how it&apos;s reached: on your network, over Bluetooth,
+              or through its maker&apos;s cloud.
+            </span>
+          </div>
+          {GROUPS.map((g) => {
+            const tiles = toAdd.filter((e) => e.group === g.id);
+            return (
+              tiles.length > 0 && (
+                <div key={g.id} className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <h3 className="text-[15px] font-semibold">{g.title}</h3>
+                    <span className="text-[13px] text-ink-muted">{g.add}</span>
+                  </div>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
+                    {tiles.map((e) => (
+                      <div key={e.id} className="contents">
+                        {e.tile}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            );
+          })}
+        </section>
+      )}
     </div>
   );
 }

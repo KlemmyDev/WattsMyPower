@@ -62,7 +62,7 @@ export function BatteryPage() {
           {rooms.length > 0 && <AllBatteries p={p} s={s} devices={rooms} />}
           {s.inverter_connected === false ? (
             <EmptyState icon="battery" title="No battery connected" id="h-nobat">
-              Connect your inverter in Manage → Integrations → Sungrow, and its battery shows here.
+              Connect your inverter in Manage → Integrations → Inverters, and its battery shows here.
             </EmptyState>
           ) : (
             <EmptyState icon="battery" title="No battery connected" id="h-nobat">

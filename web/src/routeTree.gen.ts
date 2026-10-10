@@ -57,10 +57,11 @@ import { Route as AppHomeRoomsRoomRouteImport } from './routes/_app/home_.rooms.
 import { Route as AppIntegrationsCarIndexRouteImport } from './routes/_app/integrations/car/index'
 import { Route as AppIntegrationsCarCarIdRouteImport } from './routes/_app/integrations/car/$carId'
 import { Route as AppIntegrationsHomeIntegrationRouteImport } from './routes/_app/integrations/home/$integration'
-import { Route as AppIntegrationsSungrowIndexRouteImport } from './routes/_app/integrations/sungrow/index'
-import { Route as AppIntegrationsSungrowRoleRouteImport } from './routes/_app/integrations/sungrow/$role'
-import { Route as AppIntegrationsSungrowConnectRouteImport } from './routes/_app/integrations/sungrow/connect'
-import { Route as AppIntegrationsSungrowImportRouteImport } from './routes/_app/integrations/sungrow/import'
+import { Route as AppIntegrationsInvertersIndexRouteImport } from './routes/_app/integrations/inverters/index'
+import { Route as AppIntegrationsInvertersRoleRouteImport } from './routes/_app/integrations/inverters/$role'
+import { Route as AppIntegrationsInvertersConnectRouteImport } from './routes/_app/integrations/inverters/connect'
+import { Route as AppIntegrationsInvertersImportRouteImport } from './routes/_app/integrations/inverters/import'
+import { Route as AppIntegrationsSungrowSplatRouteImport } from './routes/_app/integrations/sungrow/$'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -302,28 +303,34 @@ const AppIntegrationsHomeIntegrationRoute =
     path: '/home/$integration',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
-const AppIntegrationsSungrowIndexRoute =
-  AppIntegrationsSungrowIndexRouteImport.update({
-    id: '/sungrow/',
-    path: '/sungrow/',
+const AppIntegrationsInvertersIndexRoute =
+  AppIntegrationsInvertersIndexRouteImport.update({
+    id: '/inverters/',
+    path: '/inverters/',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
-const AppIntegrationsSungrowRoleRoute =
-  AppIntegrationsSungrowRoleRouteImport.update({
-    id: '/sungrow/$role',
-    path: '/sungrow/$role',
+const AppIntegrationsInvertersRoleRoute =
+  AppIntegrationsInvertersRoleRouteImport.update({
+    id: '/inverters/$role',
+    path: '/inverters/$role',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
-const AppIntegrationsSungrowConnectRoute =
-  AppIntegrationsSungrowConnectRouteImport.update({
-    id: '/sungrow/connect',
-    path: '/sungrow/connect',
+const AppIntegrationsInvertersConnectRoute =
+  AppIntegrationsInvertersConnectRouteImport.update({
+    id: '/inverters/connect',
+    path: '/inverters/connect',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
-const AppIntegrationsSungrowImportRoute =
-  AppIntegrationsSungrowImportRouteImport.update({
-    id: '/sungrow/import',
-    path: '/sungrow/import',
+const AppIntegrationsInvertersImportRoute =
+  AppIntegrationsInvertersImportRouteImport.update({
+    id: '/inverters/import',
+    path: '/inverters/import',
+    getParentRoute: () => AppIntegrationsRouteRoute,
+  } as any)
+const AppIntegrationsSungrowSplatRoute =
+  AppIntegrationsSungrowSplatRouteImport.update({
+    id: '/sungrow/$',
+    path: '/sungrow/$',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
 
@@ -374,11 +381,12 @@ export interface FileRoutesByFullPath {
   '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/integrations/home/$integration': typeof AppIntegrationsHomeIntegrationRoute
-  '/integrations/sungrow/$role': typeof AppIntegrationsSungrowRoleRoute
-  '/integrations/sungrow/connect': typeof AppIntegrationsSungrowConnectRoute
-  '/integrations/sungrow/import': typeof AppIntegrationsSungrowImportRoute
+  '/integrations/inverters/$role': typeof AppIntegrationsInvertersRoleRoute
+  '/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
+  '/integrations/inverters/import': typeof AppIntegrationsInvertersImportRoute
+  '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/integrations/car/': typeof AppIntegrationsCarIndexRoute
-  '/integrations/sungrow/': typeof AppIntegrationsSungrowIndexRoute
+  '/integrations/inverters/': typeof AppIntegrationsInvertersIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -425,11 +433,12 @@ export interface FileRoutesByTo {
   '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/integrations/home/$integration': typeof AppIntegrationsHomeIntegrationRoute
-  '/integrations/sungrow/$role': typeof AppIntegrationsSungrowRoleRoute
-  '/integrations/sungrow/connect': typeof AppIntegrationsSungrowConnectRoute
-  '/integrations/sungrow/import': typeof AppIntegrationsSungrowImportRoute
+  '/integrations/inverters/$role': typeof AppIntegrationsInvertersRoleRoute
+  '/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
+  '/integrations/inverters/import': typeof AppIntegrationsInvertersImportRoute
+  '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/integrations/car': typeof AppIntegrationsCarIndexRoute
-  '/integrations/sungrow': typeof AppIntegrationsSungrowIndexRoute
+  '/integrations/inverters': typeof AppIntegrationsInvertersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -480,11 +489,12 @@ export interface FileRoutesById {
   '/_app/home_/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/_app/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/_app/integrations/home/$integration': typeof AppIntegrationsHomeIntegrationRoute
-  '/_app/integrations/sungrow/$role': typeof AppIntegrationsSungrowRoleRoute
-  '/_app/integrations/sungrow/connect': typeof AppIntegrationsSungrowConnectRoute
-  '/_app/integrations/sungrow/import': typeof AppIntegrationsSungrowImportRoute
+  '/_app/integrations/inverters/$role': typeof AppIntegrationsInvertersRoleRoute
+  '/_app/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
+  '/_app/integrations/inverters/import': typeof AppIntegrationsInvertersImportRoute
+  '/_app/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/_app/integrations/car/': typeof AppIntegrationsCarIndexRoute
-  '/_app/integrations/sungrow/': typeof AppIntegrationsSungrowIndexRoute
+  '/_app/integrations/inverters/': typeof AppIntegrationsInvertersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -535,11 +545,12 @@ export interface FileRouteTypes {
     | '/home/rooms/$room'
     | '/integrations/car/$carId'
     | '/integrations/home/$integration'
-    | '/integrations/sungrow/$role'
-    | '/integrations/sungrow/connect'
-    | '/integrations/sungrow/import'
+    | '/integrations/inverters/$role'
+    | '/integrations/inverters/connect'
+    | '/integrations/inverters/import'
+    | '/integrations/sungrow/$'
     | '/integrations/car/'
-    | '/integrations/sungrow/'
+    | '/integrations/inverters/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -586,11 +597,12 @@ export interface FileRouteTypes {
     | '/home/rooms/$room'
     | '/integrations/car/$carId'
     | '/integrations/home/$integration'
-    | '/integrations/sungrow/$role'
-    | '/integrations/sungrow/connect'
-    | '/integrations/sungrow/import'
+    | '/integrations/inverters/$role'
+    | '/integrations/inverters/connect'
+    | '/integrations/inverters/import'
+    | '/integrations/sungrow/$'
     | '/integrations/car'
-    | '/integrations/sungrow'
+    | '/integrations/inverters'
   id:
     | '__root__'
     | '/_app'
@@ -640,11 +652,12 @@ export interface FileRouteTypes {
     | '/_app/home_/rooms/$room'
     | '/_app/integrations/car/$carId'
     | '/_app/integrations/home/$integration'
-    | '/_app/integrations/sungrow/$role'
-    | '/_app/integrations/sungrow/connect'
-    | '/_app/integrations/sungrow/import'
+    | '/_app/integrations/inverters/$role'
+    | '/_app/integrations/inverters/connect'
+    | '/_app/integrations/inverters/import'
+    | '/_app/integrations/sungrow/$'
     | '/_app/integrations/car/'
-    | '/_app/integrations/sungrow/'
+    | '/_app/integrations/inverters/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -991,32 +1004,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsHomeIntegrationRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/sungrow/': {
-      id: '/_app/integrations/sungrow/'
-      path: '/sungrow'
-      fullPath: '/integrations/sungrow/'
-      preLoaderRoute: typeof AppIntegrationsSungrowIndexRouteImport
+    '/_app/integrations/inverters/': {
+      id: '/_app/integrations/inverters/'
+      path: '/inverters'
+      fullPath: '/integrations/inverters/'
+      preLoaderRoute: typeof AppIntegrationsInvertersIndexRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/sungrow/$role': {
-      id: '/_app/integrations/sungrow/$role'
-      path: '/sungrow/$role'
-      fullPath: '/integrations/sungrow/$role'
-      preLoaderRoute: typeof AppIntegrationsSungrowRoleRouteImport
+    '/_app/integrations/inverters/$role': {
+      id: '/_app/integrations/inverters/$role'
+      path: '/inverters/$role'
+      fullPath: '/integrations/inverters/$role'
+      preLoaderRoute: typeof AppIntegrationsInvertersRoleRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/sungrow/connect': {
-      id: '/_app/integrations/sungrow/connect'
-      path: '/sungrow/connect'
-      fullPath: '/integrations/sungrow/connect'
-      preLoaderRoute: typeof AppIntegrationsSungrowConnectRouteImport
+    '/_app/integrations/inverters/connect': {
+      id: '/_app/integrations/inverters/connect'
+      path: '/inverters/connect'
+      fullPath: '/integrations/inverters/connect'
+      preLoaderRoute: typeof AppIntegrationsInvertersConnectRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/sungrow/import': {
-      id: '/_app/integrations/sungrow/import'
-      path: '/sungrow/import'
-      fullPath: '/integrations/sungrow/import'
-      preLoaderRoute: typeof AppIntegrationsSungrowImportRouteImport
+    '/_app/integrations/inverters/import': {
+      id: '/_app/integrations/inverters/import'
+      path: '/inverters/import'
+      fullPath: '/integrations/inverters/import'
+      preLoaderRoute: typeof AppIntegrationsInvertersImportRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
+    '/_app/integrations/sungrow/$': {
+      id: '/_app/integrations/sungrow/$'
+      path: '/sungrow/$'
+      fullPath: '/integrations/sungrow/$'
+      preLoaderRoute: typeof AppIntegrationsSungrowSplatRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
   }
@@ -1030,11 +1050,12 @@ interface AppIntegrationsRouteRouteChildren {
   AppIntegrationsIndexRoute: typeof AppIntegrationsIndexRoute
   AppIntegrationsCarCarIdRoute: typeof AppIntegrationsCarCarIdRoute
   AppIntegrationsHomeIntegrationRoute: typeof AppIntegrationsHomeIntegrationRoute
-  AppIntegrationsSungrowRoleRoute: typeof AppIntegrationsSungrowRoleRoute
-  AppIntegrationsSungrowConnectRoute: typeof AppIntegrationsSungrowConnectRoute
-  AppIntegrationsSungrowImportRoute: typeof AppIntegrationsSungrowImportRoute
+  AppIntegrationsInvertersRoleRoute: typeof AppIntegrationsInvertersRoleRoute
+  AppIntegrationsInvertersConnectRoute: typeof AppIntegrationsInvertersConnectRoute
+  AppIntegrationsInvertersImportRoute: typeof AppIntegrationsInvertersImportRoute
+  AppIntegrationsSungrowSplatRoute: typeof AppIntegrationsSungrowSplatRoute
   AppIntegrationsCarIndexRoute: typeof AppIntegrationsCarIndexRoute
-  AppIntegrationsSungrowIndexRoute: typeof AppIntegrationsSungrowIndexRoute
+  AppIntegrationsInvertersIndexRoute: typeof AppIntegrationsInvertersIndexRoute
 }
 
 const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
@@ -1045,11 +1066,12 @@ const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
   AppIntegrationsIndexRoute: AppIntegrationsIndexRoute,
   AppIntegrationsCarCarIdRoute: AppIntegrationsCarCarIdRoute,
   AppIntegrationsHomeIntegrationRoute: AppIntegrationsHomeIntegrationRoute,
-  AppIntegrationsSungrowRoleRoute: AppIntegrationsSungrowRoleRoute,
-  AppIntegrationsSungrowConnectRoute: AppIntegrationsSungrowConnectRoute,
-  AppIntegrationsSungrowImportRoute: AppIntegrationsSungrowImportRoute,
+  AppIntegrationsInvertersRoleRoute: AppIntegrationsInvertersRoleRoute,
+  AppIntegrationsInvertersConnectRoute: AppIntegrationsInvertersConnectRoute,
+  AppIntegrationsInvertersImportRoute: AppIntegrationsInvertersImportRoute,
+  AppIntegrationsSungrowSplatRoute: AppIntegrationsSungrowSplatRoute,
   AppIntegrationsCarIndexRoute: AppIntegrationsCarIndexRoute,
-  AppIntegrationsSungrowIndexRoute: AppIntegrationsSungrowIndexRoute,
+  AppIntegrationsInvertersIndexRoute: AppIntegrationsInvertersIndexRoute,
 }
 
 const AppIntegrationsRouteRouteWithChildren =

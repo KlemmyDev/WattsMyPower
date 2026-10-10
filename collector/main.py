@@ -44,9 +44,9 @@ MAX_WRITES = 10  # registers one request may write
 
 
 async def _mock_open(host: str, port: int) -> bool:
-    """In mock mode, only the fake inverters' addresses answer a scan."""
+    """In mock mode, only the fake inverters' addresses answer a scan, on Modbus's port (they're Sungrows)."""
     await asyncio.sleep(0.01)
-    return host in MOCK_HOSTS
+    return host in MOCK_HOSTS and port == 502
 
 
 def _row_json(r: Row) -> str:

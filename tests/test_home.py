@@ -530,6 +530,9 @@ def test_home_through_the_api(client: TestClient) -> None:
         "ecoflow",
         "demo",
     ]
+    # Those read through a company's cloud say so, for Manage → Integrations.
+    clouds = [i["id"] for i in client.get("/api/home").json()["integrations"] if i["cloud"]]
+    assert clouds == ["connectlife", "electrolux", "ecoflow"]
     assert client.post("/api/home/integrations/nothing", json={}).status_code == 404
     view = client.post("/api/home/integrations/demo", json={}).json()
     demo = next(i for i in view["integrations"] if i["id"] == "demo")

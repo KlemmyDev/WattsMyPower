@@ -132,6 +132,7 @@ class HomeService:
             "demo": cls.demo,
             "find_label": cls.find_label,
             "can_switch": cls.can_switch,
+            "cloud": cls.cloud,
             "account": self._account_view(cls, account, devices) if account else None,
         }
 

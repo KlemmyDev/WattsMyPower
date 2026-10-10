@@ -26,6 +26,10 @@ export const kindIcon = (kind: DeviceKind): IconName => KIND_ICONS[kind] ?? "bol
 export const integrationIcon = (i: Pick<HomeIntegration, "icon">): IconName =>
   (["washer", "flask", "plug", "bolt", "fridge", "battery"] as const).find((n) => n === i.icon) ?? "plug";
 
+/** How an integration is read: through its maker's cloud, over Bluetooth (portable batteries), or on the network. */
+export const integrationReach = (i: Pick<HomeIntegration, "id" | "cloud">): "cloud" | "bluetooth" | "local" =>
+  i.cloud ? "cloud" : i.id === "bluetti" ? "bluetooth" : "local";
+
 /**
  * Each device's colour: by its place among every device (hidden ones included), so hiding or adding one never
  * repaints the rest. Past the palette, devices share a quiet grey; "everything else" is the bar grey.
