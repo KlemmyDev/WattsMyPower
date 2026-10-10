@@ -64,6 +64,7 @@ export function ChoiceTiles<T extends string>({
   color = COLOR.brand,
   min = "9.5rem",
   phone = 2,
+  rows,
   disabled,
   className,
 }: {
@@ -75,6 +76,8 @@ export function ChoiceTiles<T extends string>({
   min?: string;
   /** How many across on a phone. */
   phone?: 1 | 2 | 3;
+  /** One under another, each its icon beside its name: for a narrow column. */
+  rows?: boolean;
   disabled?: boolean;
   className?: string;
 }) {
@@ -83,8 +86,10 @@ export function ChoiceTiles<T extends string>({
       role="group"
       aria-label={label}
       className={cn(
-        "grid [grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--tile-min)),1fr))] gap-3 max-sm:gap-2",
-        phone === 1 ? "max-sm:grid-cols-1" : phone === 3 ? "max-sm:grid-cols-3" : "max-sm:grid-cols-2",
+        rows
+          ? "flex flex-col gap-2"
+          : "grid [grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--tile-min)),1fr))] gap-3 max-sm:gap-2",
+        !rows && (phone === 1 ? "max-sm:grid-cols-1" : phone === 3 ? "max-sm:grid-cols-3" : "max-sm:grid-cols-2"),
         className,
       )}
       style={{ "--tile-min": min } as CSSProperties}
@@ -100,8 +105,9 @@ export function ChoiceTiles<T extends string>({
             disabled={disabled}
             onClick={() => !on && onChange(o.value)}
             className={cn(
-              "relative flex min-w-0 flex-col items-start gap-3 overflow-hidden rounded-2xl border text-left transition-[border-color,background-color,transform] duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
-              o.preview ? "p-1.5 pb-3" : "p-4 max-sm:p-3.5",
+              "relative flex min-w-0 overflow-hidden rounded-2xl border text-left transition-[border-color,background-color,transform] duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
+              rows ? "flex-row items-center gap-3.5 p-3.5 pr-11" : "flex-col items-start gap-3",
+              !rows && (o.preview ? "p-1.5 pb-3" : "p-4 max-sm:p-3.5"),
               on ? "border-transparent" : "border-line-subtle bg-canvas/60 hover:border-line light:bg-canvas",
             )}
             style={on ? { background: alpha(c, 0.14), boxShadow: `inset 0 0 0 2px ${c}` } : undefined}
@@ -125,7 +131,10 @@ export function ChoiceTiles<T extends string>({
             {on && (
               <span
                 aria-hidden
-                className="absolute top-3 right-3 flex size-5 animate-pop items-center justify-center rounded-full"
+                className={cn(
+                  "absolute right-3 flex size-5 animate-pop items-center justify-center rounded-full",
+                  rows ? "top-1/2 -translate-y-1/2" : "top-3",
+                )}
                 style={{ background: c, color: "var(--color-canvas)" }}
               >
                 <Icon name="check" size={13} />
