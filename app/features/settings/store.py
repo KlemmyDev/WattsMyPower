@@ -143,7 +143,7 @@ class SettingsStore:
             "house_storeys": (1, 2, 1),
             "garage_spaces": (0, 2, 0),
             # What the system cost (dollars, after rebates) and when it went in, for payback on the Bills
-            # page; when the battery went in (if later) and its warranty, for Health. 0 = not set. Dates
+            # page; when the battery went in (if later) and its warranty, for the Battery page. 0 = not set. Dates
             # are unix seconds at local midnight.
             "system_cost": (0, 500_000, 0),
             "system_installed": (0, 4_102_444_800, 0),

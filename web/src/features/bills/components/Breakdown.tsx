@@ -11,6 +11,13 @@ const pctOf = (v: number, total: number) => `${Math.round((v / (total || 1)) * 1
 const PACE_DAYS = 3; // full days of this period before judging its pace
 const bigFigure = "font-display text-[44px] leading-12 font-light tracking-[-1.8px] tabular-nums";
 
+/** Your cost per kWh against the grid-only cost: "38% less than grid only", or "12% more" when it's dearer. */
+function againstGrid(yours: number, grid: number) {
+  const by = Math.round((1 - yours / grid) * 100);
+  if (by === 0) return "about the same as grid only";
+  return by > 0 ? `${by}% less than grid only` : `${-by}% more than grid only`;
+}
+
 /** This period's bill so far, split into home use from the grid, supply, and feed-in credit. */
 export function PaidFor({ bills }: { bills: Bills }) {
   const s = bills.current.so_far;
@@ -193,10 +200,8 @@ export function CostPerKwh({ bills }: { bills: Bills }) {
       />
       <div className="flex flex-wrap items-baseline gap-2.5">
         <span className={bigFigure}>{yours != null ? centsPerKwh(yours) : DASH}</span>
-        {yours != null && grid && (
-          <span className="text-sm text-ink-muted">
-            per kWh · {Math.round((1 - yours / grid) * 100)}% less than grid only
-          </span>
+        {yours != null && grid != null && grid > 0 && (
+          <span className="text-sm text-ink-muted">per kWh · {againstGrid(yours, grid)}</span>
         )}
       </div>
       <div className="mt-auto flex flex-col gap-3.5">

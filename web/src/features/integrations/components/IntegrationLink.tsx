@@ -67,12 +67,3 @@ const CreatedIntegrationLink = createLink(TileAnchor);
 export const IntegrationLink: LinkComponent<typeof TileAnchor> = (props) => (
   <CreatedIntegrationLink preload="intent" {...props} />
 );
-
-/** The same row, for something that can't be opened yet. */
-export function IntegrationTile({ card, ...props }: TileProps) {
-  return (
-    <div className={card ? CARD : ROW}>
-      <TileBody {...props} />
-    </div>
-  );
-}

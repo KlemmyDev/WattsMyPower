@@ -15,7 +15,7 @@ const KINDS = [
   { id: "readings", name: "Readings", color: COLOR.battery },
   { id: "weather", name: "Weather and forecast", color: COLOR.solar },
   { id: "prices", name: "Electricity prices", color: COLOR.lilac },
-  { id: "other", name: "Settings, alerts and the rest", color: COLOR.bar },
+  { id: "other", name: "Settings and the rest", color: COLOR.bar },
   { id: "overhead", name: "Logs and empty pages", color: COLOR.barFaint },
 ] as const;
 

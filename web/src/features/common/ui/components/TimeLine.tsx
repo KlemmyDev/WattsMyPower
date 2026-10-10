@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type PointerEvent, type ReactNode } from "react";
+import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { hourOf, offsetAt, partsOf } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -61,26 +61,82 @@ export function TimeTicks({ ticks }: { ticks: ReturnType<typeof timeTicks> }) {
 }
 
 /**
- * Dragging across a chart to pick a stretch of it, from `start` to `end`: spread `handlers` on the plot, draw `band`
- * (from and to as percentages of its width) while it's dragged, and `onRange` is given the stretch picked (at least ten
- * minutes, on the five minutes) when it's let go. Without `onRange` it does nothing.
+ * Dragging across a chart to pick a stretch of it, from `start` to `end`: spread `handlers` and `keys` on the plot, draw
+ * `band` (from and to as percentages of its width) while it's picked, and `onRange` is given the stretch picked (at
+ * least ten minutes, on the five minutes) when it's let go. Without `onRange` it does nothing.
+ *
+ * The keyboard can do the same: with the plot focused, the arrow keys pick a stretch (a quarter of what's shown, from
+ * the middle) and move it along, Shift with them makes it longer or shorter, Enter zooms in to it, and Escape lets it
+ * go, or with nothing picked calls `onReset` (back out to the whole day). `label` names the chart for a screen reader.
  */
-export function useDragRange(start: number, end: number, onRange?: (from: number, to: number) => void) {
+export function useDragRange(
+  start: number,
+  end: number,
+  onRange?: (from: number, to: number) => void,
+  { label = "Chart", onReset }: { label?: string; onReset?: () => void } = {},
+) {
   const [drag, setDrag] = useState<{ from: number; to: number; x0: number; x: number } | null>(null);
+  // Picked with the keys; let go when the chart shows another stretch.
+  const [keyed, setKeyed] = useState<{ start: number; end: number; from: number; to: number } | null>(null);
+  const picked = keyed && keyed.start === start && keyed.end === end ? keyed : null;
   const at = (e: PointerEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     return start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (end - start);
   };
   const moved = drag != null && Math.abs(drag.x - drag.x0) >= DRAG_PX;
   const pc = (t: number) => ((t - start) / (end - start)) * 100;
+  const pick = (a: number, b: number) => {
+    if (!onRange) return;
+    // Snapped out to the five minutes either side.
+    const from = Math.floor(Math.min(a, b) / SNAP) * SNAP;
+    const to = Math.ceil(Math.max(a, b) / SNAP) * SNAP;
+    const mid = (from + to) / 2;
+    onRange(Math.max(start, Math.min(from, mid - MIN_RANGE / 2)), Math.min(end, Math.max(to, mid + MIN_RANGE / 2)));
+  };
+  const span = end - start;
+  const step = Math.max(SNAP, Math.round(span / 24 / SNAP) * SNAP); // an hour, on a whole day
+  const snap = (t: number) => Math.round(t / SNAP) * SNAP;
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    const by = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+    if (by) {
+      const set = (from: number, to: number) => setKeyed({ start, end, from, to });
+      if (!picked) {
+        const w = Math.max(MIN_RANGE, snap(span / 4));
+        const from = Math.max(start, snap(start + (span - w) / 2));
+        set(from, Math.min(end, from + w));
+      } else if (e.shiftKey) {
+        set(picked.from, Math.max(picked.from + MIN_RANGE, Math.min(end, picked.to + by)));
+      } else {
+        const w = picked.to - picked.from;
+        const from = Math.max(start, Math.min(end - w, picked.from + by));
+        set(from, from + w);
+      }
+    } else if (e.key === "Enter" && picked) {
+      pick(picked.from, picked.to);
+      setKeyed(null);
+    } else if (e.key === "Escape" && (picked || onReset)) {
+      if (picked) setKeyed(null);
+      else onReset?.();
+    } else return;
+    e.preventDefault();
+  };
   return {
     dragging: moved,
-    band: moved ? { from: pc(Math.min(drag.from, drag.to)), to: pc(Math.max(drag.from, drag.to)) } : null,
+    band: moved
+      ? { from: pc(Math.min(drag.from, drag.to)), to: pc(Math.max(drag.from, drag.to)) }
+      : picked
+        ? {
+            from: pc(picked.from),
+            to: pc(picked.to),
+            label: `${hhmm(picked.from)} to ${hhmm(picked.to)}. Enter zooms in to it, Escape lets it go.`,
+          }
+        : null,
     handlers: onRange
       ? {
           onPointerDown: (e: PointerEvent<HTMLElement>) => {
             if (e.button !== 0) return;
             e.currentTarget.setPointerCapture(e.pointerId);
+            setKeyed(null);
             const t = at(e);
             setDrag({ from: t, to: t, x0: e.clientX, x: e.clientX });
           },
@@ -88,21 +144,22 @@ export function useDragRange(start: number, end: number, onRange?: (from: number
             if (drag) setDrag({ ...drag, to: at(e), x: e.clientX });
           },
           onPointerUp: () => {
-            if (drag && moved) {
-              // Snapped out to the five minutes either side.
-              const from = Math.floor(Math.min(drag.from, drag.to) / SNAP) * SNAP;
-              const to = Math.ceil(Math.max(drag.from, drag.to) / SNAP) * SNAP;
-              const mid = (from + to) / 2;
-              onRange(
-                Math.max(start, Math.min(from, mid - MIN_RANGE / 2)),
-                Math.min(end, Math.max(to, mid + MIN_RANGE / 2)),
-              );
-            }
+            if (drag && moved) pick(drag.from, drag.to);
             setDrag(null);
           },
           onPointerCancel: () => setDrag(null),
         }
       : {},
+    keys: onRange
+      ? {
+          tabIndex: 0,
+          role: "group",
+          "aria-roledescription": "chart",
+          "aria-label": `${label}. The arrow keys pick a stretch of it to zoom in to.`,
+          onKeyDown,
+          onBlur: () => setKeyed(null),
+        }
+      : { role: "img", "aria-label": label },
   };
 }
 
@@ -150,15 +207,21 @@ export function ZoomOut({
   );
 }
 
-/** The stretch being dragged across, shaded over the plot. */
-export function DragBand({ band }: { band: { from: number; to: number } | null }) {
-  if (!band) return null;
+/** The stretch being dragged across (or picked with the keys, which is read out), shaded over the plot. */
+export function DragBand({ band }: { band: { from: number; to: number; label?: string } | null }) {
   return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-y-0 z-1 border-x border-fg/25 bg-fg/8"
-      style={{ left: `${band.from}%`, width: `${band.to - band.from}%` }}
-    />
+    <>
+      <span className="sr-only" aria-live="polite">
+        {band?.label ?? ""}
+      </span>
+      {band && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 z-1 border-x border-fg/25 bg-fg/8"
+          style={{ left: `${band.from}%`, width: `${band.to - band.from}%` }}
+        />
+      )}
+    </>
   );
 }
 
@@ -220,6 +283,7 @@ export function TimeLine({
   empty,
   onRange,
   zoom = true,
+  label,
 }: {
   points: LinePoint[];
   start: number;
@@ -248,6 +312,8 @@ export function TimeLine({
    * chart zooms itself, with its own button back out, unless `zoom` is false. */
   onRange?: (from: number, to: number) => void;
   zoom?: boolean;
+  /** What the chart shows, for a screen reader (the drawing itself is hidden from one): "Battery level". */
+  label?: string;
 }) {
   const H = height;
   const own = useZoom(whole, wholeEnd);
@@ -308,7 +374,10 @@ export function TimeLine({
   }, [points, compare, start, end, domain, signed, fill, H]);
 
   const [hover, setHover] = useState<{ p: LinePoint; other: LinePoint | null } | null>(null);
-  const range = useDragRange(start, end, onRange ?? (self ? own.zoom : undefined));
+  const range = useDragRange(start, end, onRange ?? (self ? own.zoom : undefined), {
+    label,
+    onReset: self ? own.reset : undefined,
+  });
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -351,6 +420,7 @@ export function TimeLine({
       <div
         className="relative cursor-crosshair touch-pan-y"
         style={{ height }}
+        {...range.keys}
         onPointerMove={(e) => {
           onPoint(e);
           range.handlers.onPointerMove?.(e);

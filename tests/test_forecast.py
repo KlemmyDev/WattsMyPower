@@ -163,9 +163,10 @@ def outlook_weather(now: int) -> dict[str, object]:
 
 
 def test_the_outlook_sums_up_today_and_the_next_two_days(
-    db: Database, config: Config, readings: ReadingsRepository
+    db: Database, config: Config, readings: ReadingsRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = int(time.time())
+    monkeypatch.setattr(time, "time", lambda: float(now))  # build() reads the clock too: the same second as here
     settings = SettingsStore(db, replace(config, pv_kw=6.6))
     settings.load()
     data = outlook_weather(now)

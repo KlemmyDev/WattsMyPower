@@ -1,5 +1,4 @@
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
-import { centsShort, money } from "~/features/common/formatting/utils/number";
 import { isWeekend, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
@@ -68,25 +67,6 @@ export function bandAt(t: Tariff, ts: number): { name: string; rate: number } {
   const { bands, tab } = bandTable(t, isWeekend(ts) ? "weekend" : "weekday");
   const b = bands[tab[p.hour * 60 + p.minute]];
   return { name: b.name, rate: num(b.rate) };
-}
-
-/** Bands that apply at some time of the week (a band left with no hours isn't worth listing). */
-export function liveBands(t: Tariff): { name: string; rate: number }[] {
-  if (t.type !== "tou") return [{ name: "All times", rate: num(t.flat_rate) }];
-  const used = usedBands(t);
-  return t.bands.filter((_, i) => used.has(i)).map((b) => ({ name: b.name, rate: num(b.rate) }));
-}
-
-/** One line describing a tariff: "45c peak · 22c off-peak · 5c feed-in · $1.05 a day". */
-export function tariffDetail(t: Tariff): string {
-  if (t.type === "amber") return `Amber prices · ${money(num(t.supply_charge))} a day`;
-  const usage =
-    t.type === "tou"
-      ? liveBands(t)
-          .map((b) => `${centsShort(b.rate)} ${b.name.toLowerCase()}`)
-          .join(" · ")
-      : `${centsShort(num(t.flat_rate))} per kWh`;
-  return `${usage} · ${centsShort(num(t.feed_in_rate))} feed-in · ${money(num(t.supply_charge))} a day`;
 }
 
 /** When a time-of-use band applies: "16:00 to 21:00", "Weekdays 07:00 to 09:00", or "All other times". */

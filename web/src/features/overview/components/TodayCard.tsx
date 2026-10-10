@@ -164,7 +164,7 @@ function RateTable({ c, t, now }: { c: CostDay; t: Tariff; now: number }) {
         dot={COLOR.solar}
         label="Solar credit"
         sub={`Exported at ${centsShort(feedIn)} per kWh`}
-        cost={`−${money(c.feed_in_credit)}`}
+        cost={money(-c.feed_in_credit)}
         saved={money(c.feed_in_credit)}
         savedKwh={kWh(c.export_kwh)}
       />

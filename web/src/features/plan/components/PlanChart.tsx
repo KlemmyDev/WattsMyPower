@@ -403,10 +403,15 @@ export function PlanChart({
   );
   const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(0);
-  const drag = useDragRange(from, to, (a, b) => {
-    zoom.zoom(a, b);
-    setHover(null);
-  });
+  const drag = useDragRange(
+    from,
+    to,
+    (a, b) => {
+      zoom.zoom(a, b);
+      setHover(null);
+    },
+    { label: "The day's plan: solar, home use and the battery", onReset: zoom.reset },
+  );
   const shown = drag.dragging ? null : hover;
   const clip = useId().replace(/:/g, "");
   const clipped = zoom.zoomed ? `url(#${clip})` : undefined; // lines past the stretch shown, cut at its edges
@@ -471,6 +476,7 @@ export function PlanChart({
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
         style={{ paddingTop: top + 22 }}
+        {...drag.keys}
         onPointerMove={(e) => {
           onPoint(e);
           drag.handlers.onPointerMove?.(e);

@@ -189,6 +189,7 @@ export function HomeTodayCard({
       </div>
       {series ? (
         <TimeLine
+          label="Home use through the day, against a usual day"
           points={actual}
           compare={usual.length ? { points: usual, color: USUAL } : undefined}
           start={start}
