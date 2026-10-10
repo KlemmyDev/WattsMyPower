@@ -15,9 +15,9 @@ import { SettingsSection } from "~/features/settings/components/SettingsSection"
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Manage → Integrations → Tesla → a car's details: how it charges at home (what charging from spare solar works
- * with), what its range is worked out from, and how the Overview draws it; then removing it. Each connected Tesla
- * brings its own car; one added by hand before cars came only from a Tesla can be removed here.
+ * Manage → Integrations → Electric vehicles → Tesla → a car's details: how it charges at home (what charging from
+ * spare solar works with), what its range is worked out from, and how the Overview draws it; then removing it. Each
+ * connected Tesla brings its own car; one added by hand before cars came only from a Tesla can be removed here.
  */
 export function CarPage({ carId }: { carId: number }) {
   const { data: cars, error, isPending } = useQuery(carsQuery);
@@ -28,7 +28,7 @@ export function CarPage({ carId }: { carId: number }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
-  const back = <BackLink to="/integrations/tesla">Tesla</BackLink>;
+  const back = <BackLink to="/integrations/ev/tesla">Tesla</BackLink>;
   if (!view)
     return (
       <>
@@ -75,7 +75,7 @@ export function CarPage({ carId }: { carId: number }) {
                   remove.mutate(view.id, {
                     onSuccess: () => {
                       toast(`${carName(view)} removed.`);
-                      void navigate({ to: "/integrations/tesla" });
+                      void navigate({ to: "/integrations/ev/tesla" });
                     },
                   })
                 }

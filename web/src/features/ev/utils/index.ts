@@ -1,5 +1,5 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
-import type { EvEvent, EvMode, EvStatus, KeyRole, TeslaProvider } from "~/features/ev/types";
+import type { EvEvent, EvMode, EvStatus, KeyRole, TeslaProvider, TeslaStatus } from "~/features/ev/types";
 
 /** The key's role in words: what it lets the dashboard do. */
 export const ROLE_LABEL: Record<KeyRole, string> = { charging_manager: "Charging only", driver: "Driver" };
@@ -21,6 +21,36 @@ export const STATUS_LABEL: Record<EvStatus, string> = {
   hold: "On hold",
   unknown: "Not read yet",
 };
+
+/** What a Tesla's offered for, until one's connected. */
+export const TESLA_ABOUT =
+  "Over Bluetooth or through Tessie: its level, its charging at home, and charging it from spare solar";
+
+/** The Teslas at a glance, for Integrations: whether they're connected and reading, each car's level and how it
+ * charges ("Model Y · 80% · Spare solar"), and how they're reached (either way, until one's connected). */
+export function teslaSummary(status: TeslaStatus | undefined): {
+  connected: boolean;
+  on: boolean;
+  status: string;
+  detail: string;
+  reach: ("bluetooth" | "cloud")[];
+} {
+  const connected = !!status?.connected;
+  const detail = (status?.vehicles ?? [])
+    .map((v) =>
+      [v.name ?? "Tesla", v.state?.soc != null && `${Math.round(v.state.soc)}%`, MODE_LABEL[v.control.mode]]
+        .filter(Boolean)
+        .join(" · "),
+    )
+    .join(", ");
+  return {
+    connected,
+    on: connected && !status?.error,
+    status: !connected ? "" : status?.error ? "Not updating" : "Connected",
+    detail: connected ? detail || "No cars yet" : TESLA_ABOUT,
+    reach: !connected ? ["bluetooth", "cloud"] : status?.provider === "bluetooth" ? ["bluetooth"] : ["cloud"],
+  };
+}
 
 /** What the EV section's called: the make of the cars connected ("Tesla"), or EV with none, or a mix. */
 export function evTitle(cars: { make?: string | null }[] | null | undefined): string {

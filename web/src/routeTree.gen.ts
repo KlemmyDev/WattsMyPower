@@ -55,18 +55,20 @@ import { Route as AppTeslaSetupRouteImport } from './routes/_app/tesla/setup'
 import { Route as AppHomeRoomsRoomRouteImport } from './routes/_app/home_.rooms.$room'
 import { Route as AppIntegrationsCarIndexRouteImport } from './routes/_app/integrations/car/index'
 import { Route as AppIntegrationsCarCarIdRouteImport } from './routes/_app/integrations/car/$carId'
+import { Route as AppIntegrationsEvIndexRouteImport } from './routes/_app/integrations/ev/index'
 import { Route as AppIntegrationsHomeIndexRouteImport } from './routes/_app/integrations/home/index'
 import { Route as AppIntegrationsInvertersIndexRouteImport } from './routes/_app/integrations/inverters/index'
 import { Route as AppIntegrationsInvertersConnectRouteImport } from './routes/_app/integrations/inverters/connect'
 import { Route as AppIntegrationsSungrowSplatRouteImport } from './routes/_app/integrations/sungrow/$'
-import { Route as AppIntegrationsTeslaIndexRouteImport } from './routes/_app/integrations/tesla/index'
+import { Route as AppIntegrationsTeslaSplatRouteImport } from './routes/_app/integrations/tesla/$'
+import { Route as AppIntegrationsEvTeslaIndexRouteImport } from './routes/_app/integrations/ev/tesla/index'
 import { Route as AppIntegrationsHomeIntegrationIndexRouteImport } from './routes/_app/integrations/home/$integration/index'
 import { Route as AppIntegrationsHomeIntegrationDeviceRouteImport } from './routes/_app/integrations/home/$integration/$device'
 import { Route as AppIntegrationsInvertersBrandIndexRouteImport } from './routes/_app/integrations/inverters/$brand/index'
 import { Route as AppIntegrationsInvertersBrandRoleRouteImport } from './routes/_app/integrations/inverters/$brand/$role'
 import { Route as AppIntegrationsInvertersBrandConnectRouteImport } from './routes/_app/integrations/inverters/$brand/connect'
 import { Route as AppIntegrationsInvertersBrandImportRouteImport } from './routes/_app/integrations/inverters/$brand/import'
-import { Route as AppIntegrationsTeslaCarCarIdRouteImport } from './routes/_app/integrations/tesla/car/$carId'
+import { Route as AppIntegrationsEvTeslaCarCarIdRouteImport } from './routes/_app/integrations/ev/tesla/car/$carId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -297,6 +299,11 @@ const AppIntegrationsCarCarIdRoute = AppIntegrationsCarCarIdRouteImport.update({
   path: '/car/$carId',
   getParentRoute: () => AppIntegrationsRouteRoute,
 } as any)
+const AppIntegrationsEvIndexRoute = AppIntegrationsEvIndexRouteImport.update({
+  id: '/ev/',
+  path: '/ev/',
+  getParentRoute: () => AppIntegrationsRouteRoute,
+} as any)
 const AppIntegrationsHomeIndexRoute =
   AppIntegrationsHomeIndexRouteImport.update({
     id: '/home/',
@@ -321,10 +328,16 @@ const AppIntegrationsSungrowSplatRoute =
     path: '/sungrow/$',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
-const AppIntegrationsTeslaIndexRoute =
-  AppIntegrationsTeslaIndexRouteImport.update({
-    id: '/tesla/',
-    path: '/tesla/',
+const AppIntegrationsTeslaSplatRoute =
+  AppIntegrationsTeslaSplatRouteImport.update({
+    id: '/tesla/$',
+    path: '/tesla/$',
+    getParentRoute: () => AppIntegrationsRouteRoute,
+  } as any)
+const AppIntegrationsEvTeslaIndexRoute =
+  AppIntegrationsEvTeslaIndexRouteImport.update({
+    id: '/ev/tesla/',
+    path: '/ev/tesla/',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
 const AppIntegrationsHomeIntegrationIndexRoute =
@@ -363,10 +376,10 @@ const AppIntegrationsInvertersBrandImportRoute =
     path: '/inverters/$brand/import',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
-const AppIntegrationsTeslaCarCarIdRoute =
-  AppIntegrationsTeslaCarCarIdRouteImport.update({
-    id: '/tesla/car/$carId',
-    path: '/tesla/car/$carId',
+const AppIntegrationsEvTeslaCarCarIdRoute =
+  AppIntegrationsEvTeslaCarCarIdRouteImport.update({
+    id: '/ev/tesla/car/$carId',
+    path: '/ev/tesla/car/$carId',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
 
@@ -417,17 +430,19 @@ export interface FileRoutesByFullPath {
   '/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
   '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
+  '/integrations/tesla/$': typeof AppIntegrationsTeslaSplatRoute
   '/integrations/car/': typeof AppIntegrationsCarIndexRoute
+  '/integrations/ev/': typeof AppIntegrationsEvIndexRoute
   '/integrations/home/': typeof AppIntegrationsHomeIndexRoute
   '/integrations/inverters/': typeof AppIntegrationsInvertersIndexRoute
-  '/integrations/tesla/': typeof AppIntegrationsTeslaIndexRoute
   '/integrations/home/$integration/$device': typeof AppIntegrationsHomeIntegrationDeviceRoute
   '/integrations/inverters/$brand/$role': typeof AppIntegrationsInvertersBrandRoleRoute
   '/integrations/inverters/$brand/connect': typeof AppIntegrationsInvertersBrandConnectRoute
   '/integrations/inverters/$brand/import': typeof AppIntegrationsInvertersBrandImportRoute
-  '/integrations/tesla/car/$carId': typeof AppIntegrationsTeslaCarCarIdRoute
+  '/integrations/ev/tesla/': typeof AppIntegrationsEvTeslaIndexRoute
   '/integrations/home/$integration/': typeof AppIntegrationsHomeIntegrationIndexRoute
   '/integrations/inverters/$brand/': typeof AppIntegrationsInvertersBrandIndexRoute
+  '/integrations/ev/tesla/car/$carId': typeof AppIntegrationsEvTeslaCarCarIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -474,17 +489,19 @@ export interface FileRoutesByTo {
   '/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
   '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
+  '/integrations/tesla/$': typeof AppIntegrationsTeslaSplatRoute
   '/integrations/car': typeof AppIntegrationsCarIndexRoute
+  '/integrations/ev': typeof AppIntegrationsEvIndexRoute
   '/integrations/home': typeof AppIntegrationsHomeIndexRoute
   '/integrations/inverters': typeof AppIntegrationsInvertersIndexRoute
-  '/integrations/tesla': typeof AppIntegrationsTeslaIndexRoute
   '/integrations/home/$integration/$device': typeof AppIntegrationsHomeIntegrationDeviceRoute
   '/integrations/inverters/$brand/$role': typeof AppIntegrationsInvertersBrandRoleRoute
   '/integrations/inverters/$brand/connect': typeof AppIntegrationsInvertersBrandConnectRoute
   '/integrations/inverters/$brand/import': typeof AppIntegrationsInvertersBrandImportRoute
-  '/integrations/tesla/car/$carId': typeof AppIntegrationsTeslaCarCarIdRoute
+  '/integrations/ev/tesla': typeof AppIntegrationsEvTeslaIndexRoute
   '/integrations/home/$integration': typeof AppIntegrationsHomeIntegrationIndexRoute
   '/integrations/inverters/$brand': typeof AppIntegrationsInvertersBrandIndexRoute
+  '/integrations/ev/tesla/car/$carId': typeof AppIntegrationsEvTeslaCarCarIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -535,17 +552,19 @@ export interface FileRoutesById {
   '/_app/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/_app/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
   '/_app/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
+  '/_app/integrations/tesla/$': typeof AppIntegrationsTeslaSplatRoute
   '/_app/integrations/car/': typeof AppIntegrationsCarIndexRoute
+  '/_app/integrations/ev/': typeof AppIntegrationsEvIndexRoute
   '/_app/integrations/home/': typeof AppIntegrationsHomeIndexRoute
   '/_app/integrations/inverters/': typeof AppIntegrationsInvertersIndexRoute
-  '/_app/integrations/tesla/': typeof AppIntegrationsTeslaIndexRoute
   '/_app/integrations/home/$integration/$device': typeof AppIntegrationsHomeIntegrationDeviceRoute
   '/_app/integrations/inverters/$brand/$role': typeof AppIntegrationsInvertersBrandRoleRoute
   '/_app/integrations/inverters/$brand/connect': typeof AppIntegrationsInvertersBrandConnectRoute
   '/_app/integrations/inverters/$brand/import': typeof AppIntegrationsInvertersBrandImportRoute
-  '/_app/integrations/tesla/car/$carId': typeof AppIntegrationsTeslaCarCarIdRoute
+  '/_app/integrations/ev/tesla/': typeof AppIntegrationsEvTeslaIndexRoute
   '/_app/integrations/home/$integration/': typeof AppIntegrationsHomeIntegrationIndexRoute
   '/_app/integrations/inverters/$brand/': typeof AppIntegrationsInvertersBrandIndexRoute
+  '/_app/integrations/ev/tesla/car/$carId': typeof AppIntegrationsEvTeslaCarCarIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -596,17 +615,19 @@ export interface FileRouteTypes {
     | '/integrations/car/$carId'
     | '/integrations/inverters/connect'
     | '/integrations/sungrow/$'
+    | '/integrations/tesla/$'
     | '/integrations/car/'
+    | '/integrations/ev/'
     | '/integrations/home/'
     | '/integrations/inverters/'
-    | '/integrations/tesla/'
     | '/integrations/home/$integration/$device'
     | '/integrations/inverters/$brand/$role'
     | '/integrations/inverters/$brand/connect'
     | '/integrations/inverters/$brand/import'
-    | '/integrations/tesla/car/$carId'
+    | '/integrations/ev/tesla/'
     | '/integrations/home/$integration/'
     | '/integrations/inverters/$brand/'
+    | '/integrations/ev/tesla/car/$carId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -653,17 +674,19 @@ export interface FileRouteTypes {
     | '/integrations/car/$carId'
     | '/integrations/inverters/connect'
     | '/integrations/sungrow/$'
+    | '/integrations/tesla/$'
     | '/integrations/car'
+    | '/integrations/ev'
     | '/integrations/home'
     | '/integrations/inverters'
-    | '/integrations/tesla'
     | '/integrations/home/$integration/$device'
     | '/integrations/inverters/$brand/$role'
     | '/integrations/inverters/$brand/connect'
     | '/integrations/inverters/$brand/import'
-    | '/integrations/tesla/car/$carId'
+    | '/integrations/ev/tesla'
     | '/integrations/home/$integration'
     | '/integrations/inverters/$brand'
+    | '/integrations/ev/tesla/car/$carId'
   id:
     | '__root__'
     | '/_app'
@@ -713,17 +736,19 @@ export interface FileRouteTypes {
     | '/_app/integrations/car/$carId'
     | '/_app/integrations/inverters/connect'
     | '/_app/integrations/sungrow/$'
+    | '/_app/integrations/tesla/$'
     | '/_app/integrations/car/'
+    | '/_app/integrations/ev/'
     | '/_app/integrations/home/'
     | '/_app/integrations/inverters/'
-    | '/_app/integrations/tesla/'
     | '/_app/integrations/home/$integration/$device'
     | '/_app/integrations/inverters/$brand/$role'
     | '/_app/integrations/inverters/$brand/connect'
     | '/_app/integrations/inverters/$brand/import'
-    | '/_app/integrations/tesla/car/$carId'
+    | '/_app/integrations/ev/tesla/'
     | '/_app/integrations/home/$integration/'
     | '/_app/integrations/inverters/$brand/'
+    | '/_app/integrations/ev/tesla/car/$carId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1056,6 +1081,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsCarCarIdRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
+    '/_app/integrations/ev/': {
+      id: '/_app/integrations/ev/'
+      path: '/ev'
+      fullPath: '/integrations/ev/'
+      preLoaderRoute: typeof AppIntegrationsEvIndexRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
     '/_app/integrations/home/': {
       id: '/_app/integrations/home/'
       path: '/home'
@@ -1084,11 +1116,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsSungrowSplatRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/tesla/': {
-      id: '/_app/integrations/tesla/'
-      path: '/tesla'
-      fullPath: '/integrations/tesla/'
-      preLoaderRoute: typeof AppIntegrationsTeslaIndexRouteImport
+    '/_app/integrations/tesla/$': {
+      id: '/_app/integrations/tesla/$'
+      path: '/tesla/$'
+      fullPath: '/integrations/tesla/$'
+      preLoaderRoute: typeof AppIntegrationsTeslaSplatRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
+    '/_app/integrations/ev/tesla/': {
+      id: '/_app/integrations/ev/tesla/'
+      path: '/ev/tesla'
+      fullPath: '/integrations/ev/tesla/'
+      preLoaderRoute: typeof AppIntegrationsEvTeslaIndexRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
     '/_app/integrations/home/$integration/': {
@@ -1133,11 +1172,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsInvertersBrandImportRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/tesla/car/$carId': {
-      id: '/_app/integrations/tesla/car/$carId'
-      path: '/tesla/car/$carId'
-      fullPath: '/integrations/tesla/car/$carId'
-      preLoaderRoute: typeof AppIntegrationsTeslaCarCarIdRouteImport
+    '/_app/integrations/ev/tesla/car/$carId': {
+      id: '/_app/integrations/ev/tesla/car/$carId'
+      path: '/ev/tesla/car/$carId'
+      fullPath: '/integrations/ev/tesla/car/$carId'
+      preLoaderRoute: typeof AppIntegrationsEvTeslaCarCarIdRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
   }
@@ -1151,17 +1190,19 @@ interface AppIntegrationsRouteRouteChildren {
   AppIntegrationsCarCarIdRoute: typeof AppIntegrationsCarCarIdRoute
   AppIntegrationsInvertersConnectRoute: typeof AppIntegrationsInvertersConnectRoute
   AppIntegrationsSungrowSplatRoute: typeof AppIntegrationsSungrowSplatRoute
+  AppIntegrationsTeslaSplatRoute: typeof AppIntegrationsTeslaSplatRoute
   AppIntegrationsCarIndexRoute: typeof AppIntegrationsCarIndexRoute
+  AppIntegrationsEvIndexRoute: typeof AppIntegrationsEvIndexRoute
   AppIntegrationsHomeIndexRoute: typeof AppIntegrationsHomeIndexRoute
   AppIntegrationsInvertersIndexRoute: typeof AppIntegrationsInvertersIndexRoute
-  AppIntegrationsTeslaIndexRoute: typeof AppIntegrationsTeslaIndexRoute
   AppIntegrationsHomeIntegrationDeviceRoute: typeof AppIntegrationsHomeIntegrationDeviceRoute
   AppIntegrationsInvertersBrandRoleRoute: typeof AppIntegrationsInvertersBrandRoleRoute
   AppIntegrationsInvertersBrandConnectRoute: typeof AppIntegrationsInvertersBrandConnectRoute
   AppIntegrationsInvertersBrandImportRoute: typeof AppIntegrationsInvertersBrandImportRoute
-  AppIntegrationsTeslaCarCarIdRoute: typeof AppIntegrationsTeslaCarCarIdRoute
+  AppIntegrationsEvTeslaIndexRoute: typeof AppIntegrationsEvTeslaIndexRoute
   AppIntegrationsHomeIntegrationIndexRoute: typeof AppIntegrationsHomeIntegrationIndexRoute
   AppIntegrationsInvertersBrandIndexRoute: typeof AppIntegrationsInvertersBrandIndexRoute
+  AppIntegrationsEvTeslaCarCarIdRoute: typeof AppIntegrationsEvTeslaCarCarIdRoute
 }
 
 const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
@@ -1172,10 +1213,11 @@ const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
   AppIntegrationsCarCarIdRoute: AppIntegrationsCarCarIdRoute,
   AppIntegrationsInvertersConnectRoute: AppIntegrationsInvertersConnectRoute,
   AppIntegrationsSungrowSplatRoute: AppIntegrationsSungrowSplatRoute,
+  AppIntegrationsTeslaSplatRoute: AppIntegrationsTeslaSplatRoute,
   AppIntegrationsCarIndexRoute: AppIntegrationsCarIndexRoute,
+  AppIntegrationsEvIndexRoute: AppIntegrationsEvIndexRoute,
   AppIntegrationsHomeIndexRoute: AppIntegrationsHomeIndexRoute,
   AppIntegrationsInvertersIndexRoute: AppIntegrationsInvertersIndexRoute,
-  AppIntegrationsTeslaIndexRoute: AppIntegrationsTeslaIndexRoute,
   AppIntegrationsHomeIntegrationDeviceRoute:
     AppIntegrationsHomeIntegrationDeviceRoute,
   AppIntegrationsInvertersBrandRoleRoute:
@@ -1184,11 +1226,12 @@ const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
     AppIntegrationsInvertersBrandConnectRoute,
   AppIntegrationsInvertersBrandImportRoute:
     AppIntegrationsInvertersBrandImportRoute,
-  AppIntegrationsTeslaCarCarIdRoute: AppIntegrationsTeslaCarCarIdRoute,
+  AppIntegrationsEvTeslaIndexRoute: AppIntegrationsEvTeslaIndexRoute,
   AppIntegrationsHomeIntegrationIndexRoute:
     AppIntegrationsHomeIntegrationIndexRoute,
   AppIntegrationsInvertersBrandIndexRoute:
     AppIntegrationsInvertersBrandIndexRoute,
+  AppIntegrationsEvTeslaCarCarIdRoute: AppIntegrationsEvTeslaCarCarIdRoute,
 }
 
 const AppIntegrationsRouteRouteWithChildren =

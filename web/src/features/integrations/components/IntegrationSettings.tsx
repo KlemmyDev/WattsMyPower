@@ -9,7 +9,7 @@ import { useLocationSet } from "~/features/common/settings/hooks";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { useForecast } from "~/features/common/weather/hooks";
 import { teslaQuery } from "~/features/ev/api";
-import { MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
+import { teslaSummary } from "~/features/ev/utils";
 import { gridQuery } from "~/features/grid/api";
 import { homeQuery } from "~/features/home/api";
 import type { HomeIntegration, HomeOverview } from "~/features/home/types";
@@ -27,7 +27,7 @@ type GroupId = "energy" | "home" | "vehicles" | "services";
 const GROUPS: { id: GroupId; title: string; sub: string }[] = [
   { id: "energy", title: "Solar and battery", sub: "Inverters it reads on your network, by brand" },
   { id: "home", title: "Smart home", sub: "Plugs, meters and appliances, for the breakdown on the Home page" },
-  { id: "vehicles", title: "Electric vehicles", sub: "Your Tesla, and charging it from spare solar" },
+  { id: "vehicles", title: "Electric vehicles", sub: "Your car's charge, and charging it from spare solar" },
   { id: "services", title: "Grid, prices and weather", sub: "Outages and prices around you, and the solar forecast" },
 ];
 
@@ -304,44 +304,37 @@ function useGridEntry(): Entry {
   };
 }
 
-function useTeslaEntry(): Entry {
+/** Electric vehicles as one integration, opening to its brands (just Tesla for now): a card once a Tesla's connected,
+ * else a tile to connect one. */
+function useEvEntry(): Entry {
   const { data: status } = useQuery(teslaQuery);
-  const connected = !!status?.connected;
-  const on = connected && !status?.error;
-  const label = status?.error ? "Not updating" : status?.provider ? PROVIDER_LABEL[status.provider] : "Connected";
-  const detail = (status?.vehicles ?? [])
-    .map((v) =>
-      [v.name ?? "Tesla", v.state?.soc != null && `${Math.round(v.state.soc)}%`, MODE_LABEL[v.control.mode]]
-        .filter(Boolean)
-        .join(" · "),
-    )
-    .join(", ");
+  const tesla = teslaSummary(status);
   return {
-    id: "tesla",
+    id: "ev",
     group: "vehicles",
-    name: "Tesla",
-    connected,
-    attention: connected && !on,
-    view: connected ? (
+    name: "Electric vehicles",
+    connected: tesla.connected,
+    attention: tesla.connected && !tesla.on,
+    view: tesla.connected ? (
       <IntegrationLink
         card
-        to="/integrations/tesla"
-        icon={status?.provider === "bluetooth" ? "bluetooth" : "bolt"}
-        name="Tesla"
-        status={label}
-        on={on}
-        attention={!on}
-        detail={detail || "No cars yet"}
-        tags={tags(status?.provider === "bluetooth" ? "bluetooth" : "cloud")}
+        to="/integrations/ev"
+        icon="car"
+        name="Electric vehicles"
+        status={tesla.on ? "Connected" : `Tesla: ${tesla.status.toLowerCase()}`}
+        on={tesla.on}
+        attention={!tesla.on}
+        detail={<span className="line-clamp-2">{tesla.detail}</span>}
+        tags={tags(tesla.reach)}
       />
     ) : (
       <IntegrationLink
         connect
-        to="/integrations/tesla"
+        to="/integrations/ev"
         icon="car"
-        name="Tesla"
-        detail="Over Bluetooth or through Tessie: its level, its charging at home, and charging it from spare solar"
-        tags={tags(["bluetooth", "cloud"])}
+        name="Electric vehicles"
+        detail="Your Tesla, over Bluetooth or through Tessie: its level, its charging at home, and charging it from spare solar"
+        tags={tags(tesla.reach)}
       />
     ),
   };
@@ -472,7 +465,7 @@ export function IntegrationSettings() {
   const entries = [
     ...useInverterEntries(),
     ...homeEntries(home),
-    useTeslaEntry(),
+    useEvEntry(),
     useGridEntry(),
     useAmberEntry(),
     useWeatherEntry(),
