@@ -3,16 +3,17 @@ Whether a newer version is on GitHub (Manage → System → Updates, and the ver
 
 It follows a release channel (Manage → System → Updates), each a commit on GitHub:
 - nightly: the latest commit on main, so every change as it's merged;
-- beta: the newest release tag, a pre-release (v2026.10.9-beta, -alpha, -rc.2…) or a stable one, whichever is newer;
+- beta: the newest release tag, a pre-release (v2026.10.9-beta, -beta.2…) or a stable one, whichever is newer;
 - stable: the newest stable release tag (v2026.10.9, with nothing after the version).
-scripts/release.sh tags them. Every few hours, and when asked, the channel's commit is compared with the commit this was
+scripts/release.sh tags them; no other tags count. Every few hours, and when asked, the channel's commit is compared with the commit this was
 built from (app.core.version.COMMIT), and GitHub's compare counts the commits between: commits it has that this hasn't
 make it an update; only commits this has that it hasn't (moving to an older channel, nightly to stable) make it older,
 which can be installed too, going back. Its version is read from that commit's pyproject.toml. Without a commit to
 compare (an image built without install.sh), or one GitHub doesn't know (a local build), the versions are compared.
 
 The channel is kept in the folder shared with the host (below, `channel`), where install.sh reads it too: an update,
-from here or by hand, goes to the channel's commit, whichever way that is.
+from here or by hand, goes to the channel's commit, whichever way that is. install.sh saves it on every install: beta
+for a new one, and nightly for one from before beta was the default (which followed main without it saved).
 
 Manage → System turns it off (update_check), and then nothing is asked of GitHub but a check asked for by hand. A
 check makes three requests at most, well inside GitHub's 60 an hour without an account.
@@ -53,19 +54,33 @@ RECENT = 15 * 60  # a finished update is reported for this long
 LOG_LINES = 12
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 CHANNELS = ("nightly", "beta", "stable")
-DEFAULT_CHANNEL = "nightly"
-# A release tag: v and the version, and for a pre-release a hyphen and what it is (v2026.10.9-beta, v2026.10.9-rc.2).
-# install.sh picks the same tags, with git's version sort.
-TAG = re.compile(r"v(\d+(?:\.\d+)*)(?:-([0-9A-Za-z.]+))?")
+# Without a channel saved (install.sh saves one, so only an image built some other way): what a new install follows.
+DEFAULT_CHANNEL = "beta"
+# A release tag: v and the version, and for a pre-release -beta, then .2, .3… for the same version's next ones
+# (v2026.10.9-beta, v2026.10.9-beta.2), as scripts/release.sh makes them. Any other tag isn't a release.
+# install.sh and scripts/release.sh pick the same tags, in the same order (git's version sort).
+TAG = re.compile(r"v(\d+(?:\.\d+)*)(-beta(?:\.(\d+))?)?")
 
 
-def tag_key(name: str) -> tuple[tuple[int, ...], bool, tuple[int, ...]] | None:
+def tag_key(name: str) -> tuple[tuple[int, ...], bool, int] | None:
     """A release tag's place among the others (None for a tag that isn't one): by version, then a stable release after
-    the same version's pre-releases, then the pre-releases by their numbers (-beta, -beta.2)."""
+    the same version's betas, then the betas by their number (-beta is the first, then -beta.2)."""
     m = TAG.fullmatch(name)
     if not m:
         return None
-    return version_key(m[1]), m[2] is None, version_key(m[2] or "")
+    return version_key(m[1]), m[2] is None, int(m[3] or 1)
+
+
+def _on_windows() -> bool:
+    """Whether it's running on Windows, in WSL (as install.ps1 sets it up): a container shares WSL's kernel, whose
+    release says so (5.15.153.1-microsoft-standard-WSL2)."""
+    try:
+        return "microsoft" in Path("/proc/sys/kernel/osrelease").read_text().lower()
+    except OSError:
+        return False
+
+
+WINDOWS = _on_windows()
 
 
 def newest_tag(tags: list[dict[str, Any]], channel: str) -> dict[str, Any] | None:
@@ -213,6 +228,8 @@ class UpdateService:
             "error": error,
             "repo": REPO,
             "branch": BRANCH,
+            # Installed (and updated by hand) with install.ps1, rather than install.sh, for Settings to say so.
+            "windows": WINDOWS,
             "install": self.installer(),
         }
 
@@ -234,7 +251,8 @@ class UpdateService:
         here = bool(seen and isinstance(seen.get("seen_at"), (int, float)) and now - seen["seen_at"] < UPDATER_GONE)
         why = None
         if not seen:
-            why = "Updating from here isn't set up yet: run bash install.sh once more on the machine it's installed on."
+            again = "install.ps1 once more on the PC" if WINDOWS else "bash install.sh once more on the machine"
+            why = f"Updating from here isn't set up yet: run {again} it's installed on."
         elif not here:
             why = "The updater on this machine hasn't checked in for a few minutes (it runs every minute, from cron)."
         elif not seen.get("can_update"):

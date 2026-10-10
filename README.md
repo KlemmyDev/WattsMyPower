@@ -92,6 +92,12 @@ Windows 11 (22H2 or later). WattsMyPower runs in its own WSL (Windows Subsystem 
 
    It finishes by printing the dashboard's address, for example `http://192.168.1.50:8080`.
 
+It follows the beta [release channel](#everyday-use). To choose another, pass `-Channel` (`nightly`, `beta` or `stable`):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1))) -Channel stable
+```
+
 To update, run the same command again. For everything in [Everyday use](#everyday-use), open the distribution with `wsl -d WattsMyPower`, then `cd ~/wattsmypower`. Its files are at `\\wsl$\WattsMyPower\root\wattsmypower` in File Explorer, for example to copy a backup.
 
 If creating the distribution fails because virtualization is off, turn it on in the PC's BIOS or UEFI settings (often called Intel VT-x, AMD-V or SVM). Windows 10 isn't supported: it doesn't have mirrored networking, which lets other devices reach the dashboard.
@@ -112,6 +118,12 @@ bash install.sh
 ```
 
 It asks for your time zone and the port for the dashboard (8080 unless you change it), saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
+
+It installs the beta [release channel](#everyday-use)'s version. To choose another (`nightly`, `beta` or `stable`), pass `--channel` after `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash -s -- --channel stable
+```
 
 ### Open the dashboard
 
@@ -145,9 +157,11 @@ Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `
 
 | Channel | What it gets |
 |---|---|
-| Nightly (the default) | every change as soon as it's merged to `main` |
-| Beta | pre-releases (tags like `v2026.10.10-beta`, `-alpha`, `-rc.2`) and every stable release, whichever is newer |
+| Nightly | every change as soon as it's merged to `main` |
+| Beta (the default) | pre-releases (tags like `v2026.10.10-beta`, then `-beta.2`) and every stable release, whichever is newer |
 | Stable | stable releases only (tags like `v2026.10.10`) |
+
+A new install follows Beta. An install from before Beta was the default, with no channel chosen, carries on following Nightly (`install.sh` saves that on its next update); `--channel beta` moves it. Until something is released on a channel, an install on it stays on the version it has.
 
 An update installs the channel's version, so moving to a channel behind the one you're on (Nightly to Stable) goes back to its older version: the dashboard offers **Go back** rather than **Update now**, and `install.sh` lists the changes it leaves out. The databases are backed up first, as on any update; tables and columns a newer version added are left as they are and used again when it's updated. The channel is kept in `data/update/channel`, where the dashboard and `install.sh` both read it.
 
@@ -415,7 +429,7 @@ scripts/release.sh stable v2026.10.10-beta  # promote a beta that's been tried
 scripts/release.sh stable                   # or the latest on main, straight to stable
 ```
 
-The version is the commit's own, from `pyproject.toml`, so bump it (and merge that) before a stable release of new changes: each stable tag is used once. It shows what's changed since the channel's last release and asks before pushing the tag. Installs on the channel find it at their next check. Releases are only made from commits on `main`. Deleting a tag on GitHub takes a release back: installs on its channel move to the one before at their next update.
+The version is the commit's own, from `pyproject.toml`, so bump it (and merge that) before a stable release of new changes: each stable tag is used once. It shows what's changed since the channel's last release and asks before pushing the tag. Installs on the channel find it at their next check. Releases are only made from commits on `main` whose CI (the GitHub Actions workflow named `CI`) has passed; if `gh` can't say, it asks, and `--skip-ci` releases anyway. The GitHub release's notes are the changes since the channel's last release, or `--notes-file <file>`'s; the first release on a channel, with no last release, gets a short note pointing at `CHANGELOG.md` unless `--notes-file` is given. Deleting a tag on GitHub takes a release back: installs on its channel move to the one before at their next update.
 
 ## Layout
 

@@ -370,21 +370,47 @@ function Version({
   );
 }
 
-/** How to update by hand, while updating from here isn't set up (or can't run), and why not. */
+/**
+ * How to update by hand, while updating from here isn't set up (or can't run), and why not. On Windows, install.ps1
+ * again (it runs install.sh in WattsMyPower's WSL distribution), or install.sh in there.
+ */
 function HowToUpdate({ s }: { s: UpdateStatus }) {
+  const what = `It installs ${channelName(s.channel)}'s version, backs up your data and rebuilds; your settings and history are kept.`;
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-line-subtle bg-surface-inset p-4 text-sm">
       <span className="font-medium">
         {s.move === "older" ? `To go back to v${s.latest!.version}` : `To update to ${newerWords(s)}`}
       </span>
-      <span className="text-pretty text-ink-muted">
-        On the machine WattsMyPower runs on, run this in its folder. It installs {channelName(s.channel)}'s version,
-        backs up your data and rebuilds; your settings and history are kept.
-      </span>
-      <code className="w-fit rounded-lg bg-canvas px-3 py-1.5 font-mono text-[13px] text-ink select-all">
-        bash install.sh
-      </code>
+      {s.windows ? (
+        <>
+          <span className="text-pretty text-ink-muted">
+            On the Windows PC WattsMyPower runs on, run the installer again in PowerShell. {what}
+          </span>
+          <Command>{`irm https://raw.githubusercontent.com/${s.repo}/${s.branch}/install.ps1 | iex`}</Command>
+          <span className="text-[13px] text-pretty text-ink-muted">
+            Or in its Linux distribution (<code className="font-mono">wsl -d WattsMyPower</code>, then{" "}
+            <code className="font-mono">cd ~/wattsmypower</code>):
+          </span>
+          <Command>bash install.sh</Command>
+        </>
+      ) : (
+        <>
+          <span className="text-pretty text-ink-muted">
+            On the machine WattsMyPower runs on, run this in its folder. {what}
+          </span>
+          <Command>bash install.sh</Command>
+        </>
+      )}
       {s.install.why && <span className="text-[13px] text-pretty text-ink-faint">{s.install.why}</span>}
     </div>
+  );
+}
+
+/** A command to copy (selected whole with a click). */
+function Command({ children }: { children: string }) {
+  return (
+    <code className="w-fit max-w-full rounded-lg bg-canvas px-3 py-1.5 font-mono text-[13px] break-all text-ink select-all">
+      {children}
+    </code>
   );
 }
