@@ -12,6 +12,8 @@ type TileProps = {
   /** The pill shows it as working. */
   on?: boolean;
   detail: ReactNode;
+  /** Small tags under the detail: how it's read ("On your network"), "Untested". */
+  tags?: ReactNode;
   /** A card of its own (in a grid of them), rather than a row in a settings card. */
   card?: boolean;
 };
@@ -21,7 +23,7 @@ const CARD =
   "flex items-center gap-4 rounded-3xl border border-line-subtle glass p-6 transition-[translate,border-color,background-color] duration-200 ease-out-soft max-sm:rounded-[20px] max-sm:p-5";
 
 /** Icon, name with a status pill, and a line of detail. */
-function TileBody({ icon, name, status, on, detail }: TileProps) {
+function TileBody({ icon, name, status, on, detail, tags }: TileProps) {
   return (
     <>
       <div className="flex size-11 flex-none items-center justify-center rounded-full bg-canvas text-ink">
@@ -37,13 +39,14 @@ function TileBody({ icon, name, status, on, detail }: TileProps) {
           )}
         </div>
         <span className="text-[13px] text-pretty text-ink-muted">{detail}</span>
+        {tags && <span className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">{tags}</span>}
       </div>
     </>
   );
 }
 
 const TileAnchor = forwardRef<HTMLAnchorElement, TileProps & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children">>(
-  function TileAnchor({ icon, name, status, on, detail, card, className, ...rest }, ref) {
+  function TileAnchor({ icon, name, status, on, detail, tags, card, className, ...rest }, ref) {
     return (
       <a
         ref={ref}
@@ -54,7 +57,7 @@ const TileAnchor = forwardRef<HTMLAnchorElement, TileProps & Omit<AnchorHTMLAttr
         )}
         {...rest}
       >
-        <TileBody icon={icon} name={name} status={status} on={on} detail={detail} />
+        <TileBody icon={icon} name={name} status={status} on={on} detail={detail} tags={tags} />
         <Icon name="chevR" size={18} className="text-ink-faint" />
       </a>
     );

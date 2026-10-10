@@ -51,6 +51,7 @@ class Electrolux(Integration):
     id = "electrolux"
     name = "Electrolux"
     via = "Electrolux Group's developer API"
+    cloud = True
     about = (
         "Electrolux, AEG, Frigidaire and Westinghouse appliances in the Electrolux, AEG or +home app: each fridge's "
         "temperatures, doors and alerts, and when washers, dryers, dishwashers and ovens run. Through Electrolux's "

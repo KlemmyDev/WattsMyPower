@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
+import { ChoiceTiles, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { connectInverter, scanQuery, startScan } from "~/features/integrations/api";
 import type {
   ConnectedInverter,
@@ -127,14 +128,22 @@ function FoundRow({
 }
 
 /** Scanning the home network for inverters, and what it found. */
+const SCAN_SUB =
+  "Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle, Fronius' Solar API), then asks what's there. Takes up to a minute.";
+const MANUAL_SUB =
+  "The dongle's IP address is in your router's list of connected devices, or in the inverter's app (iSolarCloud, SEMS, Solar.web).";
+
 function Scan({
   overview,
   busy,
   onConnect,
+  bare,
 }: {
   overview: IntegrationsOverview;
   busy: boolean;
   onConnect: (f: FoundDevice) => void;
+  /** Without its own heading: it's in a section that has one. */
+  bare?: boolean;
 }) {
   const qc = useQueryClient();
   const [network, setNetwork] = useState(overview.network);
@@ -157,13 +166,12 @@ function Scan({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h3 className="text-[15px] font-semibold">Find inverters on your network</h3>
-        <span className="text-[13px] text-ink-muted">
-          Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle, Fronius' Solar API), then asks
-          what's there. Takes up to a minute.
-        </span>
-      </div>
+      {!bare && (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[15px] font-semibold">Find inverters on your network</h3>
+          <span className="text-[13px] text-ink-muted">{SCAN_SUB}</span>
+        </div>
+      )}
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
         <Field label="Network" help="Your home network, e.g. 192.168.1.0/24" className="w-[240px] max-sm:w-full">
           <Input
@@ -233,13 +241,21 @@ function Manual({
   busy,
   error,
   onConnect,
+  brand: initialBrand,
+  bare,
 }: {
   overview: IntegrationsOverview;
   busy: boolean;
   error: unknown;
   onConnect: (role: InverterRole, body: ConnectRequest) => void;
+  /** The brand to offer first. */
+  brand?: string;
+  bare?: boolean;
 }) {
-  const [driver, setDriver] = useState(overview.kinds[0]?.driver ?? "");
+  const brands = [...new Set(overview.kinds.map((k) => k.brand))];
+  const [brand, setBrand] = useState(initialBrand && brands.includes(initialBrand) ? initialBrand : (brands[0] ?? ""));
+  const kinds = overview.kinds.filter((k) => k.brand === brand);
+  const [driver, setDriver] = useState(kinds[0]?.driver ?? "");
   const [host, setHost] = useState("");
   const [tried, setTried] = useState<string | null>(null);
   const kind = overview.kinds.find((k) => k.driver === driver);
@@ -260,19 +276,35 @@ function Manual({
         connect(true);
       }}
     >
-      <div className="flex flex-col gap-1">
-        <h3 className="text-[15px] font-semibold">Or enter its address</h3>
-        <span className="text-[13px] text-ink-muted">
-          The dongle's IP address is in your router's list of connected devices, or in the inverter's app (iSolarCloud,
-          SEMS, Solar.web).
-        </span>
-      </div>
+      {!bare && (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[15px] font-semibold">Or enter its address</h3>
+          <span className="text-[13px] text-ink-muted">{MANUAL_SUB}</span>
+        </div>
+      )}
+      {brands.length > 1 && (
+        <ChoiceTiles
+          label="Brand"
+          value={brand}
+          onChange={(b) => {
+            setBrand(b);
+            setDriver(overview.kinds.find((k) => k.brand === b)?.driver ?? "");
+          }}
+          min="9rem"
+          phone={3}
+          options={brands.map((b) => ({
+            value: b,
+            title: b,
+            sub: overview.kinds.some((k) => k.brand === b && k.verified === false) ? "Untested" : "Tried at home",
+          }))}
+        />
+      )}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-4">
         <Field label="Inverter">
           <Select value={driver} onChange={(e) => setDriver(e.target.value)}>
-            {overview.kinds.map((k) => (
+            {kinds.map((k) => (
               <option key={k.driver} value={k.driver}>
-                {k.brand} {k.label} ({ROLE_NAME[k.role]}){k.verified === false ? ", untested" : ""}
+                {k.label} ({ROLE_NAME[k.role]})
               </option>
             ))}
           </Select>
@@ -315,25 +347,33 @@ function Manual({
   );
 }
 
-/** Connecting an inverter, by scanning the network or by address (Manage → Integrations → Sungrow, and the set-up guide). */
+/**
+ * Connecting an inverter, by scanning the network or by address: in a card of its own (the set-up guide), or as two
+ * sections (`sections`: Manage → Integrations → Inverters → Connect). `brand` is the one the address form offers first.
+ */
 export function ConnectInverter({
   overview,
   onConnected,
+  brand,
+  sections,
   className,
 }: {
   overview: IntegrationsOverview;
   onConnected: (device: ConnectResult) => void;
+  brand?: string;
+  sections?: boolean;
   className?: string;
 }) {
   const connect = useConnect(onConnected);
   const [source, setSource] = useState<"scan" | "manual">();
   const busy = connect.isPending;
 
-  return (
-    <div className={cn("flex flex-col gap-7 p-6", className)}>
+  const scan = (
+    <>
       <Scan
         overview={overview}
         busy={busy}
+        bare={sections}
         onConnect={(f) => {
           if (!f.role || !f.driver) return;
           setSource("scan");
@@ -341,16 +381,38 @@ export function ConnectInverter({
         }}
       />
       {connect.isError && source === "scan" && <HelpText tone="bad">{errorMessage(connect.error)}</HelpText>}
+    </>
+  );
+  const manual: ReactNode = (
+    <Manual
+      overview={overview}
+      busy={busy && source === "manual"}
+      error={source === "manual" ? connect.error : null}
+      brand={brand}
+      bare={sections}
+      onConnect={(role, body) => {
+        setSource("manual");
+        connect.mutate({ role, body });
+      }}
+    />
+  );
+
+  if (sections)
+    return (
+      <>
+        <SettingsSection id="h-scan" title="Find it on your network" sub={SCAN_SUB}>
+          {scan}
+        </SettingsSection>
+        <SettingsSection id="h-manual" title="Or enter its address" sub={MANUAL_SUB}>
+          {manual}
+        </SettingsSection>
+      </>
+    );
+  return (
+    <div className={cn("flex flex-col gap-7 p-6", className)}>
+      {scan}
       <div className="border-t border-line-subtle" />
-      <Manual
-        overview={overview}
-        busy={busy && source === "manual"}
-        error={source === "manual" ? connect.error : null}
-        onConnect={(role, body) => {
-          setSource("manual");
-          connect.mutate({ role, body });
-        }}
-      />
+      {manual}
     </div>
   );
 }

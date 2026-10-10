@@ -39,6 +39,8 @@ export type HomeIntegration = {
   /** The button to look for devices added since it was connected ("Look for new plugs"), if it has one. */
   find_label: string | null;
   can_switch: boolean;
+  /** Read through its maker's cloud, not on the home network. */
+  cloud: boolean;
   account: HomeAccount | null;
 };
 

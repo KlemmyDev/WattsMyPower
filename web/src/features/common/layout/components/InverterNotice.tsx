@@ -13,7 +13,7 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 export function InverterNotice() {
   const st = useLive();
   const now = useNow(30_000);
-  const connecting = useRouterState({ select: (s) => s.location.pathname.startsWith("/integrations/sungrow") });
+  const connecting = useRouterState({ select: (s) => s.location.pathname.startsWith("/integrations/inverters") });
   if (!st) return null;
   if (st.system.inverter_connected === false) {
     if (connecting) return null;
@@ -21,13 +21,13 @@ export function InverterNotice() {
       <Notice tone="info" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <span className="text-pretty">
           <span className="font-medium text-ink">No inverter connected yet.</span> Readings show here once one is.
-          Connect it in Manage → Integrations → Sungrow, or with the{" "}
+          Connect it in Manage → Integrations → Inverters, or with the{" "}
           <Link to="/welcome" search={{ step: "inverter" }}>
             set-up guide
           </Link>
           .
         </span>
-        <ButtonLink to="/integrations/sungrow/connect" variant="primary" size="sm">
+        <ButtonLink to="/integrations/inverters/connect" variant="primary" size="sm">
           Connect one
         </ButtonLink>
       </Notice>

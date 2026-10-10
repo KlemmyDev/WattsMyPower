@@ -138,6 +138,9 @@ class Integration(ABC):
     find_label: ClassVar[str | None] = None
     # Its devices can be switched on and off (see `switch`).
     can_switch: ClassVar[bool] = False
+    # Read through its maker's cloud rather than from the devices on the home network (or over Bluetooth): shown on
+    # Manage → Integrations, as a cloud can be slower, go down, or change without notice.
+    cloud: ClassVar[bool] = False
 
     def __init__(self, saved: dict[str, Any]):
         self.saved = saved

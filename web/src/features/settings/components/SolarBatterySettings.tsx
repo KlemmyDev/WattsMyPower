@@ -82,7 +82,7 @@ function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | 
           title="Your system"
           sub={last ? `Read from your inverter at ${hhmm(last)}.` : "Not read from your inverter yet."}
           aside={
-            <ButtonLink to="/integrations/sungrow" variant="outline" size="sm">
+            <ButtonLink to="/integrations/inverters" variant="outline" size="sm">
               Manage inverters
             </ButtonLink>
           }

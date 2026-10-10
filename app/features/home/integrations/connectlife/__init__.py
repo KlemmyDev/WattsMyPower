@@ -16,6 +16,7 @@ class ConnectLife(Integration):
     id = "connectlife"
     name = "Hisense"
     via = "the ConnectLife app"
+    cloud = True
     about = (
         "Hisense washers and dryers in the ConnectLife app (Gorenje and ASKO too): when each runs, and what every cycle "
         "uses."
