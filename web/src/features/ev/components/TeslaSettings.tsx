@@ -134,7 +134,12 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
           ))}
         </Select>
         {v.car != null && (
-          <ButtonLink to="/integrations/tesla/car/$carId" params={{ carId: String(v.car) }} size="sm" variant="outline">
+          <ButtonLink
+            to="/integrations/ev/tesla/car/$carId"
+            params={{ carId: String(v.car) }}
+            size="sm"
+            variant="outline"
+          >
             Details
           </ButtonLink>
         )}
@@ -193,7 +198,7 @@ function HandAdded({ status }: { status?: TeslaStatus }) {
         {loose.map((c) => (
           <IntegrationLink
             key={c.id}
-            to="/integrations/tesla/car/$carId"
+            to="/integrations/ev/tesla/car/$carId"
             params={{ carId: String(c.id) }}
             icon="car"
             name={carName(c)}
@@ -206,9 +211,9 @@ function HandAdded({ status }: { status?: TeslaStatus }) {
 }
 
 /**
- * Manage → Integrations → Tesla: how the cars are reached (over this server's Bluetooth, or through Tessie; the
- * dashboard does the same with them either way), each car and the details it charges with, pairing another over
- * Bluetooth, and switching from one way to the other.
+ * Manage → Integrations → Electric vehicles → Tesla: how the cars are reached (over this server's Bluetooth, or
+ * through Tessie; the dashboard does the same with them either way), each car and the details it charges with, pairing
+ * another over Bluetooth, and switching from one way to the other.
  */
 export function TeslaSettings() {
   const { data: status, isPending, error } = useQuery(teslaQuery);
@@ -220,7 +225,7 @@ export function TeslaSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations/ev">Electric vehicles</BackLink>}
         id="h-tesla"
         title="Tesla"
         sub="See each car's charge, and charge it from spare solar on the EV page. Over this server's Bluetooth or through Tessie: the dashboard does the same either way."
