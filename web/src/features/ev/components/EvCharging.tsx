@@ -14,7 +14,8 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
 import { EvTiming } from "~/features/ev/components/EvTiming";
 import { useEvChange } from "~/features/ev/hooks";
-import type { EvFirst, EvMode, EvVehicle } from "~/features/ev/types";
+import type { BluelinkCar, EvBrand, EvFirst, EvMode, EvVehicle } from "~/features/ev/types";
+import { appName } from "~/features/ev/utils";
 
 const MODES: { mode: EvMode; icon: IconName; title: string; about: string }[] = [
   {
@@ -202,6 +203,116 @@ function CarMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   );
 }
 
+/**
+ * The car's share of the sun, for a car that charges at one power (a Hyundai or Kia: its current can't be set): how
+ * much is spare for it now, on a scale a little past that power, with the mark it has to reach to start (and, striped,
+ * how far short it may run once it's going), and what it's drawing.
+ */
+function FixedMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
+  const s = v.state;
+  const need = v.min_w;
+  if (need == null) return null;
+  const spare = v.spare_w != null ? Math.max(0, v.spare_w) : null;
+  const draw = s?.charging ? (s.power_kw ?? 0) * 1000 : null;
+  const top = Math.max(need * 1.5, (spare ?? 0) * 1.05, draw ?? 0);
+  const at = (w: number) => `${Math.max(0, Math.min(100, (w / top) * 100))}%`;
+  const floor = Math.max(0, need - shortBy);
+  const caption =
+    draw != null
+      ? `Charging at about ${kW(draw)}`
+      : spare == null
+        ? "Working out how much is spare…"
+        : spare >= need
+          ? "Enough to charge"
+          : !s?.charging && v.solar_from
+            ? `Spare sun expected from ${hhmm(v.solar_from)}`
+            : `Needs ${kW(need - spare)} more to start`;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px]">
+        <span className="flex items-center gap-1.5">
+          <Dot color={draw != null ? CAR : COLOR.solar} />
+          <span className="text-ink-muted">{draw != null ? "Charging at" : "Spare for the car"}</span>
+          <span className="font-medium tabular-nums">{draw != null ? kW(draw) : spare != null ? kW(spare) : "—"}</span>
+        </span>
+        <span className="text-ink-muted tabular-nums">{caption}</span>
+      </div>
+      <div className="relative h-3 rounded-full bg-track">
+        {shortBy > 0 && (
+          <span
+            className="absolute inset-y-0 transition-[left,width] duration-300"
+            style={{
+              left: at(floor),
+              width: `calc(${at(need)} - ${at(floor)})`,
+              background: `repeating-linear-gradient(135deg, ${alpha(COLOR.solar, 0.5)} 0 3px, transparent 3px 6px)`,
+            }}
+          />
+        )}
+        {spare != null && (
+          <span
+            className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
+            style={{ width: at(spare), background: COLOR.solar }}
+          />
+        )}
+        <span className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-full bg-ink" style={{ left: at(need) }} />
+      </div>
+      <div className="relative h-4 text-[11px] text-ink-faint tabular-nums">
+        <span
+          className="absolute -translate-x-1/2 whitespace-nowrap"
+          style={{ left: `clamp(3rem, ${at(need)}, calc(100% - 3rem))` }}
+        >
+          Starts at {kW(need)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Charging powers a Hyundai or Kia may charge at home (W), as its charger gives them: the car can't be told to
+ * charge slower, so it's what's needed spare before it starts. Auto is what the car measured, else a 10 A portable
+ * charger's. */
+const POWERS: { value: number | "auto"; label: string; about: string }[] = [
+  { value: "auto", label: "Auto", about: "" },
+  { value: 2400, label: "10 A", about: "a 10 A portable charger (the one that comes with the car)" },
+  { value: 3600, label: "15 A", about: "a 15 A portable charger" },
+  { value: 7200, label: "32 A", about: "a single-phase wall charger" },
+  { value: 11000, label: "3-phase", about: "a three-phase wall charger" },
+];
+
+/** A Hyundai or Kia's charging power at home: what it needs spare before it starts, as it can't be slowed. */
+function ChargePower({ v, onSave }: { v: BluelinkCar; onSave: (w: number | null) => void }) {
+  const chosen = v.control.charge_w ?? "auto";
+  const preset = POWERS.find((p) => p.value === chosen);
+  const about =
+    chosen === "auto"
+      ? v.charge_from === "measured"
+        ? `It charges at ${kW(v.min_w ?? 0)} at home, as the car measured it.`
+        : `It's taken to charge at ${kW(v.min_w ?? 0)}, what a 10 A portable charger gives. Choose your charger if it's another: this car doesn't say.`
+      : preset
+        ? `${kW(v.min_w ?? 0)}: ${preset.about}.`
+        : `${kW(v.min_w ?? 0)}.`;
+  return (
+    <Row
+      title="Your charger"
+      control={
+        <Segmented
+          label="Your charger"
+          options={POWERS.map((p) => ({ value: String(p.value), label: p.label }))}
+          value={preset ? String(chosen) : "auto"}
+          onChange={(value) => onSave(value === "auto" ? null : Number(value))}
+          buttonClassName="px-3 py-1.5 text-[13px]"
+        />
+      }
+      about={
+        <>
+          {about} {v.make}'s cloud can start and stop a charge but can't set how fast it charges, so the car charges at
+          whatever its charger gives, and only starts once that much sun is spare.
+        </>
+      }
+    />
+  );
+}
+
 const AMPS_SETTLE = 700; // ms after the last tap of − or + before the current's sent
 
 /**
@@ -288,13 +399,25 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
  * share of it, then the two choices (who gets the sun first; how far it may run short through a cloud), each a row
  * with its control beside it. Then starting, stopping and its speed, now.
  */
-export function EvCharging({ v, className }: { v: EvVehicle; className?: string }) {
-  const { configure, command } = useEvChange();
+export function EvCharging({
+  v,
+  brand = "tesla",
+  className,
+}: {
+  v: EvVehicle | BluelinkCar;
+  brand?: EvBrand;
+  className?: string;
+}) {
+  const { configure, command } = useEvChange(brand);
+  // A Hyundai or Kia charges at one power: its current can't be set, so it's only started and stopped.
+  const fixed = brand === "bluelink" ? (v as BluelinkCar) : null;
+  const app = appName(v.make);
   const hasBattery = useHasBattery();
   const c = v.control;
   const s = v.state;
   const set = (body: Parameters<typeof configure.mutate>[0]) => configure.mutate(body);
-  const busy = command.isPending;
+  const busy = command.isPending || !!fixed?.pending;
+  const blocked = !!fixed && !fixed.can_command;
   // While the dashboard follows the sun it sets the speed itself; by hand only when it's manual or paused.
   const auto = c.mode !== "off" && !v.hold;
   const { amps, step, waiting, asking, confirm, cancel } = useAmps(v, command);
@@ -355,7 +478,11 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
           onChange={(mode) => mode !== c.mode && set({ vin: v.vin, mode })}
           buttonClassName="flex-1 justify-center"
         />
-        <Muted>{mode.about}</Muted>
+        <Muted>
+          {fixed && mode.mode === "solar"
+            ? "Charges when there's enough sun to spare for its charger, and stops when there isn't."
+            : mode.about}
+        </Muted>
       </div>
 
       {c.mode === "solar" && (
@@ -363,7 +490,9 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
           <Row
             title="Your sun right now"
             control={
-              perAmp && v.phases ? (
+              fixed ? (
+                <span className="text-xs text-ink-muted tabular-nums">Starts at {kW(fixed.min_w ?? 0)}</span>
+              ) : perAmp && v.phases ? (
                 <span className="text-xs text-ink-muted tabular-nums">
                   {v.phases === 1 ? "Single-phase" : `${v.phases}-phase`} · {kW(perAmp)} per amp
                 </span>
@@ -371,8 +500,9 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
             }
           >
             <SunShare carW={carW} first={c.first} />
-            <CarMeter v={v} shortBy={shortBy.value} />
+            {fixed ? <FixedMeter v={v} shortBy={shortBy.value} /> : <CarMeter v={v} shortBy={shortBy.value} />}
           </Row>
+          {fixed && <ChargePower v={fixed} onSave={(w) => set({ vin: v.vin, charge_w: w })} />}
           <Row
             title="Who gets the sun first"
             about={firstAbout}
@@ -409,7 +539,7 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
           >
             {shortBy.input}
           </Row>
-          <EvTiming v={v} hasBattery={hasBattery} />
+          <EvTiming v={v} hasBattery={hasBattery} brand={brand} />
           {s?.at_home === false && s.in_range == null && s.plugged && (
             <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
               <span>The car doesn't seem to be at home, so it won't charge from solar here. Is this your home?</span>
@@ -425,7 +555,11 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
       <Row
         title="Right now"
         control={
-          auto ? (
+          fixed ? (
+            <span className="text-xs text-ink-muted tabular-nums">
+              At {kW(fixed.min_w ?? 0)}: its speed can't be set
+            </span>
+          ) : auto ? (
             <span className="text-xs text-ink-muted">The sun sets the speed</span>
           ) : (
             <div
@@ -458,15 +592,18 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
       >
         <div className="flex flex-wrap items-center gap-3">
           {s?.charging ? (
-            <Button variant="outline" disabled={busy} onClick={() => act("stop")}>
+            <Button variant="outline" disabled={busy || blocked} onClick={() => act("stop")}>
               <Icon name="pause" size={16} /> Stop charging
             </Button>
           ) : (
-            <Button disabled={busy || !s?.plugged || s.charging_state === "Complete"} onClick={() => act("start")}>
+            <Button
+              disabled={busy || blocked || !s?.plugged || s.charging_state === "Complete"}
+              onClick={() => act("start")}
+            >
               <Icon name="bolt" size={16} /> Start charging
             </Button>
           )}
-          {auto && s?.charging && <span className="text-sm text-ink-muted tabular-nums">{ampsText}</span>}
+          {auto && s?.charging && !fixed && <span className="text-sm text-ink-muted tabular-nums">{ampsText}</span>}
         </div>
         {(asking || askAction) && (
           <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
@@ -516,9 +653,15 @@ export function EvCharging({ v, className }: { v: EvVehicle; className?: string 
               ? "Sending to your car…"
               : command.isError
                 ? errorMessage(command.error)
-                : c.mode !== "off"
-                  ? "Starting, stopping or changing the speed here or in the Tesla app pauses solar charging until you unplug."
-                  : ""}
+                : blocked
+                  ? "Enter the 4-digit PIN you use in the app (Integrations → Hyundai and Kia) to start and stop this car."
+                  : fixed?.pending
+                    ? `Sent to the car at ${hhmm(fixed.pending.at)}: waiting for it to say it's done.`
+                    : c.mode !== "off"
+                      ? fixed
+                        ? `Starting or stopping here or in the ${app} app pauses solar charging until you unplug.`
+                        : `Starting, stopping or changing the speed here or in the ${app} app pauses solar charging until you unplug.`
+                      : ""}
         </HelpText>
       </Row>
     </Card>

@@ -19,7 +19,13 @@ export type EvTimingKey =
   "start_after" | "stop_after" | "min_switch" | "amps_every" | "average" | "lead" | "battery_full";
 
 /** A change to how a car charges: a timing given as null goes back to its default. */
-export type EvControlChange = Partial<Omit<EvControl, EvTimingKey>> & Partial<Record<EvTimingKey, number | null>>;
+export type EvControlChange = Partial<Omit<EvControl, EvTimingKey>> &
+  Partial<Record<EvTimingKey, number | null>> & {
+    /** A Hyundai or Kia's: its charging power at home (W; null: measured, or the default), and how often the car
+     * itself may be asked (seconds; 0: never). */
+    charge_w?: number | null;
+    force_every?: number;
+  };
 
 /** What was last known of the car (through Tessie, or over Bluetooth). */
 export type EvCarState = {
@@ -388,4 +394,69 @@ export type BydStatus = {
   /** Mock mode: any email and password connects a made-up car. */
   mock: boolean;
   vehicles: BydCar[];
+};
+
+/** Which integration a car comes from, for what's sent to it: a Tesla's, or a Hyundai or Kia's (app.features.bluelink).
+ * Both take the same changes and commands (a Hyundai or Kia without the current). */
+export type EvBrand = "tesla" | "bluelink";
+
+/** A Hyundai or Kia, shaped as a Tesla is (so the same panel and charging card show it), with what's its own. It
+ * charges at one power (its charging power at home: `min_w`), as the current can't be set from its cloud. */
+export type BluelinkCar = Omit<EvVehicle, "state" | "control"> & {
+  state: (EvCarState & { odometer_km: number | null; limit_dc: number | null }) | null;
+  control: EvControl & {
+    /** Its charging power at home as set (W); null: measured, or the default. */
+    charge_w: number | null;
+    /** How often (seconds) the car itself may be asked, by day in Spare solar mode; 0: never. */
+    force_every: number;
+  };
+  /** A plug-in hybrid: its range is the battery's alone. */
+  hybrid: boolean;
+  /** On Hyundai and Kia's newer protocol: commands need the app's PIN. */
+  ccs2: boolean;
+  /** Where its charging power is from: set on the EV page, measured by the car charging at home, or the default. */
+  charge_from: "set" | "measured" | "default";
+  /** Whether it can be started and stopped (a CCS2 car needs the PIN). */
+  can_command: boolean;
+  /** A command sent that the car hasn't confirmed yet. */
+  pending: { action: "start" | "stop" | "limit"; at: number } | null;
+  /** When the car itself was last asked for its state (unix seconds), and until when it can't be again from the page. */
+  forced_at: number | null;
+  force_from: number | null;
+  /** What the dashboard did with it lately, newest first. */
+  events: EvEvent[];
+};
+
+export type BluelinkBrand = "hyundai" | "kia";
+
+/** A Hyundai or Kia account (read and commanded through the maker's cloud), how reading it is going, and its cars. */
+export type BluelinkStatus = {
+  connected: boolean;
+  /** Its email, partly hidden: "ma…@example.com". */
+  account: string | null;
+  brand: BluelinkBrand | null;
+  /** The makes, with what their app's called ("Bluelink", "Kia Connect"). */
+  brands: { code: BluelinkBrand; name: string; app: string }[];
+  region: string | null;
+  /** The countries an account can be in, with the makes reached there. */
+  regions: { code: string; name: string; brands: BluelinkBrand[] }[];
+  /** Whether the app's PIN is set (it never leaves the server). */
+  pin: boolean;
+  error: string | null;
+  /** The email and password were turned down: not read again until they're entered again. */
+  signed_out: boolean;
+  read_at: number | null;
+  next_read: number | null;
+  reading: boolean;
+  tick: number;
+  mock: boolean;
+  timing: Record<EvTimingKey, { default: number; min: number; max: number }>;
+  /** The charge limits it takes (50 to 100, in tens). */
+  limits: number[];
+  /** What its charging power may be (W). */
+  charge_w: { min: number; max: number; default: number };
+  /** How often the car itself may be asked (seconds; 0: never). */
+  force_choices: number[];
+  home: [number, number] | null;
+  vehicles: BluelinkCar[];
 };

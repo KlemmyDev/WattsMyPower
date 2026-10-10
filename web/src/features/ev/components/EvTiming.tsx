@@ -3,9 +3,9 @@ import { useState } from "react";
 import { duration } from "~/features/common/formatting/utils/date";
 import { Button } from "~/features/common/ui/components/Button";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { teslaQuery } from "~/features/ev/api";
+import { bluelinkQuery, teslaQuery } from "~/features/ev/api";
 import { useEvChange } from "~/features/ev/hooks";
-import type { EvTimingKey, EvVehicle } from "~/features/ev/types";
+import type { EvBrand, EvTimingKey, EvVehicle } from "~/features/ev/types";
 
 /** A wait in seconds, in words: "45 s", "1 min 30 s", "3 min", "1 h 30 min". */
 function span(secs: number): string {
@@ -168,9 +168,11 @@ const PRESET_KEYS: PresetKey[] = ["start_after", "stop_after", "min_switch", "am
  * is the one the car's timings match; Custom when none does, or once it's chosen. The home battery's full level only
  * in Custom, and only with the home battery first.
  */
-export function EvTiming({ v, hasBattery }: { v: EvVehicle; hasBattery: boolean }) {
-  const { data: status } = useQuery(teslaQuery);
-  const { configure } = useEvChange();
+export function EvTiming({ v, hasBattery, brand = "tesla" }: { v: EvVehicle; hasBattery: boolean; brand?: EvBrand }) {
+  const { data: tesla } = useQuery({ ...teslaQuery, enabled: brand === "tesla" });
+  const { data: bluelink } = useQuery({ ...bluelinkQuery, enabled: brand === "bluelink" });
+  const status = brand === "tesla" ? tesla : bluelink;
+  const { configure } = useEvChange(brand);
   const [custom, setCustom] = useState(false);
   const limits = status?.timing;
   if (!limits) return null;
@@ -188,7 +190,12 @@ export function EvTiming({ v, hasBattery }: { v: EvVehicle; hasBattery: boolean 
       ...Object.fromEntries(PRESET_KEYS.map((k) => [k, p.values ? p.values[k] : null])),
     });
   };
-  const rows = ROWS.filter((r) => r.key !== "battery_full" || (hasBattery && v.control.first === "battery"));
+  // A Hyundai or Kia's speed can't be changed, so there's no time between changes of it to set.
+  const rows = ROWS.filter(
+    (r) =>
+      (r.key !== "battery_full" || (hasBattery && v.control.first === "battery")) &&
+      (r.key !== "amps_every" || brand === "tesla"),
+  );
   const full = rows.some((r) => r.key === "battery_full") && v.control.battery_full !== limits.battery_full.default;
   return (
     <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">

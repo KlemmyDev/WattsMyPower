@@ -60,6 +60,10 @@ Everything below is new. When it's released, this heading becomes the beta's ver
 - **Electric vehicles:** a Tesla over the server's Bluetooth or through Tessie, charged from spare solar a step at a
   time (Standard, Quick, Steady or Custom timing), with each charge and trip logged and the car's day charted, and
   drawn in the garage. Each Tesla brings its own car details; cars aren't added by hand.
+- **Hyundai and Kia (untested):** each car's charge, range, plug and charging, read through Bluelink or Kia Connect
+  as their apps do (with hyundai_kia_connect_api), on the EV page and in the garage, and charged from spare solar with
+  the same modes and timing as a Tesla, by starting and stopping it (their cloud can't set the current). Newer cars
+  need the app's PIN to start and stop. Genesis isn't supported yet.
 - **BYD (untested):** each BYD's charge, range and charging, read through BYD's cloud as the BYD app does (with
   pyBYD), on the EV page and in the garage. Read only: BYD's cloud can't stop a charge or set its current.
 - **Manage → Data:** everything both databases hold, table by table.

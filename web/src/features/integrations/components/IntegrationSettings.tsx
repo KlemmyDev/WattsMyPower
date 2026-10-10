@@ -8,8 +8,8 @@ import { useLive } from "~/features/common/live/hooks/useLive";
 import { useLocationSet } from "~/features/common/settings/hooks";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { useForecast } from "~/features/common/weather/hooks";
-import { bydQuery, teslaQuery } from "~/features/ev/api";
-import { bydSummary, teslaSummary } from "~/features/ev/utils";
+import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
+import { bluelinkSummary, bydSummary, teslaSummary } from "~/features/ev/utils";
 import { gridQuery } from "~/features/grid/api";
 import { homeQuery } from "~/features/home/api";
 import type { HomeIntegration, HomeOverview } from "~/features/home/types";
@@ -304,15 +304,19 @@ function useGridEntry(): Entry {
   };
 }
 
-/** Electric vehicles as one integration, opening to its brands (Tesla, BYD): a card once a car's connected (saying
+/** Electric vehicles as one integration, opening to its brands (Tesla, Hyundai and Kia, BYD): a card once a car's
+ * connected (saying
  * which brand needs a look, if one does), else a tile to connect one. */
 function useEvEntry(): Entry {
   const { data: status } = useQuery(teslaQuery);
   const { data: bydStatus } = useQuery(bydQuery);
+  const { data: bluelinkStatus } = useQuery(bluelinkQuery);
   const tesla = teslaSummary(status);
   const byd = bydSummary(bydStatus);
+  const hk = bluelinkSummary(bluelinkStatus);
   const brands = [
     { name: "Tesla", ...tesla, reach: tesla.reach as Reach[] },
+    { name: bluelinkStatus?.brand === "kia" ? "Kia" : "Hyundai", reach: ["cloud"] as Reach[], ...hk },
     { name: "BYD", reach: ["cloud"] as Reach[], ...byd },
   ].filter((b) => b.connected);
   const off = brands.find((b) => !b.on);
@@ -332,7 +336,7 @@ function useEvEntry(): Entry {
         on={!off}
         attention={!!off}
         detail={<span className="line-clamp-2">{brands.map((b) => b.detail).join(", ")}</span>}
-        tags={tags([...new Set(brands.flatMap((b) => b.reach))], byd.connected)}
+        tags={tags([...new Set(brands.flatMap((b) => b.reach))], byd.connected || hk.connected)}
       />
     ) : (
       <IntegrationLink
@@ -340,7 +344,7 @@ function useEvEntry(): Entry {
         to="/integrations/ev"
         icon="car"
         name="Electric vehicles"
-        detail="Your Tesla, over Bluetooth or through Tessie, charged from spare solar; or your BYD's charge, through BYD's cloud"
+        detail="Your Tesla (over Bluetooth or through Tessie), Hyundai or Kia charged from spare solar; or your BYD's charge, through BYD's cloud"
         tags={tags(tesla.reach)}
       />
     ),
