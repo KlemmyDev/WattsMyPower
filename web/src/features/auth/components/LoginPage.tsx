@@ -17,6 +17,7 @@ import { ApiError, errorMessage } from "~/features/common/api/utils";
 import { BrandLockup, StandalonePage } from "~/features/common/layout/components/Standalone";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
+import { Collapse } from "~/features/common/ui/components/Collapse";
 import { Field, Input } from "~/features/common/ui/components/Field";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Spinner } from "~/features/common/ui/components/Progress";
@@ -365,11 +366,13 @@ const RESET = "docker compose exec wattsmypower python -m app reset-account";
 /** A line of help folded away under a link until it's asked for. */
 function Disclosure({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const id = useId();
   return (
     <div className={cn("flex flex-col", className)}>
       <button
         type="button"
         aria-expanded={open}
+        aria-controls={id}
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1 self-start text-[13px] font-medium text-link hover:text-link-hover"
       >
@@ -377,15 +380,15 @@ function Disclosure({ label, className, children }: { label: string; className?:
         <Icon
           name="chevD"
           size={14}
-          className={cn("transition-transform duration-200", open && "rotate-180")}
+          className={cn("transition-transform duration-300 ease-out-soft", open && "rotate-180")}
           aria-hidden
         />
       </button>
-      {open && (
-        <div className="mt-3 flex w-full animate-pop flex-col gap-3 rounded-2xl bg-canvas/60 p-4 text-left text-[13px] leading-5 text-pretty text-ink-muted light:bg-canvas">
+      <Collapse open={open} id={id} className="pt-3">
+        <div className="flex w-full flex-col gap-3 rounded-2xl bg-canvas/60 p-4 text-left text-[13px] leading-5 text-pretty text-ink-muted light:bg-canvas">
           {children}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

@@ -2,13 +2,14 @@ import type { ReactNode } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
+import { useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Swatch } from "~/features/common/ui/components/Swatch";
+import { cn } from "~/features/common/ui/utils";
 import { OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
-import { StorageTreemap, type TreemapItem } from "~/features/storage/components/StorageTreemap";
 import type { MeasuredDatabase, StorageReport } from "~/features/storage/types";
 import { bytes, compact, share } from "~/features/storage/utils";
 
-/** The kinds of data, in a fixed order and colour. Groups not named here count as "everything else". */
+/** The kinds of data, each in its own colour. Groups not named here count as "settings and the rest". */
 const KINDS = [
   { id: "registers", name: "Raw inverter registers", color: COLOR.teal },
   { id: "readings", name: "Readings", color: COLOR.battery },
@@ -21,88 +22,77 @@ const KINDS = [
 type Kind = (typeof KINDS)[number]["id"];
 const NAMED = new Set<string>(KINDS.map((k) => k.id));
 const kindOf = (group: string): Kind => (NAMED.has(group) && group !== "overhead" ? (group as Kind) : "other");
-const colorOf = (k: Kind) => KINDS.find((x) => x.id === k)!.color;
 
 const measured = (r: StorageReport) => r.databases.filter((d): d is MeasuredDatabase => d.available);
 
+type Slice = (typeof KINDS)[number] & { bytes: number };
+
 /**
- * Every table with something in it, across both databases, and what no table holds (the write-ahead log, its index,
- * empty pages) as one box a database, so the boxes add up to the files' size.
+ * How much room each kind of data takes across both databases, largest first. What no table holds (the write-ahead
+ * log, its index, empty pages) is one more part, so the parts add up to the files' size.
  */
-function treemapItems(dbs: MeasuredDatabase[]): TreemapItem[] {
-  const out: TreemapItem[] = [];
+function slices(dbs: MeasuredDatabase[]): Slice[] {
+  const room = new Map<Kind, number>();
+  const add = (k: Kind, b: number) => b > 0 && room.set(k, (room.get(k) ?? 0) + b);
   for (const db of dbs) {
     let inTables = 0;
-    for (const g of db.groups)
-      for (const t of g.tables) {
-        const b = t.bytes ?? 0;
-        inTables += b;
-        if (b > 0)
-          out.push({
-            key: `${db.id}.${t.name}`,
-            label: t.label,
-            where: `${db.name} · ${g.name}`,
-            bytes: b,
-            rows: t.rows,
-            color: colorOf(kindOf(g.id)),
-            quiet: kindOf(g.id) === "other",
-          });
-      }
-    const rest = db.measured ? db.total_bytes - inTables : db.total_bytes;
-    if (rest > 0)
-      out.push({
-        key: `${db.id}.overhead`,
-        label: db.measured ? "Logs and empty pages" : db.name,
-        where: db.name,
-        bytes: rest,
-        rows: null,
-        color: colorOf(db.measured ? "overhead" : "other"),
-        quiet: true,
-      });
+    for (const g of db.groups) {
+      const b = g.tables.reduce((s, t) => s + (t.bytes ?? 0), 0);
+      inTables += b;
+      add(kindOf(g.id), b);
+    }
+    // A database that can't measure its tables is all "the rest".
+    add(db.measured ? "overhead" : "other", db.total_bytes - inTables);
   }
-  return out;
+  return KINDS.map((k) => ({ ...k, bytes: room.get(k.id) ?? 0 }))
+    .filter((k) => k.bytes > 0)
+    .sort((a, b) => b.bytes - a.bytes);
 }
 
-/** Settings → Data, the picture: what takes the room, table by table, as a treemap coloured by kind, with a legend. */
-export function StorageVisual({
-  report,
-  measuring,
-  onMeasure,
-}: {
-  report: StorageReport;
-  measuring: boolean;
-  onMeasure: () => void;
-}) {
-  const dbs = measured(report);
-  const items = treemapItems(dbs);
-  const total = items.reduce((s, i) => s + i.bytes, 0);
-  const byKind = KINDS.map((k) => ({
-    ...k,
-    bytes: items.filter((i) => i.color === k.color).reduce((s, i) => s + i.bytes, 0),
-  })).filter((k) => k.bytes > 0);
+/**
+ * What takes the room: one thin bar split by kind of data, and a line for each kind under it with its share and size.
+ * Pointing at a part, on the bar or its line, lights it and fades the rest.
+ */
+function RoomBar({ parts, total }: { parts: Slice[]; total: number }) {
+  const { hover, plot, bar } = useBarHover<Kind>();
+  const lit = (k: Kind) => hover == null || hover === k;
   return (
-    <SettingsSection
-      id="h-storage"
-      title="What takes the room"
-      sub={`${bytes(total)} on disk. Each box is a table, as big as its share; hover one for its details.`}
-      aside={
-        <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
-          {measuring ? "Measuring…" : "Measure again"}
-        </Button>
-      }
-    >
-      <StorageTreemap items={items} />
-      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-5 gap-y-1.5 p-0">
-        {byKind.map((k) => (
-          <li key={k.id} className="flex items-center gap-2 text-[13px]">
-            <Swatch color={k.color} size={10} />
-            <span className="min-w-0 flex-1 truncate">{k.name}</span>
-            <span className="text-ink-muted tabular-nums">{share(k.bytes, total)}</span>
+    <div className="flex flex-col gap-3" {...plot}>
+      <div className="flex h-2.5 gap-0.5" role="img" aria-label="What takes the room in the databases">
+        {parts.map((p) => (
+          <span
+            key={p.id}
+            {...bar(p.id)}
+            title={`${p.name}: ${bytes(p.bytes)}`}
+            className={cn(
+              "h-full min-w-1 transition-[opacity,scale] duration-300 ease-out-soft first:rounded-l-full last:rounded-r-full",
+              !lit(p.id) && "opacity-30",
+              hover === p.id && "scale-y-150",
+            )}
+            style={{ flexGrow: p.bytes, background: p.color }}
+          />
+        ))}
+      </div>
+      <ul className="-mx-2.5 flex flex-col">
+        {parts.map((p) => (
+          <li
+            key={p.id}
+            tabIndex={0}
+            {...bar(p.id)}
+            className={cn(
+              "flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-1 text-[13.5px] transition-[background-color,opacity] duration-200 outline-none",
+              hover === p.id && "bg-fg/5",
+              !lit(p.id) && "opacity-55",
+            )}
+          >
+            <Swatch color={p.color} shape="dot" />
+            <span className="min-w-0 flex-1 truncate">{p.name}</span>
+            <span className="text-ink-faint tabular-nums">{share(p.bytes, total)}</span>
+            <span className="w-16 text-right tabular-nums">{bytes(p.bytes)}</span>
           </li>
         ))}
       </ul>
-      <span className="text-xs text-ink-faint">Measured {hhmm(report.measured_at)}</span>
-    </SettingsSection>
+    </div>
   );
 }
 
@@ -134,15 +124,26 @@ function Projection({ now, perDay }: { now: number; perDay: number }) {
       </svg>
       <div className="flex justify-between text-[11px] text-ink-faint tabular-nums">
         <span>Now · {bytes(now)}</span>
-        <span>In 6 months · {bytes(months[6])}</span>
+        <span className="max-sm:hidden">In 6 months · {bytes(months[6])}</span>
         <span>In a year · {bytes(months[12])}</span>
       </div>
     </div>
   );
 }
 
-/** Settings → Data, beside the picture: both databases' size, rows, growth and where it's heading, and the drive. */
-export function StorageFacts({ report }: { report: StorageReport }) {
+/**
+ * Settings → Data, the overview: how much is on disk and what takes the room, then the rows, growth and where it's
+ * heading, and the drive it's on.
+ */
+export function StorageSummary({
+  report,
+  measuring,
+  onMeasure,
+}: {
+  report: StorageReport;
+  measuring: boolean;
+  onMeasure: () => void;
+}) {
   const dbs = measured(report);
   const total = dbs.reduce((s, d) => s + d.total_bytes, 0);
   const growth = dbs.reduce((s, d) => s + d.growth_per_day, 0);
@@ -155,14 +156,23 @@ export function StorageFacts({ report }: { report: StorageReport }) {
   const used = report.disk.total - report.disk.free;
   return (
     <SettingsSection
-      id="h-storage-facts"
-      title="Storage"
+      id="h-storage"
+      title="What takes the room"
       sub="Everything stays on this server, in two SQLite databases."
+      aside={
+        <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
+          {measuring ? "Measuring…" : "Measure again"}
+        </Button>
+      }
     >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="text-[28px] leading-8 font-light tracking-[-0.6px] tabular-nums">{bytes(total)}</span>
+        <span className="text-[13px] text-ink-muted">
+          Dashboard {size("dashboard")} · collector {size("collector")}
+        </span>
+      </div>
+      <RoomBar parts={slices(dbs)} total={total} />
       <OptionList>
-        <Fact label="On disk" help={`Dashboard ${size("dashboard")} · collector ${size("collector")}`}>
-          {bytes(total)}
-        </Fact>
         <Fact label="Rows stored">{compact(rows)}</Fact>
         <Fact label="Empty pages" help="Left by deleted rows, and used again as rows are added.">
           {bytes(empty)}
@@ -187,6 +197,7 @@ export function StorageFacts({ report }: { report: StorageReport }) {
           </div>
         </div>
       </OptionList>
+      <span className="text-xs text-ink-faint">Measured {hhmm(report.measured_at)}</span>
     </SettingsSection>
   );
 }
