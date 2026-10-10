@@ -1,5 +1,5 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
-import type { EvEvent, EvMode, EvStatus, KeyRole, TeslaProvider, TeslaStatus } from "~/features/ev/types";
+import type { BydStatus, EvEvent, EvMode, EvStatus, KeyRole, TeslaProvider, TeslaStatus } from "~/features/ev/types";
 
 /** The key's role in words: what it lets the dashboard do. */
 export const ROLE_LABEL: Record<KeyRole, string> = { charging_manager: "Charging only", driver: "Driver" };
@@ -49,6 +49,33 @@ export function teslaSummary(status: TeslaStatus | undefined): {
     status: !connected ? "" : status?.error ? "Not updating" : "Connected",
     detail: connected ? detail || "No cars yet" : TESLA_ABOUT,
     reach: !connected ? ["bluetooth", "cloud"] : status?.provider === "bluetooth" ? ["bluetooth"] : ["cloud"],
+  };
+}
+
+/** What a BYD's offered for, until one's connected. */
+export const BYD_ABOUT = "Through BYD's cloud, as the BYD app reads it: each car's charge, range and charging";
+
+/** The BYDs at a glance, for Integrations: whether they're connected and reading, and each car's level and what it's
+ * doing ("Atto · 64% · Charging"). Always through BYD's cloud, as there's no local way. */
+export function bydSummary(status: BydStatus | undefined): {
+  connected: boolean;
+  on: boolean;
+  status: string;
+  detail: string;
+} {
+  const connected = !!status?.connected;
+  const detail = (status?.vehicles ?? [])
+    .map((v) =>
+      [v.name ?? v.model ?? "BYD", v.state?.soc != null && `${Math.round(v.state.soc)}%`, STATUS_LABEL[v.status]]
+        .filter(Boolean)
+        .join(" · "),
+    )
+    .join(", ");
+  return {
+    connected,
+    on: connected && !status?.error,
+    status: !connected ? "" : status?.signed_out ? "Sign in again" : status?.error ? "Not updating" : "Connected",
+    detail: !connected ? BYD_ABOUT : status?.signed_out ? (status.error ?? "") : detail || "No cars yet",
   };
 }
 

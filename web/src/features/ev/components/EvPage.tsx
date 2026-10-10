@@ -7,15 +7,16 @@ import { ButtonLink } from "~/features/common/ui/components/Button";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
-import { teslaQuery } from "~/features/ev/api";
+import { bydQuery, teslaQuery } from "~/features/ev/api";
+import { BydPanel } from "~/features/ev/components/BydPanel";
 import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvDetails } from "~/features/ev/components/EvDetails";
 import { EvInOut } from "~/features/ev/components/EvInOut";
 import { EvDayChart } from "~/features/ev/components/EvDayChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
 import { NextRead } from "~/features/ev/components/NextRead";
-import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
-import { ProviderChip } from "~/features/ev/components/ProviderChip";
+import type { EvVehicle, TeslaProvider, TeslaStatus } from "~/features/ev/types";
+import { ProviderChip, type Reached } from "~/features/ev/components/ProviderChip";
 import { carTitle, evTitle } from "~/features/ev/utils";
 
 /** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), its day (its charge,
@@ -35,21 +36,37 @@ function Car({ v, provider, now }: { v: EvVehicle; provider: TeslaProvider | nul
   );
 }
 
+/** How the cars shown are reached, for under the page's title: the Teslas' way (Bluetooth or Tessie), else BYD's
+ * cloud; when they were read, and when they're next read. */
+function Reach({ status, provider, year }: { status: Freshness; provider: Reached | null; year: number | null }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+      {year && <span className="text-sm font-normal text-ink-muted tabular-nums">{year}</span>}
+      {provider && <ProviderChip provider={provider} />}
+      {status.read_at && <span className="text-sm font-normal text-ink-muted">Read {hhmm(status.read_at)}</span>}
+      {!status.error && <NextRead status={status} />}
+    </span>
+  );
+}
+
+type Freshness = Pick<TeslaStatus, "read_at" | "next_read" | "reading" | "error">;
+
 /**
- * The EV page: each car connected (so far Teslas, through Tessie or over Bluetooth), or with `vin`, one of them (its
- * own page, as the side nav lists them).
+ * The EV page: each car connected (Teslas, through Tessie or over Bluetooth, and BYDs, through BYD's cloud), or with
+ * `vin`, one of them (its own page, as the side nav lists them).
  */
 export function EvPage({ vin }: { vin?: string } = {}) {
   const now = useNow(30_000);
   const { data, error, isPending } = useQuery(teslaQuery);
-  if (isPending)
+  const { data: byd, isPending: bydPending } = useQuery(bydQuery);
+  if (isPending || bydPending)
     return (
       <>
         <PageHeader title="EV" sub="Checking the connection…" />
         <Skeleton className="h-[260px] rounded-3xl" />
       </>
     );
-  if (!data?.connected)
+  if (!data?.connected && !byd?.connected)
     return (
       <>
         <PageHeader title="EV" sub={error ? errorMessage(error) : "Not connected"} />
@@ -64,25 +81,29 @@ export function EvPage({ vin }: { vin?: string } = {}) {
           }
         >
           Connect your Tesla, over this server's Bluetooth or through Tessie, and the charge rate follows the sun
-          through the day, so the car gets spare solar and the home battery still fills.
+          through the day, so the car gets spare solar and the home battery still fills. A BYD can be connected too, to
+          see its charge.
         </EmptyState>
       </>
     );
-  const cars = vin ? data.vehicles.filter((v) => v.vin === vin) : data.vehicles;
+  const allTeslas = data?.connected ? data.vehicles : [];
+  const allByds = byd?.connected ? byd.vehicles : [];
+  const teslas = vin ? allTeslas.filter((v) => v.vin === vin) : allTeslas;
+  const byds = vin ? allByds.filter((v) => v.vin === vin) : allByds;
+  const cars = [...teslas, ...byds];
   // One car shown: it's named for what it is (its own name is on its panel), with its model year.
   const one = cars.length === 1 ? cars[0] : null;
-  const sub = (
-    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-      {one?.year && <span className="text-sm font-normal text-ink-muted tabular-nums">{one.year}</span>}
-      {data.provider && <ProviderChip provider={data.provider} />}
-      {data.read_at && <span className="text-sm font-normal text-ink-muted">Read {hhmm(data.read_at)}</span>}
-      {!data.error && <NextRead status={data} />}
-    </span>
-  );
+  // The Teslas' reach leads while any are shown (a BYD panel says how fresh it is itself).
+  const sub =
+    data?.connected && (teslas.length || !byds.length) ? (
+      <Reach status={data} provider={data.provider} year={one?.year ?? null} />
+    ) : byd?.connected ? (
+      <Reach status={byd} provider="byd" year={one?.year ?? null} />
+    ) : null;
   if (vin && cars.length === 0)
     return (
       <>
-        <PageHeader title={evTitle(data.vehicles)} sub={sub} />
+        <PageHeader title={evTitle([...allTeslas, ...allByds])} sub={sub} />
         <Notice tone="plain">That car isn't connected any more.</Notice>
       </>
     );
@@ -90,7 +111,13 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     <>
       <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />
       <div className="flex flex-col gap-10">
-        {data.error && data.error_kind === "busy" ? (
+        {byd?.error && byds.length > 0 && (
+          <Notice tone="bad" className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span>BYD: {byd.error}</span>
+            <NextRead status={byd} className="text-inherit" />
+          </Notice>
+        )}
+        {!data?.connected || !teslas.length ? null : data.error && data.error_kind === "busy" ? (
           <Notice tone="warn" className="flex flex-col gap-1.5 px-5 py-4">
             <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <b className="font-semibold">Your car isn't taking Bluetooth connections right now</b>
@@ -110,8 +137,11 @@ export function EvPage({ vin }: { vin?: string } = {}) {
             </Notice>
           )
         )}
-        {cars.map((v) => (
-          <Car key={v.vin} v={v} provider={data.provider} now={now} />
+        {teslas.map((v) => (
+          <Car key={v.vin} v={v} provider={data?.provider ?? null} now={now} />
+        ))}
+        {byds.map((v) => (
+          <BydPanel key={v.vin} v={v} />
         ))}
       </div>
     </>

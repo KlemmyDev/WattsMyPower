@@ -1456,8 +1456,7 @@ class TeslaService:
 
     async def publish(self) -> None:
         summary = await asyncio.to_thread(self.summary)
-        if summary != self.live.ev:
-            self.live.ev = summary
+        if self.live.set_ev("tesla", summary):
             self.live.publish()
 
     async def start(self) -> None:

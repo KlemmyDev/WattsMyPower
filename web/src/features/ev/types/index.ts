@@ -338,3 +338,54 @@ export type EvLevels = {
   events: EvEvent[];
   limit: number | null;
 };
+
+/** A BYD's state, as BYD's cloud last had it from the car (app.features.byd). */
+export type BydCarState = {
+  /** When the car sent it (unix seconds). */
+  as_of: number | null;
+  soc: number | null;
+  range_km: number | null;
+  /** Only true while BYD says it's charging: whether it's plugged in otherwise isn't told reliably. */
+  charging: boolean;
+  minutes_to_full: number | null;
+  odometer_km: number | null;
+  online: boolean;
+};
+
+export type BydCar = {
+  vin: string;
+  make: "BYD";
+  /** "Atto 3", "Seal", "Sealion 7". */
+  model: string | null;
+  year: number | null;
+  /** The name it's given in the BYD app. */
+  name: string | null;
+  plate: string | null;
+  /** A plug-in hybrid: its range is the battery's alone. */
+  hybrid: boolean;
+  status: Extract<EvStatus, "charging" | "complete" | "stopped" | "unknown">;
+  /** What it's doing, in a sentence. */
+  doing: string;
+  /** null until the car's answered. */
+  state: BydCarState | null;
+};
+
+/** The BYD account (read from BYD's cloud, never sent anything), how reading it is going, and its cars. */
+export type BydStatus = {
+  connected: boolean;
+  /** Its email, partly hidden: "ma…@example.com". */
+  account: string | null;
+  region: string | null;
+  /** The regions an account can be in. */
+  regions: { code: string; name: string }[];
+  error: string | null;
+  /** BYD turned the email and password down: not read again until they're entered again. */
+  signed_out: boolean;
+  read_at: number | null;
+  /** When the cars are next read (unix seconds); null when they won't be. */
+  next_read: number | null;
+  reading: boolean;
+  /** Mock mode: any email and password connects a made-up car. */
+  mock: boolean;
+  vehicles: BydCar[];
+};

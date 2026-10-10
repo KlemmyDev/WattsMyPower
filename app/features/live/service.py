@@ -36,11 +36,24 @@ class LiveService:
         self.inverter: bool | None = None
         # What the battery is set to do, from app.features.battery (BatteryService.summary); None if it can't be told.
         self.battery_mode: dict[str, Any] | None = None
-        # Each EV in brief, from app.features.tesla (TeslaService.summary); None when none is connected.
+        # Each EV in brief, from every maker's integration (app.features.tesla, app.features.byd: set_ev); None when
+        # none is connected.
         self.ev: list[dict[str, Any]] | None = None
+        self._ev: dict[str, list[dict[str, Any]] | None] = {}  # each integration's cars (None: not connected)
         # The second inverter, when the collector has one configured.
         self.pv2: dict[str, Any] | None = None
         self._subscribers: set[asyncio.Queue[Status]] = set()
+
+    def set_ev(self, source: str, cars: list[dict[str, Any]] | None) -> bool:
+        """One integration's cars in brief (None: it isn't connected), shown after the others' (Teslas first). Whether
+        `ev` changed, so the caller publishes."""
+        self._ev[source] = cars
+        connected = [self._ev[k] for k in sorted(self._ev, key=lambda k: (k != "tesla", k)) if self._ev[k] is not None]
+        ev = [car for cs in connected for car in cs or []] if connected else None
+        if ev == self.ev:
+            return False
+        self.ev = ev
+        return True
 
     # -- live fan-out ---------------------------------------------------------
     def subscribe(self) -> asyncio.Queue[Status]:

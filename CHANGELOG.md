@@ -60,6 +60,8 @@ Everything below is new. When it's released, this heading becomes the beta's ver
 - **Electric vehicles:** a Tesla over the server's Bluetooth or through Tessie, charged from spare solar a step at a
   time (Standard, Quick, Steady or Custom timing), with each charge and trip logged and the car's day charted, and
   drawn in the garage. Each Tesla brings its own car details; cars aren't added by hand.
+- **BYD (untested):** each BYD's charge, range and charging, read through BYD's cloud as the BYD app does (with
+  pyBYD), on the EV page and in the garage. Read only: BYD's cloud can't stop a charge or set its current.
 - **Manage → Data:** everything both databases hold, table by table.
 - **Sign-in** with one household account, created on the first visit, and a set-up guide for the inverter, system,
   rates, location and billing period.

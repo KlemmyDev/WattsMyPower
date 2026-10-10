@@ -1,26 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage } from "~/features/common/api/utils";
-import { teslaQuery } from "~/features/ev/api";
-import { teslaSummary } from "~/features/ev/utils";
+import { bydQuery, teslaQuery } from "~/features/ev/api";
+import { bydSummary, teslaSummary } from "~/features/ev/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
-import { ReachTag } from "~/features/integrations/components/ReachTag";
+import { ReachTag, UntestedTag } from "~/features/integrations/components/ReachTag";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Manage → Integrations → Electric vehicles: each EV brand WattsMyPower reaches (just Tesla for now), saying whether
- * it's connected and its cars, each opening to its own page: connecting it, its cars, and how they're reached.
+ * Manage → Integrations → Electric vehicles: each EV brand WattsMyPower reaches (Tesla and BYD), saying whether it's
+ * connected and its cars, each opening to its own page: connecting it, its cars, and how they're reached.
  */
 export function EvSettings() {
   const { data: status, isPending, error } = useQuery(teslaQuery);
+  const { data: bydStatus } = useQuery(bydQuery);
   const tesla = teslaSummary(status);
+  const byd = bydSummary(bydStatus);
   return (
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-ev"
         title="Electric vehicles"
-        sub="See each car's charge, and charge it from spare solar on the EV page."
+        sub="See each car's charge on the EV page, and charge a Tesla from spare solar."
       />
       {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
       {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
@@ -37,6 +39,21 @@ export function EvSettings() {
             tags={tesla.reach.map((r) => (
               <ReachTag key={r} reach={r} />
             ))}
+          />
+          <IntegrationLink
+            to="/integrations/ev/byd"
+            icon="car"
+            name="BYD"
+            status={byd.status || undefined}
+            on={byd.on}
+            attention={byd.connected && !byd.on}
+            detail={<span className="line-clamp-2">{byd.detail}</span>}
+            tags={
+              <>
+                <ReachTag reach="cloud" />
+                <UntestedTag />
+              </>
+            }
           />
         </div>
       </SettingsSection>
