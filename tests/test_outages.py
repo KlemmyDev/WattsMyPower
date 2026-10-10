@@ -9,7 +9,7 @@ import pytest
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.grid.outages.energyq import outage, qld_time
+from app.features.grid.outages.energyq import CHROME, browser_headers, outage, qld_time
 from app.features.grid.outages.service import OutageService, bearing, distance_km, inside, street_key
 from app.features.settings.store import SettingsStore
 
@@ -161,3 +161,27 @@ def test_reasons_for_the_outlook(settings: SettingsStore) -> None:
     assert kinds["planned_here"]["level"] == "warning"  # tomorrow
     assert kinds["planned_here"]["title"] == "Planned outage at your street tomorrow"
     assert "outages_nearby" not in kinds  # the only unplanned one within the radius is ours
+
+
+def test_feeds_are_asked_for_as_a_browser_would() -> None:
+    h = browser_headers("https://www.energex.com.au/static/PRD/ex_map_current_unplanned.geojson")
+    assert h["User-Agent"].startswith("Mozilla/5.0") and f"Chrome/{CHROME}." in h["User-Agent"]
+    assert f'v="{CHROME}"' in h["sec-ch-ua"] and h["Referer"] == "https://www.energex.com.au/"
+    assert "gzip" in h["Accept-Encoding"] and h["Sec-Fetch-Site"] == "same-origin"
+
+
+def test_compressed_answers_are_unpacked(monkeypatch: pytest.MonkeyPatch) -> None:
+    import gzip
+    import io
+    import urllib.request
+    from email.message import Message
+
+    from app.core import http
+
+    class Resp(io.BytesIO):
+        headers = Message()
+
+    resp = Resp(gzip.compress(b'{"features": []}'))
+    resp.headers["Content-Encoding"] = "gzip"
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: resp)
+    assert http.get_json("https://example.invalid/x.geojson") == {"features": []}

@@ -24,8 +24,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from app.core.http import get_json
-from app.features.grid.outages.energyq import NETWORKS, EnergyQueensland, OutageFeedError, Ring
+from app.features.grid.outages.energyq import NETWORKS, EnergyQueensland, OutageFeedError, Ring, get_feed
 from app.features.settings.store import SettingsStore
 
 log = logging.getLogger(__name__)
@@ -96,7 +95,7 @@ class OutageService:
         self,
         settings: SettingsStore,
         region: Callable[[], str | None],
-        get: Callable[[str], Any] = lambda url: get_json(url, timeout=30),
+        get: Callable[[str], Any] = get_feed,
         clock: Callable[[], float] = time.time,
         networks: dict[str, EnergyQueensland] = NETWORKS,
     ):
