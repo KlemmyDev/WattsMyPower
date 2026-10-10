@@ -61,6 +61,8 @@ export type SystemInfo = {
   tariff: Tariff;
   pv2: SecondInverter | null;
   ev_connected?: boolean;
+  /** Whether a main inverter is connected: false once the collector says there's none, null until it's been asked. */
+  inverter_connected?: boolean | null;
 } & Settings;
 
 /** What the battery is set to do (app.features.battery): who has it, and the control in effect from the dashboard or

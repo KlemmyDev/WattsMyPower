@@ -180,9 +180,11 @@ def test_status_without_a_hybrid_says_to_connect_one(config: Config, collector: 
     cfg = replace(config, mock=False)
     live = LiveService(cfg, None, None)  # type: ignore[arg-type]
     ingest = CollectorIngest(cfg, None, None, live, collector)  # type: ignore[arg-type]
+    assert live.inverter is None  # the collector hasn't been asked yet
     live.info = {"model": "SH5.0RS"}
     ingest.apply_status({"devices": {}})
     assert live.last_error == NO_INVERTER and live.info == {} and live.pv2 is None
+    assert live.inverter is False  # known to have none, not just not heard from
 
 
 def test_where_the_second_inverter_connects_comes_from_its_settings(config: Config, collector: FakeCollector) -> None:

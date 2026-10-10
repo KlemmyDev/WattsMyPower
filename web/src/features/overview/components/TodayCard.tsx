@@ -13,14 +13,14 @@ import { bandColor, bandTable, tariffNumber, usedBands } from "~/features/common
 import { dateKey, isWeekend, midnight, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
-/** Today so far: cost and savings, split by rate. */
-export function TodayCard({ tariff, now }: { tariff: Tariff | undefined; now: number }) {
+/** Today so far: cost and savings, split by rate. `wide`: the row to itself (with no Battery card beside it). */
+export function TodayCard({ tariff, now, wide }: { tariff: Tariff | undefined; now: number; wide?: boolean }) {
   // Today's costs come from the server, priced at the rate in force for each 5 minutes.
   const { data } = useQuery(costsQuery(midnight(now)));
   const c = data?.days.find((d) => d.date === dateKey(now));
   const t = c && tariff;
   return (
-    <Card aria-labelledby="h-today" className="col-span-6 gap-6 max-lg:col-span-12">
+    <Card aria-labelledby="h-today" className={cn("gap-6", wide ? "col-span-12" : "col-span-6 max-lg:col-span-12")}>
       <CardHeader
         title="Today so far"
         id="h-today"

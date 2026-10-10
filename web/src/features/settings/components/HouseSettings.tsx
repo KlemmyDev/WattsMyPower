@@ -177,7 +177,7 @@ function HouseCard({ system }: { system: SystemInfo }) {
 
           <SettingsSection
             id="h-house-units"
-            title="Inverters and battery"
+            title={house.batteries.length ? "Inverters and battery" : "Inverters"}
             sub={
               garage
                 ? "Where each one is: on an outside wall, or in the garage (drawn see-through, so what's inside shows)."

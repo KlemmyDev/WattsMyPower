@@ -204,6 +204,7 @@ def test_ingest_writes_readings_and_status(db: Database, config: Config) -> None
     assert status["model"] == "SH5.0RS" and status["system"]["battery_reserve"] == 5.0
     assert status["system"]["pv2"]["host"] == "dongle" and status["system"]["pv2"]["behind_meter"] is True
     assert status["snapshot"]["ts"] == DAY + 300
+    assert status["system"]["inverter_connected"] is True
     assert status["next_poll"] == 183.0
     # The first rollup has nothing before it, so 2 kW of export for 5 minutes stands in; the
     # second is what the meter's lifetime counter moved. The Today card and the day agree.

@@ -1,5 +1,6 @@
 import { AmberPricesCard } from "~/features/amber/components/AmberPricesCard";
 import { useAmberPrices } from "~/features/amber/hooks";
+import { useNoBattery } from "~/features/battery/hooks";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { GridOverviewCard } from "~/features/grid/components/GridOverviewCard";
 import { RunningNowCard } from "~/features/home/components/RunningNowCard";
@@ -22,6 +23,8 @@ export function OverviewPage() {
   const f = useForecast();
   const prices = useAmberPrices(now);
   const located = useLocationSet();
+  // Solar only: no Battery card, and today's costs take its row.
+  const none = useNoBattery();
   return (
     <>
       <PageHeader title={greeting(now)} sub="Here is how your home is running right now" />
@@ -33,9 +36,9 @@ export function OverviewPage() {
           </LocationPrompt>
         )}
         <GridOverviewCard now={now} />
-        <BatteryCard p={p} s={s} f={f} now={now} />
+        {!none && <BatteryCard p={p} s={s} f={f} now={now} />}
         <RunningNowCard />
-        <TodayCard tariff={s?.tariff} now={now} />
+        <TodayCard tariff={s?.tariff} now={now} wide={none} />
         <TodayEnergyCard p={p} s={s} f={f} now={now} prices={prices} />
         {prices && <AmberPricesCard prices={prices} now={now} />}
       </div>
