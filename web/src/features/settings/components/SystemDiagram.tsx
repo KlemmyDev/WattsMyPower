@@ -4,9 +4,6 @@ import { inverterName } from "~/features/common/live/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
-import { HouseScene } from "~/features/overview/components/HouseScene";
-import { houseOptions } from "~/features/overview/utils/house/options";
-import { THUMB_FLOWS } from "~/features/settings/components/HouseSettings";
 
 /** The figures the diagram draws: the system's, with any not saved yet in their place. */
 export type DiagramFigures = {
@@ -32,7 +29,7 @@ const mid = (p: Part) => [((AT[p][0] - 0.5) / 3) * 100, ((AT[p][1] - 0.5) / 3) *
 
 const num = (v: number) => +v.toFixed(2);
 
-/** One part of the system: its icon in its colour, what it is, its size, and a line under it. */
+/** One part of the system, quietly: its icon in its colour, what it is, its size, and a line under it. */
 function Node({
   part,
   icon,
@@ -52,34 +49,38 @@ function Node({
 }) {
   return (
     <div
-      className="relative z-1 flex min-w-0 flex-col gap-2 self-center rounded-2xl border border-line-subtle bg-surface p-3.5 shadow-[0_8px_24px_-12px_var(--color-shadow-pop)] max-sm:gap-1.5 max-sm:p-2.5"
+      className="relative z-1 flex w-full max-w-[12.5rem] min-w-0 items-center gap-2.5 self-center justify-self-center rounded-2xl bg-surface py-2.5 pr-3 pl-2.5 ring-1 ring-line-subtle max-sm:px-2 max-sm:py-2"
       style={{ gridColumn: AT[part][0], gridRow: AT[part][1] }}
     >
-      <div className="flex items-center gap-2">
-        <span
-          className="flex size-7 flex-none items-center justify-center rounded-full max-sm:hidden"
-          style={{ background: alpha(color, 0.18), color }}
-        >
-          <Icon name={icon} size={15} />
+      <span
+        className="hidden size-8 flex-none items-center justify-center rounded-full @[32rem]:flex"
+        style={{ background: alpha(color, 0.14), color }}
+      >
+        <Icon name={icon} size={15} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-ink-muted">
+          {/* The part's colour, where there's no room for its icon. */}
+          <i aria-hidden className="size-1.5 flex-none rounded-full @[32rem]:hidden" style={{ background: color }} />
+          <span className="truncate">{label}</span>
         </span>
-        <span className="truncate text-xs text-ink-muted max-sm:text-[11px]">{label}</span>
-      </div>
-      {value != null && (
-        <span className="truncate text-[19px] leading-6 font-light tracking-[-0.3px] text-ink tabular-nums max-sm:text-[15px] max-sm:leading-5 max-sm:whitespace-normal">
-          {value}
-        </span>
-      )}
-      {sub && (
-        <span className="truncate text-[11px] leading-4 text-ink-faint max-sm:line-clamp-2 max-sm:text-[10px] max-sm:leading-[13px] max-sm:whitespace-normal">
-          {sub}
-        </span>
-      )}
-      {children}
+        {value != null && (
+          <span className="truncate text-base leading-6 font-light tracking-[-0.2px] text-ink tabular-nums max-sm:text-sm max-sm:leading-5">
+            {value}
+          </span>
+        )}
+        {sub && (
+          <span className="truncate text-[11px] leading-4 text-ink-faint max-sm:text-[10px] max-sm:leading-[13px] max-sm:whitespace-normal">
+            {sub}
+          </span>
+        )}
+        {children}
+      </span>
     </div>
   );
 }
 
-/** A line between two parts' middles, its dashes running from `from` to `to`, behind the parts. */
+/** A thin line between two parts' middles, behind them, with small dots running from `from` to `to`. */
 function Wire({ from, to, color }: { from: Part; to: Part; color: string }) {
   const [x1, y1] = mid(from);
   const [x2, y2] = mid(to);
@@ -90,8 +91,8 @@ function Wire({ from, to, color }: { from: Part; to: Part; color: string }) {
         y1={y1}
         x2={x2}
         y2={y2}
-        stroke={alpha(color, 0.25)}
-        strokeWidth={6}
+        stroke={alpha(color, 0.4)}
+        strokeWidth={1.5}
         vectorEffect="non-scaling-stroke"
       />
       <line
@@ -100,8 +101,8 @@ function Wire({ from, to, color }: { from: Part; to: Part; color: string }) {
         x2={x2}
         y2={y2}
         stroke={color}
-        strokeWidth={2}
-        strokeDasharray="2 10"
+        strokeWidth={2.5}
+        strokeDasharray="0.01 11.99"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
         className="animate-dash"
@@ -120,67 +121,65 @@ export function SystemDiagram({ system: s, figures: f }: { system: SystemInfo; f
   const reserve = f.reservePct ?? 0;
   const usable = f.batteryKwh ? f.batteryKwh * (1 - reserve / 100) : null;
   return (
-    <div className="relative grid aspect-[4/3] grid-cols-3 grid-rows-3 gap-x-4 gap-y-3 max-sm:aspect-[5/6] max-sm:gap-x-2">
-      <svg
-        aria-hidden
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        className="pointer-events-none absolute inset-0 size-full overflow-visible"
-      >
-        <Wire from="solar" to="inverter" color={COLOR.solar} />
-        {pv2 && <Wire from="solar" to="second" color={COLOR.solar} />}
-        {pv2 && <Wire from="second" to="home" color={COLOR.solar} />}
-        <Wire from="inverter" to="home" color={COLOR.teal} />
-        <Wire from="inverter" to="battery" color={COLOR.battery} />
-        <Wire from="grid" to="inverter" color={COLOR.grid} />
-      </svg>
+    <div className="@container">
+      <div className="relative grid aspect-[4/3] grid-cols-3 grid-rows-3 gap-x-4 gap-y-3 max-sm:aspect-[5/6] max-sm:gap-x-1.5">
+        <svg
+          aria-hidden
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="pointer-events-none absolute inset-0 size-full overflow-visible"
+        >
+          <Wire from="solar" to="inverter" color={COLOR.solar} />
+          {pv2 && <Wire from="solar" to="second" color={COLOR.solar} />}
+          {pv2 && <Wire from="second" to="home" color={COLOR.solar} />}
+          <Wire from="inverter" to="home" color={COLOR.teal} />
+          <Wire from="inverter" to="battery" color={COLOR.battery} />
+          <Wire from="grid" to="inverter" color={COLOR.grid} />
+        </svg>
 
-      <Node
-        part="solar"
-        icon="sun"
-        color={COLOR.solar}
-        label="Solar array"
-        value={f.pvKw ? `${num(f.pvKw)} kW` : "Not set"}
-        sub={ratio ? `${ratio.toFixed(2)}× the inverter` : "All your panels"}
-      />
-      {pv2 && (
         <Node
-          part="second"
-          icon="bolt"
+          part="solar"
+          icon="sun"
           color={COLOR.solar}
-          label="Second inverter"
-          value={pv2.nominal_kw ? `${pv2.nominal_kw} kW` : (pv2.model ?? "—")}
-          sub={pv2.model ? `${inverterName(pv2)}` : pv2.host}
+          label="Solar array"
+          value={f.pvKw ? `${num(f.pvKw)} kW` : "Not set"}
+          sub={ratio ? `${ratio.toFixed(2)}× the inverter` : "All your panels"}
         />
-      )}
-      <Node part="home" icon="home" color={COLOR.teal} label="Home">
-        <span className="relative block aspect-[2/1] w-full overflow-hidden rounded-[10px] bg-[#dcebff]">
-          <HouseScene flows={THUMB_FLOWS} sky="sunny" house={houseOptions(s)} />
-        </span>
-      </Node>
-      <Node
-        part="inverter"
-        icon="bolt"
-        color={COLOR.brand}
-        label={s.model ?? "Inverter"}
-        value={s.nominal_kw ? `${s.nominal_kw} kW` : "—"}
-        sub={`${s.brand ? `${s.brand} ` : ""}hybrid inverter`}
-      />
-      <Node
-        part="battery"
-        icon="battery"
-        color={COLOR.battery}
-        label="Battery"
-        value={f.batteryKwh ? `${num(f.batteryKwh)} kWh` : "None"}
-        sub={
-          usable != null
-            ? `${num(usable)} kWh usable${f.maxKw ? ` · ±${num(f.maxKw)} kW` : ""}`
-            : "Not reported by the inverter"
-        }
-      >
-        {f.batteryKwh ? <ReserveBar reserve={reserve} /> : null}
-      </Node>
-      <Node part="grid" icon="grid" color={COLOR.grid} label="Grid" value={s.phases ?? "—"} sub="Connection" />
+        {pv2 && (
+          <Node
+            part="second"
+            icon="bolt"
+            color={COLOR.solar}
+            label="Second inverter"
+            value={pv2.nominal_kw ? `${pv2.nominal_kw} kW` : (pv2.model ?? "—")}
+            sub={pv2.model ? `${inverterName(pv2)}` : pv2.host}
+          />
+        )}
+        <Node part="home" icon="home" color={COLOR.teal} label="Home" value="Your house" sub="Where it's used" />
+        <Node
+          part="inverter"
+          icon="bolt"
+          color={COLOR.brand}
+          label={s.model ?? "Inverter"}
+          value={s.nominal_kw ? `${s.nominal_kw} kW` : "—"}
+          sub={`${s.brand ? `${s.brand} ` : ""}hybrid inverter`}
+        />
+        <Node
+          part="battery"
+          icon="battery"
+          color={COLOR.battery}
+          label="Battery"
+          value={f.batteryKwh ? `${num(f.batteryKwh)} kWh` : "None"}
+          sub={
+            usable != null
+              ? `${num(usable)} kWh usable${f.maxKw ? ` · ±${num(f.maxKw)} kW` : ""}`
+              : "Not reported by the inverter"
+          }
+        >
+          {f.batteryKwh ? <ReserveBar reserve={reserve} /> : null}
+        </Node>
+        <Node part="grid" icon="grid" color={COLOR.grid} label="Grid" value={s.phases ?? "—"} sub="Connection" />
+      </div>
     </div>
   );
 }
@@ -191,7 +190,7 @@ function ReserveBar({ reserve }: { reserve: number }) {
   return (
     <span
       title={`${Math.round(r)}% kept in reserve for blackouts`}
-      className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full"
+      className="mt-1.5 flex h-1 w-full gap-[2px] overflow-hidden rounded-full"
     >
       <span
         className={cn("h-full rounded-l-full", r === 0 && "rounded-r-full")}

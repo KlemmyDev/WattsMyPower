@@ -33,7 +33,6 @@ from app.features.live.service import LiveService
 from app.features.live.simulator import Simulator
 from app.features.meter.service import MeterService
 from app.features.onboarding.service import OnboardingService
-from app.features.plans.service import PlansService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.geocode import Geocoder
 from app.features.settings.store import SettingsStore
@@ -53,7 +52,6 @@ class Services:
     tariffs: TariffStore
     amber: AmberService
     geocoder: Geocoder
-    plans: PlansService
     weather: WeatherService
     forecast: ForecastService
     insights: InsightsService
@@ -83,7 +81,6 @@ def build_services(config: Config) -> Services:
     settings = SettingsStore(db, config)
     tariffs = TariffStore(db, config)
     amber = AmberService(db, tariffs)
-    plans = PlansService(tariffs)
     meter = MeterService(db, readings)
     bills = BillsService(db, readings, settings, tariffs, meter, amber.repo)
     live = LiveService(config, settings, tariffs)
@@ -108,7 +105,6 @@ def build_services(config: Config) -> Services:
         tariffs=tariffs,
         amber=amber,
         geocoder=Geocoder(),
-        plans=plans,
         weather=weather,
         forecast=forecast,
         insights=insights,

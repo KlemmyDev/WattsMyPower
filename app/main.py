@@ -35,7 +35,6 @@ from app.features.live.router import health_router
 from app.features.live.router import router as live_router
 from app.features.meter.router import router as meter_router
 from app.features.onboarding.router import router as onboarding_router
-from app.features.plans.router import router as plans_router
 from app.features.readings.router import router as readings_router
 from app.features.settings.router import name_location
 from app.features.settings.router import router as settings_router
@@ -63,7 +62,6 @@ ROUTERS = [
     bills_router,
     meter_router,
     imports_router,
-    plans_router,
     car_router,
     battery_router,
     tesla_router,

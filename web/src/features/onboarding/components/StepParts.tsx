@@ -35,10 +35,14 @@ function StepTile({ step, className }: { step: StepInfo; className?: string }) {
 /** A step's heading, its icon beside it, and a line or two about why it matters. */
 export function StepIntro({ nav, title, children }: { nav: StepNav; title: string; children: ReactNode }) {
   return (
-    <div
-      className="flex items-start gap-5 p-7 pb-6 max-sm:gap-3.5 max-sm:p-5"
-      style={{ backgroundImage: `linear-gradient(110deg, ${alpha(nav.step.color, 0.1)}, transparent 55%)` }}
-    >
+    <div className="relative isolate flex items-start gap-5 p-7 pb-8 max-sm:gap-3.5 max-sm:p-5 max-sm:pb-6">
+      {/* The step's colour washing in from the top left and fading out below the heading, with no edge where the
+          step's own panels begin. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -bottom-24 -z-1 [mask-image:linear-gradient(to_bottom,black_45%,transparent)]"
+        style={{ backgroundImage: `linear-gradient(110deg, ${alpha(nav.step.color, 0.1)}, transparent 55%)` }}
+      />
       <StepTile step={nav.step} className="animate-spring-in max-sm:size-10 max-sm:rounded-xl" />
       <div className="flex min-w-0 flex-col gap-1.5">
         <span className="text-[13px] font-medium" style={{ color: nav.step.color }}>

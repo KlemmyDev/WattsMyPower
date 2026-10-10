@@ -1,4 +1,3 @@
-import type { PlanTariff } from "~/features/settings/types";
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
 import { seedBands } from "~/features/common/tariffs/utils";
 
@@ -67,20 +66,19 @@ export function applyEdit(t: Tariff, e: TariffEdit): Tariff {
 export type EditorStatus = { text: string; bad?: boolean } | null;
 
 /**
- * The rates editor. `draft` is null while showing the server's copy unchanged; any edit, or loading
- * a published plan, makes it a draft that isn't saved until Save rates.
+ * The rates editor. `draft` is null while showing the server's copy unchanged; any edit makes it a draft that isn't
+ * saved until Save rates.
  */
-export type EditorState = { draft: Tariff | null; imported: PlanTariff | null; status: EditorStatus };
+export type EditorState = { draft: Tariff | null; status: EditorStatus };
 
 export type EditorAction =
   | { type: "edit"; base: Tariff; edit: TariffEdit }
-  | { type: "import"; plan: PlanTariff }
   | { type: "discard" }
   | { type: "saving" }
   | { type: "saved"; message: string }
   | { type: "failed"; message: string };
 
-export const EDITOR_START: EditorState = { draft: null, imported: null, status: null };
+export const EDITOR_START: EditorState = { draft: null, status: null };
 
 const UNSAVED: EditorStatus = { text: "Unsaved changes." };
 
@@ -88,14 +86,12 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
   switch (a.type) {
     case "edit":
       return { ...s, draft: applyEdit(s.draft ?? a.base, a.edit), status: UNSAVED };
-    case "import":
-      return { draft: a.plan.tariff, imported: a.plan, status: UNSAVED };
     case "discard":
       return EDITOR_START;
     case "saving":
       return { ...s, status: { text: "Saving…" } };
     case "saved":
-      return { draft: null, imported: null, status: { text: a.message } };
+      return { draft: null, status: { text: a.message } };
     case "failed":
       return { ...s, status: { text: a.message, bad: true } };
   }
