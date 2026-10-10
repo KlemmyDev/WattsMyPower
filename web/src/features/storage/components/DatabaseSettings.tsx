@@ -5,7 +5,7 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { measureAgain, storageQuery } from "~/features/storage/api";
 import { BackupCard } from "~/features/storage/components/BackupCard";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
-import { StorageFacts, StorageVisual } from "~/features/storage/components/StorageOverview";
+import { StorageSummary } from "~/features/storage/components/StorageOverview";
 import { SettingsSplit } from "~/features/settings/components/SettingsSection";
 import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
@@ -30,7 +30,7 @@ function Storage() {
   if (report.isPending)
     return (
       <>
-        <Skeleton className="h-[330px] rounded-3xl" />
+        <Skeleton className="h-[560px] rounded-3xl" />
         <Skeleton className="h-[480px] rounded-3xl" />
       </>
     );
@@ -43,9 +43,10 @@ function Storage() {
         <Notice>{errorMessage(measure.error, "The databases couldn't be measured. Try again.")}</Notice>
       )}
       <SettingsSplit
-        visual={<StorageVisual report={report.data} measuring={measure.isPending} onMeasure={() => measure.mutate()} />}
+        visual={
+          <StorageSummary report={report.data} measuring={measure.isPending} onMeasure={() => measure.mutate()} />
+        }
       >
-        <StorageFacts report={report.data} />
         <BackupCard report={report.data} />
       </SettingsSplit>
       <h2 className="px-1 pt-3 text-[13px] leading-5 font-semibold tracking-[0.08em] text-ink-muted uppercase">
