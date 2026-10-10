@@ -186,11 +186,14 @@ curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install
 
 - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
 - **Your system:** the solar array's size (the forecast starts from it, and it's 6.6 kW until it's entered), and the battery details your inverter can't report.
-- **Your electricity plan:** enter the rates from your bill (or connect Amber Electric), beside a chart of them through the day.
+- **Your house:** how the Overview draws your home (its style, storeys and garage, and where the inverter and battery are), with a picture of it by day or night.
 - **Where you live:** your suburb, for the weather forecast.
+- **Your electricity plan:** enter the rates from your bill (or connect Amber Electric), beside a chart of them through the day.
 - **Your billing period:** how often you're billed and when a period starts.
+- **Cost and payback:** optional: what the system cost and when it went in (for when it pays for itself), and the battery's warranty.
+- **Anything else:** pick what else you have (an electric car, smart plugs or appliances, a second inverter) or want (outage alerts), and the last page links straight to connecting each.
 
-Everything in it is also in the dashboard (Manage → Integrations and System, and Bills → Rates & settings), and **Manage → System → Open the set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
+Everything in it is also in the dashboard (Manage → Integrations and Settings, and Bills → Rates & settings), and **Settings → Set-up guide** brings it back. Updating an install that's already set up (an inverter connected, readings recorded, or rates, location or billing period saved) never shows it.
 
 ## Everyday use
 
@@ -460,7 +463,7 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/auth/session` | whether this browser is signed in, and whether an account still needs creating |
 | `POST /api/auth/setup`, `POST /api/auth/login`, `POST /api/auth/logout` | create the account (first run only), sign in, sign out |
 | `PUT /api/auth/password` | change the password (signs out other browsers) |
-| `GET /api/onboarding`, `PATCH /api/onboarding` | the set-up guide's progress: steps done or skipped, finished, or put off |
+| `GET /api/onboarding`, `PATCH /api/onboarding` | the set-up guide's progress: steps done or skipped, extras picked, finished, or put off |
 | `GET /api/live` | latest snapshot, system details, and whether readings are arriving |
 | `GET /api/stream` | server-sent events, one message per poll |
 | `GET /api/history?start=&end=&points=&fields=` | time-bucketed columnar series (unix seconds) |

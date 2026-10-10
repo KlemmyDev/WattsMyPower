@@ -24,11 +24,11 @@ import { OptionList, SettingsSection } from "~/features/settings/components/Sett
 import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /** A phone: the house with a dot on each part, rather than the choices beside it. */
-const PHONE = "(max-width: 639px)";
+export const PHONE = "(max-width: 639px)";
 
-type Group = "kind" | "size" | "look" | "outside" | "units";
+export type Group = "kind" | "size" | "look" | "outside" | "units";
 
-const GROUPS: { value: Group; label: string }[] = [
+export const GROUPS: { value: Group; label: string }[] = [
   { value: "kind", label: "Kind" },
   { value: "size", label: "Size" },
   { value: "look", label: "Look" },
@@ -37,7 +37,7 @@ const GROUPS: { value: Group; label: string }[] = [
 ];
 
 /** A group of choices: its title, a line under it, and the choices. */
-function groupOf(e: HouseEditor, g: Group): { title: string; sub: string; body: ReactNode } {
+export function groupOf(e: HouseEditor, g: Group): { title: string; sub: string; body: ReactNode } {
   switch (g) {
     case "kind":
       return { title: "Kind of house", sub: "Its shape: walls, roof, windows and porch.", body: <KindTiles e={e} /> };

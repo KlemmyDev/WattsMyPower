@@ -6,7 +6,7 @@ import { OWNERSHIP_SETTINGS, type OwnershipKey, type Settings } from "~/features
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { dateKey, fromDateKey } from "~/features/common/time/utils";
-import { CostVisual } from "~/features/settings/components/CostVisual";
+import { CostVisual, type CostFigures } from "~/features/settings/components/CostVisual";
 import {
   NumberRow,
   OptionList,
@@ -63,9 +63,12 @@ export function OwnershipSettings() {
   );
 }
 
-function Ownership({ system: s }: { system: SystemInfo }) {
+/**
+ * The cost and warranty fields as typed: a row for each (`row`), the figures the picture shows from them, and saving
+ * what's changed (`submit`, then `onSaved`).
+ */
+export function useOwnershipForm(s: SystemInfo) {
   const save = useSaveSettings();
-  const toast = useToast();
   const [values, setValues] = useState(() => valuesOf(s));
   const [error, setError] = useState("");
   const changed = OWNERSHIP_SETTINGS.filter((k) => saved(k, values[k]) !== (s[k] || 0));
@@ -74,7 +77,7 @@ function Ownership({ system: s }: { system: SystemInfo }) {
     return Number.isNaN(v) ? 0 : v;
   };
 
-  const submit = () => {
+  const submit = (onSaved: () => void) => {
     setError("");
     const bad = changed.find((k) => Number.isNaN(saved(k, values[k])));
     if (bad) return setError(`Enter a number for ${NAMES[bad]}, or leave it blank.`);
@@ -82,10 +85,15 @@ function Ownership({ system: s }: { system: SystemInfo }) {
     save.mutate(changes, {
       onSuccess: (next) => {
         setValues(valuesOf({ ...s, ...next }));
-        toast("Saved. Payback and the battery's warranty are updated.");
+        onSaved();
       },
       onError: (err) => setError(saveSettingsError(err)),
     });
+  };
+
+  const discard = () => {
+    setValues(valuesOf(s));
+    setError("");
   };
 
   const row = (key: OwnershipKey) => {
@@ -105,19 +113,27 @@ function Ownership({ system: s }: { system: SystemInfo }) {
     );
   };
 
+  const figures: CostFigures = {
+    cost: num("system_cost"),
+    installed: num("system_installed"),
+    batteryInstalled: num("battery_installed"),
+    warrantyYears: num("battery_warranty_years"),
+    warrantyMwh: num("battery_warranty_mwh"),
+  };
+
+  return { row, figures, dirty: changed.length > 0, pending: save.isPending, error, submit, discard };
+}
+
+function Ownership({ system: s }: { system: SystemInfo }) {
+  const toast = useToast();
+  const form = useOwnershipForm(s);
+  const row = form.row;
+
   return (
     <SettingsSplit
       visual={
         <SettingsSection id="h-own-return" title="Return on your system" sub="What it has saved against the grid.">
-          <CostVisual
-            figures={{
-              cost: num("system_cost"),
-              installed: num("system_installed"),
-              batteryInstalled: num("battery_installed"),
-              warrantyYears: num("battery_warranty_years"),
-              warrantyMwh: num("battery_warranty_mwh"),
-            }}
-          />
+          <CostVisual figures={form.figures} />
         </SettingsSection>
       }
     >
@@ -130,14 +146,11 @@ function Ownership({ system: s }: { system: SystemInfo }) {
         </OptionList>
         {/* Saves both sections' changes, at the foot of the last. */}
         <SaveBanner
-          dirty={changed.length > 0}
-          pending={save.isPending}
-          error={error}
-          onDiscard={() => {
-            setValues(valuesOf(s));
-            setError("");
-          }}
-          onSave={submit}
+          dirty={form.dirty}
+          pending={form.pending}
+          error={form.error}
+          onDiscard={form.discard}
+          onSave={() => form.submit(() => toast("Saved. Payback and the battery's warranty are updated."))}
         />
       </SettingsSection>
     </SettingsSplit>

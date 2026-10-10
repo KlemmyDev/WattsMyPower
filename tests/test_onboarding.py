@@ -70,7 +70,13 @@ def test_an_existing_install_never_sees_the_guide_after_upgrading(
         conn.executemany("INSERT INTO settings (key, value) VALUES (?, ?)", [("latitude", -27.47), ("longitude", 153.03)])  # fmt: skip
 
     client = open_app()
-    assert client.get("/api/onboarding").json() == {"complete": True, "dismissed": False, "show": False, "steps": {}}
+    assert client.get("/api/onboarding").json() == {
+        "complete": True,
+        "dismissed": False,
+        "show": False,
+        "steps": {},
+        "extras": [],
+    }
     assert stored(db) == {"complete": True, "dismissed": False, "steps": {}, "existing": True}
 
     # Settled once: it stays finished whatever changes later, even across restarts.
@@ -141,7 +147,13 @@ def test_a_fresh_install_is_guided_until_it_finishes(
     db: Database, collector: FakeCollector, open_app: Callable[..., TestClient]
 ) -> None:
     client = open_app()
-    assert client.get("/api/onboarding").json() == {"complete": False, "dismissed": False, "show": True, "steps": {}}
+    assert client.get("/api/onboarding").json() == {
+        "complete": False,
+        "dismissed": False,
+        "show": True,
+        "steps": {},
+        "extras": [],
+    }
 
     # Connecting the inverter in the guide's first step doesn't end it.
     assert client.put("/api/integrations/hybrid", json={"driver": "sungrow.sh_rs", "host": "192.168.0.244"}).is_success
@@ -160,6 +172,7 @@ def test_a_fresh_install_is_guided_until_it_finishes(
         "dismissed": False,
         "show": False,
         "steps": {"inverter": "done", "system": "done", "plan": "skipped", "location": "done", "billing": "done"},
+        "extras": [],
     }
     assert open_app().get("/api/onboarding").json()["show"] is False
 
@@ -168,9 +181,18 @@ def test_putting_it_off_stops_the_redirect_but_keeps_progress(open_app: Callable
     client = open_app()
     client.patch("/api/onboarding", json={"steps": {"inverter": "skipped"}})
     body = client.patch("/api/onboarding", json={"dismissed": True}).json()
-    assert body == {"complete": False, "dismissed": True, "show": False, "steps": {"inverter": "skipped"}}
+    assert body == {"complete": False, "dismissed": True, "show": False, "steps": {"inverter": "skipped"}, "extras": []}
     # Unmarking a step (to do it again) is a null.
     assert client.patch("/api/onboarding", json={"steps": {"inverter": None}}).json()["steps"] == {}
+
+
+def test_the_extras_picked_are_kept_for_the_finish(open_app: Callable[..., TestClient]) -> None:
+    client = open_app()
+    body = client.patch("/api/onboarding", json={"steps": {"extras": "done"}, "extras": ["ev", "home", "ev"]}).json()
+    assert body["steps"] == {"extras": "done"} and body["extras"] == ["ev", "home"]
+    # Marking other steps leaves them; a new list replaces them.
+    assert client.patch("/api/onboarding", json={"complete": True}).json()["extras"] == ["ev", "home"]
+    assert client.patch("/api/onboarding", json={"extras": []}).json()["extras"] == []
 
 
 def test_with_the_collector_down_a_fresh_install_is_asked_again_later(
@@ -194,7 +216,9 @@ def test_with_the_collector_down_a_fresh_install_is_asked_again_later(
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
-        ({"steps": {"cost": "done"}}, "No step 'cost'"),
+        ({"steps": {"bills": "done"}}, "No step 'bills'"),
+        ({"extras": ["boat"]}, "extras must be a list"),
+        ({"extras": "ev"}, "extras must be a list"),
         ({"steps": {"plan": "maybe"}}, "done or skipped"),
         ({"steps": ["plan"]}, "steps must be an object"),
         ({"complete": "yes"}, "complete must be true or false"),
