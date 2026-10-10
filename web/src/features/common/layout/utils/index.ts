@@ -12,9 +12,8 @@ export type Section =
   | "/battery"
   | "/bills"
   | "/ev"
-  | "/system"
-  | "/integrations"
-  | "/data";
+  | "/settings"
+  | "/integrations";
 
 /**
  * Live: what's happening now. Insights: what happened, what's coming, and what it cost. Manage: setting it all up
@@ -43,9 +42,8 @@ export const NAV: NavItem[] = [
   { to: "/history", label: "History", icon: "chart", group: "Insights", color: COLOR.lilac },
   { to: "/plan", label: "Plan", icon: "cloudSun", group: "Insights", color: COLOR.export },
   { to: "/bills", label: "Bills", icon: "dollar", group: "Insights", color: COLOR.good },
-  { to: "/system", label: "System", icon: "settings", group: "Manage", color: MANAGE_COLOR },
+  { to: "/settings", label: "Settings", icon: "settings", group: "Manage", color: MANAGE_COLOR },
   { to: "/integrations", label: "Integrations", icon: "plug", group: "Manage", color: MANAGE_COLOR },
-  { to: "/data", label: "Data", icon: "database", group: "Manage", color: MANAGE_COLOR },
 ];
 
 /** Which top-level section a path belongs to: "/home" for "/home/12". */

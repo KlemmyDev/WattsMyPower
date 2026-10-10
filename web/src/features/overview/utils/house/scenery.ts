@@ -10,7 +10,7 @@ import { queenslander } from "~/features/overview/utils/house/styles/queenslande
 
 /*
  * The parts of the drawing that don't move: ground, the house in its style, garage, roof panels, garden, and
- * the overlays for wet ground and night. Built once for each house layout (Manage → System → Your house)
+ * the overlays for wet ground and night. Built once for each house layout (Settings → Your house)
  * and reused for every render. The batteries, inverters and charger are drawn by HouseScene, as their lights
  * and gauges follow the readings.
  */

@@ -67,7 +67,7 @@ export function BatteryPage() {
           ) : (
             <EmptyState icon="battery" title="No battery connected" id="h-nobat">
               Your inverter doesn't report a battery, so this looks like a solar-only system. If it does have one, set
-              its size in Manage → System.
+              its size in Settings.
             </EmptyState>
           )}
         </div>

@@ -6,9 +6,24 @@ import { measureAgain, storageQuery } from "~/features/storage/api";
 import { BackupCard } from "~/features/storage/components/BackupCard";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
 import { StorageOverview } from "~/features/storage/components/StorageOverview";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-/** Manage → Data: everything stored, in both databases, how much room each part takes, and a backup to download. */
+/** Settings → Data: everything stored, in both databases, how much room each part takes, and a backup to download. */
 export function DatabaseSettings() {
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/settings">Settings</BackLink>}
+        id="h-data-page"
+        title="Data"
+        sub="What's stored, how much room it takes, and a backup to download."
+      />
+      <Storage />
+    </>
+  );
+}
+
+function Storage() {
   const qc = useQueryClient();
   const report = useQuery(storageQuery);
   const measure = useMutation({

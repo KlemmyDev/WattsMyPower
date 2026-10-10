@@ -13,7 +13,7 @@ import { bytes } from "~/features/storage/utils";
 
 type What = "dashboard" | "everything";
 
-/** Manage → Data: download a backup of the databases, to keep before trying a new version or to take your data away. */
+/** Settings → Data: download a backup of the databases, to keep before trying a new version or to take your data away. */
 export function BackupCard({ report }: { report: StorageReport }) {
   const size = (id: "dashboard" | "collector") => {
     const d = report.databases.find((db) => db.id === id);

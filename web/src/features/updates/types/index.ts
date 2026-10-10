@@ -18,7 +18,7 @@ export type LatestVersion = {
 
 /** This version, the channel's on GitHub, and whether that's an update or older (GET /api/updates). */
 export type UpdateStatus = {
-  /** Checking every few hours is on (Manage → System → Updates). */
+  /** Checking every few hours is on (Settings → Updates). */
   enabled: boolean;
   channel: Channel;
   current: { version: string; release: string | null; commit: string | null };

@@ -31,7 +31,7 @@ export type Insights = {
     cycles: number | null;
     round_trip_pct: number | null;
   };
-  /** How much of the battery's warranty is used (Manage → System), or null when none is set. */
+  /** How much of the battery's warranty is used (Settings), or null when none is set. */
   warranty: {
     installed: number | null;
     years: number | null;

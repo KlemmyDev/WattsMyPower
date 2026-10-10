@@ -2,7 +2,7 @@ import { reducedMotion } from "~/features/common/display/utils";
 import { store, STORE_THEME } from "~/features/common/storage/utils";
 
 /*
- * Light or dark, chosen per browser in Manage → Account. "System" follows the device's setting.
+ * Light or dark, chosen per browser in Settings → Account. "System" follows the device's setting.
  * The page shows a theme through <html data-theme>, which swaps the colour tokens in styles/app.css.
  */
 
@@ -70,7 +70,7 @@ export const themeChanged = () => listeners.forEach((l) => l());
 export function saveTheme(choice: ThemeChoice) {
   store.set(STORE_THEME, choice);
   // Cross-fade to the new theme where the browser can (the page's ::view-transition styles), unless
-  // motion is turned down (on the device or in Manage → Account); otherwise it switches at once.
+  // motion is turned down (on the device or in Settings → Account); otherwise it switches at once.
   if (document.startViewTransition && !reducedMotion()) {
     const fade = document.startViewTransition(() => applyTheme(choice));
     // A fade cut short (another switch mid-fade, the page hidden) still applies the theme: nothing to report.

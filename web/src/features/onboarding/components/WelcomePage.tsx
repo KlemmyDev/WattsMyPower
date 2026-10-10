@@ -47,7 +47,7 @@ export function WelcomePage({ step }: { step: StepId | undefined }) {
   const leave = () => {
     if (!finished) {
       mark.mutate({ dismissed: true });
-      toast("No problem. The set-up guide is in Manage → System whenever you want it.");
+      toast("No problem. The set-up guide is in Settings whenever you want it.");
     }
     navigate({ to: "/" });
   };

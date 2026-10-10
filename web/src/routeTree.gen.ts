@@ -28,8 +28,8 @@ import { Route as AppIntegrationsRouteRouteImport } from './routes/_app/integrat
 import { Route as AppPlanRouteImport } from './routes/_app/plan'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppSavingsRouteImport } from './routes/_app/savings'
+import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
 import { Route as AppSolarRouteImport } from './routes/_app/solar'
-import { Route as AppSystemRouteRouteImport } from './routes/_app/system/route'
 import { Route as AppBillsRatesRouteImport } from './routes/_app/bills_.rates'
 import { Route as AppEvIndexRouteImport } from './routes/_app/ev/index'
 import { Route as AppEvVinRouteImport } from './routes/_app/ev/$vin'
@@ -42,12 +42,15 @@ import { Route as AppIntegrationsTeslaRouteImport } from './routes/_app/integrat
 import { Route as AppIntegrationsWeatherRouteImport } from './routes/_app/integrations/weather'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsSplatRouteImport } from './routes/_app/settings/$'
+import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsCostRouteImport } from './routes/_app/settings/cost'
+import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
+import { Route as AppSettingsHouseRouteImport } from './routes/_app/settings/house'
+import { Route as AppSettingsLocationRouteImport } from './routes/_app/settings/location'
+import { Route as AppSettingsSolarBatteryRouteImport } from './routes/_app/settings/solar-battery'
+import { Route as AppSettingsUpdatesRouteImport } from './routes/_app/settings/updates'
 import { Route as AppSystemIndexRouteImport } from './routes/_app/system/index'
-import { Route as AppSystemCostRouteImport } from './routes/_app/system/cost'
-import { Route as AppSystemHouseRouteImport } from './routes/_app/system/house'
-import { Route as AppSystemLocationRouteImport } from './routes/_app/system/location'
-import { Route as AppSystemSolarBatteryRouteImport } from './routes/_app/system/solar-battery'
-import { Route as AppSystemUpdatesRouteImport } from './routes/_app/system/updates'
+import { Route as AppSystemSplatRouteImport } from './routes/_app/system/$'
 import { Route as AppTeslaIndexRouteImport } from './routes/_app/tesla/index'
 import { Route as AppTeslaSetupRouteImport } from './routes/_app/tesla/setup'
 import { Route as AppHomeRoomsRoomRouteImport } from './routes/_app/home_.rooms.$room'
@@ -153,14 +156,14 @@ const AppSavingsRoute = AppSavingsRouteImport.update({
   path: '/savings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsRouteRoute = AppSettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSolarRoute = AppSolarRouteImport.update({
   id: '/solar',
   path: '/solar',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSystemRouteRoute = AppSystemRouteRouteImport.update({
-  id: '/system',
-  path: '/system',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBillsRatesRoute = AppBillsRatesRouteImport.update({
@@ -214,44 +217,59 @@ const AppIntegrationsWeatherRoute = AppIntegrationsWeatherRouteImport.update({
   getParentRoute: () => AppIntegrationsRouteRoute,
 } as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
-  id: '/settings/',
-  path: '/settings/',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSettingsSplatRoute = AppSettingsSplatRouteImport.update({
-  id: '/settings/$',
-  path: '/settings/$',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSystemIndexRoute = AppSystemIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppSystemRouteRoute,
+  getParentRoute: () => AppSettingsRouteRoute,
 } as any)
-const AppSystemCostRoute = AppSystemCostRouteImport.update({
+const AppSettingsSplatRoute = AppSettingsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSettingsCostRoute = AppSettingsCostRouteImport.update({
   id: '/cost',
   path: '/cost',
-  getParentRoute: () => AppSystemRouteRoute,
+  getParentRoute: () => AppSettingsRouteRoute,
 } as any)
-const AppSystemHouseRoute = AppSystemHouseRouteImport.update({
+const AppSettingsDataRoute = AppSettingsDataRouteImport.update({
+  id: '/data',
+  path: '/data',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSettingsHouseRoute = AppSettingsHouseRouteImport.update({
   id: '/house',
   path: '/house',
-  getParentRoute: () => AppSystemRouteRoute,
+  getParentRoute: () => AppSettingsRouteRoute,
 } as any)
-const AppSystemLocationRoute = AppSystemLocationRouteImport.update({
+const AppSettingsLocationRoute = AppSettingsLocationRouteImport.update({
   id: '/location',
   path: '/location',
-  getParentRoute: () => AppSystemRouteRoute,
+  getParentRoute: () => AppSettingsRouteRoute,
 } as any)
-const AppSystemSolarBatteryRoute = AppSystemSolarBatteryRouteImport.update({
+const AppSettingsSolarBatteryRoute = AppSettingsSolarBatteryRouteImport.update({
   id: '/solar-battery',
   path: '/solar-battery',
-  getParentRoute: () => AppSystemRouteRoute,
+  getParentRoute: () => AppSettingsRouteRoute,
 } as any)
-const AppSystemUpdatesRoute = AppSystemUpdatesRouteImport.update({
+const AppSettingsUpdatesRoute = AppSettingsUpdatesRouteImport.update({
   id: '/updates',
   path: '/updates',
-  getParentRoute: () => AppSystemRouteRoute,
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSystemIndexRoute = AppSystemIndexRouteImport.update({
+  id: '/system/',
+  path: '/system/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSystemSplatRoute = AppSystemSplatRouteImport.update({
+  id: '/system/$',
+  path: '/system/$',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppTeslaIndexRoute = AppTeslaIndexRouteImport.update({
   id: '/tesla/',
@@ -314,7 +332,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/integrations': typeof AppIntegrationsRouteRouteWithChildren
-  '/system': typeof AppSystemRouteRouteWithChildren
+  '/settings': typeof AppSettingsRouteRouteWithChildren
   '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/battery': typeof AppBatteryRoute
@@ -339,11 +357,14 @@ export interface FileRoutesByFullPath {
   '/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/settings/$': typeof AppSettingsSplatRoute
-  '/system/cost': typeof AppSystemCostRoute
-  '/system/house': typeof AppSystemHouseRoute
-  '/system/location': typeof AppSystemLocationRoute
-  '/system/solar-battery': typeof AppSystemSolarBatteryRoute
-  '/system/updates': typeof AppSystemUpdatesRoute
+  '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/cost': typeof AppSettingsCostRoute
+  '/settings/data': typeof AppSettingsDataRoute
+  '/settings/house': typeof AppSettingsHouseRoute
+  '/settings/location': typeof AppSettingsLocationRoute
+  '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
+  '/settings/updates': typeof AppSettingsUpdatesRoute
+  '/system/$': typeof AppSystemSplatRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/ev/': typeof AppEvIndexRoute
   '/integrations/': typeof AppIntegrationsIndexRoute
@@ -387,11 +408,14 @@ export interface FileRoutesByTo {
   '/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/settings/$': typeof AppSettingsSplatRoute
-  '/system/cost': typeof AppSystemCostRoute
-  '/system/house': typeof AppSystemHouseRoute
-  '/system/location': typeof AppSystemLocationRoute
-  '/system/solar-battery': typeof AppSystemSolarBatteryRoute
-  '/system/updates': typeof AppSystemUpdatesRoute
+  '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/cost': typeof AppSettingsCostRoute
+  '/settings/data': typeof AppSettingsDataRoute
+  '/settings/house': typeof AppSettingsHouseRoute
+  '/settings/location': typeof AppSettingsLocationRoute
+  '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
+  '/settings/updates': typeof AppSettingsUpdatesRoute
+  '/system/$': typeof AppSystemSplatRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/ev': typeof AppEvIndexRoute
   '/integrations': typeof AppIntegrationsIndexRoute
@@ -413,7 +437,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/_app/integrations': typeof AppIntegrationsRouteRouteWithChildren
-  '/_app/system': typeof AppSystemRouteRouteWithChildren
+  '/_app/settings': typeof AppSettingsRouteRouteWithChildren
   '/_app/$': typeof AppSplatRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/battery': typeof AppBatteryRoute
@@ -439,11 +463,14 @@ export interface FileRoutesById {
   '/_app/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/_app/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/_app/settings/$': typeof AppSettingsSplatRoute
-  '/_app/system/cost': typeof AppSystemCostRoute
-  '/_app/system/house': typeof AppSystemHouseRoute
-  '/_app/system/location': typeof AppSystemLocationRoute
-  '/_app/system/solar-battery': typeof AppSystemSolarBatteryRoute
-  '/_app/system/updates': typeof AppSystemUpdatesRoute
+  '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/cost': typeof AppSettingsCostRoute
+  '/_app/settings/data': typeof AppSettingsDataRoute
+  '/_app/settings/house': typeof AppSettingsHouseRoute
+  '/_app/settings/location': typeof AppSettingsLocationRoute
+  '/_app/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
+  '/_app/settings/updates': typeof AppSettingsUpdatesRoute
+  '/_app/system/$': typeof AppSystemSplatRoute
   '/_app/tesla/setup': typeof AppTeslaSetupRoute
   '/_app/ev/': typeof AppEvIndexRoute
   '/_app/integrations/': typeof AppIntegrationsIndexRoute
@@ -466,7 +493,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/integrations'
-    | '/system'
+    | '/settings'
     | '/$'
     | '/account'
     | '/battery'
@@ -491,11 +518,14 @@ export interface FileRouteTypes {
     | '/integrations/tesla'
     | '/integrations/weather'
     | '/settings/$'
-    | '/system/cost'
-    | '/system/house'
-    | '/system/location'
-    | '/system/solar-battery'
-    | '/system/updates'
+    | '/settings/account'
+    | '/settings/cost'
+    | '/settings/data'
+    | '/settings/house'
+    | '/settings/location'
+    | '/settings/solar-battery'
+    | '/settings/updates'
+    | '/system/$'
     | '/tesla/setup'
     | '/ev/'
     | '/integrations/'
@@ -539,11 +569,14 @@ export interface FileRouteTypes {
     | '/integrations/tesla'
     | '/integrations/weather'
     | '/settings/$'
-    | '/system/cost'
-    | '/system/house'
-    | '/system/location'
-    | '/system/solar-battery'
-    | '/system/updates'
+    | '/settings/account'
+    | '/settings/cost'
+    | '/settings/data'
+    | '/settings/house'
+    | '/settings/location'
+    | '/settings/solar-battery'
+    | '/settings/updates'
+    | '/system/$'
     | '/tesla/setup'
     | '/ev'
     | '/integrations'
@@ -564,7 +597,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/_app/integrations'
-    | '/_app/system'
+    | '/_app/settings'
     | '/_app/$'
     | '/_app/account'
     | '/_app/battery'
@@ -590,11 +623,14 @@ export interface FileRouteTypes {
     | '/_app/integrations/tesla'
     | '/_app/integrations/weather'
     | '/_app/settings/$'
-    | '/_app/system/cost'
-    | '/_app/system/house'
-    | '/_app/system/location'
-    | '/_app/system/solar-battery'
-    | '/_app/system/updates'
+    | '/_app/settings/account'
+    | '/_app/settings/cost'
+    | '/_app/settings/data'
+    | '/_app/settings/house'
+    | '/_app/settings/location'
+    | '/_app/settings/solar-battery'
+    | '/_app/settings/updates'
+    | '/_app/system/$'
     | '/_app/tesla/setup'
     | '/_app/ev/'
     | '/_app/integrations/'
@@ -752,18 +788,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSavingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/solar': {
       id: '/_app/solar'
       path: '/solar'
       fullPath: '/solar'
       preLoaderRoute: typeof AppSolarRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/system': {
-      id: '/_app/system'
-      path: '/system'
-      fullPath: '/system'
-      preLoaderRoute: typeof AppSystemRouteRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/bills_/rates': {
@@ -838,59 +874,80 @@ declare module '@tanstack/react-router' {
     }
     '/_app/settings/': {
       id: '/_app/settings/'
-      path: '/settings'
+      path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof AppSettingsIndexRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppSettingsRouteRoute
     }
     '/_app/settings/$': {
       id: '/_app/settings/$'
-      path: '/settings/$'
+      path: '/$'
       fullPath: '/settings/$'
       preLoaderRoute: typeof AppSettingsSplatRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/account': {
+      id: '/_app/settings/account'
+      path: '/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof AppSettingsAccountRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/cost': {
+      id: '/_app/settings/cost'
+      path: '/cost'
+      fullPath: '/settings/cost'
+      preLoaderRoute: typeof AppSettingsCostRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/data': {
+      id: '/_app/settings/data'
+      path: '/data'
+      fullPath: '/settings/data'
+      preLoaderRoute: typeof AppSettingsDataRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/house': {
+      id: '/_app/settings/house'
+      path: '/house'
+      fullPath: '/settings/house'
+      preLoaderRoute: typeof AppSettingsHouseRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/location': {
+      id: '/_app/settings/location'
+      path: '/location'
+      fullPath: '/settings/location'
+      preLoaderRoute: typeof AppSettingsLocationRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/solar-battery': {
+      id: '/_app/settings/solar-battery'
+      path: '/solar-battery'
+      fullPath: '/settings/solar-battery'
+      preLoaderRoute: typeof AppSettingsSolarBatteryRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/updates': {
+      id: '/_app/settings/updates'
+      path: '/updates'
+      fullPath: '/settings/updates'
+      preLoaderRoute: typeof AppSettingsUpdatesRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
     }
     '/_app/system/': {
       id: '/_app/system/'
-      path: '/'
+      path: '/system'
       fullPath: '/system/'
       preLoaderRoute: typeof AppSystemIndexRouteImport
-      parentRoute: typeof AppSystemRouteRoute
+      parentRoute: typeof AppRoute
     }
-    '/_app/system/cost': {
-      id: '/_app/system/cost'
-      path: '/cost'
-      fullPath: '/system/cost'
-      preLoaderRoute: typeof AppSystemCostRouteImport
-      parentRoute: typeof AppSystemRouteRoute
-    }
-    '/_app/system/house': {
-      id: '/_app/system/house'
-      path: '/house'
-      fullPath: '/system/house'
-      preLoaderRoute: typeof AppSystemHouseRouteImport
-      parentRoute: typeof AppSystemRouteRoute
-    }
-    '/_app/system/location': {
-      id: '/_app/system/location'
-      path: '/location'
-      fullPath: '/system/location'
-      preLoaderRoute: typeof AppSystemLocationRouteImport
-      parentRoute: typeof AppSystemRouteRoute
-    }
-    '/_app/system/solar-battery': {
-      id: '/_app/system/solar-battery'
-      path: '/solar-battery'
-      fullPath: '/system/solar-battery'
-      preLoaderRoute: typeof AppSystemSolarBatteryRouteImport
-      parentRoute: typeof AppSystemRouteRoute
-    }
-    '/_app/system/updates': {
-      id: '/_app/system/updates'
-      path: '/updates'
-      fullPath: '/system/updates'
-      preLoaderRoute: typeof AppSystemUpdatesRouteImport
-      parentRoute: typeof AppSystemRouteRoute
+    '/_app/system/$': {
+      id: '/_app/system/$'
+      path: '/system/$'
+      fullPath: '/system/$'
+      preLoaderRoute: typeof AppSystemSplatRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/tesla/': {
       id: '/_app/tesla/'
@@ -998,31 +1055,36 @@ const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
 const AppIntegrationsRouteRouteWithChildren =
   AppIntegrationsRouteRoute._addFileChildren(AppIntegrationsRouteRouteChildren)
 
-interface AppSystemRouteRouteChildren {
-  AppSystemCostRoute: typeof AppSystemCostRoute
-  AppSystemHouseRoute: typeof AppSystemHouseRoute
-  AppSystemLocationRoute: typeof AppSystemLocationRoute
-  AppSystemSolarBatteryRoute: typeof AppSystemSolarBatteryRoute
-  AppSystemUpdatesRoute: typeof AppSystemUpdatesRoute
-  AppSystemIndexRoute: typeof AppSystemIndexRoute
+interface AppSettingsRouteRouteChildren {
+  AppSettingsSplatRoute: typeof AppSettingsSplatRoute
+  AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsCostRoute: typeof AppSettingsCostRoute
+  AppSettingsDataRoute: typeof AppSettingsDataRoute
+  AppSettingsHouseRoute: typeof AppSettingsHouseRoute
+  AppSettingsLocationRoute: typeof AppSettingsLocationRoute
+  AppSettingsSolarBatteryRoute: typeof AppSettingsSolarBatteryRoute
+  AppSettingsUpdatesRoute: typeof AppSettingsUpdatesRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
-const AppSystemRouteRouteChildren: AppSystemRouteRouteChildren = {
-  AppSystemCostRoute: AppSystemCostRoute,
-  AppSystemHouseRoute: AppSystemHouseRoute,
-  AppSystemLocationRoute: AppSystemLocationRoute,
-  AppSystemSolarBatteryRoute: AppSystemSolarBatteryRoute,
-  AppSystemUpdatesRoute: AppSystemUpdatesRoute,
-  AppSystemIndexRoute: AppSystemIndexRoute,
+const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
+  AppSettingsSplatRoute: AppSettingsSplatRoute,
+  AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsCostRoute: AppSettingsCostRoute,
+  AppSettingsDataRoute: AppSettingsDataRoute,
+  AppSettingsHouseRoute: AppSettingsHouseRoute,
+  AppSettingsLocationRoute: AppSettingsLocationRoute,
+  AppSettingsSolarBatteryRoute: AppSettingsSolarBatteryRoute,
+  AppSettingsUpdatesRoute: AppSettingsUpdatesRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
 }
 
-const AppSystemRouteRouteWithChildren = AppSystemRouteRoute._addFileChildren(
-  AppSystemRouteRouteChildren,
-)
+const AppSettingsRouteRouteWithChildren =
+  AppSettingsRouteRoute._addFileChildren(AppSettingsRouteRouteChildren)
 
 interface AppRouteChildren {
   AppIntegrationsRouteRoute: typeof AppIntegrationsRouteRouteWithChildren
-  AppSystemRouteRoute: typeof AppSystemRouteRouteWithChildren
+  AppSettingsRouteRoute: typeof AppSettingsRouteRouteWithChildren
   AppSplatRoute: typeof AppSplatRoute
   AppAccountRoute: typeof AppAccountRoute
   AppBatteryRoute: typeof AppBatteryRoute
@@ -1043,17 +1105,17 @@ interface AppRouteChildren {
   AppEvVinRoute: typeof AppEvVinRoute
   AppEvSetupRoute: typeof AppEvSetupRoute
   AppHomeDeviceRoute: typeof AppHomeDeviceRoute
-  AppSettingsSplatRoute: typeof AppSettingsSplatRoute
+  AppSystemSplatRoute: typeof AppSystemSplatRoute
   AppTeslaSetupRoute: typeof AppTeslaSetupRoute
   AppEvIndexRoute: typeof AppEvIndexRoute
-  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+  AppSystemIndexRoute: typeof AppSystemIndexRoute
   AppTeslaIndexRoute: typeof AppTeslaIndexRoute
   AppHomeRoomsRoomRoute: typeof AppHomeRoomsRoomRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppIntegrationsRouteRoute: AppIntegrationsRouteRouteWithChildren,
-  AppSystemRouteRoute: AppSystemRouteRouteWithChildren,
+  AppSettingsRouteRoute: AppSettingsRouteRouteWithChildren,
   AppSplatRoute: AppSplatRoute,
   AppAccountRoute: AppAccountRoute,
   AppBatteryRoute: AppBatteryRoute,
@@ -1074,10 +1136,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppEvVinRoute: AppEvVinRoute,
   AppEvSetupRoute: AppEvSetupRoute,
   AppHomeDeviceRoute: AppHomeDeviceRoute,
-  AppSettingsSplatRoute: AppSettingsSplatRoute,
+  AppSystemSplatRoute: AppSystemSplatRoute,
   AppTeslaSetupRoute: AppTeslaSetupRoute,
   AppEvIndexRoute: AppEvIndexRoute,
-  AppSettingsIndexRoute: AppSettingsIndexRoute,
+  AppSystemIndexRoute: AppSystemIndexRoute,
   AppTeslaIndexRoute: AppTeslaIndexRoute,
   AppHomeRoomsRoomRoute: AppHomeRoomsRoomRoute,
 }

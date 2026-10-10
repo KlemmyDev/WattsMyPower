@@ -1,7 +1,7 @@
 import { store, STORE_DISPLAY } from "~/features/common/storage/utils";
 
 /*
- * How the dashboard is shown in this browser, from Manage → Account → Display: its size, how
+ * How the dashboard is shown in this browser, from Settings → Account → Display: its size, how
  * compact its layout is, stronger text contrast, and whether it animates. Each is an attribute on
  * <html> that styles/app.css acts on:
  *   data-size      zooms the whole page (text, spacing and charts together), smaller to larger
