@@ -198,10 +198,11 @@ export function UsageCard({
             <div className="flex flex-col gap-1 pb-1.5 text-sm text-ink-muted tabular-nums">
               <span>
                 <b className="font-semibold text-ink">{kWh(total?.measured ?? 0)}</b> measured by your devices
+                {usage.car?.total ? " and car" : ""}
                 {whole ? ` (${share(total?.measured ?? 0, whole)})` : ""}
               </span>
               {usage.total.cost.credit > 0 && <span>{money(usage.total.cost.credit)} earned from feed-in</span>}
-              {whole == null && <span>No inverter readings in this period, so only what the devices measured</span>}
+              {whole == null && <span>No inverter readings in this period, so only what was measured</span>}
               <span
                 aria-hidden={!compared}
                 className={cn("truncate transition-opacity duration-300", compared ? "opacity-100" : "opacity-0")}

@@ -322,8 +322,8 @@ function Branch({ pages }: { pages: SectionPages }) {
 }
 
 /**
- * Which version this is, and its release ("Alpha") until it's marked stable: under the power flow, or on the rail the
- * release alone (the version in its tooltip). When GitHub has a newer one, a link to System → Updates says so
+ * Which version this is, and the release channel the install follows ("Nightly", "Beta"; nothing on Stable): under
+ * the power flow, or on the rail the channel alone (the version in its tooltip). When GitHub has a newer one, a link to System → Updates says so
  * (on the rail, a dot on the tag).
  */
 function VersionTag({ full }: { full: boolean }) {
@@ -356,9 +356,10 @@ function VersionTag({ full }: { full: boolean }) {
         )}
       </button>
     );
-  const release = app.release ? app.release.charAt(0).toUpperCase() + app.release.slice(1) : null;
+  const channel = updates && updates.channel !== "stable" ? updates.channel : null;
+  const release = channel ? channel.charAt(0).toUpperCase() + channel.slice(1) : null;
   const newer = updates?.available ? updates.latest : null;
-  const title = `WattsMyPower ${app.version}${release ? `, ${app.release} release` : ""}${newer ? ". A newer version is available." : ""}`;
+  const title = `WattsMyPower ${app.version}${channel ? `, on the ${channel} channel` : ""}${newer ? ". A newer version is available." : ""}`;
   const pill = release && (
     <span className="rounded-full border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-warn">
       {release}

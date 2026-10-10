@@ -33,8 +33,8 @@ dev = [
 ]
 
 [tool.wattsmypower]
-# How far along it is, shown beside the version in the dashboard. Left out once it's stable.
-release = "alpha"
+# How far along it is (e.g. "alpha"), shown beside the version in Manage → System → Updates. Left out once it's
+# stable; the navigation shows the release channel an install follows instead (Nightly, Beta).
 
 [tool.ruff]
 line-length = 120

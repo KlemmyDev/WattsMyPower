@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { duration } from "~/features/common/formatting/utils/date";
 import { Button } from "~/features/common/ui/components/Button";
+import { Segmented } from "~/features/common/ui/components/Segmented";
 import { teslaQuery } from "~/features/ev/api";
 import { useEvChange } from "~/features/ev/hooks";
 import type { EvTimingKey, EvVehicle } from "~/features/ev/types";
@@ -128,31 +129,90 @@ function TimingRow({
   );
 }
 
+type PresetKey = Exclude<EvTimingKey, "battery_full">;
+type Preset = {
+  id: "standard" | "quick" | "steady";
+  label: string;
+  about: string;
+  values: Record<PresetKey, number> | null;
+};
+
+/** Ready-made timings, each a whole set (the home battery's full level is left as it is). Standard is the defaults. */
+const PRESETS: Preset[] = [
+  {
+    id: "standard",
+    label: "Standard",
+    about: "A balance: it rides out a short cloud without starting and stopping too often.",
+    values: null,
+  },
+  {
+    id: "quick",
+    label: "Quick",
+    about:
+      "Follows the sun closely and catches short sunny spells, so the car gets more of it. It starts and stops more often, and wakes the car more.",
+    values: { start_after: 60, stop_after: 120, min_switch: 120, amps_every: 20, average: 40, lead: 2700 },
+  },
+  {
+    id: "steady",
+    label: "Steady",
+    about:
+      "Rides out clouds and changes little: fewer starts and stops, easier on the car. It may miss a short sunny spell.",
+    values: { start_after: 600, stop_after: 900, min_switch: 1200, amps_every: 180, average: 420, lead: 900 },
+  },
+];
+const PRESET_KEYS: PresetKey[] = ["start_after", "stop_after", "min_switch", "amps_every", "average", "lead"];
+
 /**
- * How the car's solar charging is timed (app.features.tesla.control.TIMING): each wait as a slider, its default a
- * Reset away. Folded away until asked for; says how many have been changed. The home battery's full level only
- * with the home battery first.
+ * How the car's solar charging is timed (app.features.tesla.control.TIMING): a preset (Standard, the defaults; Quick;
+ * Steady), each setting them all at once, or Custom, each wait as a slider, its default a Reset away. The preset shown
+ * is the one the car's timings match; Custom when none does, or once it's chosen. The home battery's full level only
+ * in Custom, and only with the home battery first.
  */
 export function EvTiming({ v, hasBattery }: { v: EvVehicle; hasBattery: boolean }) {
   const { data: status } = useQuery(teslaQuery);
   const { configure } = useEvChange();
-  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState(false);
   const limits = status?.timing;
   if (!limits) return null;
+  const valuesOf = (p: Preset) =>
+    p.values ?? (Object.fromEntries(PRESET_KEYS.map((k) => [k, limits[k].default])) as Record<PresetKey, number>);
+  const matched = PRESETS.find((p) => PRESET_KEYS.every((k) => v.control[k] === valuesOf(p)[k]));
+  const chosen = custom || !matched ? "custom" : matched.id;
+  const choose = (id: Preset["id"] | "custom") => {
+    if (id === "custom") return setCustom(true);
+    setCustom(false);
+    const p = PRESETS.find((x) => x.id === id)!;
+    // Standard sets each back to its default (null), so it follows the defaults if they change.
+    configure.mutate({
+      vin: v.vin,
+      ...Object.fromEntries(PRESET_KEYS.map((k) => [k, p.values ? p.values[k] : null])),
+    });
+  };
   const rows = ROWS.filter((r) => r.key !== "battery_full" || (hasBattery && v.control.first === "battery"));
-  const changed = rows.filter((r) => v.control[r.key] !== limits[r.key].default).length;
+  const full = rows.some((r) => r.key === "battery_full") && v.control.battery_full !== limits.battery_full.default;
   return (
     <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <span className="text-sm font-semibold">Timing</span>
-        <span className="flex items-baseline gap-3 text-xs text-ink-muted tabular-nums">
-          {changed ? `${changed} changed` : "As standard"}
-          <Button variant="muted-link" size="sm" aria-expanded={open} onClick={() => setOpen(!open)}>
-            {open ? "Hide" : "Adjust"}
-          </Button>
-        </span>
+        <Segmented
+          label="Timing"
+          value={chosen}
+          onChange={choose}
+          options={[
+            ...PRESETS.map((p) => ({ value: p.id, label: p.label })),
+            { value: "custom" as const, label: "Custom" },
+          ]}
+          className="max-sm:w-full"
+          buttonClassName="px-3 py-[7px] text-[13px] max-sm:flex-1 max-sm:justify-center"
+        />
       </div>
-      {open ? (
+      <span className="text-[13px] leading-5 text-pretty text-ink-muted">
+        {chosen === "custom" ? "Your own timing, set below." : PRESETS.find((p) => p.id === chosen)!.about} It starts
+        after {span(v.control.start_after)} of enough sun, stops after {span(v.control.stop_after)} without it, and
+        waits at least {span(v.control.min_switch)} between the two.
+        {full && chosen !== "custom" && ` Your home battery counts as full at ${v.control.battery_full}%.`}
+      </span>
+      {chosen === "custom" && (
         <div className="flex flex-col gap-4">
           {rows.map((r) => (
             <TimingRow
@@ -164,11 +224,6 @@ export function EvTiming({ v, hasBattery }: { v: EvVehicle; hasBattery: boolean 
             />
           ))}
         </div>
-      ) : (
-        <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-          Starts after {span(v.control.start_after)} of enough sun, stops after {span(v.control.stop_after)} without it,
-          and waits at least {span(v.control.min_switch)} between the two.
-        </span>
       )}
     </div>
   );
