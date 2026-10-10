@@ -153,6 +153,7 @@ def test_the_cars_charging_is_found(db: Database, readings: ReadingsRepository) 
     assert not any(DAY + 18 * 3600 <= ts < DAY + 19 * 3600 for ts in car)
     out = usage.breakdown(repo, readings, DAY, DAY + 86400, "day", car)
     assert out["car"]["total"] == pytest.approx(20.3, abs=0.01)
+    assert out["total"]["measured"] == pytest.approx(20.3, abs=0.01)  # the car's measured too: no devices here
     assert out["total"]["other"] == pytest.approx(out["total"]["home"] - 20.3, abs=0.01)
     assert car_use(repo, readings, None, DAY, DAY + 86400) == {}
 
@@ -173,6 +174,26 @@ def test_a_teslas_measured_charging_is_the_cars_line(db: Database, readings: Rea
     car = guessed | history.charged_w(DAY, DAY + 86400)
     out = usage.breakdown(repo, readings, DAY, DAY + 86400, "day", car)
     assert out["car"]["total"] == pytest.approx(3.4, abs=0.01)
+
+
+def test_the_car_is_priced_on_what_its_shown_to_have_drawn(db: Database, readings: ReadingsRepository) -> None:
+    """Noon to 1, all from the grid at 30c: the home used 2 kW and a plug 0.5 kWh. The car says it drew 3 kW, more
+    than the home used: it's shown as what was left after the plug (1.5 kWh), and costs that, not 3 kWh's worth."""
+    repo = HomeRepository(db)
+    noon = DAY + 12 * 3600
+    rollups(db, [(noon + i * ROLLUP, 0.0, 2000.0) for i in range(12)])
+    (plug,) = devices(db, "Plug")
+    with db.writing() as conn:
+        repo.add_energy(conn, plug, [(noon, 0.5)])
+    car = {noon + i * ROLLUP: 3000.0 for i in range(12)}
+    out = usage.breakdown(repo, readings, DAY, DAY + 86400, "hour", car)
+    assert out["car"]["total"] == pytest.approx(1.5, abs=0.01)
+    assert out["total"]["measured"] == pytest.approx(2.0, abs=0.01) and out["total"]["other"] == pytest.approx(0)
+    days = [{"date": "2026-09-21", "import_cost": 0.60, "supply": 1.0, "feed_in_credit": 0.0}]
+    insights.priced(out, repo, readings, pricing(), days, usage.car_as_shown(car, out))
+    cost = out["total"]["cost"]
+    assert out["car"]["cost"] == pytest.approx(0.45, abs=1e-3) and cost["car"] == pytest.approx(0.45, abs=0.01)
+    assert cost["devices"] + cost["car"] + cost["other"] == pytest.approx(cost["import"], abs=0.01)
 
 
 def test_whats_changed_this_week(db: Database, readings: ReadingsRepository) -> None:

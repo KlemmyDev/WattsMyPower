@@ -91,7 +91,8 @@ def breakdown(
     car: dict[int, float] | None = None,
 ) -> dict[str, Any]:
     """The home's use in each hour or day of [start, end), each visible device's share of it, the car's (`car`: W it
-    drew in each 5-minute rollup, app.features.home.car; None without a car), and the rest."""
+    drew in each 5-minute rollup, app.features.home.car; None without a car), and the rest. What's measured is the
+    devices' and the car's together: everything that isn't the rest."""
     t = buckets(start, end, by)
     index = {b: i for i, b in enumerate(t)}
     home = home_use(readings, start, end, by)
@@ -148,10 +149,25 @@ def breakdown(
         "car": {"kwh": [round(c, 3) for c in charged], "total": round(sum(charged), 3)} if car is not None else None,
         "total": {
             "home": round(sum(known), 3) if known else None,
-            "measured": round(sum(measured), 3),
+            "measured": round(sum(measured) + sum(charged), 3),
             "other": round(sum(o for o in other if o is not None), 3) if known else None,
         },
     }
+
+
+def car_as_shown(car: dict[int, float] | None, out: dict[str, Any]) -> dict[int, float] | None:
+    """`car` (W in each rollup) scaled in each of `out`'s hours or days to what `breakdown` shows for it there (never
+    more than the home used after the devices), so what it's priced on is what's shown."""
+    if not car or out.get("car") is None:
+        return car
+    index = {b: i for i, b in enumerate(out["t"])}
+    drew = [0.0] * len(out["t"])
+    for ts, w in car.items():
+        if (i := index.get(bucket_start(ts, out["bucket"]))) is not None:
+            drew[i] += w * KWH_PER_W_ROLLUP
+    shown = out["car"]["kwh"]
+    fit = [min(1.0, s / d) if d > 0 else 0.0 for s, d in zip(shown, drew, strict=True)]
+    return {ts: w * fit[i] for ts, w in car.items() if (i := index.get(bucket_start(ts, out["bucket"]))) is not None}
 
 
 def patterns(repo: HomeRepository, now: int) -> list[dict[str, Any]]:

@@ -170,14 +170,15 @@ export type HomeUsage = {
     /** The share of its energy that came from the panels or the battery (null: it used nothing). */
     solar_share: number | null;
   }[];
-  /** What the car drew from the home's power (found in what no device measured), with what it cost; null without a
-   * car connected. */
+  /** What the car drew from the home's power (as a Tesla measured it, else found in what no device measured), with
+   * what it cost; null without a car connected. */
   car: { kwh: number[]; total: number; cost: number; solar_share: number | null } | null;
   total: {
     home: number | null;
+    /** What the devices and the car measured, together. */
     measured: number;
     other: number | null;
-    /** What the period cost, as Bills prices it ($): the import, split between the devices and everything else, the
+    /** What the period cost, as Bills prices it ($): the import, split between the devices, the car and everything else, the
      * daily supply charges, and the feed-in credit. */
     cost: { import: number; supply: number; credit: number; devices: number; car: number; other: number };
   };

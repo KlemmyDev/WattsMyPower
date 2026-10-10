@@ -125,7 +125,7 @@ async def get_usage(
         car = _car(svc, start, end)
         out = usage.breakdown(svc.home.repo, svc.readings, start, end, bucket, car)
         pricing, days = _pricing(svc, start, end)
-        return insights.priced(out, svc.home.repo, svc.readings, pricing, days, car)
+        return insights.priced(out, svc.home.repo, svc.readings, pricing, days, usage.car_as_shown(car, out))
 
     return await asyncio.to_thread(priced)
 
