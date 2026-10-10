@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from "react";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
 import { nowS, sameDay } from "~/features/common/time/utils";
 import { intAU, plural } from "~/features/common/formatting/utils/number";
+import { Collapse } from "~/features/common/ui/components/Collapse";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
@@ -168,15 +169,13 @@ function TableRow({ table: t, total }: { table: StorageTable; total: number }) {
           <Icon
             name="chevD"
             size={18}
-            className={cn("text-ink-muted transition-transform duration-200", open && "rotate-180")}
+            className={cn("text-ink-muted transition-transform duration-300 ease-out-soft", open && "rotate-180")}
           />
         </span>
       </button>
-      {open && (
-        <div id={id} className="flex animate-pop flex-col gap-5 px-5 pb-5 max-sm:px-4">
-          <TableDetails table={t} total={total} />
-        </div>
-      )}
+      <Collapse open={open} id={id} className="flex flex-col gap-5 px-5 pb-5 max-sm:px-4">
+        <TableDetails table={t} total={total} />
+      </Collapse>
     </div>
   );
 }
