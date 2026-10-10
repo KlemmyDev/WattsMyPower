@@ -1,11 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { COLOR } from "~/features/common/theme/utils/colors";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { homeQuery } from "~/features/home/api";
 import type { HomeIntegration } from "~/features/home/types";
-import { integrationIcon, integrationReach, nowLine } from "~/features/home/utils";
+import { integrationIcon, integrationReach } from "~/features/home/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { ReachTag } from "~/features/integrations/components/ReachTag";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
@@ -24,18 +22,14 @@ export function accountPill(i: HomeIntegration): { status?: string; on: boolean;
 }
 
 /**
- * Manage → Integrations → Smart home: the devices across every brand at a glance, then each brand WattsMyPower reads
- * (connected first), each opening to its own page: its account, and its devices, each opening to theirs.
+ * Manage → Integrations → Smart home: each brand WattsMyPower reads (connected first, with any needing a look named at
+ * the top), each opening to its own page: its account, and its devices, each opening to theirs.
  */
 export function SmartHomeSettings() {
   const { data, isPending, error } = useQuery(homeQuery);
   const integrations = data?.integrations ?? [];
   const connected = integrations.filter((i) => i.account);
   const attention = connected.filter((i) => accountPill(i).attention);
-  const devices = data?.devices ?? [];
-  const running = devices.filter((d) => nowLine(d).running).length;
-  const local = connected.filter((i) => integrationReach(i) !== "cloud").length;
-  const last = Math.max(0, ...connected.map((i) => i.account?.last_poll ?? 0));
   const order = [...connected, ...integrations.filter((i) => !i.account)];
   return (
     <>
@@ -45,42 +39,13 @@ export function SmartHomeSettings() {
         title="Smart home"
         sub="Plugs, meters and appliances that say what they use, for the breakdown on the Home page. Connect as many brands as you have."
       />
-      <SummaryCard
-        icon="plug"
-        color={attention.length ? COLOR.warn : COLOR.brand}
-        label="Your smart home"
-        footer={
-          <div className="border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-            {isPending
-              ? "Checking what's connected…"
-              : error
-                ? errorMessage(error)
-                : attention.length
-                  ? `${attention.map((i) => i.name).join(", ")} ${attention.length === 1 ? "needs" : "need"} a look.`
-                  : connected.length
-                    ? `Everything connected is answering${last ? `, last read ${hhmm(last)}` : ""}.`
-                    : "Nothing connected yet: choose a brand below."}
-          </div>
-        }
-      >
-        <SummaryStat
-          label="Brands"
-          value={connected.length}
-          sub={`of ${integrations.length}`}
-          color={attention.length ? COLOR.warn : undefined}
-        />
-        <SummaryStat
-          label="Devices"
-          value={devices.length}
-          sub={`${devices.filter((d) => !d.hidden).length} in the breakdown`}
-        />
-        <SummaryStat label="Running now" value={running} sub={plural(running, "device")} />
-        <SummaryStat
-          label="On your network"
-          value={`${local} of ${connected.length}`}
-          sub={connected.length - local ? `${connected.length - local} through a cloud` : "No clouds"}
-        />
-      </SummaryCard>
+      {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
+      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {attention.length > 0 && (
+        <p className="m-0 text-sm text-warn">
+          {attention.map((i) => i.name).join(", ")} {attention.length === 1 ? "needs" : "need"} a look.
+        </p>
+      )}
       <SettingsSection
         id="h-smart-home-brands"
         title="Brands"

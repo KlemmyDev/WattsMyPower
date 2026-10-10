@@ -1,10 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { errorMessage } from "~/features/common/api/utils";
-import { hhmm, longDate } from "~/features/common/formatting/utils/date";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { longDate } from "~/features/common/formatting/utils/date";
 import { ButtonLink } from "~/features/common/ui/components/Button";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
+import { cn } from "~/features/common/ui/utils";
 import { ConfirmAction } from "~/features/integrations/components/ConfirmAction";
 import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInverters";
 import { InverterWiring } from "~/features/integrations/components/InverterWiring";
@@ -15,9 +14,9 @@ import { OptionList, SettingsSection } from "~/features/settings/components/Sett
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Manage → Integrations → Inverters → a brand → one inverter: how it's doing and what it reported about itself at the
- * top, the rest of what's known about it, where it's wired (a second inverter), and removing it. Reached under another
- * brand's address (the inverter in that role was swapped for another make), it moves to its own.
+ * Manage → Integrations → Inverters → a brand → one inverter: how it's doing in a line at the top (and what went wrong,
+ * if anything), what it reported about itself, where it's wired (a second inverter), and removing it. Reached under
+ * another brand's address (the inverter in that role was swapped for another make), it moves to its own.
  */
 export function InverterDetail({ brand, role }: { brand: string; role: string }) {
   const navigate = useNavigate();
@@ -67,9 +66,10 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
     );
   }
 
-  const { device, name, ok, error: problem, status, on, reading, hybrid, last } = inverter;
+  const { device, name, ok, error: problem, status, on, reading, hybrid } = inverter;
   const rows: [string, string | null][] = [
     ["Type", [device.brand, device.label].filter(Boolean).join(" ") || null],
+    ["Model", device.model],
     ["Address", deviceAddress(device)],
     ["Connected through", device.via],
     ["Serial number", device.serial],
@@ -80,42 +80,10 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
   return (
     <>
       <SubPageHeader back={back} id="h-inverter" title={name} sub={ROLE_DETAIL[device.role]} />
-      <SummaryCard
-        icon={hybrid ? "battery" : "sun"}
-        color={on ? COLOR.solar : COLOR.warn}
-        label={name}
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-            <span className="flex min-w-0 flex-1 flex-col gap-1">
-              <span>{reading.charAt(0).toUpperCase() + reading.slice(1)}.</span>
-              {!ok && problem && <span className="text-xs text-bad">{problem}</span>}
-              <span className="flex flex-wrap gap-3">
-                <ReachTag reach="local" />
-                {device.verified === false && <UntestedTag />}
-              </span>
-            </span>
-            {!readOnly && (
-              <ConfirmAction
-                label="Stop reading it"
-                doing="Removing…"
-                note={REMOVE_NOTE[device.role]}
-                pending={remove.isPending}
-                error={remove.error}
-                run={() => remove.mutate(name)}
-              />
-            )}
-          </div>
-        }
-      >
-        <SummaryStat label="Status" value={status} color={on ? undefined : COLOR.warn} sub={ROLE_NAME[device.role]} />
-        <SummaryStat label="Last read" value={last ? hhmm(last) : "—"} sub={device.via ?? undefined} />
-        <SummaryStat label="Model" value={device.model ?? device.label ?? "—"} sub={device.brand ?? undefined} />
-        <SummaryStat
-          label="Size"
-          value={device.nominal_kw ? `${device.nominal_kw} kW` : "—"}
-          sub={device.serial ? `Serial ${device.serial}` : undefined}
-        />
-      </SummaryCard>
+      <p className={cn("m-0 text-sm", on ? "text-ink-muted" : "text-warn")}>
+        {status}: {reading}.
+      </p>
+      {!ok && problem && <p className="m-0 text-sm text-bad">{problem}</p>}
       <div className={hybrid ? "flex flex-col gap-5" : "grid gap-5 xl:grid-cols-2"}>
         <SettingsSection
           id="h-inverter-about"
@@ -133,6 +101,10 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
                 ),
             )}
           </OptionList>
+          <span className="flex flex-wrap gap-3">
+            <ReachTag reach="local" />
+            {device.verified === false && <UntestedTag />}
+          </span>
           {readOnly && <ReadOnlyNote />}
         </SettingsSection>
         {!hybrid && (
@@ -145,6 +117,25 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
           </SettingsSection>
         )}
       </div>
+      {!readOnly && (
+        <SettingsSection
+          id="h-inverter-remove"
+          title="Stop reading it"
+          sub="Takes it off WattsMyPower. It can be connected again any time."
+          aside={
+            <ConfirmAction
+              label="Stop reading it"
+              doing="Removing…"
+              note={REMOVE_NOTE[device.role]}
+              pending={remove.isPending}
+              error={remove.error}
+              run={() => remove.mutate(name)}
+            />
+          }
+        >
+          {null}
+        </SettingsSection>
+      )}
     </>
   );
 }

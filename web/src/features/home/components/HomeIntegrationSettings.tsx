@@ -2,19 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
-import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { homeHintsQuery, homeQuery } from "~/features/home/api";
 import { useHomeChange } from "~/features/home/hooks";
-import type { HomeDevice, HomeIntegration } from "~/features/home/types";
+import type { HomeIntegration } from "~/features/home/types";
 import { integrationIcon, integrationReach, kindIcon, nowLine } from "~/features/home/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
-import { REACH } from "~/features/integrations/components/ReachTag";
+import { ReachTag } from "~/features/integrations/components/ReachTag";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
@@ -80,6 +78,10 @@ function SignInForm({
   );
 }
 
+/** How often it's read, e.g. "1 min". */
+const every = (i: HomeIntegration) =>
+  i.poll_seconds >= 60 ? `${Math.round(i.poll_seconds / 60)} min` : `${i.poll_seconds} s`;
+
 function accountStatus(i: HomeIntegration): [label: string, on: boolean] {
   const a = i.account!;
   if (a.signed_out) return ["Sign in again", false];
@@ -88,7 +90,7 @@ function accountStatus(i: HomeIntegration): [label: string, on: boolean] {
   return ["Connected", true];
 }
 
-/** The connected account: how it's doing, signing in again, and disconnecting. */
+/** The connected account: how it's doing, signing in again, disconnecting, and how and how often it's read. */
 function Account({ integration }: { integration: HomeIntegration }) {
   const { disconnect, find } = useHomeChange();
   const toast = useToast();
@@ -182,41 +184,17 @@ function Account({ integration }: { integration: HomeIntegration }) {
         />
       )}
       <div className="px-6 py-4 text-[13px] text-ink-muted">
-        Connected {longDate.format(new Date(a.connected_at * 1000))}. Read every{" "}
-        {integration.poll_seconds >= 60
-          ? `${Math.round(integration.poll_seconds / 60)} min`
-          : `${integration.poll_seconds} s`}
-        .
+        Connected {longDate.format(new Date(a.connected_at * 1000))}. Read through {integration.via}, every{" "}
+        {every(integration)}.
       </div>
     </>
   );
 }
 
-/** The integration at a glance: how it's doing, its devices, when it last read them, and how it reaches them. */
-function Summary({ integration: i, devices }: { integration: HomeIntegration; devices: HomeDevice[] }) {
-  const a = i.account;
-  const [status, on] = a ? accountStatus(i) : ["Not connected", false];
-  const reach = REACH[integrationReach(i)];
-  const every = i.poll_seconds >= 60 ? `${Math.round(i.poll_seconds / 60)} min` : `${i.poll_seconds} s`;
-  const running = devices.filter((d) => d.now?.online && (d.now.power_w ?? 0) > 0).length;
-  return (
-    <SummaryCard icon={integrationIcon(i)} color={a && !on ? COLOR.warn : COLOR.brand} label={i.name}>
-      <SummaryStat label="Status" value={status} color={a && !on ? COLOR.warn : undefined} sub={a?.label} />
-      <SummaryStat
-        label="Devices"
-        value={a ? devices.length : "—"}
-        sub={a ? (running ? `${running} using power now` : "None using power now") : "Once it's connected"}
-      />
-      <SummaryStat label="Last read" value={a?.last_poll ? hhmm(a.last_poll) : "—"} sub={`Every ${every}`} />
-      <SummaryStat label="Reached" value={reach.label} sub={i.via} title={reach.title} />
-    </SummaryCard>
-  );
-}
-
 /**
  * Manage → Integrations → Smart home → a brand (Tapo, Shelly, Home Assistant, Hisense through ConnectLife, Electrolux,
- * Bluetti, EcoFlow; the demo in mock mode): connecting its account, how it's going, and the devices it brought, each
- * opening to its own page.
+ * Bluetti, EcoFlow; the demo in mock mode): connecting its account, how it's going and how it's reached, and the devices
+ * it brought, each opening to its own page.
  */
 export function HomeIntegrationSettings({ id }: { id: string }) {
   const { data, isPending, error } = useQuery(homeQuery);
@@ -230,7 +208,6 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
         title={integration ? `${integration.name}` : "Smart home"}
         sub={integration?.about ?? ""}
       />
-      {integration && <Summary integration={integration} devices={devices} />}
       {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
       {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
       {data && !integration && <p className="m-0 text-sm text-bad">There's no such integration.</p>}
@@ -238,7 +215,8 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
         <SettingsSection
           id="h-home-connect"
           title={`Connect ${integration.name}`}
-          sub={`Read through ${integration.via}.`}
+          sub={`Read through ${integration.via}, every ${every(integration)}.`}
+          aside={<ReachTag reach={integrationReach(integration)} />}
         >
           <div className="flex flex-col gap-4">
             {integration.id === "connectlife" && (
@@ -260,7 +238,12 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
         </SettingsSection>
       )}
       {integration?.account && (
-        <SettingsSection id="h-home-account" title="Account" sub="How it's signed in, and how it's going.">
+        <SettingsSection
+          id="h-home-account"
+          title="Account"
+          sub="How it's signed in, and how it's going."
+          aside={<ReachTag reach={integrationReach(integration)} />}
+        >
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
             <Account integration={integration} />
           </div>

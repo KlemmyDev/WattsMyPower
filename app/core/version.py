@@ -1,7 +1,8 @@
 """
-The app's version, as the dashboard and /healthz show it: from pyproject.toml, its `version` (the date it was
-released: 2026.10.8, or 2026.10.8.1 for a second release that day) and `[tool.wattsmypower] release` (how far along it
-is, e.g. "alpha"; left out, as now, once it's stable). The file is next to app/ in the repository and in the image.
+The app's version, as the dashboard and /healthz show it: from pyproject.toml, its `version` (the date of its last
+change in Brisbane, kept up to date by the Version workflow: 2026.10.8, or 2026.10.8.1 for a second release that day)
+and `[tool.wattsmypower] release` (how far along it is, e.g. "alpha"; left out, as now, once it's stable). The
+file is next to app/ in the repository and in the image.
 
 And the commit it was built from, which is what tells an update apart (app.features.updates): GIT_COMMIT, stamped
 into the image by install.sh, or, run from a checkout, the checkout's own.

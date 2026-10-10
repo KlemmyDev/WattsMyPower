@@ -3,17 +3,16 @@ import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
 import { kW, kWh } from "~/features/common/formatting/utils/number";
-import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { HelpText, Input, Select } from "~/features/common/ui/components/Field";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
+import { cn } from "~/features/common/ui/utils";
 import { deviceRawQuery, homeQuery } from "~/features/home/api";
 import { GroupInput } from "~/features/home/components/GroupInput";
 import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeOverview } from "~/features/home/types";
-import { groupNames, kindIcon, nowLine, suggestedGroup } from "~/features/home/utils";
+import { groupNames, nowLine, suggestedGroup } from "~/features/home/utils";
 import { OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
@@ -144,8 +143,8 @@ function Settings({
 }
 
 /**
- * Manage → Integrations → Smart home → a brand → one device: what it's doing and what it is at the top, its settings,
- * and what it last sent.
+ * Manage → Integrations → Smart home → a brand → one device: a line on what it's doing and its last run (with the way to
+ * its Home page) at the top, its settings, and what it last sent.
  */
 export function HomeDeviceSettings({ integrationId, deviceId }: { integrationId: string; deviceId: number }) {
   const { data, isPending, error } = useQuery(homeQuery);
@@ -168,7 +167,6 @@ export function HomeDeviceSettings({ integrationId, deviceId }: { integrationId:
     );
   const now = nowLine(device);
   const n = device.now;
-  const kind = data.kinds.find((k) => k.id === device.kind);
   const run = device.last_run;
   const live = !!n && n.online && !n.stale;
   return (
@@ -179,57 +177,21 @@ export function HomeDeviceSettings({ integrationId, deviceId }: { integrationId:
         title={device.name}
         sub={[device.model, integration?.name && `Through ${integration.name}`].filter(Boolean).join(" · ")}
       />
-      <SummaryCard
-        icon={kindIcon(device.kind)}
-        color={live ? COLOR.brand : COLOR.warn}
-        label={device.name}
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-            <span className="min-w-0 flex-1">
-              {n ? `Last read ${hhmm(n.at)}.` : "Not read yet."} Its use, runs and habits are on its Home page.
-            </span>
-            <ButtonLink to="/home/$device" params={{ device: String(device.id) }} variant="outline" size="sm">
-              Open on Home
-            </ButtonLink>
-          </div>
-        }
-      >
-        <SummaryStat
-          label="Now"
-          value={
-            !n
-              ? "—"
-              : !live
-                ? n.online
-                  ? "Not read"
-                  : "Offline"
-                : n.power_w != null && n.power_w >= 2
-                  ? kW(n.power_w)
-                  : now.running
-                    ? "Running"
-                    : "Idle"
-          }
-          color={live ? undefined : COLOR.warn}
-          sub={now.text}
-        />
-        <SummaryStat
-          label="What it is"
-          value={kind?.label ?? device.kind}
-          sub={device.group ? `In ${device.group}` : "On its own"}
-        />
-        <SummaryStat
-          label="Last run"
-          value={run ? kWh(run.kwh) : "—"}
-          sub={
-            run
-              ? `${longDate.format(new Date(run.start * 1000))}${run.program ? `, ${run.program}` : ""}`
-              : kind?.cycles
-                ? "None yet"
-                : "Doesn't run in cycles"
-          }
-        />
-        <SummaryStat label="Breakdown" value={device.hidden ? "Left out" : "Counted"} sub="On the Home page" />
-      </SummaryCard>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className={cn("m-0 min-w-0 flex-1 text-sm", n && !live ? "text-warn" : "text-ink-muted")}>
+          {[
+            now.text,
+            n && !n.stale && `read ${hhmm(n.at)}`,
+            run &&
+              `last run ${kWh(run.kwh)} on ${longDate.format(new Date(run.start * 1000))}${run.program ? `, ${run.program}` : ""}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+        <ButtonLink to="/home/$device" params={{ device: String(device.id) }} variant="outline" size="sm">
+          Open on Home
+        </ButtonLink>
+      </div>
       <Settings key={device.id} device={device} kinds={data.kinds} groups={groupNames(data.devices)} />
       <SettingsSection
         id="h-device-raw"

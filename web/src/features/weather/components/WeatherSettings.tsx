@@ -13,8 +13,6 @@ import { Field, HelpText, Input, Select } from "~/features/common/ui/components/
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
-import { COLOR } from "~/features/common/theme/utils/colors";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { retrain, weatherStatusQuery } from "~/features/weather/api";
@@ -126,7 +124,7 @@ function Model({ status }: { status: WeatherStatus | undefined }) {
     <SettingsSection
       id="h-model"
       title="Weather model"
-      sub="Where the forecast's sunshine, cloud, rain and temperature come from. Past weather is filled in from the same model."
+      sub="Where the forecast's sunshine, cloud, rain and temperature come from. Past weather is filled in from the same model. Open-Meteo is a free public weather service: no account, and only your location is sent."
     >
       <Field label="Model" help={chosen.help} className="max-w-[420px]">
         <Select
@@ -390,50 +388,6 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
   );
 }
 
-/** The forecast at a glance: where it's for, the model, when it was fetched, how much past weather is kept, and the
- * temperature unit. */
-function WeatherSummary({ status }: { status: WeatherStatus | undefined }) {
-  const system = useLive()?.system;
-  const located = useLocationSet();
-  const model = MODELS.find((m) => m.value === (system?.weather_model ?? "best_match")) ?? MODELS[0];
-  const days = status ? Math.floor(status.stored.hours / 24) : null;
-  return (
-    <SummaryCard
-      icon="cloudSun"
-      color={status?.error || located === false ? COLOR.warn : COLOR.solar}
-      label="The forecast"
-      footer={
-        <div className="border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-          {status?.error ? (
-            <span className="text-bad">{status.error}. The last forecast stored is shown meanwhile.</span>
-          ) : (
-            "From Open-Meteo, a free public weather service: no account, and only your location is sent."
-          )}
-        </div>
-      }
-    >
-      <SummaryStat
-        label="For"
-        value={located === false ? "Not set" : locationLabel(system)}
-        color={located === false ? COLOR.warn : undefined}
-        sub={located === false ? "Choose your location below" : "Where your panels are"}
-      />
-      <SummaryStat label="Model" value={model.label.replace(/ \(recommended\)$/, "")} sub="Open-Meteo" />
-      <SummaryStat
-        label="Updated"
-        value={status?.fetched_at ? hhmm(status.fetched_at) : "—"}
-        sub={status?.error ? "Not updating" : "Every hour"}
-      />
-      <SummaryStat
-        label="Past weather"
-        value={days != null ? `${intAU(days)} ${plural(days, "day")}` : "—"}
-        sub={status?.missing_days ? `${intAU(status.missing_days)} days missing` : "Kept to learn from"}
-      />
-      <SummaryStat label="Temperatures" value={system?.temp_unit_f ? "°F" : "°C"} sub="Across the dashboard" />
-    </SummaryCard>
-  );
-}
-
 /** Manage → Integrations → Weather: the Open-Meteo forecast behind the solar forecast, and what it learns. */
 export function WeatherSettings() {
   const system = useLive()?.system;
@@ -452,7 +406,9 @@ export function WeatherSettings() {
           </>
         }
       />
-      <WeatherSummary status={status} />
+      {status?.error && (
+        <p className="m-0 text-sm text-bad">{status.error}. The last forecast stored is shown meanwhile.</p>
+      )}
       <WeatherLocation />
       <div className="grid gap-5 xl:grid-cols-2">
         <Units />

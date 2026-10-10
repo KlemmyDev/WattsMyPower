@@ -4,13 +4,10 @@ import { carsQuery } from "~/features/car/api";
 import { carName } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { HelpText, Select } from "~/features/common/ui/components/Field";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
-import { REACH } from "~/features/integrations/components/ReachTag";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { teslaQuery } from "~/features/ev/api";
@@ -29,93 +26,64 @@ const SWITCH_ABOUT: Record<TeslaProvider, string> = {
     "Reach the car through Tessie instead, from anywhere. Once Tessie's connected, the cars it has replace the ones paired here.",
 };
 
-/** The connection at a glance: how the cars are reached, how many, the first one's charge, and when they were read;
- * then how it's reached in words, and disconnecting. */
-function Summary({ status }: { status: TeslaStatus }) {
+/** How the cars are reached, in words (this server's key, or Tessie's token) and when they were last read, with
+ * disconnecting on the right. */
+function Connection({ status }: { status: TeslaStatus }) {
   const { disconnect } = useEvChange();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const bt = status.provider === "bluetooth";
-  const first = status.vehicles[0];
-  const reach = REACH[bt ? "bluetooth" : "cloud"];
   return (
-    <SummaryCard
-      icon={bt ? "bluetooth" : "bolt"}
-      color={status.error ? COLOR.warn : COLOR.lilac}
-      label="Your Tesla"
-      footer={
-        <div className="flex flex-col gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="min-w-0 flex-1">
-              {status.error ? (
-                <span className="text-bad">{status.error}</span>
-              ) : bt ? (
-                `This server's key ${status.bluetooth.key ?? ""}: ${status.bluetooth.role === "driver" ? "a driver's, so it can wake the car" : "charging only, so it can't wake the car"}.`
-              ) : (
-                `Through Tessie with the access token ${status.token}.`
-              )}
-            </span>
-            {confirming ? (
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={disconnect.isPending}
-                  onClick={() =>
-                    disconnect.mutate(undefined, {
-                      onSuccess: () => {
-                        setConfirming(false);
-                        toast(bt ? "The Teslas are disconnected." : "Disconnected from Tessie.");
-                      },
-                    })
-                  }
-                >
-                  {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-                </Button>
-                <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-                Disconnect
-              </Button>
-            )}
+    <SettingsSection
+      id="h-tesla-connection"
+      title={`Connected ${bt ? "over Bluetooth" : "through Tessie"}`}
+      sub={
+        <>
+          {bt
+            ? `This server's key ${status.bluetooth.key ?? ""}: ${status.bluetooth.role === "driver" ? "a driver's, so it can wake the car" : "charging only, so it can't wake the car"}.`
+            : `With the access token ${status.token}.`}{" "}
+          {status.reading ? "Reading now…" : status.read_at ? `Last read at ${hhmm(status.read_at)}.` : ""}
+        </>
+      }
+      aside={
+        confirming ? (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disconnect.isPending}
+              onClick={() =>
+                disconnect.mutate(undefined, {
+                  onSuccess: () => {
+                    setConfirming(false);
+                    toast(bt ? "The Teslas are disconnected." : "Disconnected from Tessie.");
+                  },
+                })
+              }
+            >
+              {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
+            </Button>
+            <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
           </div>
-          {confirming && (
-            <HelpText>
-              {bt
-                ? "The dashboard stops reading the cars and charging from solar. The cars keep this server's key (remove it in the car, under Controls → Locks, if you like), so pairing again needs no tap."
-                : "The token is removed from this server and the dashboard stops charging from solar."}{" "}
-              Your cars and their levels stay.
-            </HelpText>
-          )}
-        </div>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+            Disconnect
+          </Button>
+        )
       }
     >
-      <SummaryStat
-        label="Connected"
-        value={PROVIDER_LABEL[status.provider ?? "bluetooth"]}
-        sub={reach.label}
-        title={reach.title}
-      />
-      <SummaryStat
-        label="Cars"
-        value={status.vehicles.length}
-        sub={status.vehicles.map((v) => v.name ?? "Tesla").join(", ") || "None yet"}
-      />
-      <SummaryStat
-        label={first?.name ?? "Charge"}
-        value={first?.state?.soc != null ? `${Math.round(first.state.soc)}%` : "—"}
-        sub={first ? MODE_LABEL[first.control.mode] : undefined}
-      />
-      <SummaryStat
-        label="Last read"
-        value={status.read_at ? hhmm(status.read_at) : "—"}
-        color={status.error ? COLOR.warn : undefined}
-        sub={status.error ? "Not updating" : status.reading ? "Reading now…" : "From the car"}
-      />
-    </SummaryCard>
+      {confirming && (
+        <HelpText>
+          {bt
+            ? "The dashboard stops reading the cars and charging from solar. The cars keep this server's key (remove it in the car, under Controls → Locks, if you like), so pairing again needs no tap."
+            : "The token is removed from this server and the dashboard stops charging from solar."}{" "}
+          Your cars and their levels stay.
+        </HelpText>
+      )}
+      {disconnect.isError && <HelpText tone="bad">{errorMessage(disconnect.error)}</HelpText>}
+    </SettingsSection>
   );
 }
 
@@ -270,7 +238,7 @@ export function TeslaSettings() {
       )}
       {status && provider && (
         <>
-          <Summary status={status} />
+          {status.error && <p className="m-0 text-sm text-bad">Not updating: {status.error}</p>}
           <SettingsSection
             id="h-tesla-cars"
             title="Cars"
@@ -301,6 +269,7 @@ export function TeslaSettings() {
               </div>
             )}
           </SettingsSection>
+          <Connection status={status} />
         </>
       )}
       {provider === "bluetooth" && status?.bluetooth.role === "charging_manager" && (
