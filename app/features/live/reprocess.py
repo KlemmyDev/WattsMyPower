@@ -11,6 +11,8 @@ from typing import Any
 from app.core.config import Config
 from app.core.database import Database
 from app.core.schema import ROLLUP
+from app.features.inverters import drivers
+from app.features.inverters.limits import bounds_for
 from app.features.live.client import Feed
 from app.features.live.ingest import BATCH, save_cursor
 from app.features.live.transform import Freeze, Pv2Carry, behind_meter, snapshots
@@ -27,6 +29,9 @@ def reprocess(config: Config, db: Database, client: Feed, since: int | None = No
         return {"polls": 0, "frozen": 0, "from": None, "to": None}
     start = max(int(oldest), since or 0) // ROLLUP * ROLLUP  # whole rollup buckets
     readings = ReadingsRepository(db, config.poll_interval, config.raw_retention_days)
+    hybrid = (status.get("devices") or {}).get("hybrid") or {}
+    main = drivers.hybrid(hybrid.get("driver"))
+    bounds = bounds_for(main.decode_info(hybrid.get("info") or {}) if main else None)
     pv2 = (status.get("devices") or {}).get("pv2")
     has_pv2 = pv2 is not None
     behind = behind_meter(pv2, config.pv2_behind_meter)
@@ -49,6 +54,7 @@ def reprocess(config: Config, db: Database, client: Feed, since: int | None = No
                 poll_interval=config.poll_interval,
                 carry=carry,
                 freeze=freeze,
+                bounds=bounds,
             )
             readings.insert_many(conn, snaps)
             polls += len(snaps)

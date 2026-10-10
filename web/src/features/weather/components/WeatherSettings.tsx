@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm, longDate, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
@@ -19,7 +19,7 @@ import { retrain, weatherStatusQuery } from "~/features/weather/api";
 import type { WeatherStatus } from "~/features/weather/types";
 import { useFetchWeather, WeatherFetchProgress } from "~/features/weather/components/WeatherFetch";
 import { LocationForm } from "~/features/settings/components/LocationForm";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { CardTitle, SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const MODELS: { value: WeatherModel; label: string; help: string }[] = [
@@ -43,21 +43,6 @@ const DIRECTIONS = [
   ["West", 270],
   ["North-west", 315],
 ] as const;
-
-/** A card's heading with a line of explanation, at the size cards on a sub-page use. */
-function CardTitle({ id, title, sub, aside }: { id: string; title: string; sub: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h3 id={id} className="text-[15px] font-semibold">
-          {title}
-        </h3>
-        <span className="text-sm text-pretty text-ink-muted">{sub}</span>
-      </div>
-      {aside}
-    </div>
-  );
-}
 
 /** Save a setting straight away, with a toast to say so. */
 function useSaveNow() {

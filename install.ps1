@@ -2,6 +2,11 @@
 #
 #   In PowerShell:  irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1 | iex
 #
+# -Channel nightly|beta|stable follows that release channel from now on, as install.sh's --channel does (otherwise
+# the one chosen in the dashboard, Manage → System → Updates; beta for a new install). Piped in from irm, it's passed
+# like this:
+#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1))) -Channel stable
+#
 # It asks to run as administrator, then:
 #   - installs WSL if it's missing (that needs a restart: it carries on by itself after you sign in)
 #   - creates a WSL distribution called WattsMyPower (Ubuntu 24.04) with systemd, so Docker runs as a service
@@ -13,10 +18,15 @@
 # Run it again to update. Everything else is done inside the distribution: wsl -d WattsMyPower
 # (the app is in ~/wattsmypower; see the README's Everyday use).
 
+param(
+    [ValidateSet('nightly', 'beta', 'stable')]
+    [string]$Channel = ''
+)
+
 $WmpSelf = $PSCommandPath  # empty when piped in from irm
 
 function Install-WattsMyPower {
-    param([string]$Self)
+    param([string]$Self, [string]$Channel)
 
     $url = 'https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1'
     $installSh = 'https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh'
@@ -25,8 +35,10 @@ function Install-WattsMyPower {
     $wslVm = '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'  # the Hyper-V firewall's ID for WSL
     $wsl = Join-Path $env:windir 'System32\wsl.exe'
     $env:WSL_UTF8 = '1'  # wsl.exe prints UTF-16 otherwise
-    # How to run this again: from its file, or from GitHub
-    $again = if ($Self) { "& '$Self'" } else { "irm $url | iex" }
+    # How to run this again (as administrator, or after a restart): from its file, or from GitHub, with the channel
+    $again = if ($Self) { "& '$Self'" } elseif ($Channel) { "& ([scriptblock]::Create((irm $url)))" } else { "irm $url | iex" }
+    if ($Channel) { $again += " -Channel $Channel" }
+    $options = if ($Channel) { "--yes --channel $Channel" } else { '--yes' }  # for install.sh
 
     function Say([string]$text) { Write-Host ''; Write-Host $text -ForegroundColor Cyan }
     function Info([string]$text) { Write-Host "  $text" }
@@ -119,9 +131,9 @@ function Install-WattsMyPower {
 
     # ------------------------------------------------------------ install or update WattsMyPower
     # --yes: no questions (the time zone follows Windows'; the port is 8080). To change them later:
-    # wsl -d WattsMyPower, then bash ~/wattsmypower/install.sh --configure
+    # wsl -d WattsMyPower, then bash ~/wattsmypower/install.sh --configure. And --channel, if -Channel was given.
     Say "Running install.sh in $distro"
-    InDistro "cd ~ && if [ -f wattsmypower/install.sh ]; then exec bash wattsmypower/install.sh --yes; else curl -fsSL $installSh | bash -s -- --yes; fi"
+    InDistro "cd ~ && if [ -f wattsmypower/install.sh ]; then exec bash wattsmypower/install.sh $options; else curl -fsSL $installSh | bash -s -- $options; fi"
     if ($LASTEXITCODE -ne 0) { Fail 'install.sh stopped (see above). Run this again once that is sorted.' }
 
     # ------------------------------------------------------------ reachable from the network, and always on
@@ -161,7 +173,7 @@ function Install-WattsMyPower {
 }
 
 try {
-    Install-WattsMyPower -Self $WmpSelf
+    Install-WattsMyPower -Self $WmpSelf -Channel $Channel
 } catch {
     Write-Host ''
     Write-Host $_.Exception.Message -ForegroundColor Red

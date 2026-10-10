@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
+import { NotFound, RouteError } from "~/features/common/errors/components/ErrorPages";
 import { routeTree } from "~/routeTree.gen";
 
 export type RouterContext = { queryClient: QueryClient };
@@ -22,6 +23,9 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
+    // A page that fails, or an address with no page: in the dashboard's frame when signed in, else on their own.
+    defaultErrorComponent: RouteError,
+    defaultNotFoundComponent: NotFound,
   });
 }
 

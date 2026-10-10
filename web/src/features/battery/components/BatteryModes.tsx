@@ -12,6 +12,7 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
+import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
@@ -38,6 +39,88 @@ const ACTION: Record<ControlKind, string> = {
   floor: "Set reserve",
   charge: "Start charging",
 };
+
+/** What a charge from the grid will do, asked before it's sent: it buys power, to what level, how fast and until when. */
+function chargeAsk(c: ControlRequest, now: number): string {
+  const to = `${c.target ?? 100}%`;
+  return (
+    `This buys power from the grid to charge the battery to ${to}${c.power_w ? ` at ${kw(c.power_w)}` : ""}, ` +
+    `for whatever solar can't cover. It stops once it reaches ${to}` +
+    (c.until ? `, or at ${when(c.until, now)} if that comes first.` : ", or when you choose Resume normal.")
+  );
+}
+
+/**
+ * Why the controls are off on a model they haven't been tried on, and turning them on anyway for this inverter, once
+ * it's plain what that risks. While they're on that way, a line saying so and turning them back off.
+ */
+function Experiment({ v }: { v: Supported }) {
+  const { experiment } = useBatteryChange();
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const model = v.model && !v.model.startsWith("Unknown") ? `the ${v.model}` : "this inverter";
+  if (v.experimental)
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-ink-muted">
+        <span>Experimental: the controls haven't been tried on {model}.</span>
+        <Button
+          variant="muted-link"
+          size="sm"
+          disabled={experiment.isPending}
+          onClick={() =>
+            experiment.mutate(false, {
+              onSuccess: () => toast("Battery controls turned off."),
+              onError: (e) => toast(errorMessage(e)),
+            })
+          }
+        >
+          Turn off
+        </Button>
+      </div>
+    );
+  if (!v.untried) return null;
+  return (
+    <Notice tone="warn" className="flex flex-col gap-3 text-pretty">
+      <span>{v.untried}</span>
+      {v.model &&
+        (confirming ? (
+          <>
+            <span>
+              The controls change the inverter's battery settings (its battery mode, a forced charge and the reserve)
+              the same way as on the models they've been tried on, but that's never been tried on {model}. If this
+              model's settings work differently, they could set it up wrongly. Check the battery in iSolarCloud after
+              each change, and turn this off if anything looks wrong.
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={experiment.isPending}
+                onClick={() =>
+                  experiment.mutate(true, {
+                    onSuccess: () => {
+                      setConfirming(false);
+                      toast("Battery controls turned on for this inverter.");
+                    },
+                  })
+                }
+              >
+                {experiment.isPending ? "Turning on…" : "Turn on for this inverter"}
+              </Button>
+              <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
+                Cancel
+              </Button>
+            </div>
+            {experiment.isError && <HelpText tone="bad">{errorMessage(experiment.error)}</HelpText>}
+          </>
+        ) : (
+          <Button variant="outline" size="sm" className="self-start" onClick={() => setConfirming(true)}>
+            Try them anyway
+          </Button>
+        ))}
+    </Notice>
+  );
+}
 
 /** A value made only once its inputs have stopped changing for a moment (a slider being dragged). */
 function useSettled<T>(value: T, ms = 200): T {
@@ -83,12 +166,17 @@ export function BatteryModes({
     return [...new Set(steps)];
   }, [lowW, highW]);
   const [power, setPower] = useState(speeds[speeds.length - 1]);
+  // A charge from the grid buys power, so it asks first.
+  const [confirming, setConfirming] = useState(false);
   const { start } = useBatteryChange();
   const toast = useToast();
+  // Another controller has the battery, or the controls haven't been tried on this model.
+  const off = !!v.blocked || !!v.untried;
 
   const choose = (k: ControlKind) => {
     setKind(kind === k ? null : k);
     setLasting(k === "charge" ? "open" : "3h");
+    setConfirming(false);
   };
   const until =
     lasting === "1h"
@@ -114,7 +202,7 @@ export function BatteryModes({
   // A control just chosen is worked out at once; only changes to it wait for the sliders to settle.
   const asked = rounded && settled?.kind !== rounded.kind ? rounded : settled;
   const { data: plan, isFetching } = useQuery({
-    ...previewQuery(v.blocked ? null : asked),
+    ...previewQuery(off ? null : asked),
     placeholderData: keepPreviousData,
   });
   const shown = kind && plan?.kind === kind ? plan : null;
@@ -125,6 +213,10 @@ export function BatteryModes({
 
   const go = () => {
     if (!body) return;
+    if (body.kind === "charge" && !confirming) {
+      setConfirming(true);
+      return;
+    }
     start.mutate(body, {
       onSuccess: () => {
         toast(
@@ -135,6 +227,7 @@ export function BatteryModes({
               : "Charging the battery.",
         );
         setKind(null);
+        setConfirming(false);
       },
     });
   };
@@ -156,6 +249,8 @@ export function BatteryModes({
         </span>
       </div>
 
+      <Experiment v={v} />
+
       <div className="grid grid-cols-3 gap-3 max-sm:gap-2">
         {TILES.map((t) => {
           // Why it can't be chosen now, if it can't: a charge with nothing to charge.
@@ -168,7 +263,7 @@ export function BatteryModes({
               key={t.kind}
               type="button"
               aria-pressed={on}
-              disabled={!!v.blocked || !!why}
+              disabled={off || !!why}
               title={why ?? undefined}
               onClick={() => choose(t.kind)}
               className={cn(
@@ -259,9 +354,21 @@ export function BatteryModes({
 
           <Outcome kind={kind} plan={shown ?? null} floor={floor} busy={isFetching} now={now} />
 
-          <Button size="lg" disabled={start.isPending} onClick={go} className="w-full justify-center">
-            {start.isPending ? "Sending to the inverter…" : ACTION[kind]}
-          </Button>
+          {confirming && body?.kind === "charge" && (
+            <Notice tone="warn" className="text-pretty">
+              {chargeAsk(body, now)}
+            </Notice>
+          )}
+          <div className="flex flex-col items-center gap-3">
+            <Button size="lg" disabled={start.isPending} onClick={go} className="w-full justify-center">
+              {start.isPending ? "Sending to the inverter…" : confirming ? "Charge from the grid" : ACTION[kind]}
+            </Button>
+            {confirming && (
+              <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
+                Cancel
+              </Button>
+            )}
+          </div>
           {start.isError && <HelpText tone="bad">{errorMessage(start.error)}</HelpText>}
         </div>
       )}
