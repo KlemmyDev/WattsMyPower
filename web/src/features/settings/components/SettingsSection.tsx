@@ -1,8 +1,8 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
-import { HelpText } from "~/features/common/ui/components/Field";
+import { HelpText, Input } from "~/features/common/ui/components/Field";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 
@@ -213,6 +213,110 @@ export function SaveBar({
       <HelpText tone="bad" role="alert">
         {error}
       </HelpText>
+    </div>
+  );
+}
+
+/**
+ * A settings page's two halves from a wide screen: a picture of what's set on the left (kept in view while it fits),
+ * and the options on the right. Stacked, picture first, where there isn't room.
+ */
+export function SettingsSplit({ visual, children }: { visual: ReactNode; children: ReactNode }) {
+  return (
+    <div className="@container">
+      <div className="grid grid-cols-1 items-start gap-5 @4xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,1fr)]">
+        <div className="flex min-w-0 flex-col gap-5 @4xl:sticky @4xl:top-6">{visual}</div>
+        <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A number setting in an OptionList: its name and a line of help on the left, a small box for it on the right.
+ */
+export function NumberRow({
+  label,
+  help,
+  unit,
+  prefix,
+  step = "0.1",
+  placeholder,
+  value,
+  onChange,
+  type = "number",
+}: {
+  label: ReactNode;
+  help?: ReactNode;
+  unit?: string;
+  prefix?: string;
+  step?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: "number" | "date";
+}) {
+  const id = useId();
+  return (
+    <OptionRow id={id} label={label} help={help}>
+      <Input
+        aria-labelledby={id}
+        type={type}
+        inputMode={type === "number" ? "decimal" : undefined}
+        step={type === "number" ? step : undefined}
+        min="0"
+        prefix={prefix}
+        unit={unit}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        boxClassName={cn(
+          "h-10 bg-surface light:bg-surface",
+          type === "date" ? "w-[11.5rem] max-sm:w-[9.5rem]" : "w-[9.5rem] max-sm:w-[7rem]",
+        )}
+        className="text-right"
+      />
+    </OptionRow>
+  );
+}
+
+/**
+ * What's changed and not saved yet, as a bar that rises at the bottom of the options while there's something to save
+ * (or a save that failed): Discard and Save.
+ */
+export function SaveBanner({
+  dirty,
+  pending,
+  error,
+  onSave,
+  onDiscard,
+  saveLabel = "Save",
+  what = "Unsaved changes",
+}: {
+  dirty: boolean;
+  pending: boolean;
+  error?: ReactNode;
+  onSave: () => void;
+  onDiscard: () => void;
+  saveLabel?: string;
+  what?: ReactNode;
+}) {
+  if (!dirty && !error) return null;
+  return (
+    <div
+      role="region"
+      aria-label="Unsaved changes"
+      className="sticky bottom-4 z-10 flex animate-pop flex-wrap items-center gap-3 rounded-2xl border border-line-subtle bg-popover px-4 py-3 shadow-[0_12px_32px_var(--color-shadow-pop)]"
+    >
+      <span className={cn("min-w-0 flex-1 text-[13px]", error ? "text-bad" : "text-ink-muted")} role="status">
+        {error || what}
+      </span>
+      <Button variant="outline" size="sm" disabled={pending || !dirty} onClick={onDiscard}>
+        Discard
+      </Button>
+      <Button size="sm" disabled={pending || !dirty} onClick={onSave}>
+        {pending ? "Saving…" : saveLabel}
+      </Button>
     </div>
   );
 }
