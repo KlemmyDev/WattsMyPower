@@ -13,7 +13,7 @@ goes wrong.
 - **Overview, Solar, Home, Battery and Grid pages:** the live power flow drawn as your house, today's cost and
   savings, each string of panels, where the home's power goes, the battery's health and whether it's the right size,
   and AEMO's wholesale prices and notices.
-- **Battery controls** (experimental): standby, a floor it won't go below, or charging from the grid, for a set time.
+- **Battery controls:** standby, a floor it won't go below, or charging from the grid, for a set time.
 - **Plan:** the next three days of solar, home use, battery and cost from the weather forecast, learning how your
   roof turns sunshine into solar.
 - **Bills:** the current bill day by day against a budget, ways to lower it, plans from Energy Made Easy, NEM12 smart
@@ -39,8 +39,8 @@ hear how it goes.
 
 ## Known issues
 
-- **Battery controls** have only been tried on an SH5.0RS. They change what the inverter does, so watch the first
-  one you set.
+- **Battery controls** are on for SH-RS hybrids, and used at home on an SH5.0RS. On any other model they're off
+  until you turn them on for that inverter on the Battery page, as they haven't been tried there.
 - **Tesla through Tessie, Bluetti, EcoFlow, Shelly, Home Assistant and Amber** have had little or no use beyond our
   own hardware.
 - **Hisense ConnectLife** has no public API, so it can stop working if Hisense changes it.

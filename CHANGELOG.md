@@ -51,8 +51,8 @@ Everything below is new. When it's released, this heading becomes the beta's ver
 
 ### Known issues
 
-- Battery controls have only been tried on an SH5.0RS. They change what the inverter does, so watch the first one
-  you set.
+- Battery controls are on for the SH-RS hybrids they were written for, and used at home on an SH5.0RS. On any other
+  model they're off until turned on for that inverter, as they haven't been tried there.
 - Hisense ConnectLife has no public API: it's read the way its app reads it, and can stop working if Hisense changes
   it.
 - The WiNet-S2 sometimes repeats the same readings for a few minutes. Those are left out, so charts show a short gap.

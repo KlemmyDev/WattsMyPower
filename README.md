@@ -20,8 +20,8 @@ The other SH hybrids in [Supported inverters](#supported-inverters) share the SH
 
 | | |
 |---|---|
-| **Expected to work** | Readings from the hybrid, battery and grid meter, and a second SG-D inverter; Overview, Solar, Home, Battery and Grid pages; History and CSV downloads; costs, Bills, rates and plans from Energy Made Easy; NEM12 imports; the forecast and Plan; AEMO prices and notices, outages and weather warnings; updates and backups. TP-Link Tapo plugs, Hisense (ConnectLife) washers and dryers, and a Tesla over Bluetooth are used at home every day. |
-| **Experimental** | **Battery controls** (standby, a floor, charging from the grid): they change what the inverter does, and have only been tried on an SH5.0RS. Tesla through Tessie. Bluetti (Bluetooth) and EcoFlow (cloud) portable batteries. Shelly plugs and meters. Home Assistant. Amber Electric prices. Importing history from iSolarCloud. These work as far as we know, on little or no hardware beyond our own. |
+| **Expected to work** | Readings from the hybrid, battery and grid meter, and a second SG-D inverter; Overview, Solar, Home, Battery and Grid pages; History and CSV downloads; costs, Bills, rates and plans from Energy Made Easy; NEM12 imports; the forecast and Plan; AEMO prices and notices, outages and weather warnings; updates and backups. TP-Link Tapo plugs, Hisense (ConnectLife) washers and dryers, and a Tesla over Bluetooth are used at home every day. **Battery controls** (standby, a floor, charging from the grid) on the SH-RS hybrids they were written for, used at home on an SH5.0RS. |
+| **Experimental** | **Battery controls on other hybrids** (SH-RT, SH-T and the rest): they're off until you turn them on for that inverter on the Battery page, as they change what the inverter does and haven't been tried there. Tesla through Tessie. Bluetti (Bluetooth) and EcoFlow (cloud) portable batteries. Shelly plugs and meters. Home Assistant. Amber Electric prices. Importing history from iSolarCloud. These work as far as we know, on little or no hardware beyond our own. |
 
 **Known limitations:**
 
@@ -558,6 +558,6 @@ docs/                   screenshots, and release notes (docs/release-notes/)
 
 ## Licence
 
-See [LICENSE](LICENSE).
+MIT: see [LICENSE](LICENSE).
 
 The Sungrow register map and its quirks come from [berndverhofstadt/sungrow-poc](https://github.com/berndverhofstadt/sungrow-poc) (MIT).
