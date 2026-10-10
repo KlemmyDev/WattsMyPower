@@ -14,6 +14,7 @@ Horizon Power  www.horizonpower.com.au/api/outage/getdetailedoutages   outages n
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,12 +30,14 @@ from app.features.grid.outages.base import (
     gone,
     in_bounds,
     inside,
+    job,
     kept,
     leftover,
     outage,
     split,
     to_float,
     when,
+    with_query,
 )
 
 # Western Power's grid, roughly (lon, lat): Kalbarri to Kalgoorlie to Albany. Esperance, east of it, is Horizon's.
@@ -69,6 +72,10 @@ def westernpower_outage(o: dict[str, Any], now: float) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class WesternPower(Provider):
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Western Power's outage page opens an outage by its number."""
+        return with_query(f"{self.site}/outages", outageId=job(o)), True
+
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         if which == "future" or around is None:
             return []  # the one feed has planned work to come too
@@ -121,4 +128,11 @@ class Horizon(Provider):
 WESTERNPOWER = WesternPower(
     "westernpower", "Western Power", "https://www.westernpower.com.au", "WA", (-35.2, 113.5, -28.0, 122.0)
 )
-HORIZON = Horizon("horizon", "Horizon Power", "https://www.horizonpower.com.au", "WA", (-35.2, 112.9, -13.6, 129.0))
+HORIZON = Horizon(
+    "horizon",
+    "Horizon Power",
+    "https://www.horizonpower.com.au",
+    "WA",
+    (-35.2, 112.9, -13.6, 129.0),
+    outages_page="/outages",
+)

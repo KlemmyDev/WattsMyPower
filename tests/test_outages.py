@@ -191,3 +191,25 @@ def test_fetches_are_spread_out() -> None:
     assert next_wait(lambda lo, hi: lo) == 12 * 60 and next_wait(lambda lo, hi: hi) == 18 * 60
     waits = {next_wait() for _ in range(20)}
     assert len(waits) > 1 and all(12 * 60 <= w <= 18 * 60 for w in waits)
+
+
+def test_each_outage_says_where_to_see_it_and_its_area(settings: SettingsStore) -> None:
+    v = _service(settings).view()
+    ours, underway = v["now"]
+    # Energex opens an outage now by its number; planned work only as the list for its suburb.
+    assert ours["url"] == (
+        "https://www.energex.com.au/outages/outage-finder/emergency-outages-text-view?event=INCD-1"
+    ) and ours["url_exact"]
+    assert underway["url"].endswith("planned-outages-text-view?suburb-postcode=UNDERWOOD")
+    assert not underway["url_exact"]
+    # The area comes along, roughly, for the radar: [lon, lat] corners.
+    assert ours["area"] == [[list(p) for p in SQUARE]] and underway["area"] == []
+
+
+def test_rough_areas_keep_their_largest_rings_and_few_corners() -> None:
+    from app.features.grid.outages.base import rough
+
+    big = [(153 + i / 1000, -27 - i / 1000) for i in range(500)]
+    small = [(1.0, 2.0), (1.1, 2.0), (1.1, 2.1)]
+    out = rough([small, big], points=48, most=1)
+    assert len(out) == 1 and len(out[0]) <= 48 and out[0][0] == [153.0, -27.0]

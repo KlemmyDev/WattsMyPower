@@ -36,8 +36,10 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   street on your own server: Energex and Ergon Energy (Queensland), Ausgrid, Endeavour Energy and Essential Energy
   (NSW), Evoenergy (ACT), CitiPower, Powercor, Jemena, United Energy and AusNet Services (Victoria), SA Power
   Networks, TasNetworks, Western Power and Horizon Power (WA). They come from each network's public outage map
-  (unofficial feeds, which may change). The Bureau of Meteorology's warnings for your district; Queensland Fire
-  Department bushfire warnings.
+  (unofficial feeds, which may change), drawn around your house with the areas that are off. Choosing one shows it in
+  full and links to it on the network's own site (the outage itself on Energex, Ausgrid, Essential Energy, AusNet
+  Services and Western Power; elsewhere the network's map or list for its suburb). The Bureau of Meteorology's
+  warnings for your district; Queensland Fire Department bushfire warnings.
 - **Plan:** today and the next two days of solar, home use, battery and cost from Open-Meteo's forecast, calibrated to
   your system and learning how your roof turns sunshine into solar, with the best times to use power and warnings
   when the battery will run down or won't fill.

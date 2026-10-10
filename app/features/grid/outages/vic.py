@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,14 +37,17 @@ from app.features.grid.outages.base import (
     ask,
     gone,
     in_bounds,
+    job,
     kept,
     leftover,
     outage,
     ring_of,
     rings_of,
     split,
+    suburb_of,
     to_float,
     when,
+    with_query,
 )
 
 LOCATOR = "https://ds5ykmduea4ri.cloudfront.net/network-locator.json"
@@ -123,6 +127,10 @@ def ausnet_outage(o: dict[str, Any], now: float) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class AusNet(Victorian):
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """AusNet's outage tracker opens an outage by its incident number."""
+        return with_query("https://www.outagetracker.com.au/", incident=job(o)), True
+
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         if which == "future" or around is None:
             return []  # the one feed has planned work too
@@ -182,6 +190,10 @@ class Cppc(Victorian):
     """CitiPower or Powercor: one company, one feed, each job marked with its network (BUSINESS)."""
 
     business: str = ""
+
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """CitiPower's and Powercor's map can't open an outage, only zoom to its suburb."""
+        return with_query(f"{self.site}/outages/live-outage-map", suburb=suburb_of(o)), False
 
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         if which == "future":
@@ -301,6 +313,10 @@ def jemena_planned(rows: list[dict[str, Any]], now: float) -> list[dict[str, Any
 
 @dataclass(frozen=True)
 class Jemena(Victorian):
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Jemena's map can't open an outage, only zoom to its suburb."""
+        return with_query("https://poweroutages.jemena.com.au/", suburb=suburb_of(o)), False
+
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         if which == "future":
             if around is None:
@@ -360,7 +376,14 @@ CITIPOWER = Cppc(
     business="citipower",
 )
 JEMENA = Jemena("jemena", "Jemena", "https://www.jemena.com.au", "VIC", (-37.86, 144.7, -37.55, 145.1))
-UNITED = United("united", "United Energy", "https://www.unitedenergy.com.au", "VIC", (-38.5, 144.65, -37.75, 145.35))
+UNITED = United(
+    "united",
+    "United Energy",
+    "https://www.unitedenergy.com.au",
+    "VIC",
+    (-38.5, 144.65, -37.75, 145.35),
+    outages_page="/outage-map",
+)
 AUSNET = AusNet("ausnet", "AusNet Services", "https://www.ausnetservices.com.au", "VIC", (-39.2, 144.85, -35.9, 150.0))
 POWERCOR = Cppc(
     "powercor", "Powercor", "https://www.powercor.com.au", "VIC", (-39.2, 140.9, -33.9, 145.6), business="powercor"
