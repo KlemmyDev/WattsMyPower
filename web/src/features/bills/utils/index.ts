@@ -1,6 +1,7 @@
 import type { Basis, BillSpan } from "~/features/bills/types";
 import { dayMonth, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
 import { dollars, money } from "~/features/common/formatting/utils/number";
+import { fromDateKey, partsOf, siteTime } from "~/features/common/time/utils";
 
 /** A bill in whole dollars, with credits saying so: "$412", "$38 credit". */
 export const billAmount = (v: number) => (v < 0 ? `${dollars(-v)} credit` : dollars(v));
@@ -8,7 +9,7 @@ export const billAmount = (v: number) => (v < 0 ? `${dollars(-v)} credit` : doll
 export const billCents = (v: number) => (v < 0 ? `${money(-v)} credit` : money(v));
 
 /** "1 Sep" from "2026-09-01". */
-export const ymdLabel = (s: string) => dayMonth(parseYmd(s).getTime() / 1000);
+export const ymdLabel = (s: string) => dayMonth(fromDateKey(s));
 
 /** "1 Sep to 30 Nov". */
 export const spanLabel = (p: BillSpan) => `${ymdLabel(p.start)} to ${ymdLabel(p.end)}`;
@@ -35,12 +36,13 @@ export const centsPerKwh = (v: number) => `${v < 0 ? "−" : ""}${Math.round(Mat
 
 /**
  * The first day of the billing period `day` falls in: periods of `months` months starting on
- * `startDay`, in step with `anchor` (a month, 1-12, a bill starts in). Matches the server.
+ * `startDay`, in step with `anchor` (a month, 1-12, a bill starts in), at its midnight. Matches the server.
  */
-export function periodStart(day: Date, months: number, startDay: number, anchor: number): Date {
-  let m = day.getMonth() + 1 - (day.getDate() < startDay ? 1 : 0);
+export function periodStart(ts: number, months: number, startDay: number, anchor: number): number {
+  const day = partsOf(ts);
+  let m = day.month - (day.day < startDay ? 1 : 0);
   while ((((m - anchor) % months) + months) % months) m--;
-  return new Date(day.getFullYear(), m - 1, startDay);
+  return siteTime(day.year, m, startDay);
 }
 
 /** Vertical layout for bars that can go below zero, as percentages of the plot height. */

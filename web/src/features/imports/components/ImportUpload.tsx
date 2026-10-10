@@ -315,9 +315,9 @@ export function ImportUpload() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-[13px] font-semibold">
               {days.length} {plural(days.length, "day")}, {shortDay.format(parseYmd(days[0].date))}{" "}
-              {parseYmd(days[0].date).getFullYear()}
+              {days[0].date.slice(0, 4)}
               {days.length > 1 &&
-                ` to ${shortDay.format(parseYmd(days[days.length - 1].date))} ${parseYmd(days[days.length - 1].date).getFullYear()}`}
+                ` to ${shortDay.format(parseYmd(days[days.length - 1].date))} ${days[days.length - 1].date.slice(0, 4)}`}
             </span>
             <span className="text-xs text-ink-muted tabular-nums">
               {intAU(toWrite)} 5-minute readings to import
@@ -345,7 +345,7 @@ export function ImportUpload() {
                   return (
                     <tr key={d.date} className="border-t border-line-subtle">
                       <td className="px-4 py-2 whitespace-nowrap">
-                        {shortDay.format(parseYmd(d.date))} {parseYmd(d.date).getFullYear()}
+                        {shortDay.format(parseYmd(d.date))} {d.date.slice(0, 4)}
                       </td>
                       <td className="px-3 py-2 text-right">{kWh(d.pv_kwh)}</td>
                       <td className="px-3 py-2 text-right max-sm:hidden">{kWh(d.load_kwh)}</td>

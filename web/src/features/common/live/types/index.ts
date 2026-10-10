@@ -98,6 +98,9 @@ export type LiveStatus = {
   /** Which version this is: the date it was released ("2026.10.8"), and how far along it is (e.g. "alpha"; null
    * once it's stable, as now). */
   app?: { version: string; release: string | null; commit: string | null };
+  /** The site's time zone, e.g. "Australia/Brisbane": the server's, which its days are kept in. Days, hours and clock
+   * times are drawn in it, whatever zone the browser is in. Null if the server can't name it. */
+  time_zone?: string | null;
   /** Each EV in brief (app.features.tesla); null when none is connected. */
   ev?: EvBrief[] | null;
 };

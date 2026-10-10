@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import { listDays, monthShort, monthYear, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
+import { dayMonth, listDays, monthShort, monthYear, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
+import { fromDateKey } from "~/features/common/time/utils";
 import { DASH, kWh, pct, plural } from "~/features/common/formatting/utils/number";
 import { Card, Footnote, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
@@ -21,10 +22,7 @@ function Corner({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const dayLabel = (d: Day) => {
-  const x = parseYmd(d.date);
-  return `${x.getDate()} ${monthShort.format(x)}`;
-};
+const dayLabel = (d: Day) => dayMonth(fromDateKey(d.date));
 
 /** A clear day more than 10% under what the weather allowed. */
 const isLow = (d: Day) => d.clear && d.ratio != null && d.ratio < 0.9;
@@ -116,10 +114,9 @@ export function SolarPerformance({ performance: P }: { performance: SolarInsight
 function LikelyCauses({ causes: c }: { causes: Causes }) {
   const items: [title: string, body: string][] = [];
   if (c.dust) {
-    const d = parseYmd(c.dust.date);
     items.push([
       "Dust on the panels",
-      `After ${c.dust.rain_mm} mm of rain on ${d.getDate()} ${monthShort.format(d)}, clear days went from ${pct(c.dust.before * 100)} to ${pct(c.dust.after * 100)} of expected. If it's been dry since, a clean may be worth it.`,
+      `After ${c.dust.rain_mm} mm of rain on ${dayMonth(fromDateKey(c.dust.date))}, clear days went from ${pct(c.dust.before * 100)} to ${pct(c.dust.after * 100)} of expected. If it's been dry since, a clean may be worth it.`,
     ]);
   }
   if (c.shade)

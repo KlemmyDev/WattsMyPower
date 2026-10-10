@@ -21,7 +21,7 @@ export function OverviewPage() {
   const prices = useAmberPrices(now);
   return (
     <>
-      <PageHeader title={greeting(new Date(now * 1000))} sub="Here is how your home is running right now" />
+      <PageHeader title={greeting(now)} sub="Here is how your home is running right now" />
       <div className="grid grid-cols-12 gap-5">
         <PowerFlowHero p={p} s={s} f={f} now={now} />
         <GridOverviewCard now={now} />

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { sameDay } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -16,9 +17,7 @@ const FIRE_COLOR: Record<FireWarning["level"], string> = {
 };
 
 const when = (ts: number, now: number) =>
-  new Date(ts * 1000).toDateString() === new Date(now * 1000).toDateString()
-    ? hhmm(ts)
-    : `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
+  sameDay(ts, now) ? hhmm(ts) : `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
 
 function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
   const [open, setOpen] = useState(false);

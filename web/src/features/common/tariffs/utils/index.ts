@@ -1,6 +1,6 @@
 import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/types";
 import { centsShort, money } from "~/features/common/formatting/utils/number";
-import { isWeekend } from "~/features/common/time/utils";
+import { isWeekend, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
 export const BAND_COLORS = [COLOR.solar, COLOR.battery, COLOR.gridLine, COLOR.good, COLOR.lilac, COLOR.bad];
@@ -64,9 +64,9 @@ export const usedBands = (t: Tariff) => new Set([...bandTable(t, "weekday").tab,
 
 /** The band in force at a moment. */
 export function bandAt(t: Tariff, ts: number): { name: string; rate: number } {
-  const d = new Date(ts * 1000);
-  const { bands, tab } = bandTable(t, isWeekend(d) ? "weekend" : "weekday");
-  const b = bands[tab[d.getHours() * 60 + d.getMinutes()]];
+  const p = partsOf(ts);
+  const { bands, tab } = bandTable(t, isWeekend(ts) ? "weekend" : "weekday");
+  const b = bands[tab[p.hour * 60 + p.minute]];
   return { name: b.name, rate: num(b.rate) };
 }
 

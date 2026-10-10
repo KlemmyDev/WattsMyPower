@@ -12,6 +12,7 @@ import { Pill } from "~/features/common/ui/components/Pill";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { cn } from "~/features/common/ui/utils";
 import { useNow } from "~/features/common/time/hooks";
+import { addDays, midnight, nowS, sameDay } from "~/features/common/time/utils";
 import { useHomeChange } from "~/features/home/hooks";
 import type { BestTime, DevicePattern, HomeDevice, HomeUsage, Saving } from "~/features/home/types";
 import { ESTIMATED, habitLine, kindIcon, nowLine, watts, WEEKDAY_SHORT } from "~/features/home/utils";
@@ -215,10 +216,9 @@ function compared(now: number, before: number | undefined): { text: string; up: 
 
 /** "today", "tomorrow" or the weekday a time falls on. */
 function dayWord(ts: number) {
-  const day = (t: number) => new Date(t * 1000).toDateString();
-  const now = Date.now() / 1000;
-  if (day(ts) === day(now)) return "today";
-  if (day(ts) === day(now + 86400)) return "tomorrow";
+  const today = midnight(nowS());
+  if (sameDay(ts, today)) return "today";
+  if (sameDay(ts, addDays(today, 1))) return "tomorrow";
   return shortDay.format(new Date(ts * 1000));
 }
 

@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { hhmm, hourLabel, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, money } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, midnight, mondayFirst } from "~/features/common/time/utils";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
@@ -15,7 +15,6 @@ import { WEEKDAY_SHORT } from "~/features/home/utils";
 
 const USUAL = alpha(COLOR.fg, 0.45);
 const WEEKDAY_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const mondayFirst = (d: Date) => (d.getDay() + 6) % 7;
 
 /** A figure in a card's corner, with what it is above it and, optionally, below. */
 function Corner({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
@@ -58,7 +57,7 @@ export function UsualDayCard({
   const start = midnight(now);
   const { today: t } = p;
   const u = t.usual;
-  const day = u.same_weekday ? `a usual ${WEEKDAY_LONG[mondayFirst(new Date(start * 1000))]}` : "a usual day";
+  const day = u.same_weekday ? `a usual ${WEEKDAY_LONG[mondayFirst(start)]}` : "a usual day";
   const points: LinePoint[] = t.t.map((ts, i) => ({ t: ts + 150, v: t.w[i] }));
   const usual: LinePoint[] = u.w.map((w, i) => ({ t: start + i * u.slot + u.slot / 2, v: w }));
   const ahead = u.by_now > 0.01 ? (t.kwh - u.by_now) / u.by_now : null;

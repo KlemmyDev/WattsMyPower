@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
+import { nowS, sameDay } from "~/features/common/time/utils";
 import { intAU, plural } from "~/features/common/formatting/utils/number";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -11,8 +12,7 @@ import { bytes, compact, share } from "~/features/storage/utils";
 
 /** "Today 14:05", or "3 July 2026". */
 function when(ts: number): string {
-  const d = new Date(ts * 1000);
-  return d.toDateString() === new Date().toDateString() ? `Today ${hhmm(ts)}` : longDate.format(d);
+  return sameDay(ts, nowS()) ? `Today ${hhmm(ts)}` : longDate.format(ts * 1000);
 }
 
 /** One database: where it is, what it's made of, then its tables by group, each opening to show everything known about it. */

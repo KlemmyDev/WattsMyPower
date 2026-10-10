@@ -11,7 +11,7 @@ import { cn } from "~/features/common/ui/utils";
 import { heatColor } from "~/features/common/theme/utils/colors";
 import { dayMonth } from "~/features/common/formatting/utils/date";
 import { dollars, energyParts, kWh } from "~/features/common/formatting/utils/number";
-import { addDays, dateKey, fromDateKey, midnight } from "~/features/common/time/utils";
+import { addDays, dateKey, fromDateKey, midnight, mondayFirst } from "~/features/common/time/utils";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import { weatherDaysQuery } from "~/features/weather/api";
 import { DayPanel } from "~/features/history/components/DayPanel";
@@ -110,7 +110,7 @@ export function HistoryPage() {
   const months = useMemo(() => monthsOf(days), [days]);
   const standouts = useMemo(() => standoutsOf(days), [days]);
   const loaded = !!(daily.data && costs.data);
-  const lead = (new Date(start * 1000).getDay() + 6) % 7;
+  const lead = mondayFirst(start);
   const selected = Math.round((dayTs - start) / 86400);
   const { label, color } = TABS[metric];
   const perDay = showWeather ? "The weather each day" : `${label} per day`;

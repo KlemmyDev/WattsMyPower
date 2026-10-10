@@ -231,7 +231,7 @@ All settings are environment variables (see `.env.example`):
 | `PV2_BEHIND_METER` | `true` | Where a second system connects, unless it's set in **Manage → Integrations**. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
-| `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
+| `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over, and the time zone the dashboard shows its days and times in, whatever zone the browser viewing it is in |
 | `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
 | `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |

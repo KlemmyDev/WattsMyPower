@@ -9,6 +9,7 @@ import asyncio
 from typing import Any
 
 from app.core.config import Config
+from app.core.timezone import site_zone
 from app.core.version import about
 from app.features.inverters.types import Snapshot
 from app.features.settings.store import SettingsStore
@@ -106,5 +107,7 @@ class LiveService:
             "battery_mode": self.battery_mode,
             # Which version this is, shown at the foot of the navigation.
             "app": about(),
+            # The zone the days above are kept in, so the dashboard draws times in it whatever the browser's is.
+            "time_zone": site_zone(),
             "ev": self.ev,
         }

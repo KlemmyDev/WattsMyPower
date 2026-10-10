@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { sameDay } from "~/features/common/time/utils";
 import { intAU } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
@@ -31,10 +32,7 @@ export const suburbsOf = (o: Outage) => {
 
 /** "Today 8 am to 3 pm", "Fri 10 Oct, 8 am to 2 pm", or until the network's words ("Under investigation"). */
 export function when(o: Outage, now: number): string {
-  const day = (t: number) =>
-    new Date(t * 1000).toDateString() === new Date(now * 1000).toDateString()
-      ? "Today"
-      : shortDay.format(new Date(t * 1000));
+  const day = (t: number) => (sameDay(t, now) ? "Today" : shortDay.format(new Date(t * 1000)));
   const end = o.end ? hhmm(o.end) : o.end_text ? title(o.end_text) : "not known";
   if (!o.start) return `Back ${end}`;
   if (o.start <= now && !o.planned)
@@ -47,7 +45,7 @@ function ago(at: number, now: number): string {
   const mins = Math.floor((now - at) / 60);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins} min ago`;
-  if (new Date(at * 1000).toDateString() === new Date(now * 1000).toDateString()) return `at ${hhmm(at)}`;
+  if (sameDay(at, now)) return `at ${hhmm(at)}`;
   return `${shortDay.format(new Date(at * 1000))}, ${hhmm(at)}`;
 }
 
