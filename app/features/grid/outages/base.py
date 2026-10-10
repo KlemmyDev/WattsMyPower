@@ -27,9 +27,10 @@ import datetime as dt
 import json
 import math
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -144,6 +145,8 @@ class Provider:
     # Roughly where it is (south, west, north, east): for telling which network serves a house when nothing better
     # (its service area, a suburb list) says.
     bounds: tuple[float, float, float, float]
+    # Its outage map (or list) on its own site, from the site's root: where an outage it can't link to is seen.
+    outages_page: str = field(default="", kw_only=True)
 
     def outages(self, which: str, get: Get, around: Around) -> list[dict[str, Any]]:
         """`which`: "current", what's on now (and, from a feed that lists everything at once, what's planned too), or
@@ -169,6 +172,37 @@ class Provider:
     def areas(self, outages: list[dict[str, Any]], get: Get) -> dict[str, list[Ring]]:
         """The areas of these outages (id -> rings), for a feed that draws them only when asked, outage by outage."""
         return {}
+
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Where to see an outage on the network's own site, and whether that page is the outage's own (True) or
+        only the network's outage map or list (False)."""
+        return self.site + self.outages_page, False
+
+
+def job(o: Mapping[str, Any]) -> str:
+    """An outage's job number as its network knows it (its id without the network in front)."""
+    return str(o["id"]).split(":", 1)[-1]
+
+
+def suburb_of(o: Mapping[str, Any]) -> str:
+    """The first suburb an outage lists, as its network wrote it ("" when it lists none)."""
+    return o["suburbs"][0] if o.get("suburbs") else ""
+
+
+def with_query(url: str, fragment: str = "", **params: Any) -> str:
+    """A link with what's given of `params` as its query (the empty ones left out), and a #fragment."""
+    qs = urllib.parse.urlencode({k: v for k, v in params.items() if v not in (None, "")})
+    return url + (f"?{qs}" if qs else "") + (f"#{fragment}" if fragment else "")
+
+
+def rough(rings: list[Ring], points: int = 48, most: int = 6) -> list[list[list[float]]]:
+    """An outage's area drawn roughly, for the Grid page's radar: its largest few rings, each cut to about `points`
+    corners and to about a metre."""
+    out = []
+    for r in sorted(rings, key=len, reverse=True)[:most]:
+        step = max(1, math.ceil(len(r) / points))
+        out.append([[round(x, 5), round(y, 5)] for x, y in r[::step]])
+    return out
 
 
 def in_bounds(bounds: tuple[float, float, float, float], lat: float, lon: float) -> bool:

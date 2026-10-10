@@ -19,6 +19,7 @@ Evoenergy  /outages                                         the page itself: its
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,6 +35,7 @@ from app.features.grid.outages.base import (
     gone,
     in_bounds,
     inside,
+    job,
     kept,
     outage,
     ring_of,
@@ -41,6 +43,7 @@ from app.features.grid.outages.base import (
     split,
     to_float,
     when,
+    with_query,
     words,
 )
 
@@ -79,6 +82,10 @@ def ausgrid_outage(o: dict[str, Any]) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class Ausgrid(Provider):
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Ausgrid's map opens an outage by its number, planned work's with NECF in front."""
+        return f"{self.site}/outages/{'NECF' if o['planned'] else ''}{job(o)}", True
+
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         # Today's every 15 minutes (a few kilobytes); the 90 days ahead (a megabyte) hourly, with the rest's.
         days = 90 if which == "future" else 0
@@ -148,6 +155,11 @@ def endeavour_outage(o: dict[str, Any]) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class Endeavour(Provider):
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Endeavour's map can't open an outage, only be centred on one."""
+        page = f"{self.site}/power-outages/outage-map"
+        return with_query(page, lat=o.get("lat"), lng=o.get("lon"), zoom=15 if o.get("lat") is not None else ""), False
+
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         if which == "future":
             return []  # the one feed has planned work too
@@ -195,6 +207,10 @@ ESSENTIAL_BOX = (140.9, -37.6, 153.7, -27.9)
 @dataclass(frozen=True)
 class Essential(Provider):
     feed: str = "https://ee-ai-api.pollen.au/v3/outages"
+
+    def link(self, o: Mapping[str, Any]) -> tuple[str, bool]:
+        """Essential's outage page opens the outage its address ends with (its own Share button's link)."""
+        return f"{self.site}/outages-and-faults/power-outages#{job(o)}", True
 
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
         box = ",".join(f"{x:g}" for x in ESSENTIAL_BOX)
@@ -261,7 +277,14 @@ class Evoenergy(Provider):
 
 
 AUSGRID = Ausgrid("ausgrid", "Ausgrid", AUSGRID_SITE, "NSW", (-34.18, 150.0, -31.55, 152.21))
-EVOENERGY = Evoenergy("evoenergy", "Evoenergy", "https://www.evoenergy.com.au", "ACT", (-35.93, 148.76, -35.12, 149.4))
+EVOENERGY = Evoenergy(
+    "evoenergy",
+    "Evoenergy",
+    "https://www.evoenergy.com.au",
+    "ACT",
+    (-35.93, 148.76, -35.12, 149.4),
+    outages_page="/outages#All",
+)
 ENDEAVOUR = Endeavour(
     "endeavour", "Endeavour Energy", "https://www.endeavourenergy.com.au", "NSW", (-35.6, 149.9, -32.8, 151.15)
 )

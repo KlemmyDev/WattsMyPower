@@ -61,6 +61,11 @@ export type Outage = {
   direction: string;
   /** It reaches the house: it lists the house's street, or its area covers the house. */
   affects: "street" | "area" | null;
+  /** The area that's off, roughly: polygons' outer rings of [lon, lat]. Empty when the network draws no area. */
+  area: [number, number][][];
+  /** Where to see it on the network's own site: the outage's own page (`url_exact`), or else its outage map. */
+  url: string | null;
+  url_exact: boolean;
 };
 
 /** The network's outages around the house (every state's and territory's networks but the NT's). */
@@ -102,6 +107,8 @@ export type WeatherWarning = {
   level: "warning" | "watch";
   /** It came with a polygon around the house. */
   here: boolean;
+  /** The Bureau's page for it, as the warning gives it (its warnings page). */
+  url?: string | null;
 };
 
 /** A Queensland Fire Department fire or warning near the house. */

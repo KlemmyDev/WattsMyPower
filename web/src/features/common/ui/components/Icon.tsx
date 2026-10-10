@@ -148,6 +148,7 @@ const ICONS = {
     P("M7 16h10"),
   ],
   clock: [["circle", { cx: 12, cy: 12, r: 10 }], P("M12 6v6l4 2")],
+  external: [P("M15 3h6v6"), P("M10 14 21 3"), P("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6")],
   code: [P("m16 18 6-6-6-6"), P("m8 6-6 6 6 6")],
   pause: [
     ["rect", { x: 14, y: 4, width: 4, height: 16, rx: 1 }],

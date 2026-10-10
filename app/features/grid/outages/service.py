@@ -41,6 +41,7 @@ from app.features.grid.outages.base import (
     distance_km,
     fetch,
     inside,
+    rough,
 )
 from app.features.grid.outages.networks import NETWORKS, place_state, place_suburb, states_for
 from app.features.settings.store import SettingsStore
@@ -305,7 +306,8 @@ class OutageService:
                 return None
             o = {**o, "lat": lat, "lon": lon}
         return {
-            **{k: v for k, v in o.items() if k != "area"},
+            **o,
+            "area": area,
             "distance_km": round(distance_km(lat, lon, o["lat"], o["lon"]), 1),
             "direction": bearing(lat, lon, o["lat"], o["lon"]),
             "affects": affects,
@@ -352,7 +354,14 @@ class OutageService:
         ]
         on_now.sort(key=lambda o: (o["affects"] is None, o["planned"], o["distance_km"]))
         ahead.sort(key=lambda o: (o["start"] or 0, o["distance_km"]))
-        return {"now": on_now, "planned": ahead}
+        return {"now": [self._shown(o) for o in on_now], "planned": [self._shown(o) for o in ahead]}
+
+    def _shown(self, o: dict[str, Any]) -> dict[str, Any]:
+        """An outage as the Grid page gets it: its area drawn roughly (enough for the radar), and where to see it on
+        its network's own site."""
+        net = NETWORKS.get(o["network"])
+        url, exact = net.link(o) if net else (None, False)
+        return {**o, "area": rough(o["area"]), "url": url, "url_exact": exact}
 
     def view(self) -> dict[str, Any]:
         now = self.clock()

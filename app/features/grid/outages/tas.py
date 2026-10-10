@@ -76,5 +76,10 @@ class TasNetworks(Provider):
 
 
 TASNETWORKS = TasNetworks(
-    "tasnetworks", "TasNetworks", "https://www.tasnetworks.com.au", "TAS", (-43.8, 143.5, -39.2, 148.6)
+    "tasnetworks",
+    "TasNetworks",
+    "https://www.tasnetworks.com.au",
+    "TAS",
+    (-43.8, 143.5, -39.2, 148.6),
+    outages_page="/outages",
 )
