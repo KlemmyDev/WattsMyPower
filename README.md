@@ -204,6 +204,8 @@ Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
 | `bash install.sh --no-dashboard-updates` | update, and stop updating from the dashboard (removes the cron job below) |
+| `bash install.sh --rollback` | go back to the version before the last update, with the databases as they were before it (see below) |
+| `bash install.sh --uninstall` | stop it and remove its containers, images and cron job, leaving your data and settings in the folder (see below) |
 | `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `TZ=Australia/Perth bash install.sh --yes`. On a first install, `PV_KW=10` sets the array size and `INVERTER_HOST=192.168.1.20` connects the inverter, without the dashboard. |
 
 **Release channels.** An install follows one of three, chosen in **Manage → System → Updates** or with `--channel`:
@@ -218,26 +220,28 @@ A new install follows Beta. An install from before Beta was the default, with no
 
 An update installs the channel's version, so moving to a channel behind the one you're on (Nightly to Stable) goes back to its older version: the dashboard offers **Go back** rather than **Update now**, and `install.sh` lists the changes it leaves out. The databases are backed up first, as on any update; tables and columns a newer version added are left as they are and used again when it's updated. The channel is kept in `data/update/channel`, where the dashboard and `install.sh` both read it.
 
-**Updating** pulls the latest version on the channel, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
+**Updating** pulls the latest version on the channel, backs up both databases to `data/backups/` without stopping the app, rebuilds, waits until the app responds, and removes the image from the update before last. If the dashboard isn't running (or keeps restarting), the backup is made with its image, or with `sqlite3`, or by stopping it and copying the files; if none of those works, the update stops before rebuilding (`--no-backup` carries on without one). Backups are named for the version they were taken from (`wattsmypower-20261010-091500-2026.10.9-beta.db`): the newest 5 of each database are kept, plus the newest from each of the last 5 versions and from each channel, so the last one from before you tried beta stays. They're on the same disk as the app, so copy one somewhere else now and then. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
-**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version on its channel (**Manage → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Settings says why and shows the command to run instead.
+**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version on its channel (**Manage → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Manage → System → Updates says why and shows the command to run instead.
 
 **Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
-**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year.
+**Going back.** Each update that changes the version keeps the one it replaced (its images, tagged `:previous`, and in `data/update/previous` its commit and the backup made before it). `bash install.sh --rollback` goes back to it and puts that backup back, after backing up the databases as they are; updating again brings the newer version back.
+
+**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year. `install.sh` keeps `data/` and `.env` readable by you alone.
 
 ### Backups and restoring
 
-Every update backs up both databases to `data/backups/` first, named by when they were made (`wattsmypower-20261010-093000.db` and `collector-20261010-093000.db`). They live on the same machine, so for a copy that survives losing it, copy `data/` and `.env` somewhere else now and then (stop it first with `docker compose stop` for a consistent copy, then `docker compose start`).
+Every update backs up both databases to `data/backups/` first, named by when they were made and the version (and channel) that made them: `wattsmypower-20261010-093000-2026.10.9-beta.db` and `collector-20261010-093000-2026.10.9-beta.db`. If the dashboard can't make them (it isn't running, or keeps restarting), `install.sh` makes them on this machine instead, and if it can't make them at all it stops before updating (`--no-backup` goes ahead anyway). The newest 5 of each are kept, plus the newest from each of the last 5 versions and from each channel, so the last backup from before you tried a beta stays. They live on the same machine, so for a copy that survives losing it, copy `data/` and `.env` somewhere else now and then (stop it first with `docker compose stop` for a consistent copy, then `docker compose start`).
 
-To restore, from the `wattsmypower` folder, using the pair of backups from the same time:
+`bash install.sh --rollback` puts back the backup from before the last update (see **Going back**). To restore another by hand, from the `wattsmypower` folder, using the pair of backups from the same time:
 
 ```bash
 docker compose stop
 # Remove the databases' journals first: left beside a restored database, SQLite would replay them into it.
 rm -f data/wattsmypower.db-wal data/wattsmypower.db-shm data/collector.db-wal data/collector.db-shm
-cp data/backups/wattsmypower-20261010-093000.db data/wattsmypower.db
-cp data/backups/collector-20261010-093000.db data/collector.db
+cp data/backups/wattsmypower-20261010-093000-2026.10.9-beta.db data/wattsmypower.db
+cp data/backups/collector-20261010-093000-2026.10.9-beta.db data/collector.db
 docker compose start
 ```
 
@@ -245,15 +249,9 @@ docker compose start
 
 ### Removing it
 
-On Linux or a Mac, from the `wattsmypower` folder (copy `data/` and `.env` somewhere else first if you want to keep your history; this deletes them):
+`bash install.sh --uninstall` stops it, removes its containers and images, and removes the cron job. Your data, backups and `.env` stay in the folder: copy anything you want to keep, then delete the folder yourself (`cd .. && rm -rf wattsmypower`, with `sudo` if it says permission denied). Docker itself is left installed.
 
-```bash
-docker compose down --rmi local     # stop it, and remove its containers and the images it built
-crontab -l | grep -v 'WattsMyPower: updates from the dashboard' | crontab -   # stop updating from the dashboard
-cd .. && rm -rf wattsmypower        # its folder, with the databases and settings (sudo if it says permission denied)
-```
-
-Docker itself is left installed. On Windows, see [Windows](#windows).
+On Windows, also remove the scheduled task and firewall rule (`Unregister-ScheduledTask WattsMyPower` and `Remove-NetFirewallHyperVRule -Name WattsMyPower`, in PowerShell as administrator); `wsl --unregister WattsMyPower` then deletes the whole distribution, data included. See [Windows](#windows).
 
 > **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
