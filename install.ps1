@@ -8,7 +8,9 @@
 #   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1))) -Channel stable
 #
 # It asks to run as administrator, then:
-#   - installs WSL if it's missing (that needs a restart: it carries on by itself after you sign in)
+#   - installs WSL if it's missing, with the virtualization it needs: the Virtual Machine Platform feature and
+#     Windows' hypervisor, or, if it's off in the PC's firmware, a restart into the firmware settings to turn it on
+#     (these need a restart, which it does after a minute's warning: it carries on by itself after you sign in)
 #   - creates a WSL distribution called WattsMyPower (Ubuntu 24.04) with systemd, so Docker runs as a service
 #   - turns on WSL's mirrored networking, so the dashboard is at this PC's own address
 #   - runs install.sh in it, which installs Docker and WattsMyPower (time zone from Windows, port 8080)
@@ -18,8 +20,9 @@
 # Run it again to update. Everything else is done inside the distribution: wsl -d WattsMyPower
 # (the app is in ~/wattsmypower; see the README's Everyday use).
 
+# No [ValidateSet] here: piped into iex, this block runs as a plain assignment in the caller's session, where
+# the attribute rejects the empty default ("The attribute cannot be added because variable Channel ...").
 param(
-    [ValidateSet('nightly', 'beta', 'stable')]
     [string]$Channel = ''
 )
 
@@ -31,6 +34,7 @@ function Install-WattsMyPower {
     $url = 'https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1'
     $installSh = 'https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh'
     $distro = 'WattsMyPower'
+    $resume = 'WattsMyPower setup'  # the one-off task that carries on after a restart
     $image = 'Ubuntu-24.04'
     $wslVm = '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'  # the Hyper-V firewall's ID for WSL
     $wsl = Join-Path $env:windir 'System32\wsl.exe'
@@ -53,6 +57,10 @@ function Install-WattsMyPower {
         Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoExit -ExecutionPolicy Bypass -Command $again"
         return
     }
+    # Carrying on after a restart: it's done its job (and so has an older version's RunOnce entry).
+    Unregister-ScheduledTask -TaskName $resume -Confirm:$false -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WattsMyPower' `
+        -ErrorAction SilentlyContinue
     $build = [int](Get-CimInstance Win32_OperatingSystem).BuildNumber
     if ($build -lt 22621) {
         Fail ('WattsMyPower needs Windows 11 22H2 or later on Windows (for WSL''s mirrored networking, which lets ' +
@@ -60,17 +68,88 @@ function Install-WattsMyPower {
               'Linux machine instead (see the README).')
     }
 
-    # ------------------------------------------------------------ WSL
-    $vmp = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
-    if ($vmp.State -ne 'Enabled') {
+    # ------------------------------------------------------------ WSL, and the virtualization it needs
+    # WSL 2 runs Linux in a small virtual machine. That needs the Virtual Machine Platform feature, virtualization
+    # turned on in the PC's firmware (BIOS/UEFI), and Windows starting its hypervisor at boot. None of them take
+    # effect without a restart, so this sorts out everything it can first, then restarts once and carries on.
+    function RestartAndCarryOn([string]$why, [switch]$Firmware) {
+        # After the restart, a one-off task runs this again as administrator once you sign in, without asking
+        # again (30 seconds in, so the network is up). It removes itself when it runs.
+        $me = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoExit -ExecutionPolicy Bypass -Command $again"
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $me
+        $trigger.Delay = 'PT30S'
+        $principal = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Highest
+        Register-ScheduledTask -TaskName $resume -Description 'Carries on setting up WattsMyPower after a restart.' `
+            -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+        Say $why
+        Info 'After you sign in again, this carries on by itself in a minute or so.'
+        if ($Firmware) {
+            Read-Host '  Press Enter to restart into them' | Out-Null
+            shutdown.exe /r /fw /t 0  # straight into the UEFI settings
+            if ($LASTEXITCODE -eq 0) { return }
+            Info ('This PC can''t restart straight into its firmware settings. As it starts, press the key it shows ' +
+                  'for Setup (often F2, F10, Del or Esc).')
+            Read-Host '  Press Enter to restart' | Out-Null
+            Restart-Computer
+            return
+        }
+        Info 'Restarting in 60 seconds: save anything you have open. (To restart later yourself instead: shutdown /a)'
+        shutdown.exe /r /t 60 /c 'Restarting to finish setting up WattsMyPower. It carries on by itself after you sign in.'
+    }
+    # A change to how Windows boots, or to the firmware settings, can make BitLocker ask for its recovery key.
+    # Pausing it until the next restart avoids that; it turns itself back on after.
+    function PauseBitLockerOnce {
+        $volume = try { Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop } catch { $null }  # not on every edition
+        if ($volume -and $volume.ProtectionStatus -eq 'On') {
+            Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 1 | Out-Null
+            Info 'Paused BitLocker until the next restart, so it doesn''t ask for its recovery key.'
+        }
+    }
+
+    $restart = $false
+    $vmp = (Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State
+    if ($vmp -notin 'Enabled', 'EnablePending') {
         Say 'Installing WSL'
         & $wsl --install --no-distribution
         if ($LASTEXITCODE -ne 0) { Fail 'WSL could not be installed (see above).' }
-        Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WattsMyPower' `
-            -Value "powershell.exe -NoExit -ExecutionPolicy Bypass -Command $again"
-        Say 'Windows needs to restart to finish installing WSL.'
-        Info 'After you sign in again, this carries on by itself (approve the administrator prompt).'
-        if ((Read-Host '  Restart now? [Y/n]') -notmatch '^[Nn]') { Restart-Computer }
+        # Normally done by wsl --install already; this makes sure of it.
+        Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart | Out-Null
+        $restart = $true
+    } elseif ($vmp -eq 'EnablePending') {
+        $restart = $true  # turned on, but Windows hasn't restarted since
+    }
+
+    $computer = Get-CimInstance Win32_ComputerSystem
+    if (-not $computer.HypervisorPresent) {
+        # Windows only reports the firmware setting while its hypervisor isn't running, as here.
+        $firmwareOff = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled -eq $false
+        if ($firmwareOff -and $computer.Model -match 'Virtual|VMware|Parallels|KVM|QEMU') {
+            Fail ('This Windows is itself a virtual machine without nested virtualization, which WSL 2 needs. Turn ' +
+                  'on nested virtualization for it in the program running it, then run this again.')
+        }
+        # Turned off at boot: some games' anti-cheat and older VirtualBox or VMware ask for that.
+        $launch = bcdedit.exe /enum '{current}' | Select-String 'hypervisorlaunchtype\s+(\S+)' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value }
+        if ($launch -and $launch -ne 'Auto') {
+            Info 'Windows is set not to start its hypervisor, which WSL needs. Setting hypervisorlaunchtype to Auto.'
+            PauseBitLockerOnce
+            $result = bcdedit.exe /set '{current}' hypervisorlaunchtype auto 2>&1
+            if ($LASTEXITCODE -ne 0) { Fail "It could not be changed: $result" }
+            $restart = $true
+        }
+        if ($firmwareOff) {
+            # Windows can't change this one. Restarting into the firmware settings also finishes anything above.
+            PauseBitLockerOnce
+            RestartAndCarryOn -Firmware ('Virtualization is turned off in this PC''s firmware (BIOS/UEFI) ' +
+                'settings, and WSL needs it. Restart into them, turn it on (usually under Advanced or CPU ' +
+                'Configuration, called Intel Virtualization Technology or VT-x, AMD-V or SVM Mode), then save ' +
+                'and exit.')
+            return
+        }
+    }
+    if ($restart) {
+        RestartAndCarryOn 'Windows needs to restart to finish setting up WSL.'
         return
     }
     Say 'Updating WSL'
@@ -173,6 +252,10 @@ function Install-WattsMyPower {
 }
 
 try {
+    $Channel = "$Channel".Trim().ToLower()
+    if ($Channel -and $Channel -notin 'nightly', 'beta', 'stable') {
+        throw "-Channel must be nightly, beta or stable (not '$Channel')."
+    }
     Install-WattsMyPower -Self $WmpSelf -Channel $Channel
 } catch {
     Write-Host ''
