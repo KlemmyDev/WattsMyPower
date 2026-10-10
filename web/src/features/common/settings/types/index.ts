@@ -61,7 +61,7 @@ export type Settings = {
   battery_places: ("wall" | "garage")[];
   /**
    * Cost and warranty (Manage → System): what the system cost in dollars, and when it went in, for payback on Bills;
-   * when the battery went in if later, and its warranty in years and in MWh delivered, for Health. 0 = not set. Dates
+   * when the battery went in if later, and its warranty in years and in MWh delivered, for Battery. 0 = not set. Dates
    * are unix seconds at local midnight.
    */
   system_cost: number;

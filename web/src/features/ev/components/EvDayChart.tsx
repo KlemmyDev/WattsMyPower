@@ -116,7 +116,7 @@ function ChargeBars({
   onRange: (from: number, to: number) => void;
 }) {
   const { hover: h, width, plot, bar } = useBarHover();
-  const range = useDragRange(start, end, onRange);
+  const range = useDragRange(start, end, onRange, { label: "Charging power through the day, from solar and the grid" });
   const size = slotFor(end - start);
   const bars = slots(power, start, end, size);
   const top = Math.max(0.25, ...bars.map((s) => s.solar + s.grid)) * 1.08;
@@ -125,7 +125,12 @@ function ChargeBars({
   const s = h != null && !range.dragging ? bars[h] : null;
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="relative h-24 cursor-crosshair touch-pan-y overflow-x-clip" {...plot} {...range.handlers}>
+      <div
+        className="relative h-24 cursor-crosshair touch-pan-y overflow-x-clip"
+        {...plot}
+        {...range.handlers}
+        {...range.keys}
+      >
         <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-fg/5" />
         <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-fg/5" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-fg/12" />
@@ -282,6 +287,7 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
         </div>
       </div>
       <TimeLine
+        label="Charge level through the day"
         points={points}
         start={from}
         end={to}

@@ -1,5 +1,5 @@
 """
-Longer-term figures for the Health page (the insights feature).
+Longer-term figures for the Solar and Battery pages (the insights feature).
 
 Everything comes from our own history (5-minute rollups and the inverter's
 daily counters) plus the inverter's lifetime counters in the latest snapshot.

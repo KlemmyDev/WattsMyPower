@@ -227,19 +227,21 @@ class BillsService:
                 "so_far": {**totals(so_far), "days": len(so_far), "meter_days": meter_days(so_far)},
                 "expected": expected(cur_s, cur_e),
             },
+            # At full precision (as /api/costs has them), not to the cent: added up, the days then come to
+            # the same as the bill so far, rather than drifting a few cents from it in rounding.
             "days": [
                 {
                     "date": d["date"],
-                    "net_cost": round(d["net_cost"], 2),
-                    "import_kwh": round(d["import_kwh"], 2),
-                    "export_kwh": round(d["export_kwh"], 2),
-                    "home_kwh": round(d["home_kwh"], 2),
+                    "net_cost": round(d["net_cost"], 4),
+                    "import_kwh": round(d["import_kwh"], 3),
+                    "export_kwh": round(d["export_kwh"], 3),
+                    "home_kwh": round(d["home_kwh"], 3),
                     "pv_kwh": pv.get(d["date"]),
-                    "import_cost": round(d["import_cost"], 2),
-                    "feed_in_credit": round(d["feed_in_credit"], 2),
-                    "supply": round(d["supply"], 2),
+                    "import_cost": round(d["import_cost"], 4),
+                    "feed_in_credit": round(d["feed_in_credit"], 4),
+                    "supply": round(d["supply"], 4),
                     "bands": [
-                        {"import_kwh": round(b["import_kwh"], 2), "cost": round(b["cost"], 2)} for b in d["bands"]
+                        {"import_kwh": round(b["import_kwh"], 3), "cost": round(b["cost"], 4)} for b in d["bands"]
                     ],
                     "source": d["source"],
                     "partial": d["date"] == today.isoformat(),

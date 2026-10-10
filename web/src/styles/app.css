@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./fonts.css";
 
 /* For the odd place the light theme needs more than a token swap, e.g. light:bg-canvas. */
 @custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));

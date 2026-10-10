@@ -40,7 +40,6 @@ export const DEFAULT_HOUSE: HouseOptions = {
   cars: [],
 };
 
-export const MAX_BATTERIES = 3;
 export const MAX_INVERTERS = 3;
 export const MAX_OUTSIDE = 2; // car spots outside, beside the outermost wall
 
