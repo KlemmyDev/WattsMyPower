@@ -46,8 +46,8 @@ function Storage() {
         visual={<StorageVisual report={report.data} measuring={measure.isPending} onMeasure={() => measure.mutate()} />}
       >
         <StorageFacts report={report.data} />
-        <BackupCard report={report.data} />
       </SettingsSplit>
+      <BackupCard report={report.data} />
       <h2 className="px-1 pt-3 text-[13px] leading-5 font-semibold tracking-[0.08em] text-ink-muted uppercase">
         Table by table
       </h2>

@@ -161,95 +161,131 @@ function UpdatesBody() {
   return (
     <SettingsSplit
       visual={
-        <SettingsSection
-          id="h-update"
-          title={headline}
-          sub={[
-            s?.available ? "A newer version is on your channel." : "WattsMyPower is published on GitHub.",
-            s?.checked_at ? `Checked ${when(s.checked_at)}.` : s?.enabled === false ? "Checking is off." : null,
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aside={
-            <div className="flex flex-wrap items-center gap-2">
-              {s?.latest && (
-                <a href={changesUrl(s)} target="_blank" rel="noreferrer" className={buttonClass("muted-link", "sm")}>
-                  See what's changed
-                </a>
-              )}
-              <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending || underWay}>
-                {check.isPending ? "Checking…" : "Check now"}
-              </Button>
-            </div>
-          }
-        >
-          {s && <VersionTrack s={s} color={color} />}
-          {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
-          {s?.unreleased && !channel.isPending && (
-            <Notice tone="info">
-              Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly
-              has every change as it's merged.
-            </Notice>
-          )}
+        <>
+          <SettingsSection
+            id="h-update"
+            title={headline}
+            sub={[
+              s?.available ? "A newer version is on your channel." : "WattsMyPower is published on GitHub.",
+              s?.checked_at ? `Checked ${when(s.checked_at)}.` : s?.enabled === false ? "Checking is off." : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aside={
+              <div className="flex flex-wrap items-center gap-2">
+                {s?.latest && (
+                  <a href={changesUrl(s)} target="_blank" rel="noreferrer" className={buttonClass("muted-link", "sm")}>
+                    See what's changed
+                  </a>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => check.mutate()}
+                  disabled={check.isPending || underWay}
+                >
+                  {check.isPending ? "Checking…" : "Check now"}
+                </Button>
+              </div>
+            }
+          >
+            {s && <VersionTrack s={s} color={color} />}
+            {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
+            {s?.unreleased && !channel.isPending && (
+              <Notice tone="info">
+                Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly
+                has every change as it's merged.
+              </Notice>
+            )}
 
-          {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
-          {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
-            <Progress s={s} restarting={status.isError || updated} />
-          )}
-          {!underWay && s?.install.state === "failed" && (
-            <Notice className="flex flex-col gap-2">
-              <span>The update didn't finish. {s.install.error}</span>
-              <Log lines={s.install.log} />
-            </Notice>
-          )}
-          {!underWay && s?.install.state === "expired" && (
-            <Notice tone="warn">
-              The update was asked for while the updater wasn't running, so it was dropped. Try again.
-            </Notice>
-          )}
+            {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
+            {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
+              <Progress s={s} restarting={status.isError || updated} />
+            )}
+            {!underWay && s?.install.state === "failed" && (
+              <Notice className="flex flex-col gap-2">
+                <span>The update didn't finish. {s.install.error}</span>
+                <Log lines={s.install.log} />
+              </Notice>
+            )}
+            {!underWay && s?.install.state === "expired" && (
+              <Notice tone="warn">
+                The update was asked for while the updater wasn't running, so it was dropped. Try again.
+              </Notice>
+            )}
 
-          {s?.move && !underWay && !updated && (
-            <>
-              {s.install.ready ? (
-                confirming ? (
-                  <div className="flex animate-pop flex-col gap-3 rounded-2xl bg-canvas/60 p-5 text-sm light:bg-canvas">
-                    <span className="font-semibold">
-                      {older
-                        ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
-                        : `Update to ${newerWords(s)} now?`}
-                    </span>
-                    {older && (
-                      <span className="text-pretty text-ink-muted">
-                        It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in
-                        the database, for when it's updated again.
+            {s?.move && !underWay && !updated && (
+              <>
+                {s.install.ready ? (
+                  confirming ? (
+                    <div className="flex animate-pop flex-col gap-3 rounded-2xl bg-canvas/60 p-5 text-sm light:bg-canvas">
+                      <span className="font-semibold">
+                        {older
+                          ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
+                          : `Update to ${newerWords(s)} now?`}
                       </span>
-                    )}
-                    <span className="text-pretty text-ink-muted">
-                      It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away
-                      for a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
-                        {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
-                        Cancel
+                      {older && (
+                        <span className="text-pretty text-ink-muted">
+                          It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in
+                          the database, for when it's updated again.
+                        </span>
+                      )}
+                      <span className="text-pretty text-ink-muted">
+                        It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is
+                        away for a minute while it restarts, and then this page reloads. Your inverters keep being
+                        recorded.
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
+                          {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
+                        {older ? `Go back to v${s.latest!.version}` : "Update now"}
                       </Button>
                     </div>
-                  </div>
+                  )
                 ) : (
-                  <div>
-                    <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
-                      {older ? `Go back to v${s.latest!.version}` : "Update now"}
-                    </Button>
-                  </div>
-                )
-              ) : (
-                <HowToUpdate s={s} />
-              )}
-            </>
-          )}
-        </SettingsSection>
+                  <HowToUpdate s={s} />
+                )}
+              </>
+            )}
+          </SettingsSection>
+          <SettingsSection id="h-updates" title="Automatic checks">
+            <OptionList>
+              <OptionRow
+                label="Check for updates"
+                help="Every few hours WattsMyPower asks GitHub whether there's a newer version on your channel."
+                icon="clock"
+                color={COLOR.brand}
+              >
+                <Switch
+                  on={on}
+                  disabled={save.isPending || !s}
+                  label="Check for updates"
+                  onChange={(v) =>
+                    save.mutate(
+                      { update_check: v ? 1 : 0 },
+                      {
+                        onSuccess: () => {
+                          qc.invalidateQueries({ queryKey: updatesQuery.queryKey });
+                          toast(v ? "Checking for updates." : "Not checking for updates.");
+                        },
+                        onError: (e) => toast(saveSettingsError(e)),
+                      },
+                    )
+                  }
+                />
+              </OptionRow>
+            </OptionList>
+          </SettingsSection>
+        </>
       }
     >
       {s && following && (
@@ -268,35 +304,6 @@ function UpdatesBody() {
           />
         </SettingsSection>
       )}
-
-      <SettingsSection id="h-updates" title="Automatic checks">
-        <OptionList>
-          <OptionRow
-            label="Check for updates"
-            help="Every few hours WattsMyPower asks GitHub whether there's a newer version on your channel."
-            icon="clock"
-            color={COLOR.brand}
-          >
-            <Switch
-              on={on}
-              disabled={save.isPending || !s}
-              label="Check for updates"
-              onChange={(v) =>
-                save.mutate(
-                  { update_check: v ? 1 : 0 },
-                  {
-                    onSuccess: () => {
-                      qc.invalidateQueries({ queryKey: updatesQuery.queryKey });
-                      toast(v ? "Checking for updates." : "Not checking for updates.");
-                    },
-                    onError: (e) => toast(saveSettingsError(e)),
-                  },
-                )
-              }
-            />
-          </OptionRow>
-        </OptionList>
-      </SettingsSection>
     </SettingsSplit>
   );
 }
