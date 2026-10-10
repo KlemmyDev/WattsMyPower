@@ -25,7 +25,7 @@ The other SH hybrids in [Supported inverters](#supported-inverters) share the SH
 
 **Known limitations:**
 
-- Sungrow inverters (one SH hybrid, plus an optional SG-D string inverter) are the ones used every day. GoodWe's ET hybrids and DT string inverters are read from their documented registers but are untested. Other brands need a driver (see [Supported inverters](#supported-inverters)).
+- Sungrow inverters (one SH hybrid, plus an optional SG-D string inverter) are the ones used every day. GoodWe's ET hybrids and DT string inverters, and Fronius (GEN24, or a Symo or Primo with a Smart Meter), are read from what their makers document but are untested. Other brands need a driver (see [Supported inverters](#supported-inverters)).
 - It's served over plain HTTP with one household account. Keep it on your home network; don't port-forward it.
 - Only one app should talk to the inverter over Modbus at a time (not Home Assistant or SunGather as well).
 - The WiNet-S2 sometimes repeats the same readings for a few minutes; those are left out, so charts show a short gap.
@@ -353,10 +353,14 @@ Each inverter is handled by a driver: one for the hybrid (with the battery and g
 | `sungrow.sg_d` | second inverter | Sungrow SG-D string inverters (tested on an SG5K-D) | Sungrow's encrypted Modbus through the Wi-Fi dongle |
 | `goodwe.et` | hybrid | GoodWe's ET family of hybrids: ET, EH, BT and BH, and their Plus and G2 versions (e.g. GW5K-EH, GW10K-ET). **Untested** | Modbus over UDP port 8899 through the Wi-Fi or LAN dongle (newer LAN dongles also take Modbus TCP on 502) |
 | `goodwe.dt` | second inverter | GoodWe's DT family of string inverters: D-NS, XS, DT, MS and SDT (e.g. GW5000D-NS, GW3000-XS). **Untested** | Modbus over UDP port 8899 through the Wi-Fi or LAN dongle |
+| `fronius.site` | hybrid | A Fronius GEN24 or GEN24 Plus (Primo or Symo, with its battery if it has one), or a Datamanager inverter (Symo, Primo, Symo Hybrid), with a Fronius Smart Meter at the grid connection. **Untested** | Fronius' Solar API (JSON over HTTP, port 80). On a GEN24 it's off from the factory: turn it on in the inverter's web page under **Communication → Solar API** |
+| `fronius.inverter` | second inverter | Any one Fronius inverter (Primo, Symo, Galvo, Eco, GEN24) as an AC-coupled second system. **Untested** | Fronius' Solar API |
 
 A Sungrow hybrid that isn't in that list but reports a hybrid's device type (a newer model) can still be connected: it's shown as an untested SH hybrid with its type code, read with the same registers. If yours works (or doesn't), an issue saying its model and type code gets it named. Batteries aren't read on their own, so any battery behind a supported inverter works.
 
 The GoodWe drivers follow the register maps of the [`goodwe`](https://github.com/marcelblijleven/goodwe) library (MIT), which Home Assistant's GoodWe integration uses, but haven't been tried on a real GoodWe here. If you have one, an issue saying how it reads (and what's off) gets it checked: the raw registers are kept, so a fix applies to everything already recorded. GoodWe's older ES/EM hybrids speak a different protocol and aren't supported yet.
+
+Fronius is read through its Solar API, from the responses of real GEN24 and Symo systems that Home Assistant's Fronius integration tests with, but not yet on a Fronius here. A GEN24 keeps no daily counters and the Solar API none for the battery, so on those days solar comes from the lifetime counter and the battery's charge and discharge from its power, added up. A Fronius without a Smart Meter can only be a second inverter, as there's nothing to say what the house uses.
 
 Since firmware from late 2024, Sungrow hybrids report battery power as a signed value; earlier firmware reports it unsigned. Both are read correctly: the size comes from the register, the direction from the inverter's power-flow flags.
 
@@ -364,7 +368,7 @@ A driver has two halves with the same id. The collector's reader (`collector/dev
 
 ### Connecting inverters
 
-**Manage → Integrations → Sungrow → Add an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502 or replying to a GoodWe hello on UDP port 8899, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle, and GoodWe's ET and DT addresses on 8899. Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
+**Manage → Integrations → Sungrow → Add an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502, replying to a GoodWe hello on UDP port 8899, or listening on port 80, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle; GoodWe's ET and DT addresses on 8899; Fronius' Solar API on port 80 (a Fronius with a Smart Meter is offered as the main inverter, one without as a second). Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
 
 The collector does the scanning and stores the connected inverters in `data/collector.db`, since it's the only part that talks to them and keeps recording while the dashboard updates. Changes apply from its next poll, without a restart. Inverters already connected aren't probed during a scan, because the WiNet-S2 copes badly with a second Modbus client. Installs from before this kept their inverters in `.env` (`INVERTER_HOST`, `PV2_HOST`): the first time the updated collector starts, it moves them into its database, once, and they're managed in the dashboard from then on.
 

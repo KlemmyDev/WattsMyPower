@@ -2,7 +2,7 @@
 Finding inverters on the home network, for connecting them in the dashboard (Manage → Integrations).
 
 A scan checks every address in a private network (a /22 or smaller) on each port an inverter listens on (Modbus TCP
-502; GoodWe's UDP 8899, where an address "answers" when it replies to a hello: see udp_hello), then asks each
+502; GoodWe's UDP 8899, where an address "answers" when it replies to a hello: see udp_hello; Fronius' HTTP 80), then asks each
 address that answers what it is, with the probe of every reader for that port in turn (drivers.READERS).
 What a probe reads comes back as raw words, like every other reading: the API decodes them into a
 model and serial number. Addresses of devices already connected aren't probed, as the WiNet-S2
@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable, Collection, Mapping
 from contextlib import suppress
 from typing import Any
 
-from collector.devices import Words
+from collector.devices import Values
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ CONCURRENCY = 64
 MAX_HOSTS = 1024  # a /22: anything bigger isn't a home network
 
 # (host, port) -> (driver, words) for the first reader whose probe recognised it, or None.
-Probe = Callable[[str, int], tuple[str, Words] | None]
+Probe = Callable[[str, int], tuple[str, Values] | None]
 # (host, port) -> whether anything answers there.
 IsOpen = Callable[[str, int], Awaitable[bool]]
 

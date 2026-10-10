@@ -18,7 +18,7 @@ from typing import Annotated, Any, cast
 from fastapi import APIRouter, Body, Depends, FastAPI, Header, HTTPException, Request, Response
 
 from collector.config import Config
-from collector.devices import ROLES, Device, DeviceConfig, Settable, Words, WriteRefused
+from collector.devices import ROLES, Device, DeviceConfig, Settable, Values, Words, WriteRefused
 from collector.devices.drivers import READERS, build_device, env_devices
 from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_probe
 from collector.poller import DeviceStatus, Poller
@@ -154,7 +154,7 @@ async def put_device(request: Request, role: str, body: Annotated[dict[str, Any]
     same = current is not None and (current.driver, current.host, current.port, current.unit) == (
         device.driver, device.host, device.port, device.unit,
     )  # fmt: skip
-    words: Words = {}
+    words: Values = {}
     if body.get("check", True) and not same:  # only settings changed: no need to bother the inverter
         found = await asyncio.to_thread(request.app.state.check, device)
         if found is None:
@@ -283,7 +283,7 @@ async def healthz(request: Request) -> dict[str, bool]:
 
 def _probes(
     site: MockSite | None,
-) -> tuple[Callable[[str, int], tuple[str, Words] | None], Callable[[DeviceConfig], Words | None]]:
+) -> tuple[Callable[[str, int], tuple[str, Values] | None], Callable[[DeviceConfig], Values | None]]:
     """(what a scan asks each address: the first reader that recognises it; whether a device to
     connect answers its driver). In mock mode, the fake inverters answer at MOCK_HOSTS."""
     if site is not None:
@@ -291,11 +291,11 @@ def _probes(
         for k, r in READERS.items():  # the mocks are Sungrows: the first reader for each role
             drivers.setdefault(r.role, k)
 
-        def mock_scan(host: str, port: int) -> tuple[str, Words] | None:
+        def mock_scan(host: str, port: int) -> tuple[str, Values] | None:
             hit = mock_probe(site, host)
             return (drivers[hit[0]], hit[1]) if hit else None
 
-        def mock_check(d: DeviceConfig) -> Words | None:
+        def mock_check(d: DeviceConfig) -> Values | None:
             hit = mock_probe(site, d.host)
             if d.host == "mock":
                 return {}
@@ -303,7 +303,7 @@ def _probes(
 
         return mock_scan, mock_check
 
-    def scan(host: str, port: int) -> tuple[str, Words] | None:
+    def scan(host: str, port: int) -> tuple[str, Values] | None:
         for driver, r in READERS.items():
             if r.port == port and (words := r.probe(host, port, r.unit)) is not None:
                 return driver, words
@@ -320,7 +320,7 @@ def create_app(
     poll: bool = True,
     build: Callable[[DeviceConfig], Device] | None = None,
     scanner: Scanner | None = None,
-    check: Callable[[DeviceConfig], Words | None] | None = None,
+    check: Callable[[DeviceConfig], Values | None] | None = None,
 ) -> FastAPI:
     """The feed and its poller. The devices are the ones connected in the database (or mocks), built
     with `build`; passing `hybrid` (and `pv2`) reads those instead until devices change. `poll=False`

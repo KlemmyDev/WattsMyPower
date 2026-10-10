@@ -27,6 +27,9 @@ DAILY_COLS = [
     "daily_pv2",
 ]
 KWH_PER_W_ROLLUP = ROLLUP / 3.6e6  # one rollup of 1 W, in kWh
+# Daily figures worked out from lifetime counters or power when the inverter has no daily counter for them (`daily`);
+# a second inverter's (daily_pv2) is filled in along with them.
+WORKED_OUT = ("daily_pv", "daily_charge", "daily_discharge")
 # How long after midnight the inverter's daily counters are trusted to have reset (see `daily`).
 SINCE_MIDNIGHT = 600
 DEFAULT_FIELDS = ["pv_power", "load_power", "grid_power", "battery_power", "battery_soc"]
@@ -154,6 +157,12 @@ class ReadingsRepository:
             for c, v in zip(DAILY_COLS, values, strict=True):
                 if day[c] is None and v is not None:
                     day[c] = round(v, 2)
+        if any(day[c] is None for day in days.values() for c in WORKED_OUT):
+            for date, worked in self.worked_out(start, end).items():
+                if (missing := days.get(date)) is not None:
+                    for c, v in worked.items():
+                        if missing[c] is None and v is not None:
+                            missing[c] = v
         out = []
         for date, day in days.items():
             imp, exp = grid.get(date, (None, None))
@@ -162,6 +171,50 @@ class ReadingsRepository:
             day["daily_export"] = exp if exp is not None else day["daily_export"]
             out.append({"date": date, **day})
         return out
+
+    def worked_out(self, start: int, end: int) -> dict[str, dict[str, float | None]]:
+        """
+        A day's solar, charge and discharge (kWh) for inverters that don't count them per day: a Fronius GEN24 has no
+        daily counters at all, and Fronius' Solar API no battery counters. Solar (each system's, too) is how far its
+        lifetime counter moved over the day, from the last reading before it; without one, its power added up over
+        the day's rollups, as is the battery's charge and discharge. Only fills in what the counters left out.
+        """
+        cols = "ts, pv_power, battery_power, total_pv, total_pv2, pv2_power, import_id"
+        with self.db.reading() as conn:
+            prev = conn.execute(f"SELECT {cols} FROM samples_5m WHERE ts < ? ORDER BY ts DESC LIMIT 1", (start,))
+            rows = [*prev.fetchall(), *conn.execute(f"SELECT {cols} FROM samples_5m WHERE ts >= ? AND ts < ? ORDER BY ts", (start, end))]  # fmt: skip
+        # Per day: [last total_pv before it, last total_pv in it, the same for pv2, pv kWh, pv2 kWh, charge, discharge,
+        # whether there's a battery]
+        days: dict[str, list[float | None]] = {}
+        last: list[float | None] = [None, None]  # the latest lifetime counters seen (pv, pv2)
+        for ts, pv, bp, total, total2, pv2, _ in rows:
+            if ts >= start:
+                date = time.strftime("%Y-%m-%d", time.localtime(ts))
+                d = days.setdefault(date, [last[0], None, last[1], None, 0.0, 0.0, 0.0, 0.0, 0.0])
+                d[1] = total if total is not None else d[1]
+                d[3] = total2 if total2 is not None else d[3]
+                for i, w in ((4, pv), (5, pv2)):
+                    d[i] = (d[i] or 0.0) + max(w or 0.0, 0.0) * KWH_PER_W_ROLLUP
+                d[6] = (d[6] or 0.0) + max(-(bp or 0.0), 0.0) * KWH_PER_W_ROLLUP
+                d[7] = (d[7] or 0.0) + max(bp or 0.0, 0.0) * KWH_PER_W_ROLLUP
+                d[8] = 1.0 if bp is not None else d[8]
+            last = [total if total is not None else last[0], total2 if total2 is not None else last[1]]
+
+        def moved(before: float | None, after: float | None, by_power: float | None) -> float | None:
+            step = after - before if before is not None and after is not None else None
+            if step is not None and 0 <= step <= MAX_W / 1000 * 24:
+                return round(step, 2)
+            return round(by_power, 2) if by_power is not None else None
+
+        return {
+            date: {
+                "daily_pv": moved(b, a, pv),
+                "daily_pv2": moved(b2, a2, pv2) if a2 is not None or (pv2 or 0) > 0 else None,
+                "daily_charge": round(ch or 0.0, 2) if battery else None,
+                "daily_discharge": round(dis or 0.0, 2) if battery else None,
+            }
+            for date, (b, a, b2, a2, pv, pv2, ch, dis, battery) in days.items()
+        }
 
     def metered(self, start: int, end: int) -> dict[str, tuple[float | None, float | None]]:
         """

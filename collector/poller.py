@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from collector.config import Config
-from collector.devices import Device, DeviceConfig, RawReading, Words
+from collector.devices import Device, DeviceConfig, RawReading, Values, Words
 from collector.store import PollRow, Store
 
 log = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class DeviceStatus:
     last_success: float | None = None
     error: str | None = None
     # The most recent words read from each info register (kept across polls that don't read them).
-    info_input: Words = field(default_factory=dict)
+    info_input: Values = field(default_factory=dict)
     info_holding: Words = field(default_factory=dict)
     info_at: float | None = None  # when info was last read successfully
 

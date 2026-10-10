@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from collector.config import Config
-from collector.devices import Device, DeviceConfig, Words
+from collector.devices import Device, DeviceConfig, Values
+from collector.devices.fronius.solar_api import PORT as FRONIUS_PORT
+from collector.devices.fronius.solar_api import InverterDevice, SiteDevice
 from collector.devices.goodwe.dt import DtDevice
 from collector.devices.goodwe.et import EtDevice
 from collector.devices.goodwe.protocol import UDP_PORT, rtu_request
@@ -27,7 +29,7 @@ class Reader:
     role: str  # the role a device read this way has (see collector.devices.ROLES)
     build: Callable[[str, int, int], Device]  # (host, port, unit) -> the device
     # (host, port, unit) -> the words that identify it, or None if what's there isn't this kind of device
-    probe: Callable[[str, int, int], Words | None]
+    probe: Callable[[str, int, int], Values | None]
     port: int = 502  # where it usually listens: what a scan checks, and the port when none is given
     unit: int = 1  # its usual Modbus unit
     udp: bool = False  # the port is a UDP one: there's no connection to try, so a scan sends `hello` to each address
@@ -47,6 +49,11 @@ READERS: dict[str, Reader] = {
     "goodwe.dt": Reader(
         "pv2", DtDevice, lambda h, p, u: DtDevice(h, p, u).probe(), UDP_PORT, DtDevice.default_unit,
         udp=True, hello=rtu_request(DtDevice.default_unit, *DtDevice.identity),
+    ),
+    # Fronius' Solar API (JSON over HTTP): a Fronius with a Smart Meter runs the site; any Fronius can be a second one.
+    "fronius.site": Reader("hybrid", SiteDevice, lambda h, p, u: SiteDevice(h, p, u, timeout=3).probe(), FRONIUS_PORT),
+    "fronius.inverter": Reader(
+        "pv2", InverterDevice, lambda h, p, u: InverterDevice(h, p, u, timeout=3).probe(), FRONIUS_PORT
     ),
 }  # fmt: skip
 

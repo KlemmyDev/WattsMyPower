@@ -25,6 +25,13 @@ longer read. Changes take effect from the next poll, without a restart.
 | `goodwe.et`     | `hybrid` | GoodWe ET/EH/BT/BH hybrids, Modbus over UDP 8899 (unit 0xF7) | (35100, 125), (36000, 45), (37000, 24) | (35000, 33)                                     |
 | `goodwe.dt`     | `pv2`    | GoodWe D-NS/XS/DT string inverters, Modbus over UDP 8899 (unit 0x7F) | (30001, 40), (30100, 73) | — (30001-30040 carry model, serial)                     |
 
+| `fronius.site`     | `hybrid` | Fronius GEN24, or a Datamanager inverter with a Smart Meter: Solar API, HTTP port 80 | power flow, Smart Meter, the inverter (unit = its device id), the battery | GetInverterInfo |
+| `fronius.inverter` | `pv2`    | any one Fronius inverter: Solar API, HTTP port 80 | the inverter's CommonInverterData | — (GetInverterInfo every poll) |
+
+Fronius isn't Modbus: its rows hold the figures its Solar API reported, by name and as reported (no scaling or
+units changed), e.g. `{"flow.P_PV": 2163.4, "flow.P_Grid": -812.0, "meter.EnergyReal_WAC_Plus_Absolute": 1247204.0}`.
+See `collector/devices/fronius/solar_api.py` for which are kept.
+
 GoodWe only has holding registers (function 0x03); as they hold its readings, they're stored under `input`. Its
 dongles answer Modbus RTU frames over UDP port 8899, or Modbus TCP when connected on port 502 (newer LAN dongles); a
 unit of 0 or 1 means the family's own address (0xF7 or 0x7F). See `collector/devices/goodwe/protocol.py`.
@@ -91,7 +98,7 @@ transaction, with the same `ts`, so readers never see half a poll.
   422 for a network that can't be scanned, 409 while a scan runs. `GET /v1/scan` reports progress:
   `{"running", "network", "started_at", "finished_at", "checked", "total", "error", "found": [{"host", "port",
   "driver", "input", "connected"?}]}`. `found` lists every address and port that answered: Modbus TCP port 502
-  open, or a reply on UDP 8899 to the GoodWe readers' hellos. `driver` is the first reader for that port whose probe
+  open, a reply on UDP 8899 to the GoodWe readers' hellos, or HTTP port 80 open (Fronius). `driver` is the first reader for that port whose probe
   recognised it (null if none did), with the words its probe read; addresses of connected devices are marked
   `connected` and not probed.
 - `GET /v1/storage`: the database measured, for the dashboard's Manage → Data. Reads every page, so it
