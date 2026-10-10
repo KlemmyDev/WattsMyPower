@@ -1,0 +1,355 @@
+{
+ "data": [
+  {
+   "incident_id": "INC 1115107991",
+   "outage_type": "UNPLANNED",
+   "incident_status": "NEW",
+   "customers_affected": 802,
+   "center_lat": -33.9402698014445,
+   "center_lng": 150.948225835709,
+   "polygon_geojson": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       150.95071,
+       -33.94762
+      ],
+      [
+       150.95067,
+       -33.9476
+      ],
+      [
+       150.93993,
+       -33.93143
+      ],
+      [
+       150.93993,
+       -33.9314
+      ],
+      [
+       150.94022,
+       -33.93084
+      ],
+      [
+       150.94025,
+       -33.93082
+      ],
+      [
+       150.94184,
+       -33.93117
+      ],
+      [
+       150.95119,
+       -33.93821
+      ],
+      [
+       150.95535,
+       -33.94544
+      ],
+      [
+       150.95534,
+       -33.94548
+      ],
+      [
+       150.95339,
+       -33.94736
+      ],
+      [
+       150.95071,
+       -33.94762
+      ]
+     ]
+    ]
+   },
+   "bbox_min_lat": -33.9475694497409,
+   "bbox_max_lat": -33.9308749300756,
+   "bbox_min_lng": 150.939978769523,
+   "bbox_max_lng": 150.955298109592,
+   "start_date_time": "2026-10-10T07:06:30.762+00:00",
+   "end_date_time": "1970-01-01T00:00:00+00:00",
+   "etr": "2026-10-10 13:30:00+00",
+   "cause": "None",
+   "sub_cause": "None",
+   "outage_cause": [
+    {
+     "sub": "None",
+     "main": "None"
+    }
+   ],
+   "cityname": "HAMMONDVILLE",
+   "cityname_list": [
+    "HAMMONDVILLE",
+    "MOOREBANK",
+    "PARRAMATTA"
+   ],
+   "cityname_count": 3,
+   "postcode": "2170",
+   "street_name": "RENTON AVE",
+   "materialized_at": "2026-10-10T07:54:36.006578+00:00"
+  },
+  {
+   "incident_id": "SP 2133023618",
+   "outage_type": "PLANNED",
+   "incident_status": "PREPARED",
+   "customers_affected": 419,
+   "center_lat": -35.0730405764688,
+   "center_lng": 150.687460676151,
+   "polygon_geojson": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       150.6926,
+       -35.07684
+      ],
+      [
+       150.69257,
+       -35.07687
+      ],
+      [
+       150.69173,
+       -35.07674
+      ],
+      [
+       150.68198,
+       -35.07244
+      ],
+      [
+       150.68068,
+       -35.07106
+      ],
+      [
+       150.68081,
+       -35.06985
+      ],
+      [
+       150.68083,
+       -35.06982
+      ],
+      [
+       150.68087,
+       -35.06981
+      ],
+      [
+       150.68123,
+       -35.06985
+      ],
+      [
+       150.6934,
+       -35.07257
+      ],
+      [
+       150.69342,
+       -35.0726
+      ],
+      [
+       150.69354,
+       -35.07503
+      ],
+      [
+       150.6926,
+       -35.07684
+      ]
+     ]
+    ]
+   },
+   "bbox_min_lat": -35.0768188599396,
+   "bbox_max_lat": -35.0698576602766,
+   "bbox_min_lng": 150.680726070147,
+   "bbox_max_lng": 150.693519299557,
+   "start_date_time": "2026-10-12T21:00:00+00:00",
+   "end_date_time": "2026-10-13T05:00:00+00:00",
+   "etr": "2026-10-13 05:00:00+00",
+   "cause": "Maintenance Work",
+   "sub_cause": "Maintenance Work",
+   "outage_cause": [
+    {
+     "sub": "Maintenance Work",
+     "main": "Maintenance Work"
+    }
+   ],
+   "cityname": "TOMERONG",
+   "cityname_list": [
+    "TOMERONG",
+    "VINCENTIA"
+   ],
+   "cityname_count": 2,
+   "postcode": "2540",
+   "street_name": "ANNE ST",
+   "materialized_at": "2026-10-10T07:54:36.006578+00:00"
+  },
+  {
+   "incident_id": "MMJ 003566",
+   "outage_type": "SINGLE_PREMISE",
+   "incident_status": "SUBMITTED",
+   "customers_affected": 31,
+   "center_lat": -33.8042826899275,
+   "center_lng": 150.689657780372,
+   "polygon_geojson": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       150.68971,
+       -33.80428
+      ],
+      [
+       150.6897,
+       -33.80431
+      ],
+      [
+       150.68968,
+       -33.80433
+      ],
+      [
+       150.68965,
+       -33.80433
+      ],
+      [
+       150.68962,
+       -33.80432
+      ],
+      [
+       150.68961,
+       -33.80429
+      ],
+      [
+       150.68961,
+       -33.80426
+      ],
+      [
+       150.68963,
+       -33.80424
+      ],
+      [
+       150.68966,
+       -33.80423
+      ],
+      [
+       150.68969,
+       -33.80424
+      ],
+      [
+       150.6897,
+       -33.80426
+      ],
+      [
+       150.68971,
+       -33.80428
+      ]
+     ]
+    ]
+   },
+   "bbox_min_lat": -33.8042826899275,
+   "bbox_max_lat": -33.8042826899275,
+   "bbox_min_lng": 150.689657780372,
+   "bbox_max_lng": 150.689657780372,
+   "start_date_time": "2026-10-12T20:30:00+00:00",
+   "end_date_time": "2026-10-13T05:00:00+00:00",
+   "etr": "2026-10-13 05:00:00+00",
+   "cause": "",
+   "sub_cause": "",
+   "outage_cause": null,
+   "cityname": "GLENMORE PARK",
+   "cityname_list": [
+    "GLENMORE PARK"
+   ],
+   "cityname_count": 1,
+   "postcode": "2745",
+   "street_name": "GLENMORE RIDGE DR",
+   "materialized_at": "2026-10-10T07:54:36.006578+00:00"
+  },
+  {
+   "incident_id": "SP 2146029363",
+   "outage_type": "PLANNED",
+   "incident_status": "PREPARED",
+   "customers_affected": 236,
+   "center_lat": -33.7497609949122,
+   "center_lng": 150.997654987153,
+   "polygon_geojson": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       151.00069,
+       -33.75141
+      ],
+      [
+       150.99548,
+       -33.75093
+      ],
+      [
+       150.99524,
+       -33.7509
+      ],
+      [
+       150.99522,
+       -33.75087
+      ],
+      [
+       150.99516,
+       -33.74986
+      ],
+      [
+       150.99552,
+       -33.74873
+      ],
+      [
+       150.99566,
+       -33.74846
+      ],
+      [
+       150.9988,
+       -33.74791
+      ],
+      [
+       150.99884,
+       -33.74792
+      ],
+      [
+       151.00177,
+       -33.75057
+      ],
+      [
+       151.00177,
+       -33.75061
+      ],
+      [
+       151.00159,
+       -33.75086
+      ],
+      [
+       151.00069,
+       -33.75141
+      ]
+     ]
+    ]
+   },
+   "bbox_min_lat": -33.7513708497024,
+   "bbox_max_lat": -33.7479606500317,
+   "bbox_min_lng": 150.99515180987,
+   "bbox_max_lng": 151.001722390288,
+   "start_date_time": "2026-10-13T21:00:00+00:00",
+   "end_date_time": "2026-10-14T05:00:00+00:00",
+   "etr": "2026-10-14 05:00:00+00",
+   "cause": "Maintenance Work",
+   "sub_cause": "Maintenance Work",
+   "outage_cause": [
+    {
+     "sub": "Maintenance Work",
+     "main": "Maintenance Work"
+    }
+   ],
+   "cityname": "BAULKHAM HILLS",
+   "cityname_list": [
+    "BAULKHAM HILLS",
+    "CASTLE HILL"
+   ],
+   "cityname_count": 2,
+   "postcode": "2154",
+   "street_name": "WYLDWOOD CRES",
+   "materialized_at": "2026-10-10T07:54:36.006578+00:00"
+  }
+ ]
+}

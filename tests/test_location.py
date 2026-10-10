@@ -35,7 +35,7 @@ def unset(config: Config) -> Config:
 def asking(asked: list[str], answer: Any = None) -> Callable[..., Any]:
     """A fetch that notes what it was asked for."""
 
-    def get(url: str, *_: Any) -> Any:
+    def get(url: str, *_: Any, **__: Any) -> Any:
         asked.append(url)
         if answer is None:
             raise OSError("not in this test")

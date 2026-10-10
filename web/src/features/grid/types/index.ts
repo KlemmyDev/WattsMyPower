@@ -63,13 +63,15 @@ export type Outage = {
   affects: "street" | "area" | null;
 };
 
-/** The network's outages around the house (Energex, Ergon Energy). */
+/** The network's outages around the house (every state's and territory's networks but the NT's). */
 export type OutagesView = {
   network: { id: string; name: string; site: string } | null;
+  /** Every network whose outages are followed, the house's first: more than one where it can't be told which serves it. */
+  networks: { id: string; name: string; site: string }[];
   network_auto: boolean;
   /** The house's location has been chosen: no outages are followed until it is. */
   location_set: boolean;
-  /** The house is somewhere a network is supported (Queensland, for now), or one was chosen. */
+  /** The house is somewhere a network is supported (anywhere but the NT), or one was chosen. */
   supported: boolean;
   radius_km: number;
   street: string | null;

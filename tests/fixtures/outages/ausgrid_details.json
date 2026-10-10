@@ -1,0 +1,174 @@
+[
+ [
+  736010143,
+  {
+   "EventId": 736010143,
+   "OutageDisplayType": "U",
+   "PowerStatus": "InProgress",
+   "Cause": "Under investigation",
+   "Reason": null,
+   "Area": [
+    "Burwood"
+   ],
+   "WhenUpdated": "2026-10-10T07:43:29Z",
+   "StartDateTime": "2026-10-10T06:20:00Z",
+   "EstRestTime": "2026-10-10T11:30:00Z",
+   "DelayInHours": 0,
+   "ActualRestoreTime": null,
+   "MarkerLocation": {
+    "lat": -33.87882,
+    "lng": 151.10267
+   },
+   "Bounds": {
+    "bottomleftlat": -33.87955,
+    "bottomleftlng": 151.10167,
+    "toprightlat": -33.87809,
+    "toprightlng": 151.10368
+   },
+   "StreetsAffected": [],
+   "AffectedCustomers": 25,
+   "RestoredCustomers": 0,
+   "Polygon": {
+    "Coords": []
+   },
+   "Polygons": [
+    {
+     "Coords": [
+      {
+       "lat": -33.87955,
+       "lng": 151.10314
+      },
+      {
+       "lat": -33.87922,
+       "lng": 151.10361
+      },
+      {
+       "lat": -33.87843,
+       "lng": 151.10353
+      },
+      {
+       "lat": -33.87816,
+       "lng": 151.10269
+      },
+      {
+       "lat": -33.87809,
+       "lng": 151.10221
+      },
+      {
+       "lat": -33.87824,
+       "lng": 151.10182
+      },
+      {
+       "lat": -33.87859,
+       "lng": 151.10167
+      },
+      {
+       "lat": -33.87894,
+       "lng": 151.10182
+      },
+      {
+       "lat": -33.87905,
+       "lng": 151.10237
+      },
+      {
+       "lat": -33.87944,
+       "lng": 151.10283
+      },
+      {
+       "lat": -33.87955,
+       "lng": 151.10314
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ [
+  736009999,
+  {
+   "EventId": 736009999,
+   "OutageDisplayType": "U",
+   "PowerStatus": "InProgress",
+   "Cause": "Under investigation",
+   "Reason": null,
+   "Area": [
+    "Yagoona"
+   ],
+   "WhenUpdated": "2026-10-09T14:00:10Z",
+   "StartDateTime": "2026-10-08T20:50:00Z",
+   "EstRestTime": "2026-10-09T11:00:00Z",
+   "DelayInHours": 0,
+   "ActualRestoreTime": null,
+   "MarkerLocation": {
+    "lat": -33.90623,
+    "lng": 151.02107
+   },
+   "Bounds": {
+    "bottomleftlat": -33.90628,
+    "bottomleftlng": 151.02102,
+    "toprightlat": -33.90618,
+    "toprightlng": 151.02112
+   },
+   "StreetsAffected": [],
+   "AffectedCustomers": 37,
+   "RestoredCustomers": 0,
+   "Polygon": {
+    "Coords": []
+   },
+   "Polygons": [
+    {
+     "Coords": [
+      {
+       "lat": -33.90628,
+       "lng": 151.02107
+      },
+      {
+       "lat": -33.90627,
+       "lng": 151.0211
+      },
+      {
+       "lat": -33.90625,
+       "lng": 151.02112
+      },
+      {
+       "lat": -33.90622,
+       "lng": 151.02112
+      },
+      {
+       "lat": -33.90619,
+       "lng": 151.02111
+      },
+      {
+       "lat": -33.90618,
+       "lng": 151.02108
+      },
+      {
+       "lat": -33.90618,
+       "lng": 151.02105
+      },
+      {
+       "lat": -33.9062,
+       "lng": 151.02103
+      },
+      {
+       "lat": -33.90623,
+       "lng": 151.02102
+      },
+      {
+       "lat": -33.90626,
+       "lng": 151.02103
+      },
+      {
+       "lat": -33.90628,
+       "lng": 151.02105
+      },
+      {
+       "lat": -33.90628,
+       "lng": 151.02107
+      }
+     ]
+    }
+   ]
+  }
+ ]
+]

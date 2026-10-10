@@ -60,7 +60,7 @@ FILES = {
 }  # fmt: skip
 
 
-def _get(url: str) -> Any:
+def _get(url: str, **_: Any) -> Any:
     name = url.rsplit("/", 1)[-1].removesuffix(".geojson")
     if name.endswith("servicearea"):
         raise OSError("not in this test")  # fall back to the networks' bounds

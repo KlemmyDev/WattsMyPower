@@ -14,6 +14,10 @@ export const REGIONS: { id: NemRegion; label: string }[] = [
   { id: "TAS1", label: "Tasmania" },
 ];
 
+/** Names as a list in words: "Endeavour Energy and Essential Energy". */
+export const listed = (names: string[]) =>
+  names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+
 /** A wholesale price ($/MWh) in cents a kWh, as the bills have it: $412.50/MWh is 41.3c. */
 export function wholesaleCents(mwh: number | null | undefined) {
   if (mwh == null) return "—";

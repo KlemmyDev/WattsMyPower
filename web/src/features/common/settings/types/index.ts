@@ -49,7 +49,24 @@ export type Settings = {
   nem_region: "auto" | "QLD1" | "NSW1" | "VIC1" | "SA1" | "TAS1" | "none";
   /** The electricity network whose outages the Grid page follows, and the house's street (name only) and suburb to
    * match them to, and how far around (km). */
-  power_network: "auto" | "energex" | "ergon" | "none";
+  power_network:
+    | "auto"
+    | "energex"
+    | "ergon"
+    | "ausgrid"
+    | "evoenergy"
+    | "endeavour"
+    | "essential"
+    | "citipower"
+    | "jemena"
+    | "united"
+    | "ausnet"
+    | "powercor"
+    | "sapn"
+    | "tasnetworks"
+    | "westernpower"
+    | "horizon"
+    | "none";
   home_street: string | null;
   home_suburb: string | null;
   outage_radius_km: number;

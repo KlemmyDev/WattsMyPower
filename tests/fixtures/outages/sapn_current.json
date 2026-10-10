@@ -1,0 +1,156 @@
+{
+ "currentOutages": [
+  {
+   "jobID": "160107698",
+   "isPaw": false,
+   "startDateTime": "2026-10-10T15:22:41",
+   "estimatedRestoration": "2026-10-10T19:15:00",
+   "reason": "To be investigated",
+   "status": "Our crews are working to restore power",
+   "affectedCustomers": 13,
+   "affectedSuburbs": [
+    {
+     "name": "Happy Valley",
+     "postcode": "5159"
+    }
+   ],
+   "geometry": [
+    {
+     "lat": -35.08049,
+     "lng": 138.55823
+    },
+    {
+     "lat": -35.08043,
+     "lng": 138.55799
+    },
+    {
+     "lat": -35.08035,
+     "lng": 138.55773
+    },
+    {
+     "lat": -35.08024,
+     "lng": 138.55736
+    },
+    {
+     "lat": -35.08013,
+     "lng": 138.55697
+    },
+    {
+     "lat": -35.08002,
+     "lng": 138.55666
+    },
+    {
+     "lat": -35.07995,
+     "lng": 138.55652
+    },
+    {
+     "lat": -35.07992,
+     "lng": 138.55785
+    },
+    {
+     "lat": -35.07999,
+     "lng": 138.55798
+    },
+    {
+     "lat": -35.08009,
+     "lng": 138.55807
+    },
+    {
+     "lat": -35.0802,
+     "lng": 138.55814
+    },
+    {
+     "lat": -35.08032,
+     "lng": 138.55818
+    },
+    {
+     "lat": -35.08042,
+     "lng": 138.55821
+    }
+   ]
+  },
+  {
+   "jobID": "160107706",
+   "isPaw": false,
+   "startDateTime": "2026-10-10T17:19:46",
+   "estimatedRestoration": "2026-10-10T23:30:00",
+   "reason": "To be investigated",
+   "status": "Our crews are travelling to this area",
+   "affectedCustomers": 53,
+   "affectedSuburbs": [
+    {
+     "name": "Avenue Range",
+     "postcode": "5273"
+    },
+    {
+     "name": "Lucindale",
+     "postcode": "5272"
+    },
+    {
+     "name": "Reedy Creek",
+     "postcode": "5275"
+    }
+   ],
+   "geometry": [
+    {
+     "lat": -37.0296,
+     "lng": 140.25875
+    },
+    {
+     "lat": -37.02905,
+     "lng": 140.14881
+    },
+    {
+     "lat": -37.02112,
+     "lng": 140.11435
+    },
+    {
+     "lat": -36.9981,
+     "lng": 140.07513
+    },
+    {
+     "lat": -36.97651,
+     "lng": 140.07163
+    },
+    {
+     "lat": -36.95838,
+     "lng": 140.11554
+    },
+    {
+     "lat": -36.94382,
+     "lng": 140.23477
+    },
+    {
+     "lat": -36.94546,
+     "lng": 140.24115
+    },
+    {
+     "lat": -36.9626,
+     "lng": 140.24593
+    },
+    {
+     "lat": -36.98758,
+     "lng": 140.25295
+    },
+    {
+     "lat": -37.01253,
+     "lng": 140.25848
+    },
+    {
+     "lat": -37.02254,
+     "lng": 140.2595
+    }
+   ]
+  }
+ ],
+ "searchCriteria": {
+  "postcode": null,
+  "suburb": "",
+  "street": "",
+  "number": null,
+  "lat": null,
+  "lng": null,
+  "isEmpty": true
+ },
+ "lastUpdated": "2026-10-10T18:27:09"
+}

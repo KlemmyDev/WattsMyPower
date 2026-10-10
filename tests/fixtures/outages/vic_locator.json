@@ -1,0 +1,67 @@
+[
+ {
+  "postcode": 3000,
+  "suburb": "MELBOURNE",
+  "distributor": "CITIPOWER"
+ },
+ {
+  "postcode": 3004,
+  "suburb": "MELBOURNE",
+  "distributor": "CITIPOWER"
+ },
+ {
+  "postcode": 3056,
+  "suburb": "BRUNSWICK",
+  "distributor": "CITIPOWER"
+ },
+ {
+  "postcode": 3058,
+  "suburb": "COBURG",
+  "distributor": "JEMENA"
+ },
+ {
+  "postcode": 3058,
+  "suburb": "COBURG",
+  "distributor": "CITIPOWER"
+ },
+ {
+  "postcode": 3134,
+  "suburb": "RINGWOOD",
+  "distributor": "UNITED ENERGY"
+ },
+ {
+  "postcode": 3134,
+  "suburb": "RINGWOOD",
+  "distributor": "AUSNET SERVICES"
+ },
+ {
+  "postcode": 3140,
+  "suburb": "LILYDALE",
+  "distributor": "AUSNET SERVICES"
+ },
+ {
+  "postcode": 3175,
+  "suburb": "DANDENONG",
+  "distributor": "UNITED ENERGY"
+ },
+ {
+  "postcode": 3220,
+  "suburb": "GEELONG",
+  "distributor": "POWERCOR"
+ },
+ {
+  "postcode": 3350,
+  "suburb": "BALLARAT CENTRAL",
+  "distributor": "POWERCOR"
+ },
+ {
+  "postcode": 3429,
+  "suburb": "SUNBURY",
+  "distributor": "JEMENA"
+ },
+ {
+  "postcode": 3429,
+  "suburb": "SUNBURY",
+  "distributor": "POWERCOR"
+ }
+]
