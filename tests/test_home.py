@@ -340,7 +340,12 @@ def test_the_demo_looks_back_four_weeks_when_connected(home: HomeService, clock:
     view = home.connect("demo", {})
     assert {d["kind"] for d in view["devices"]} == {"washer", "dryer", "fridge", "plug", "power_station"}
     runs = home.repo.runs(0, 2**40)
-    washes = [r for r in runs if r["device"] == view["devices"][0]["id"]]
+    # Whole washes only: run during one (a Saturday morning in CI's UTC), the wash under way has no end yet, and the
+    # four weeks looked back start part-way through one four weeks ago.
+    since = clock.t - 28 * 86400 + 5 * MIN
+    washes = [
+        r for r in runs if r["device"] == view["devices"][0]["id"] and r["end"] is not None and r["start"] > since
+    ]
     assert 10 <= len(washes) <= 14  # three a week: Wednesdays and weekends
     assert all(0.6 < r["kwh"] < 0.75 and 70 * MIN <= r["end"] - r["start"] <= 80 * MIN for r in washes)
 
