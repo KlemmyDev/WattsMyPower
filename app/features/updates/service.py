@@ -155,6 +155,7 @@ class UpdateService:
             self.folder.mkdir(parents=True, exist_ok=True)
             tmp = self.folder / ".channel.tmp"
             tmp.write_text(f"{channel}\n")
+            tmp.chmod(0o644)  # install.sh reads it, as whoever runs it (the dashboard's own files are its alone)
             tmp.replace(self.folder / "channel")  # whole, for install.sh
         except OSError as e:
             raise UpdateRefused(f"Couldn't save the channel: {e.strerror or e}.") from e
