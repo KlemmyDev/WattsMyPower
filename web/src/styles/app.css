@@ -170,6 +170,12 @@
   --animate-grow-y: wmpGrowY 720ms var(--ease-out-soft) backwards;
   --animate-fill-x: wmpFillX 900ms var(--ease-out-soft) backwards;
   --animate-reveal-x: wmpRevealX 1100ms var(--ease-out-soft) backwards;
+
+  /* A text caret blinking (the set-up code's boxes), a form shaking its head at a wrong password, and something
+     arriving with a little spring (a step finished, an account made). */
+  --animate-blink: wmpBlink 1s steps(1) infinite;
+  --animate-shake: wmpShake 420ms var(--ease-out-soft);
+  --animate-spring-in: wmpSpringIn 560ms var(--ease-spring) backwards;
 }
 
 /*
@@ -891,6 +897,27 @@
   }
   to {
     clip-path: inset(-20% 0 -20% 0);
+  }
+}
+@keyframes wmpBlink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes wmpShake {
+  15%,
+  55% {
+    transform: translateX(-7px);
+  }
+  35%,
+  75% {
+    transform: translateX(6px);
+  }
+}
+@keyframes wmpSpringIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
   }
 }
 @keyframes wmpShimmer {
