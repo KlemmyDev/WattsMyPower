@@ -38,6 +38,20 @@ POWER_NETWORKS = (
     "citipower", "jemena", "united", "ausnet", "powercor",
     "sapn", "tasnetworks", "westernpower", "horizon",
 )  # fmt: skip
+# The house's styles, the finishes its walls can have and its roof's colours (Settings → Your house; the drawing's
+# own lists are web/src/features/overview/utils/house/options.ts and palette.ts).
+HOUSE_STYLES = (
+    "estate", "brick", "modern", "coastal", "queenslander", "federation", "bungalow", "farmhouse", "townhouse",
+)  # fmt: skip
+WALL_FINISHES = (
+    "render_white", "render_sand", "render_charcoal",
+    "brick_red", "brick_blonde", "brick_brown",
+    "boards_white", "boards_sage", "boards_blue",
+    "cladding_charcoal",
+)  # fmt: skip
+ROOF_COLOURS = (
+    "monument", "woodland", "basalt", "shale", "surfmist", "galvanised", "terracotta", "manor_red", "night_sky",
+)  # fmt: skip
 # Text settings with a fixed set of values: key -> (allowed values, default).
 CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # Open-Meteo's weather model for the forecast: its own pick for the location, or one model.
@@ -47,8 +61,14 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     ),
     # What a bill's discount comes off (Bills → Rates & settings): usage alone, or usage and the supply charge.
     "bill_discount_on": (("usage", "usage_supply"), "usage"),
-    # How the Overview draws the house (Manage → System → Your house).
-    "house_style": (("estate", "modern", "queenslander", "federation", "farmhouse"), "estate"),
+    # How the Overview draws the house (Settings → Your house): its style, a garage or a carport, and its walls, roof
+    # colour, fence and trees ("auto": the style's own).
+    "house_style": (HOUSE_STYLES, "estate"),
+    "garage_kind": (("garage", "carport"), "garage"),
+    "house_walls": (("auto", *WALL_FINISHES), "auto"),
+    "house_roof": (("auto", *ROOF_COLOURS), "auto"),
+    "house_fence": (("auto", "none", "picket", "slat", "hedge"), "auto"),
+    "house_garden": (("auto", "leafy", "native", "tropical", "minimal"), "auto"),
     # The NEM region whose wholesale prices and notices the Grid page follows (from AEMO): worked out from the
     # location ("auto"), one region, or none (outside the NEM, or not wanted: then nothing is asked of AEMO).
     "nem_region": (("auto", "QLD1", "NSW1", "VIC1", "SA1", "TAS1", "none"), "auto"),
@@ -65,7 +85,7 @@ LISTS: dict[str, tuple[tuple[str, ...], int]] = {
 # Settings that only take whole numbers.
 WHOLE = {
     "bill_months", "bill_day", "bill_anchor", "temp_unit_f", "forecast_learning", "panel_bearing",
-    "house_storeys", "garage_spaces", "system_installed", "battery_installed", "home_standby_goal", "update_check",
+    "house_storeys", "garage_spaces", "house_panels", "house_pool", "system_installed", "battery_installed", "home_standby_goal", "update_check",
     "hazard_warnings",
 }  # fmt: skip
 # The system details (Manage → System): key -> (name in messages, unit). Their range errors are
@@ -145,10 +165,12 @@ class SettingsStore:
             # Follow the Bureau of Meteorology's warnings and Queensland Fire Department's for the house (the Grid
             # page's outlook and its alerts).
             "hazard_warnings": (0, 1, 1),
-            # The house as the Overview draws it (Manage → System → Your house): storeys, and car spaces in
-            # the garage (0 = none).
+            # The house as the Overview draws it (Settings → Your house): storeys, car spaces in the garage
+            # (0 = none), solar panels on the roof (0 = as many as the array's size needs) and a pool (1).
             "house_storeys": (1, 2, 1),
             "garage_spaces": (0, 2, 0),
+            "house_panels": (0, 60, 0),
+            "house_pool": (0, 1, 0),
             # What the system cost (dollars, after rebates) and when it went in, for payback on the Bills
             # page; when the battery went in (if later) and its warranty, for the Battery page. 0 = not set. Dates
             # are unix seconds at local midnight.

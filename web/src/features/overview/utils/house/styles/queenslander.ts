@@ -1,16 +1,24 @@
 import { box, ln, poly, type Attrs, type Kid, type P3 } from "~/features/overview/utils/house/iso";
 import { queenslanderLevels, type Layout } from "~/features/overview/utils/house/layout";
+import { shade } from "~/features/overview/utils/house/palette";
 import {
+  eaveShadow,
   flat,
   front,
+  frontWall,
   frontWindow,
+  LIT,
   litFront,
-  panel,
+  lookOf,
+  meterBox,
+  panelRows,
   porchLight,
+  rowsDown,
   shrub,
   side,
+  sideWall,
   sideWindow,
-  tree,
+  type Style,
   type StyleParts,
 } from "~/features/overview/utils/house/parts";
 
@@ -21,13 +29,8 @@ import {
  * garden.
  */
 
-const BOARDS = "#f1ead9";
-const BOARDS_SIDE = "#e2d9c4";
-const IRON = "#c6cdd3";
-const IRON_SIDE = "#aab3ba";
 const TIMBER = "#b8976d";
 const TRIM = "#ffffff";
-const RIB: Attrs = { stroke: "rgba(0,0,0,0.08)", strokeWidth: 1 };
 
 /** Diagonal lattice across a rectangle on a plane: `at(u, z)` gives the point at u along it and z up it. */
 function lattice(at: (u: number, z: number) => P3, u0: number, u1: number, z0: number, z1: number): Kid[] {
@@ -45,16 +48,14 @@ function lattice(at: (u: number, z: number) => P3, u0: number, u1: number, z0: n
   return out;
 }
 
-/** Weatherboards: faint lines every board up a wall. */
-const boards = (from: (z: number) => [P3, P3], z0: number, z1: number): Kid[] =>
-  Array.from({ length: Math.floor((z1 - z0) / 0.28) }, (_, i) => {
-    const [a, b] = from(z0 + (i + 1) * 0.28);
-    return ln(a, b, { stroke: "rgba(0,0,0,0.06)", strokeWidth: 1 });
-  });
-
-export function queenslander(l: Layout): StyleParts {
+function draw(l: Layout): StyleParts {
   const q = queenslanderLevels(l.options.storeys);
   const { floor: F, wallTop: W, ridge: R, front: Y, deck: D } = q;
+  const { walls, roof: RF } = lookOf(l, queenslander.look);
+  const IRON = RF.face;
+  const IRON_SIDE = RF.side;
+  const RIB: Attrs = { stroke: RF.line, strokeWidth: 1 };
+  const under = shade(walls.face, 0.25); // the lattice's backing and the built-in floor, paler than the walls
   const two = l.options.storeys === 2;
   const house: Kid[] = [];
   const roof: Kid[] = [];
@@ -65,35 +66,20 @@ export function queenslander(l: Layout): StyleParts {
 
   // Underneath: lattice between the stumps, or the built-in lower floor.
   if (two) {
-    house.push(side(10, 0, Y, 0, F, "#e9e4d8"), front(Y, 0, 10, 0, F, "#efebe1"));
+    house.push(side(10, 0, Y, 0, F, shade(under, -0.05)), front(Y, 0, 10, 0, F, under));
     house.push(...frontWindow(Y, 1.2, 3.2, 0.9, 2.4), ...frontWindow(Y, 7.0, 9.0, 0.9, 2.4));
     house.push(front(Y + 0.02, 4.5, 5.5, 0, 2.4, "#ffffff", { stroke: "#cfc8bb", strokeWidth: 0.8 }));
     house.push(front(Y + 0.03, 4.6, 5.4, 0, 2.3, "#7c6a55"));
   } else {
-    house.push(side(10, 0, Y, 0, F - 0.15, "#ece5d6"));
+    house.push(side(10, 0, Y, 0, F - 0.15, "#e9e2d3"));
     house.push(...lattice((u, z) => [10.01, u, z], 0, Y, 0, F - 0.15));
   }
 
   // The weatherboard walls, with white corner boards, the front door with its fanlight, and the meter.
   house.push(
-    side(10, 0, Y, F, W, BOARDS_SIDE),
-    ...boards(
-      (z) => [
-        [10.01, 0, z],
-        [10.01, Y, z],
-      ],
-      F,
-      W,
-    ),
-    front(Y, 0, 10, F, W, BOARDS),
-    ...boards(
-      (z) => [
-        [0, Y + 0.01, z],
-        [10, Y + 0.01, z],
-      ],
-      F,
-      W,
-    ),
+    ...sideWall(walls, 10, 0, Y, F, W),
+    ...frontWall(walls, Y, 0, 10, F, W),
+    ...eaveShadow.side(10, 0, Y, W),
     ln([10, Y, F], [10, Y, W], { stroke: TRIM, strokeWidth: 3 }),
     ln([10.01, 0, F], [10.01, Y, F], { stroke: TRIM, strokeWidth: 2.5 }),
     ...frontWindow(Y, 1.0, 2.8, F + 0.9, F + 2.6),
@@ -101,7 +87,7 @@ export function queenslander(l: Layout): StyleParts {
     front(Y + 0.02, 4.35, 5.65, F, F + 3.05, TRIM, { stroke: "#cfc8bb", strokeWidth: 0.8 }),
     front(Y + 0.03, 4.5, 5.5, F, F + 2.55, "#4d6b5a"),
     front(Y + 0.03, 4.5, 5.5, F + 2.65, F + 2.95, "url(#glassL)"),
-    front(Y + 0.02, 0.35, 0.85, W - 1.4, W - 0.7, "#ececec", { stroke: "#a9a9a9", strokeWidth: 0.8 }),
+    meterBox(Y, 0.35, W - 1.4),
   );
   for (const w of l.sideWindows) house.push(...sideWindow(10, w.y0, w.y1, w.z0, w.z1));
 
@@ -143,27 +129,39 @@ export function queenslander(l: Layout): StyleParts {
     const t = y > ridge.y ? (E.y1 - y) / (E.y1 - ridge.y) : (y - E.y0) / (ridge.y - E.y0);
     roof.push(ln([E.x1, y, W], [E.x1 - (E.x1 - ridge.x1) * t, y, W + (R - W) * t], RIB));
   }
-  // Panels: four across the lower row, two above, inside the hips.
-  const lift = (p: P3): P3 => [p[0], p[1] - 0.04, (p[2] ?? 0) + 0.1];
-  const onRoof = (x: number, t: number): P3 => [x, hip(t).y, hip(t).z];
-  for (const [t0, t1, n] of [
-    [0.1, 0.4, 4],
-    [0.47, 0.77, 2],
-  ] as [number, number, number][]) {
-    const span = n * 1.7 + (n - 1) * 0.1;
-    const x0 = 5 - span / 2;
-    for (let i = 0; i < n; i++) {
-      const a = x0 + i * 1.8;
-      roof.push(
-        ...panel(lift(onRoof(a, t0)), lift(onRoof(a + 1.7, t0)), lift(onRoof(a + 1.7, t1)), lift(onRoof(a, t1))),
-      );
-    }
-  }
+  // Panels inside the hips: across the street side from its widest row up, then on the right side.
+  const slope = Math.hypot(E.y1 - ridge.y, R - W);
+  const front_ = (u: number, v: number): P3 => {
+    const p = hip(1 - v / slope);
+    return [u, p.y - 0.04, p.z + 0.1];
+  };
+  const onFront = panelRows(
+    front_,
+    rowsDown(0.2, slope - 0.12, 1.36, (v) => {
+      const p = hip(1 - v / slope);
+      return [p.x0 + 0.3, p.x1 - 0.3];
+    }).reverse(),
+    l.options.panels,
+  );
+  const sideSlope = Math.hypot(E.x1 - ridge.x1, R - W);
+  const side_ = (u: number, v: number): P3 => {
+    const t = 1 - v / sideSlope;
+    return [E.x1 - (E.x1 - ridge.x1) * t + 0.04, u, W + (R - W) * t + 0.1];
+  };
+  const onSide = panelRows(
+    side_,
+    rowsDown(0.2, sideSlope - 0.12, 1.36, (v) => {
+      const t = 1 - v / sideSlope;
+      return [E.y0 + (ridge.y - E.y0) * t + 0.3, E.y1 - (E.y1 - ridge.y) * t - 0.3];
+    }).reverse(),
+    l.options.panels - onFront.placed,
+  );
+  roof.push(...onFront.kids, ...onSide.kids);
   roof.push(
-    ln([ridge.x0, ridge.y, R], [ridge.x1, ridge.y, R], { stroke: "#e9edf0", strokeWidth: 2.5 }),
-    ln([E.x0, E.y1, W], [ridge.x0, ridge.y, R], { stroke: "#e9edf0", strokeWidth: 2 }),
-    ln([E.x1, E.y1, W], [ridge.x1, ridge.y, R], { stroke: "#e9edf0", strokeWidth: 2 }),
-    ln([E.x1, E.y0, W], [ridge.x1, ridge.y, R], { stroke: "#d5dbe0", strokeWidth: 2 }),
+    ln([ridge.x0, ridge.y, R], [ridge.x1, ridge.y, R], { stroke: RF.cap, strokeWidth: 2.5 }),
+    ln([E.x0, E.y1, W], [ridge.x0, ridge.y, R], { stroke: RF.cap, strokeWidth: 2 }),
+    ln([E.x1, E.y1, W], [ridge.x1, ridge.y, R], { stroke: RF.cap, strokeWidth: 2 }),
+    ln([E.x1, E.y0, W], [ridge.x1, ridge.y, R], { stroke: shade(RF.cap, -0.08), strokeWidth: 2 }),
   );
 
   // The verandah, nearer the street than the garage: lattice under the deck, the deck, its stairs, then posts,
@@ -264,7 +262,7 @@ export function queenslander(l: Layout): StyleParts {
     ...litFront(Y, 1.0, 2.8, F + 0.9, F + 2.6),
     ...litFront(Y, 7.2, 9.0, F + 0.9, F + 2.6),
     front(Y + 0.04, 4.5, 5.5, F + 2.65, F + 2.95, "#ffd27f"),
-    ...l.sideWindows.map((w) => side(10.03, w.y0, w.y1, w.z0, w.z1, "#f5c46e")),
+    ...l.sideWindows.map((w) => side(10.04, w.y0, w.y1, w.z0, w.z1, LIT)),
     ...(two ? [...litFront(Y, 1.2, 3.2, 0.9, 2.4, true), ...litFront(Y, 7.0, 9.0, 0.9, 2.4, true)] : []),
     ...light.glow,
   );
@@ -273,10 +271,8 @@ export function queenslander(l: Layout): StyleParts {
     house,
     roof,
     night,
-    yard: [
-      ...[0.5, 1.3, 2.4, 3.4, 6.6, 7.6, 8.6, 9.5].map((x) => shrub(x, D + 0.45, 7, "#93b882")),
-      tree(0.9, stairEnd + 0.4, 24),
-    ],
+    yard: [...[0.5, 1.3, 2.4, 3.4, 6.6, 7.6, 8.6, 9.5].map((x) => shrub(x, D + 0.45, 7, "#93b882"))],
+    trees: [[0.9, stairEnd + 0.4, 24]],
     paths: [
       flat(stairs.x0 + 0.1, stairs.x1 - 0.1, stairEnd, l.ground.y1, 0.01, "#e2d8c3"),
       poly(
@@ -291,3 +287,8 @@ export function queenslander(l: Layout): StyleParts {
     ],
   };
 }
+
+export const queenslander: Style = {
+  draw,
+  look: { walls: "boards_white", roof: "galvanised", fence: "none", garden: "leafy" },
+};

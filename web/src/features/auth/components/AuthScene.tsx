@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { HouseScene, type HouseFlows } from "~/features/overview/components/HouseScene";
+import type { HouseOptions } from "~/features/overview/utils/house/layout";
 
 /** A sunny afternoon: the panels running the house, filling the battery and sending the rest to the grid. */
 const DAY: HouseFlows = { pv: 5.2, grid: -1.4, bat: 1.8, soc: 0.68, tesla: 0, conn: false };
@@ -15,9 +16,10 @@ const isDay = () => {
 
 /**
  * The Overview's house, power running along its lines, for the sign-in page: by day the sun on the panels, after dark
- * the battery carrying the house. The sun and moon in its corner switch between the two, the skies crossfading.
+ * the battery carrying the house. The sun and moon in its corner switch between the two, the skies crossfading. `house`
+ * draws it as chosen (the set-up guide's house step), else the default house.
  */
-export function AuthScene({ className }: { className?: string }) {
+export function AuthScene({ className, house }: { className?: string; house?: HouseOptions }) {
   const [day, setDay] = useState(isDay);
   return (
     <div
@@ -28,14 +30,14 @@ export function AuthScene({ className }: { className?: string }) {
     >
       {/* Both skies drawn, one over the other, so switching fades between them. */}
       <div aria-hidden className="absolute inset-0">
-        <HouseScene flows={NIGHT} sky="night" />
+        <HouseScene flows={NIGHT} sky="night" house={house} />
       </div>
       <div
         aria-hidden
         className="absolute inset-0 transition-opacity duration-700 ease-out"
         style={{ opacity: day ? 1 : 0 }}
       >
-        <HouseScene flows={DAY} sky="sunny" />
+        <HouseScene flows={DAY} sky="sunny" house={house} />
       </div>
       <div
         role="group"

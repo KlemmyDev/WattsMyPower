@@ -1,4 +1,4 @@
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { COLOR, DEVICE_COLORS } from "~/features/common/theme/utils/colors";
 import type { IconName } from "~/features/common/ui/components/Icon";
 import type { Onboarding, OnboardingChanges, StepId } from "~/features/onboarding/types";
 
@@ -32,12 +32,12 @@ export const STEPS: StepInfo[] = [
     href: "/settings/solar-battery",
   },
   {
-    id: "plan",
-    label: "Electricity plan",
-    blurb: "So costs match your bill",
-    icon: "dollar",
-    color: COLOR.good,
-    href: "/bills/rates",
+    id: "house",
+    label: "Your house",
+    blurb: "How your home is drawn",
+    icon: "home",
+    color: DEVICE_COLORS[2],
+    href: "/settings/house",
   },
   {
     id: "location",
@@ -48,12 +48,36 @@ export const STEPS: StepInfo[] = [
     href: "/settings/location",
   },
   {
+    id: "plan",
+    label: "Electricity plan",
+    blurb: "So costs match your bill",
+    icon: "dollar",
+    color: COLOR.good,
+    href: "/bills/rates",
+  },
+  {
     id: "billing",
     label: "Billing",
     blurb: "Line up bill estimates",
     icon: "calendar",
     color: COLOR.lilac,
     href: "/bills/rates",
+  },
+  {
+    id: "cost",
+    label: "Cost and payback",
+    blurb: "When it pays for itself",
+    icon: "tag",
+    color: COLOR.export,
+    href: "/settings/cost",
+  },
+  {
+    id: "extras",
+    label: "Anything else",
+    blurb: "A car, smart plugs and more",
+    icon: "plug",
+    color: COLOR.battery,
+    href: "/integrations",
   },
 ];
 
@@ -76,5 +100,6 @@ export function applyChanges(o: Onboarding | undefined, changes: OnboardingChang
   }
   const complete = changes.complete ?? o?.complete ?? false;
   const dismissed = changes.dismissed ?? o?.dismissed ?? false;
-  return { complete, dismissed, show: !complete && !dismissed, steps };
+  const extras = changes.extras ? [...new Set(changes.extras)] : (o?.extras ?? []);
+  return { complete, dismissed, show: !complete && !dismissed, steps, extras };
 }

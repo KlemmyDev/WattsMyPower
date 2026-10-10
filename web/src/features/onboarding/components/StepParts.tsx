@@ -223,19 +223,19 @@ export function StepDots({
   onJump: (step: StepId) => void;
 }) {
   return (
-    <ol className="m-0 flex list-none items-center gap-1.5 p-0" aria-label="Set-up steps">
+    <ol className="m-0 flex list-none items-center gap-1 p-0" aria-label="Set-up steps">
       {STEPS.map((s, k) => {
         const on = s.id === current;
         const done = steps[s.id] === "done";
         return (
-          <li key={s.id} className="flex min-w-0 flex-1 items-center gap-1.5 last:flex-none">
+          <li key={s.id} className="flex min-w-0 flex-1 items-center gap-1 last:flex-none">
             <button
               type="button"
               aria-current={on ? "step" : undefined}
               aria-label={`${s.label}, ${on ? "current step" : done ? "done" : steps[s.id] === "skipped" ? "skipped" : "not started"}`}
               onClick={() => onJump(s.id)}
               className={cn(
-                "flex size-9 flex-none items-center justify-center rounded-full border transition-[background-color,box-shadow] duration-300",
+                "flex size-8 flex-none items-center justify-center rounded-full border transition-[background-color,box-shadow] duration-300",
                 on || done ? "border-transparent" : "border-line bg-surface text-ink-faint",
               )}
               style={
@@ -246,12 +246,12 @@ export function StepDots({
                     : undefined
               }
             >
-              <Icon name={done && !on ? "check" : s.icon} size={16} />
+              <Icon name={done && !on ? "check" : s.icon} size={15} />
             </button>
             {k < STEPS.length - 1 && (
               <span
                 aria-hidden
-                className="h-0.5 min-w-2 flex-1 rounded-full transition-colors duration-500"
+                className="h-0.5 min-w-1 flex-1 rounded-full transition-colors duration-500"
                 style={{ background: done ? alpha(s.color, 0.6) : COLOR.track }}
               />
             )}
