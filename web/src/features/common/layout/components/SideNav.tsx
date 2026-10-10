@@ -413,7 +413,14 @@ function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
   useLayoutEffect(() => {
     const el = list.current;
     if (!el) return;
-    const mid = (n: HTMLElement) => n.offsetTop + n.offsetHeight / 2;
+    // How far down the list a row is. Added up to the list itself: while a section's pages drop in (.circuit-branch-in)
+    // their group is moving, which makes it what their offsetTop counts from, so a page's own reads 0 then.
+    const topOf = (n: HTMLElement) => {
+      let y = 0;
+      for (let at: Element | null = n; at instanceof HTMLElement && at !== el; at = at.offsetParent) y += at.offsetTop;
+      return y;
+    };
+    const mid = (n: HTMLElement) => topOf(n) + n.offsetHeight / 2;
     const place = () => {
       const rows = [...el.querySelectorAll<HTMLElement>("[data-circuit-row]")];
       const nodes = [...el.querySelectorAll<HTMLElement>("[data-circuit-row], [data-circuit-branch]")];
@@ -424,7 +431,7 @@ function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
       const row = el.querySelector<HTMLElement>('[data-circuit-row][aria-current="page"]');
       // A page on a branch is reached through its elbow, which leaves the wire at the top of its row: the wire stops
       // there, or it would carry on straight past the curve.
-      const to = branch ? branch.offsetTop - top : row ? mid(row) - top : 0;
+      const to = branch ? topOf(branch) - top : row ? mid(row) - top : 0;
       setWire({ top, height, lit: Math.max(0, to) });
     };
     place();
