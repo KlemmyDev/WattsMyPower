@@ -5,10 +5,9 @@ import { saveSettingsError } from "~/features/common/settings/utils";
 import { Field, HelpText, Select } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { ChoiceTiles } from "~/features/settings/components/SettingsSection";
+import { ChoiceTiles, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { dayMonth } from "~/features/common/formatting/utils/date";
 import { addDays, nowS, partsOf, siteTime } from "~/features/common/time/utils";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 const FREQUENCIES = [
   { value: "1", title: "Monthly", sub: "12 bills a year", icon: "calendar" as const },
@@ -19,19 +18,22 @@ const FREQUENCIES = [
 /** Bills → Rates & settings: how often bills come and when a period starts, so estimates line up with the retailer's. */
 export function BillingSettings() {
   return (
-    <SettingsCard padded aria-labelledby="h-billing">
-      <SettingsTitle
-        id="h-billing"
-        title="Billing period"
-        sub="Match these to your electricity bill so estimates line up with what your retailer charges."
-      />
-      <BillingFields />
-    </SettingsCard>
+    <SettingsSection
+      id="period"
+      className="scroll-mt-6"
+      title="Billing period"
+      sub="Match these to your bill so estimates line up with what your retailer charges. Saved as you choose."
+    >
+      <BillingFields rows />
+    </SettingsSection>
   );
 }
 
-/** The billing period's fields, saved as they change, without a card (the set-up guide shows them too). */
-export function BillingFields() {
+/**
+ * The billing period's fields, saved as they change, without a card (the set-up guide shows them too). `rows`: how
+ * often as rows, for a narrow column.
+ */
+export function BillingFields({ rows }: { rows?: boolean }) {
   const s = useSystem();
   const save = useSaveSettings();
   const pending = save.isPending ? save.variables : undefined;
@@ -56,6 +58,7 @@ export function BillingFields() {
         <span className="text-[13px] font-semibold">How often you are billed</span>
         <ChoiceTiles
           label="How often you are billed"
+          rows={rows}
           min="10rem"
           phone={3}
           color={COLOR.good}
