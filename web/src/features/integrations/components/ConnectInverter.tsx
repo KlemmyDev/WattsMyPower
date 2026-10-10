@@ -16,7 +16,7 @@ import type {
   IntegrationsOverview,
   InverterRole,
 } from "~/features/integrations/types";
-import { deviceName, ROLE_NAME } from "~/features/integrations/utils";
+import { brandSlug, deviceName, ROLE_NAME } from "~/features/integrations/utils";
 
 /** Connect an inverter, then refresh what's connected (and the scan, which marks it connected). */
 function useConnect(onConnected: (device: ConnectResult) => void) {
@@ -253,7 +253,9 @@ function Manual({
   bare?: boolean;
 }) {
   const brands = [...new Set(overview.kinds.map((k) => k.brand))];
-  const [brand, setBrand] = useState(initialBrand && brands.includes(initialBrand) ? initialBrand : (brands[0] ?? ""));
+  // Given as a name ("GoodWe") or as it's written in an address ("goodwe").
+  const given = brands.find((b) => brandSlug(b) === brandSlug(initialBrand));
+  const [brand, setBrand] = useState(given ?? brands[0] ?? "");
   const kinds = overview.kinds.filter((k) => k.brand === brand);
   const [driver, setDriver] = useState(kinds[0]?.driver ?? "");
   const [host, setHost] = useState("");

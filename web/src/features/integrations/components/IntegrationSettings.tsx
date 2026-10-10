@@ -21,7 +21,7 @@ import { IntegrationLink } from "~/features/integrations/components/IntegrationL
 import { ReachTag, UntestedTag, type Reach } from "~/features/integrations/components/ReachTag";
 import { useInverters } from "~/features/integrations/hooks";
 import type { InverterKind } from "~/features/integrations/types";
-import type { InverterState } from "~/features/integrations/utils";
+import { brandSlug, type InverterState } from "~/features/integrations/utils";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -165,8 +165,8 @@ function useInverterEntries(): Entry[] {
     view: (
       <IntegrationLink
         connect
-        to="/integrations/inverters/connect"
-        search={{ brand: b.brand }}
+        to="/integrations/inverters/$brand"
+        params={{ brand: brandSlug(b.brand) }}
         icon="sun"
         name={`${b.brand} inverter`}
         detail={<span className="line-clamp-2">{b.labels.join(", ")}</span>}

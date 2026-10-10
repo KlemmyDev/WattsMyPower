@@ -2,7 +2,7 @@ import { ExportGuide } from "~/features/imports/components/ExportGuide";
 import { ImportUpload } from "~/features/imports/components/ImportUpload";
 import { PastImports } from "~/features/imports/components/PastImports";
 
-/** Manage → Integrations → Inverters → Import: bring in history from iSolarCloud exports. */
+/** Manage → Integrations → Inverters → Sungrow → Import: bring in history from iSolarCloud exports. */
 export function ImportSettings() {
   return (
     <div className="flex flex-col gap-6">

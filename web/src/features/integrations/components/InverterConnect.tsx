@@ -4,6 +4,7 @@ import { errorMessage } from "~/features/common/api/utils";
 import { integrationsQuery } from "~/features/integrations/api";
 import { ConnectInverter } from "~/features/integrations/components/ConnectInverter";
 import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInverters";
+import { brandSlug } from "~/features/integrations/utils";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
@@ -16,7 +17,15 @@ export function InverterConnect({ brand }: { brand?: string }) {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/integrations/inverters">Inverters</BackLink>}
+        back={
+          brand ? (
+            <BackLink to="/integrations/inverters/$brand" params={{ brand: brandSlug(brand) }}>
+              {data?.kinds.find((k) => brandSlug(k.brand) === brandSlug(brand))?.brand ?? "Inverters"}
+            </BackLink>
+          ) : (
+            <BackLink to="/integrations/inverters">Inverters</BackLink>
+          )
+        }
         id="h-connect"
         title={hasHybrid ? "Add an inverter" : "Connect your inverter"}
         sub={
@@ -38,7 +47,12 @@ export function InverterConnect({ brand }: { brand?: string }) {
           overview={data}
           brand={brand}
           sections
-          onConnected={(device) => navigate({ to: "/integrations/inverters/$role", params: { role: device.role } })}
+          onConnected={(device) =>
+            navigate({
+              to: "/integrations/inverters/$brand/$role",
+              params: { brand: brandSlug(device.brand), role: device.role },
+            })
+          }
         />
       )}
     </>

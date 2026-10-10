@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
 import { COLOR } from "~/features/common/theme/utils/colors";
@@ -9,23 +10,34 @@ import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInvert
 import { InverterWiring } from "~/features/integrations/components/InverterWiring";
 import { ReachTag, UntestedTag } from "~/features/integrations/components/ReachTag";
 import { useInverters, useRemoveInverter } from "~/features/integrations/hooks";
-import { asRole, deviceAddress, REMOVE_NOTE, ROLE_DETAIL, ROLE_NAME } from "~/features/integrations/utils";
+import { asRole, brandSlug, deviceAddress, REMOVE_NOTE, ROLE_DETAIL, ROLE_NAME } from "~/features/integrations/utils";
 import { OptionList, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-const back = <BackLink to="/integrations/inverters">Inverters</BackLink>;
-
 /**
- * Manage → Integrations → Inverters → one inverter: how it's doing and what it reported about itself at the top, the
- * rest of what's known about it, where it's wired (a second inverter), and removing it.
+ * Manage → Integrations → Inverters → a brand → one inverter: how it's doing and what it reported about itself at the
+ * top, the rest of what's known about it, where it's wired (a second inverter), and removing it. Reached under another
+ * brand's address (the inverter in that role was swapped for another make), it moves to its own.
  */
-export function InverterDetail({ role }: { role: string }) {
+export function InverterDetail({ brand, role }: { brand: string; role: string }) {
   const navigate = useNavigate();
   const { data, isPending, isFetching, error, inverters } = useInverters();
   const known = asRole(role);
   const inverter = inverters.find((i) => i.device.role === known);
   const readOnly = data?.read_only ?? true;
-  const remove = useRemoveInverter(known ?? "hybrid", () => navigate({ to: "/integrations/inverters" }));
+  const remove = useRemoveInverter(known ?? "hybrid", () =>
+    navigate({ to: "/integrations/inverters/$brand", params: { brand } }),
+  );
+  const own = inverter ? brandSlug(inverter.device.brand) : brand;
+  useEffect(() => {
+    if (own !== brand && known)
+      void navigate({ to: "/integrations/inverters/$brand/$role", params: { brand: own, role: known }, replace: true });
+  }, [own, brand, known, navigate]);
+  const back = (
+    <BackLink to="/integrations/inverters/$brand" params={{ brand }}>
+      {inverter?.device.brand ?? "Inverters"}
+    </BackLink>
+  );
 
   if (!inverter) {
     // Just connected, and the list is still catching up: wait for it rather than say it isn't there.
@@ -104,7 +116,7 @@ export function InverterDetail({ role }: { role: string }) {
           sub={device.serial ? `Serial ${device.serial}` : undefined}
         />
       </SummaryCard>
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className={hybrid ? "flex flex-col gap-5" : "grid gap-5 xl:grid-cols-2"}>
         <SettingsSection
           id="h-inverter-about"
           title="About it"

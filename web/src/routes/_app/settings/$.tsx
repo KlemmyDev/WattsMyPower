@@ -7,7 +7,7 @@ const MOVED: Record<string, { to: string; hash?: string }> = {
   billing: { to: "/bills/rates", hash: "period" },
   tariffs: { to: "/bills/rates", hash: "rates" },
   integrations: { to: "/integrations" },
-  import: { to: "/integrations/inverters/import" },
+  import: { to: "/integrations/inverters/sungrow/import" },
   database: { to: "/settings/data" },
 };
 
