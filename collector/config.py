@@ -47,6 +47,11 @@ class Config:
     # Fake inverters instead of real ones, to run the whole pipeline locally without hardware.
     mock: bool = False
 
+    # Inverters connected from the dashboard must be on the local network (a private, link-local or loopback
+    # address, or a name that resolves to one), so a dashboard account can't point the collector at the internet.
+    # True allows any address, e.g. for an inverter reached over a VPN with public addresses.
+    allow_public_hosts: bool = False
+
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
         e = os.environ if env is None else env
@@ -78,4 +83,5 @@ class Config:
             token=text("COLLECTOR_TOKEN"),
             port=integer("COLLECTOR_PORT", d.port),
             mock=flag("COLLECTOR_MOCK", d.mock),
+            allow_public_hosts=flag("COLLECTOR_ALLOW_PUBLIC_HOSTS", d.allow_public_hosts),
         )

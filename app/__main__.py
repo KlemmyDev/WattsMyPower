@@ -4,7 +4,8 @@ Maintenance commands, run inside the container:
     docker compose exec wattsmypower python -m app reset-account
     docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]
 
-reset-account  remove the dashboard's account and every session; the next visit asks for a new one
+reset-account  remove the dashboard's account and every session; the next visit asks for a new one, with the
+               set-up code it prints
 reprocess      rebuild readings from the collector's raw registers (from a date, or everything it holds),
                after a change to how they're decoded
 """
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
 import sys
 
 from app.core.config import Config
@@ -23,12 +25,15 @@ from app.features.live.reprocess import reprocess
 
 
 def main(argv: list[str]) -> int:
+    os.umask(0o077)  # like the app: what it creates is for its own user only
     config = Config.from_env()
     db = Database(config.db_path)
     if argv == ["reset-account"]:
         db.migrate()
-        AuthService(db, enabled=True).reset()
-        print("Account and sessions removed. Open the dashboard to create a new account.")
+        auth = AuthService(db, enabled=True)
+        auth.reset()
+        print("Account and sessions removed.")
+        auth.prepare_setup_code()  # and shows the set-up code the new account needs
         return 0
     if argv[:1] == ["reprocess"] and len(argv) <= 2:
         logging.basicConfig(level=logging.INFO, format="%(message)s")

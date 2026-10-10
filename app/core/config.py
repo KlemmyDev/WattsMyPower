@@ -59,7 +59,11 @@ class Config:
 
     # Require signing in to the dashboard (an account is created the first time it's opened).
     # Turn off only if something in front of it already handles sign-in, e.g. a reverse proxy.
+    # Only an explicit AUTH=false (0, no, off) turns it off: an empty or mistyped value keeps it on.
     auth: bool = True
+
+    # Serve the API's own documentation at /api/docs (and /api/redoc, /api/openapi.json), behind sign-in.
+    api_docs: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
@@ -70,6 +74,10 @@ class Config:
 
         def flag(name: str, default: bool) -> bool:
             return e.get(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
+
+        def unless_off(name: str) -> bool:
+            """On unless explicitly turned off: for settings where a typo mustn't quietly turn protection off."""
+            return e.get(name, "").strip().lower() not in ("0", "false", "no", "off")
 
         def integer(name: str, default: int) -> int:
             return int(e.get(name, str(default)))
@@ -98,5 +106,6 @@ class Config:
             latitude=number("LATITUDE", d.latitude),
             longitude=number("LONGITUDE", d.longitude),
             mock=flag("MOCK", d.mock),
-            auth=flag("AUTH", d.auth),
+            auth=unless_off("AUTH"),
+            api_docs=flag("API_DOCS", d.api_docs),
         )
