@@ -970,6 +970,19 @@
   }
 }
 
+/* A part's dot on Settings → Your house's picture, on a phone: a soft ring spreading from it and fading. */
+@keyframes hotspotPulse {
+  from {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  70%,
+  to {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
 @keyframes wmpPulse {
   0%,
   100% {
