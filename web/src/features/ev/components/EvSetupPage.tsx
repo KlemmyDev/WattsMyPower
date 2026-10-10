@@ -56,7 +56,10 @@ export function EvSetupPage() {
           <span className="text-[13px] font-semibold">Connect your Tesla</span>
           <TeslaConnect onConnected={() => void navigate({ to: "/ev" })} />
         </div>
-        <p className="m-0 text-[13px] text-ink-faint">More cars and chargers can be connected the same way later.</p>
+        <p className="m-0 text-[13px] text-ink-faint">
+          A Hyundai or Kia is connected in Integrations → Electric vehicles → Hyundai and Kia, and charged from spare
+          solar the same way. More cars and chargers can be connected later.
+        </p>
         <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
           <ButtonLink to="/ev" variant="outline" size="md">
             Cancel

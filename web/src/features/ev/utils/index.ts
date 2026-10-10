@@ -1,5 +1,14 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
-import type { BydStatus, EvEvent, EvMode, EvStatus, KeyRole, TeslaProvider, TeslaStatus } from "~/features/ev/types";
+import type {
+  BluelinkStatus,
+  BydStatus,
+  EvEvent,
+  EvMode,
+  EvStatus,
+  KeyRole,
+  TeslaProvider,
+  TeslaStatus,
+} from "~/features/ev/types";
 
 /** The key's role in words: what it lets the dashboard do. */
 export const ROLE_LABEL: Record<KeyRole, string> = { charging_manager: "Charging only", driver: "Driver" };
@@ -77,6 +86,39 @@ export function bydSummary(status: BydStatus | undefined): {
     status: !connected ? "" : status?.signed_out ? "Sign in again" : status?.error ? "Not updating" : "Connected",
     detail: !connected ? BYD_ABOUT : status?.signed_out ? (status.error ?? "") : detail || "No cars yet",
   };
+}
+
+/** What a Hyundai or Kia's offered for, until one's connected. */
+export const BLUELINK_ABOUT =
+  "Through Bluelink or Kia Connect, as their apps reach the car: its charge and charging, and charging it from spare solar";
+
+/** The Hyundais and Kias at a glance, for Integrations: whether they're connected and reading, and each car's level
+ * and how it charges ("Ioniq · 64% · Spare solar"). Always through the maker's cloud, as there's no local way. */
+export function bluelinkSummary(status: BluelinkStatus | undefined): {
+  connected: boolean;
+  on: boolean;
+  status: string;
+  detail: string;
+} {
+  const connected = !!status?.connected;
+  const detail = (status?.vehicles ?? [])
+    .map((v) =>
+      [v.name ?? v.model ?? v.make, v.state?.soc != null && `${Math.round(v.state.soc)}%`, MODE_LABEL[v.control.mode]]
+        .filter(Boolean)
+        .join(" · "),
+    )
+    .join(", ");
+  return {
+    connected,
+    on: connected && !status?.error,
+    status: !connected ? "" : status?.signed_out ? "Sign in again" : status?.error ? "Not updating" : "Connected",
+    detail: !connected ? BLUELINK_ABOUT : status?.signed_out ? (status.error ?? "") : detail || "No cars yet",
+  };
+}
+
+/** The app a car's make is driven from, as the dashboard names it in "…in the Tesla app". */
+export function appName(make: string): string {
+  return make === "Hyundai" ? "Bluelink" : make === "Kia" ? "Kia Connect" : make;
 }
 
 /** What the EV section's called: the make of the cars connected ("Tesla"), or EV with none, or a mix. */

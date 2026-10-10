@@ -41,6 +41,37 @@ export const LOOKS: Record<string, MakeLooks> = {
     },
     other: { body: "suv" },
   },
+  hyundai: {
+    models: {
+      ioniq5: { body: "ioniq5" }, // the N too
+      ioniq6: { body: "seal" }, // a long, low fastback, as the Seal is
+      ioniq9: { body: "suv" },
+      ioniq: { body: "hatch" }, // the first Ioniq Electric
+      kona: { body: "atto3" }, // a small SUV of the Atto 3's size
+      inster: { body: "hatch" },
+    },
+    other: { body: "suv" },
+  },
+  kia: {
+    models: {
+      ev3: { body: "atto3" },
+      ev4: { body: "sedan" },
+      ev5: { body: "suv" },
+      ev6: { body: "sealion7" }, // a sleek, low crossover
+      ev9: { body: "suv" },
+      niro: { body: "atto3" },
+      soul: { body: "hatch" },
+    },
+    other: { body: "suv" },
+  },
+  genesis: {
+    models: {
+      gv60: { body: "sealion7" },
+      gv70: { body: "suv" },
+      g80: { body: "sedan" },
+    },
+    other: { body: "suv" },
+  },
 };
 
 /** A make the table doesn't know: an SUV. */

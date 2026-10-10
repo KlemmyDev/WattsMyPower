@@ -1,7 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
 import type {
+  BluelinkBrand,
+  BluelinkStatus,
   BydStatus,
+  EvBrand,
   EvCommand,
   EvControlChange,
   EvDetails,
@@ -42,14 +45,16 @@ export const disconnectTesla = () => apiSend<TeslaStatus>("DELETE", "tesla");
 
 export const removeEv = (vin: string) => apiSend<TeslaStatus>("DELETE", `tesla/vehicles/${vin}`);
 
+/** A change to how a car charges, for its integration (`brand`: a Tesla's, else a Hyundai or Kia's). */
 export const configureEv = ({
   vin,
+  brand = "tesla",
   ...body
-}: EvControlChange & { vin: string; car?: number | null; home?: "here" | null }) =>
-  apiSend<TeslaStatus>("PUT", `tesla/vehicles/${vin}`, body);
+}: EvControlChange & { vin: string; brand?: EvBrand; car?: number | null; home?: "here" | null }) =>
+  apiSend<TeslaStatus | BluelinkStatus>("PUT", `${brand}/vehicles/${vin}`, body);
 
-export const commandEv = ({ vin, ...body }: EvCommand & { vin: string }) =>
-  apiSend<TeslaStatus>("POST", `tesla/vehicles/${vin}/command`, body);
+export const commandEv = ({ vin, brand = "tesla", ...body }: EvCommand & { vin: string; brand?: EvBrand }) =>
+  apiSend<TeslaStatus | BluelinkStatus>("POST", `${brand}/vehicles/${vin}/command`, body);
 
 /** A car's details beyond its charge. Refreshed every minute while shown: reading them never wakes the car. */
 export const detailsQuery = (vin: string) =>
@@ -89,6 +94,32 @@ export const connectByd = (body: { username: string; password: string; region: s
 export const refreshByd = () => apiSend<BydStatus>("POST", "byd/refresh");
 
 export const disconnectByd = () => apiSend<BydStatus>("DELETE", "byd");
+
+/** The Hyundai or Kia account and its cars. Refreshed every 30 seconds while shown (the dashboard steers them each
+ * turn of its loop; the cloud's read every few minutes), every 3 while a read's under way. */
+export const bluelinkQuery = queryOptions({
+  queryKey: ["bluelink"],
+  queryFn: ({ signal }) => apiGet<BluelinkStatus>("bluelink", undefined, { signal }),
+  staleTime: 15_000,
+  refetchInterval: (q) => (q.state.data?.reading ? 3_000 : 30_000),
+});
+
+/** Sign in to Hyundai's or Kia's cloud, checked by reading the account's cars. */
+export const connectBluelink = (body: {
+  username: string;
+  password: string;
+  pin: string;
+  brand: BluelinkBrand;
+  region: string;
+}) => apiSend<BluelinkStatus>("PUT", "bluelink", body);
+
+/** Read the cars now, from the cloud; with `force`, ask that car itself (it wakes its modem). */
+export const refreshBluelink = (force?: string) =>
+  apiSend<BluelinkStatus>("POST", "bluelink/refresh", force ? { force } : {});
+
+export const setBluelinkPin = (pin: string) => apiSend<BluelinkStatus>("PUT", "bluelink/pin", { pin });
+
+export const disconnectBluelink = () => apiSend<BluelinkStatus>("DELETE", "bluelink");
 
 /** A car's level through [start, end), with when it was away and when it charged. */
 export const levelsQuery = (vin: string, start: number, end: number) =>

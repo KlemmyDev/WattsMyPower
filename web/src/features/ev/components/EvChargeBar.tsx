@@ -6,22 +6,34 @@ import { HelpText } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { cn } from "~/features/common/ui/utils";
 import { useEvChange } from "~/features/ev/hooks";
-import type { EvVehicle } from "~/features/ev/types";
+import type { EvBrand, EvVehicle } from "~/features/ev/types";
 
 const LOWEST = 50; // the lowest limit a Tesla takes (and the dashboard sends)
 const HIGHEST = 100;
 const KEYS_SETTLE = 800; // ms after the last key press before a limit chosen with the keys is sent
 const PENDING_FOR = 120; // s a limit sent is shown as being set, until the car's reading says so
 
-const clamp = (p: number) => Math.max(LOWEST, Math.min(HIGHEST, Math.round(p)));
+const clamp = (p: number, step = 1) => Math.max(LOWEST, Math.min(HIGHEST, Math.round(p / step) * step));
 
 /**
  * The car's charge up to its limit, with the limit as a handle: drag it (or tap the bar, or use the arrow keys) to
  * change the limit, and it's sent to the car when you let go. Sending wakes an asleep car, so then it asks first.
- * Until the car's next reading shows the new limit, the handle says it's being set.
+ * Until the car's next reading shows the new limit, the handle says it's being set. A Hyundai or Kia takes its
+ * limit in tens (`brand` "bluelink").
  */
-export function EvChargeBar({ v, soc, fill }: { v: EvVehicle; soc: number | null; fill: string }) {
-  const { command } = useEvChange();
+export function EvChargeBar({
+  v,
+  soc,
+  fill,
+  brand = "tesla",
+}: {
+  v: EvVehicle;
+  soc: number | null;
+  fill: string;
+  brand?: EvBrand;
+}) {
+  const { command } = useEvChange(brand);
+  const step = brand === "tesla" ? 1 : 10;
   const s = v.state;
   const limit = s?.limit != null ? Math.round(s.limit) : null;
   const track = useRef<HTMLDivElement>(null);
@@ -58,7 +70,7 @@ export function EvChargeBar({ v, soc, fill }: { v: EvVehicle; soc: number | null
   };
   const at = (clientX: number) => {
     const r = track.current?.getBoundingClientRect();
-    return r ? clamp(((clientX - r.left) / r.width) * 100) : (limit ?? 80);
+    return r ? clamp(((clientX - r.left) / r.width) * 100, step) : (limit ?? 80);
   };
 
   const down = (e: PointerEvent<HTMLDivElement>) => {
@@ -75,9 +87,10 @@ export function EvChargeBar({ v, soc, fill }: { v: EvVehicle; soc: number | null
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!can) return;
-    const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -5, PageUp: 5 }[e.key];
+    const by = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -5, PageUp: 5 }[e.key];
     const base = keyed.current ?? drag ?? shown ?? 80;
-    const next = e.key === "Home" ? LOWEST : e.key === "End" ? HIGHEST : step != null ? clamp(base + step) : null;
+    const next =
+      e.key === "Home" ? LOWEST : e.key === "End" ? HIGHEST : by != null ? clamp(base + by * step, step) : null;
     if (next == null) return;
     e.preventDefault();
     keyed.current = next;
@@ -180,7 +193,8 @@ export function EvChargeBar({ v, soc, fill }: { v: EvVehicle; soc: number | null
       {command.isError && <HelpText tone="bad">{errorMessage(command.error)}</HelpText>}
       {limit != null && ask == null && !command.isError && (
         <span className="text-xs text-ink-faint">
-          Drag the handle to change the limit ({LOWEST}–{HIGHEST}%): it's sent to the car when you let go.
+          Drag the handle to change the limit ({LOWEST}–{HIGHEST}%{step > 1 ? ", in tens" : ""}): it's sent to the car
+          when you let go.
         </span>
       )}
     </div>

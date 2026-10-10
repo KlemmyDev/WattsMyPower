@@ -16,6 +16,7 @@ from app.features.amber.service import AmberService
 from app.features.auth.service import AuthService
 from app.features.battery.service import BatteryService, CollectorRegisters, ForecastPlanner
 from app.features.bills.service import BillsService
+from app.features.bluelink.service import BluelinkService
 from app.features.byd.service import BydService
 from app.features.car.service import CarService
 from app.features.forecast.service import ForecastService
@@ -73,6 +74,7 @@ class Services:
     hazards: HazardService
     tesla: TeslaService
     byd: BydService
+    bluelink: BluelinkService
     # What feeds `live`: the collector's feed, or generated readings in mock mode.
     source: CollectorIngest | Simulator
 
@@ -132,5 +134,6 @@ def build_services(config: Config) -> Services:
         hazards=hazards,
         tesla=TeslaService(config, db, live, car, settings, forecast),
         byd=BydService(config, db, live),
+        bluelink=BluelinkService(config, db, live, settings, forecast),
         source=source,
     )

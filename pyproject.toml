@@ -19,6 +19,8 @@ dependencies = [
     "tesla-fleet-api==1.17.3",
     # BYD cars, read from BYD's cloud as its app does (no public API, nor a local way).
     "pybyd==0.0.77",
+    # Hyundai and Kia cars, read and charged through their cloud (Bluelink, Kia Connect) as their apps do.
+    "hyundai-kia-connect-api==4.35.0",
 ]
 
 [project.optional-dependencies]
@@ -64,7 +66,7 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
-module = ["pymodbus.*", "Cryptodome.*"]
+module = ["pymodbus.*", "Cryptodome.*", "hyundai_kia_connect_api.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

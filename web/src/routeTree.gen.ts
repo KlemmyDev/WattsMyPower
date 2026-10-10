@@ -57,6 +57,7 @@ import { Route as AppIntegrationsCarIndexRouteImport } from './routes/_app/integ
 import { Route as AppIntegrationsCarCarIdRouteImport } from './routes/_app/integrations/car/$carId'
 import { Route as AppIntegrationsEvIndexRouteImport } from './routes/_app/integrations/ev/index'
 import { Route as AppIntegrationsEvBydRouteImport } from './routes/_app/integrations/ev/byd'
+import { Route as AppIntegrationsEvHyundaiKiaRouteImport } from './routes/_app/integrations/ev/hyundai-kia'
 import { Route as AppIntegrationsHomeIndexRouteImport } from './routes/_app/integrations/home/index'
 import { Route as AppIntegrationsInvertersIndexRouteImport } from './routes/_app/integrations/inverters/index'
 import { Route as AppIntegrationsInvertersConnectRouteImport } from './routes/_app/integrations/inverters/connect'
@@ -310,6 +311,12 @@ const AppIntegrationsEvBydRoute = AppIntegrationsEvBydRouteImport.update({
   path: '/ev/byd',
   getParentRoute: () => AppIntegrationsRouteRoute,
 } as any)
+const AppIntegrationsEvHyundaiKiaRoute =
+  AppIntegrationsEvHyundaiKiaRouteImport.update({
+    id: '/ev/hyundai-kia',
+    path: '/ev/hyundai-kia',
+    getParentRoute: () => AppIntegrationsRouteRoute,
+  } as any)
 const AppIntegrationsHomeIndexRoute =
   AppIntegrationsHomeIndexRouteImport.update({
     id: '/home/',
@@ -435,6 +442,7 @@ export interface FileRoutesByFullPath {
   '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/integrations/ev/byd': typeof AppIntegrationsEvBydRoute
+  '/integrations/ev/hyundai-kia': typeof AppIntegrationsEvHyundaiKiaRoute
   '/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
   '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/integrations/tesla/$': typeof AppIntegrationsTeslaSplatRoute
@@ -495,6 +503,7 @@ export interface FileRoutesByTo {
   '/home/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/integrations/ev/byd': typeof AppIntegrationsEvBydRoute
+  '/integrations/ev/hyundai-kia': typeof AppIntegrationsEvHyundaiKiaRoute
   '/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
   '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/integrations/tesla/$': typeof AppIntegrationsTeslaSplatRoute
@@ -559,6 +568,7 @@ export interface FileRoutesById {
   '/_app/home_/rooms/$room': typeof AppHomeRoomsRoomRoute
   '/_app/integrations/car/$carId': typeof AppIntegrationsCarCarIdRoute
   '/_app/integrations/ev/byd': typeof AppIntegrationsEvBydRoute
+  '/_app/integrations/ev/hyundai-kia': typeof AppIntegrationsEvHyundaiKiaRoute
   '/_app/integrations/inverters/connect': typeof AppIntegrationsInvertersConnectRoute
   '/_app/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/_app/integrations/tesla/$': typeof AppIntegrationsTeslaSplatRoute
@@ -623,6 +633,7 @@ export interface FileRouteTypes {
     | '/home/rooms/$room'
     | '/integrations/car/$carId'
     | '/integrations/ev/byd'
+    | '/integrations/ev/hyundai-kia'
     | '/integrations/inverters/connect'
     | '/integrations/sungrow/$'
     | '/integrations/tesla/$'
@@ -683,6 +694,7 @@ export interface FileRouteTypes {
     | '/home/rooms/$room'
     | '/integrations/car/$carId'
     | '/integrations/ev/byd'
+    | '/integrations/ev/hyundai-kia'
     | '/integrations/inverters/connect'
     | '/integrations/sungrow/$'
     | '/integrations/tesla/$'
@@ -746,6 +758,7 @@ export interface FileRouteTypes {
     | '/_app/home_/rooms/$room'
     | '/_app/integrations/car/$carId'
     | '/_app/integrations/ev/byd'
+    | '/_app/integrations/ev/hyundai-kia'
     | '/_app/integrations/inverters/connect'
     | '/_app/integrations/sungrow/$'
     | '/_app/integrations/tesla/$'
@@ -1107,6 +1120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsEvBydRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
+    '/_app/integrations/ev/hyundai-kia': {
+      id: '/_app/integrations/ev/hyundai-kia'
+      path: '/ev/hyundai-kia'
+      fullPath: '/integrations/ev/hyundai-kia'
+      preLoaderRoute: typeof AppIntegrationsEvHyundaiKiaRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
     '/_app/integrations/home/': {
       id: '/_app/integrations/home/'
       path: '/home'
@@ -1208,6 +1228,7 @@ interface AppIntegrationsRouteRouteChildren {
   AppIntegrationsIndexRoute: typeof AppIntegrationsIndexRoute
   AppIntegrationsCarCarIdRoute: typeof AppIntegrationsCarCarIdRoute
   AppIntegrationsEvBydRoute: typeof AppIntegrationsEvBydRoute
+  AppIntegrationsEvHyundaiKiaRoute: typeof AppIntegrationsEvHyundaiKiaRoute
   AppIntegrationsInvertersConnectRoute: typeof AppIntegrationsInvertersConnectRoute
   AppIntegrationsSungrowSplatRoute: typeof AppIntegrationsSungrowSplatRoute
   AppIntegrationsTeslaSplatRoute: typeof AppIntegrationsTeslaSplatRoute
@@ -1232,6 +1253,7 @@ const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
   AppIntegrationsIndexRoute: AppIntegrationsIndexRoute,
   AppIntegrationsCarCarIdRoute: AppIntegrationsCarCarIdRoute,
   AppIntegrationsEvBydRoute: AppIntegrationsEvBydRoute,
+  AppIntegrationsEvHyundaiKiaRoute: AppIntegrationsEvHyundaiKiaRoute,
   AppIntegrationsInvertersConnectRoute: AppIntegrationsInvertersConnectRoute,
   AppIntegrationsSungrowSplatRoute: AppIntegrationsSungrowSplatRoute,
   AppIntegrationsTeslaSplatRoute: AppIntegrationsTeslaSplatRoute,

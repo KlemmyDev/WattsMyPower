@@ -8,7 +8,8 @@ import { useTween } from "~/features/common/ui/hooks/useTween";
 import { EvChargeBar } from "~/features/ev/components/EvChargeBar";
 import { useEvChange, useRefreshDetails } from "~/features/ev/hooks";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import type { EvVehicle, TeslaProvider } from "~/features/ev/types";
+import type { EvBrand, EvVehicle } from "~/features/ev/types";
+import type { Reached } from "~/features/ev/components/ProviderChip";
 import { STATUS_LABEL, statusColor } from "~/features/ev/utils";
 
 /**
@@ -16,10 +17,15 @@ import { STATUS_LABEL, statusColor } from "~/features/ev/utils";
  * following the sun, how much is spare against what it needs to charge at all.
  */
 /** While it waits for spare solar: how closely it's followed, so it's clear why it's (not) being kept awake. */
-function readiness(v: EvVehicle, provider: TeslaProvider | null): string | null {
+function readiness(v: EvVehicle, provider: Reached | null): string | null {
   if (v.night && v.status !== "charging")
     return "Left to sleep overnight: checked every half hour without waking it. Wake it to read it now.";
   if (v.status !== "waiting") return null;
+  if (provider === "hyundai" || provider === "kia") {
+    if (v.follow === "ready") return "Checked every 5 minutes, to start once the sun's spare";
+    if (v.solar_from != null) return `Spare solar expected from ${hhmm(v.solar_from)}`;
+    return "No spare solar expected for it soon";
+  }
   const bt = provider === "bluetooth";
   if (v.follow === "ready")
     return bt ? "Kept awake and checked each minute, to start quickly" : "Checked each minute, to start quickly";
@@ -30,8 +36,16 @@ function readiness(v: EvVehicle, provider: TeslaProvider | null): string | null 
 
 /** How fresh what's shown is: asleep or not, when its charge was read, and when it was last checked (over Bluetooth,
  * the car's checked without waking it far more often than its charge is read). */
-function freshness(v: EvVehicle, provider: TeslaProvider | null): string {
+function freshness(v: EvVehicle, provider: Reached | null): string {
   const s = v.state;
+  if (provider === "hyundai" || provider === "kia")
+    // The cloud only has what the car last sent it: when it did, and when the cloud was last read.
+    return [
+      s?.as_of ? `Sent by the car ${hhmm(s.as_of)}` : "Not sent by the car yet",
+      v.seen_at && `cloud checked ${hhmm(v.seen_at)}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   const parts = [
     // The link's held open (plugged in at home by day): the dashboard keeps its place among the few connections
     // the car takes, and reads it without finding and connecting first.
@@ -79,8 +93,16 @@ function WakeButton({ v }: { v: EvVehicle }) {
   );
 }
 
-export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: TeslaProvider | null }) {
-  const { command } = useEvChange();
+export function EvPanel({
+  v,
+  provider = null,
+  brand = "tesla",
+}: {
+  v: EvVehicle;
+  provider?: Reached | null;
+  brand?: EvBrand;
+}) {
+  const { command } = useEvChange(brand);
   const s = v.state;
   const soc = useTween(s?.soc ?? undefined) ?? s?.soc ?? null;
   const tone = statusColor(v.status, v.control.mode);
@@ -130,7 +152,7 @@ export function EvPanel({ v, provider = null }: { v: EvVehicle; provider?: Tesla
         </div>
       </div>
 
-      <EvChargeBar v={v} soc={soc} fill={s?.charging ? tone : COLOR.battery} />
+      <EvChargeBar v={v} soc={soc} fill={s?.charging ? tone : COLOR.battery} brand={brand} />
     </Card>
   );
 }

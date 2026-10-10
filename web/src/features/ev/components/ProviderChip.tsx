@@ -3,8 +3,8 @@ import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import type { TeslaProvider } from "~/features/ev/types";
 
-/** How a car's reached: a Tesla's two ways, or BYD's cloud (the only way to a BYD). */
-export type Reached = TeslaProvider | "byd";
+/** How a car's reached: a Tesla's two ways, BYD's cloud (the only way to a BYD), or Hyundai's or Kia's. */
+export type Reached = TeslaProvider | "byd" | "hyundai" | "kia";
 
 const WAYS: Record<Reached, { icon: IconName; name: string; where: string; color: string; title: string }> = {
   bluetooth: {
@@ -27,6 +27,20 @@ const WAYS: Record<Reached, { icon: IconName; name: string; where: string; color
     where: "Cloud",
     color: COLOR.lilac,
     title: "Read through BYD's cloud, as the BYD app reads it",
+  },
+  hyundai: {
+    icon: "cloud",
+    name: "Bluelink",
+    where: "Cloud",
+    color: COLOR.lilac,
+    title: "Read and charged through Hyundai's Bluelink cloud, as the Bluelink app does",
+  },
+  kia: {
+    icon: "cloud",
+    name: "Kia Connect",
+    where: "Cloud",
+    color: COLOR.lilac,
+    title: "Read and charged through Kia Connect, as the Kia Connect app does",
   },
 };
 
