@@ -69,9 +69,11 @@ class History:
 
     # -- wakes ----------------------------------------------------------------------------------
     def add_wake(self, vin: str, ts: float, reason: str) -> None:
-        """The dashboard woke the car (or sent it something while it slept, which wakes it), and why."""
+        """The dashboard woke the car (or sent it something while it slept, which wakes it), and why. Kept as long as
+        its levels are: they're there to see it isn't woken too often lately, not for good."""
         with self.db.writing() as conn:
             conn.execute("INSERT OR REPLACE INTO ev_wakes (vin, ts, reason) VALUES (?, ?, ?)", (vin, int(ts), reason))
+            conn.execute("DELETE FROM ev_wakes WHERE vin = ? AND ts < ?", (vin, int(ts) - LEVELS_KEPT))
 
     def wakes(self, vin: str, start: int, end: int) -> list[dict[str, Any]]:
         with self.db.reading() as conn:

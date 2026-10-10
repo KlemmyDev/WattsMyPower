@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 
@@ -79,14 +79,16 @@ class Config:
             """On unless explicitly turned off: for settings where a typo mustn't quietly turn protection off."""
             return e.get(name, "").strip().lower() not in ("0", "false", "no", "off")
 
+        problems: list[str] = []
+
         def integer(name: str, default: int) -> int:
-            return int(e.get(name, str(default)))
+            return _parse(e, name, default, int, "a whole number", problems)
 
         def number(name: str, default: float) -> float:
-            return float(e.get(name, str(default)))
+            return _parse(e, name, default, float, "a number", problems)
 
         d = cls()
-        return cls(
+        config = cls(
             collector_url=text("COLLECTOR_URL", d.collector_url),
             collector_token=text("COLLECTOR_TOKEN"),
             collector_writes=flag("COLLECTOR_WRITES", d.collector_writes),
@@ -109,3 +111,32 @@ class Config:
             auth=unless_off("AUTH"),
             api_docs=flag("API_DOCS", d.api_docs),
         )
+        if problems:
+            raise ConfigError(problems)
+        return config
+
+
+class ConfigError(ValueError):
+    """Settings in the environment that can't be read, each named with what it should look like."""
+
+    def __init__(self, problems: list[str]):
+        self.problems = problems
+        super().__init__(
+            "Can't read the settings in the environment (.env next to docker-compose.yml):\n"
+            + "\n".join(f"  - {p}" for p in problems)
+        )
+
+
+def _parse[T](
+    env: Mapping[str, str], name: str, default: T, kind: Callable[[str], T], what: str, problems: list[str]
+) -> T:
+    """`name` read as `kind` (int or float), or `default` when it isn't set (or is blank). A value that doesn't read
+    as one is added to `problems`, naming the variable and an example, and the default stands in for it."""
+    raw = env.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return kind(raw)
+    except ValueError:
+        problems.append(f"{name} is {raw!r}, which isn't {what}. Set it to one, e.g. {name}={default}")
+        return default

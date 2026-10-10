@@ -31,6 +31,14 @@ MODES = {SELF: "self", FORCED: "forced", EXTERNAL: "external", VPP: "vpp"}
 COMMANDS = {CHARGE: "charge", DISCHARGE: "discharge", STOP: "stop"}
 UNSET = 0xFFFF
 
+# The models (device type, register 5000: sh_rs.DEVICE_TYPES) the controls are known to suit: Sungrow's single-phase
+# SH-RS hybrids. The writes here were made and read back on an SH5.0RS; the other SH-RS are the same hybrid in other
+# sizes. The rest of the SH family (the three-phase SH-RT and SH-T, the older SH-K, the MG-RL, models not named yet)
+# has the same registers on paper, but writing to them hasn't been tried: there the controls stay off unless they're
+# turned on for that inverter (app.features.battery, "experimental").
+VERIFIED_TYPES = frozenset({0x0D0D, 0x0D0E, 0x0D0F, 0x0D10, 0x0D17, 0x0D18, 0x0D1A, 0x0D1B})
+VERIFIED_LABEL = "Sungrow's SH-RS hybrids (like the SH5.0RS)"
+
 # The floors (min SOC) the dashboard offers. Kept to 50 % at most: the Home Assistant integration for these
 # inverters caps min SOC there, and higher values haven't been tried on real hardware.
 FLOOR_RANGE = (5.0, 50.0)

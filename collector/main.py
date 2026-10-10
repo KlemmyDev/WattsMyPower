@@ -19,7 +19,7 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Depends, FastAPI, Header, HTTPException, Request, Response
 
-from collector.config import Config
+from collector.config import Config, ConfigError
 from collector.devices import ROLES, Device, DeviceConfig, Settable, Words, WriteRefused
 from collector.devices.drivers import READERS, build_device, env_devices
 from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_probe
@@ -405,4 +405,7 @@ def create_app(
 # Files the collector creates (its database) are readable by its own user only.
 os.umask(0o077)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-app = create_app()
+try:
+    app = create_app()
+except ConfigError as e:  # a mistyped setting: say which, once, rather than a traceback on every restart
+    raise SystemExit(f"The collector can't start. {e}") from None

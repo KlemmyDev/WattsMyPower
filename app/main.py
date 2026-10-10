@@ -14,7 +14,7 @@ from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 
 from app.container import build_services
-from app.core.config import Config
+from app.core.config import Config, ConfigError
 from app.core.security import DOCS_POLICY, SecurityHeadersMiddleware
 from app.core.spa import mount_spa
 from app.core.version import VERSION
@@ -175,4 +175,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 # message by message when the INFO log doesn't say why something failed.
 for _name in filter(None, (n.strip() for n in os.environ.get("LOG_DEBUG", "").split(","))):
     logging.getLogger(_name).setLevel(logging.DEBUG)
-app = create_app()
+try:
+    app = create_app()
+except ConfigError as e:  # a mistyped setting: say which, once, rather than a traceback on every restart
+    raise SystemExit(f"WattsMyPower can't start. {e}") from None

@@ -17,7 +17,7 @@ import logging
 import os
 import sys
 
-from app.core.config import Config
+from app.core.config import Config, ConfigError
 from app.core.database import Database
 from app.features.auth.service import AuthService
 from app.features.live.client import CollectorClient
@@ -26,7 +26,11 @@ from app.features.live.reprocess import reprocess
 
 def main(argv: list[str]) -> int:
     os.umask(0o077)  # like the app: what it creates is for its own user only
-    config = Config.from_env()
+    try:
+        config = Config.from_env()
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 1
     db = Database(config.db_path)
     if argv == ["reset-account"]:
         db.migrate()
