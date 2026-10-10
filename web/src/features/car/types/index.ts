@@ -23,7 +23,19 @@ export type NamedPaint = "white" | "black" | "grey" | "silver" | "blue" | "red" 
 
 /** The shapes the Overview draws a car as: some popular models of their own, and three for every other. */
 export type CarBody =
-  "model3" | "modelY" | "atto3" | "dolphin" | "seal" | "sealion7" | "ioniq5" | "sedan" | "suv" | "hatch";
+  | "model3"
+  | "modelY"
+  | "modelS"
+  | "modelX"
+  | "cybertruck"
+  | "atto3"
+  | "dolphin"
+  | "seal"
+  | "sealion7"
+  | "ioniq5"
+  | "sedan"
+  | "suv"
+  | "hatch";
 
 /** A car to choose from when connecting one, with its usual details. */
 export type CarModel = {

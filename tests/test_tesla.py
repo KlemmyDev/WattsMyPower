@@ -271,6 +271,13 @@ def test_the_model_year_is_read_from_the_vin() -> None:
     assert control.model_year("nope") is None
 
 
+def test_the_paint_is_read_from_what_tesla_calls_it() -> None:
+    assert control.paint({"vehicle_config": {"exterior_color": "MidnightSilver"}}) == "#50555c"
+    assert control.paint({"vehicle_config": {"exterior_color": "Pearl White"}}) == "#ecebe6"
+    assert control.paint({"vehicle_config": {"exterior_color": "Lilac"}}) is None  # one it doesn't know
+    assert control.paint({"vehicle_config": {"car_type": "modely"}}) is None  # over Bluetooth: not given
+
+
 def test_settings_kept_before_sharing_carry_on() -> None:
     assert control.clean({}, {"mode": "solar", "battery_first": False, "grid_w": 300}) == {
         "mode": "solar", "first": "car", "grid_w": 300}  # fmt: skip

@@ -26,6 +26,9 @@ export const paintOf = (c: CarColour): { label: string; hex: string } =>
 export const BODY: Record<CarBody, string> = {
   model3: "Tesla Model 3",
   modelY: "Tesla Model Y",
+  modelS: "Tesla Model S",
+  modelX: "Tesla Model X",
+  cybertruck: "Tesla Cybertruck",
   atto3: "BYD Atto 3",
   dolphin: "BYD Dolphin",
   seal: "BYD Seal",

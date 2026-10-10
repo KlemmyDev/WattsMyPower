@@ -52,6 +52,8 @@ export type EvVehicle = {
   make: string;
   model: string | null;
   year: number | null;
+  /** Its paint (#rrggbb), when the car says (a Tesla through Tessie; not over Bluetooth). */
+  colour: string | null;
   name: string | null;
   /** The dashboard car it's tied to (app.features.car). */
   car: number | null;
@@ -155,7 +157,10 @@ export type EvEvent = {
 };
 
 /** Each EV in brief, in the live status. */
-export type EvBrief = Pick<EvVehicle, "vin" | "make" | "model" | "year" | "name" | "car" | "status" | "doing"> & {
+export type EvBrief = Pick<
+  EvVehicle,
+  "vin" | "make" | "model" | "year" | "colour" | "name" | "car" | "status" | "doing"
+> & {
   mode: EvMode;
   soc: number | null;
   limit: number | null;

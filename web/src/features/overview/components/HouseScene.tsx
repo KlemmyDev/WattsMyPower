@@ -25,8 +25,8 @@ import { sky as drawSky } from "~/features/overview/utils/house/sky";
  *     paint, and for the Overview (with links), a label and where it links to
  */
 
-/** A connected car, as the drawing needs it. */
-export type SceneCar = { body: CarBody; paint: string; label: string; href: string };
+/** A connected car, as the drawing needs it; `charging`: at home, from the charger. */
+export type SceneCar = { body: CarBody; paint: string; label: string; href: string; charging?: boolean };
 
 export type HouseFlows = {
   pv: number;
@@ -225,7 +225,14 @@ export function HouseScene({
           {equipment((u) => !inside(u))}
           {group(box(ch.x, ch.x + 0.14, ch.y0, ch.y1, ch.z0, ch.z1, "#fafafa", "#f1f1f1", "#d9d9d9"))}
           {S.yard}
-          {h("circle", { cx: chLed[0], cy: chLed[1], r: 1.8, fill: flows.conn ? FLOW.car : "#bbbbbb" })}
+          {/* the charger's light: lit, and breathing, while it charges a car */}
+          {h("circle", {
+            cx: chLed[0],
+            cy: chLed[1],
+            r: 1.8,
+            fill: flows.conn ? FLOW.car : "#bbbbbb",
+            style: flows.conn ? { animation: "wmpPulse 1.4s ease-in-out infinite" } : undefined,
+          })}
           {emptyBays}
           {parkedCars(false)}
         </g>
@@ -307,8 +314,8 @@ function SpotLinks({
       <g transform={transform}>
         {l.spots.map((sp, k) => {
           const c = cars[k];
-          const label = c ? c.label : anyCar ? "Connect another Tesla" : "Connect your Tesla";
-          const href = c ? c.href : "/integrations/ev/tesla";
+          const label = c ? c.label : anyCar ? "Connect another EV" : "Connect your EV";
+          const href = c ? c.href : "/integrations/ev";
           const lit = on === k;
           const [tx, ty] = spotTop(sp);
           const w = label.length * 6.6 + 34;

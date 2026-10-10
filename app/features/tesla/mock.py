@@ -208,7 +208,7 @@ class DemoTessie:
                 "last_state": {
                     "display_name": "Demo Model Y",
                     "state": "online",
-                    "vehicle_config": {"car_type": "modely", "trim_badging": "74d"},
+                    "vehicle_config": {"car_type": "modely", "trim_badging": "74d", "exterior_color": "PearlWhite"},
                     "drive_state": {"latitude": lat, "longitude": lon},
                     "charge_state": self.car.charge_state(),
                     **self.car.fleet(),
