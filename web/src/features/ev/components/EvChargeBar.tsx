@@ -19,18 +19,23 @@ const clamp = (p: number, step = 1) => Math.max(LOWEST, Math.min(HIGHEST, Math.r
  * The car's charge up to its limit, with the limit as a handle: drag it (or tap the bar, or use the arrow keys) to
  * change the limit, and it's sent to the car when you let go. Sending wakes an asleep car, so then it asks first.
  * Until the car's next reading shows the new limit, the handle says it's being set. A Hyundai or Kia takes its
- * limit in tens (`brand` "bluelink").
+ * limit in tens (`brand` "bluelink"). While it `charging`, a light sweeps along the charge; while it's `asleep`, the
+ * charge is dimmed.
  */
 export function EvChargeBar({
   v,
   soc,
   fill,
   brand = "tesla",
+  charging = false,
+  asleep = false,
 }: {
   v: EvVehicle;
   soc: number | null;
   fill: string;
   brand?: EvBrand;
+  charging?: boolean;
+  asleep?: boolean;
 }) {
   const { command } = useEvChange(brand);
   const step = brand === "tesla" ? 1 : 10;
@@ -137,9 +142,14 @@ export function EvChargeBar({
         {/* The car's charge, the rest of the bar faded. */}
         <div className="relative h-3 overflow-hidden rounded-full bg-track">
           <div
-            className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
+            className={cn(
+              "absolute inset-y-0 left-0 overflow-hidden rounded-full transition-[width,opacity] duration-700 ease-out",
+              asleep && "opacity-45",
+            )}
             style={{ width: `${Math.min(100, soc ?? 0)}%`, background: fill }}
-          />
+          >
+            {charging && <span aria-hidden className="charge-flow absolute inset-0" />}
+          </div>
         </div>
         {shown != null && (
           <>

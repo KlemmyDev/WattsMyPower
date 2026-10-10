@@ -7,7 +7,7 @@ import { cn } from "~/features/common/ui/utils";
  * A page's summary at the top (Solar, Home, Grid, Battery): its icon in a tile of its colour, then a row of figures
  * (SummaryStat), as many across as fit and wrapping onto another row where they don't, two across on a phone. The card
  * takes a wash of the colour from the left, `wash` strong. `footer` goes under the row (the grid's warnings); `label`
- * names it for screen readers.
+ * names it for screen readers. `live` breathes a ring out around the icon (a car charging).
  */
 export function SummaryCard({
   icon,
@@ -15,6 +15,7 @@ export function SummaryCard({
   wash = 0.1,
   footer,
   label,
+  live = false,
   className,
   children,
 }: {
@@ -22,6 +23,7 @@ export function SummaryCard({
   color: string;
   wash?: number;
   footer?: ReactNode;
+  live?: boolean;
   label?: string;
   className?: string;
   children: ReactNode;
@@ -38,9 +40,16 @@ export function SummaryCard({
       {/* The icon at the top left, level with the first row's labels when the figures wrap onto more. */}
       <div className="flex items-start gap-6 max-sm:gap-4">
         <span
-          className="flex size-14 flex-none items-center justify-center rounded-[18px] transition-colors duration-500 max-sm:size-12 max-sm:rounded-2xl"
+          className="relative flex size-14 flex-none items-center justify-center rounded-[18px] transition-colors duration-500 max-sm:size-12 max-sm:rounded-2xl"
           style={{ background: alpha(color, 0.16), color }}
         >
+          {live && (
+            <span
+              aria-hidden
+              className="charge-ring absolute inset-0 rounded-[inherit]"
+              style={{ boxShadow: `0 0 0 2px ${alpha(color, 0.6)}` }}
+            />
+          )}
           <Icon name={icon} size={26} />
         </span>
         <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-x-6 gap-y-4 max-sm:grid-cols-2">
