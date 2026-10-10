@@ -4,14 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from app.core.config import Config
+from app.core.config import DEMO_LOCATION, Config
 from app.core.database import Database
 from app.features.readings.repository import ReadingsRepository
 
 
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
-    return Config(db_path=str(tmp_path / "test.db"), mock=True, auth=False)
+    # As MOCK=1 runs: at the demo's location (tests of a location not chosen yet clear it).
+    lat, lon = DEMO_LOCATION
+    return Config(db_path=str(tmp_path / "test.db"), mock=True, auth=False, latitude=lat, longitude=lon)
 
 
 @pytest.fixture

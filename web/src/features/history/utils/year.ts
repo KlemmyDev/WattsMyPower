@@ -2,7 +2,7 @@ import type { CostDay } from "~/features/common/readings/types";
 import type { DailyRow } from "~/features/history/types";
 import { dayMonth, monthLong, monthShort } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
-import { addDays, dateKey } from "~/features/common/time/utils";
+import { addDays, dateKey, partsOf } from "~/features/common/time/utils";
 import { COLOR, heatColor } from "~/features/common/theme/utils/colors";
 import type { Metric } from "~/features/history/utils/search";
 import type { WeatherDaySummary } from "~/features/weather/types";
@@ -213,7 +213,7 @@ export function monthsOf(days: Day[]): Month[] {
     let m = out[out.length - 1];
     if (!m || m.key !== key) {
       const dt = new Date(d.ts * 1000);
-      m = { key, name: monthLong.format(dt), short: monthShort.format(dt), year: dt.getFullYear(), days: 0, home: 0, direct: 0, battery: 0, imp: 0, exp: 0, saved: 0 }; // prettier-ignore
+      m = { key, name: monthLong.format(dt), short: monthShort.format(dt), year: partsOf(dt).year, days: 0, home: 0, direct: 0, battery: 0, imp: 0, exp: 0, saved: 0 }; // prettier-ignore
       out.push(m);
     }
     m.days++;

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { SystemInfo } from "~/features/common/live/types";
 import type { Forecast } from "~/features/common/weather/types";
-import { weekdayLong } from "~/features/common/formatting/utils/date";
+import { parseYmd, weekdayLong } from "~/features/common/formatting/utils/date";
+import { partsOf, siteTime } from "~/features/common/time/utils";
 import { kWh, kWhInt } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -9,9 +10,9 @@ import { Eyebrow } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
 import type { PlanDay } from "~/features/plan/utils";
 
-/** A date key's local weekday (0 Sunday), read as a date rather than a UTC midnight. */
-const weekdayOf = (date: string) => new Date(`${date}T12:00:00`).getDay();
-const plural = (n: number) => `${weekdayLong.format(new Date(2026, 0, 4 + n))}s`; // 4 Jan 2026 was a Sunday
+/** A date key's weekday (0 Sunday). */
+const weekdayOf = (date: string) => partsOf(parseYmd(date)).weekday;
+const plural = (n: number) => `${weekdayLong.format(siteTime(2026, 1, 4 + n, 12) * 1000)}s`; // 4 Jan 2026 was a Sunday
 
 /** A figure and what makes it up: the total, then a line per part. */
 function Total({
@@ -126,7 +127,7 @@ function RecentDays({
           return (
             <span
               key={d.date}
-              title={`${weekdayLong.format(new Date(`${d.date}T12:00:00`))} ${d.date.slice(8)}: ${kWh(d.kwh)}`}
+              title={`${weekdayLong.format(parseYmd(d.date))} ${d.date.slice(8)}: ${kWh(d.kwh)}`}
               className={cn("flex-1 rounded-t-[3px]", on ? "bg-ink" : "bg-ink/20")}
               style={{ height: `${(d.kwh / top) * 100}%` }}
             />
@@ -141,7 +142,7 @@ function RecentDays({
       <div className="flex gap-1 font-mono text-[10px] text-ink-faint">
         {basis.days.map((d) => (
           <span key={d.date} className="flex-1 text-center">
-            {weekdayLong.format(new Date(`${d.date}T12:00:00`)).slice(0, 1)}
+            {weekdayLong.format(parseYmd(d.date)).slice(0, 1)}
           </span>
         ))}
       </div>
@@ -211,7 +212,7 @@ function Solar({ day, forecast, system }: { day: PlanDay; forecast: Forecast; sy
       </About>
       <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-ink-muted">
         <span>Solar array: {system?.pv_kw ? `${system.pv_kw} kW` : "not set"}</span>
-        <ButtonLink to="/system" variant="link" size="sm">
+        <ButtonLink to="/system/solar-battery" variant="link" size="sm">
           Change
         </ButtonLink>
       </div>

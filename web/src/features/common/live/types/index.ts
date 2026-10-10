@@ -61,6 +61,8 @@ export type SystemInfo = {
   tariff: Tariff;
   pv2: SecondInverter | null;
   ev_connected?: boolean;
+  /** Whether a main inverter is connected: false once the collector says there's none, null until it's been asked. */
+  inverter_connected?: boolean | null;
 } & Settings;
 
 /** What the battery is set to do (app.features.battery): who has it, and the control in effect from the dashboard or
@@ -69,6 +71,8 @@ export type BatteryMode = {
   /** normal: self-consumption; dashboard: a control here; isolarcloud: a command from its app (VPP mode); external: an
    * energy manager; elsewhere: forced mode set outside the dashboard; unknown: a mode not known; null: not read yet. */
   owner: "normal" | "dashboard" | "isolarcloud" | "external" | "elsewhere" | "unknown" | null;
+  /** Why the controls are off for this inverter's model (they haven't been tried on it); null when they can be used. */
+  untried?: string | null;
   min_soc: number | null;
   max_soc?: number | null;
   kind?: "standby" | "floor" | "charge";
@@ -98,6 +102,9 @@ export type LiveStatus = {
   /** Which version this is: the date it was released ("2026.10.8"), and how far along it is (e.g. "alpha"; null
    * once it's stable, as now). */
   app?: { version: string; release: string | null; commit: string | null };
+  /** The site's time zone, e.g. "Australia/Brisbane": the server's, which its days are kept in. Days, hours and clock
+   * times are drawn in it, whatever zone the browser is in. Null if the server can't name it. */
+  time_zone?: string | null;
   /** Each EV in brief (app.features.tesla); null when none is connected. */
   ev?: EvBrief[] | null;
 };

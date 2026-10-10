@@ -1,23 +1,32 @@
 import type { ControlKind, ControlRecord, OutsideKind } from "~/features/battery/types";
-import type { BatteryMode } from "~/features/common/live/types";
+import type { BatteryMode, SystemInfo } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { addDays, partsOf, sameDay, siteTime } from "~/features/common/time/utils";
 
-/** Unix seconds of the next `hh:mm` (local) after `now`: today, or tomorrow if that's already passed. */
+/**
+ * Whether it's known there's no home battery (a solar-only system): no size from the inverter or Manage → System, once
+ * the inverter's details have been read, or with no inverter connected. False until that's known, so the battery
+ * isn't hidden while the page loads only to come back a moment later.
+ */
+export function noBattery(s: SystemInfo | undefined): boolean {
+  if (!s || (s.battery_kwh ?? 0) > 0) return false;
+  return s.inverter_connected === false || (s.inverter_connected === true && !!s.model);
+}
+
+/** Unix seconds of the next `hh:mm` (on the site's clock) after `now`: today, or tomorrow if that's already passed. */
 export function nextAt(hm: string, now: number): number | null {
   const [h, m] = hm.split(":").map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  const d = new Date(now * 1000);
-  d.setHours(h, m, 0, 0);
-  if (d.getTime() / 1000 <= now + 60) d.setDate(d.getDate() + 1);
-  return Math.floor(d.getTime() / 1000);
+  const d = partsOf(now);
+  const at = siteTime(d.year, d.month, d.day, h, m);
+  return at <= now + 60 ? siteTime(d.year, d.month, d.day + 1, h, m) : at;
 }
 
 /** "14:05", "tomorrow 06:00", or "Thu 9 Oct 06:00". */
 export function when(ts: number, now: number): string {
-  const day = (t: number) => new Date(t * 1000).toDateString();
-  if (day(ts) === day(now)) return hhmm(ts);
-  if (day(ts) === day(now + 86400)) return `tomorrow ${hhmm(ts)}`;
+  if (sameDay(ts, now)) return hhmm(ts);
+  if (sameDay(ts, addDays(now, 1))) return `tomorrow ${hhmm(ts)}`;
   return `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
 }
 

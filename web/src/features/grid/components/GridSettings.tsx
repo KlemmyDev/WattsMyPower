@@ -3,7 +3,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
-import { useSaveSettings } from "~/features/common/settings/hooks";
+import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
+import { useLocationSet, useSaveSettings } from "~/features/common/settings/hooks";
 import type { Settings } from "~/features/common/settings/types";
 import { failure, saveSettingsError } from "~/features/common/settings/utils";
 import { Button } from "~/features/common/ui/components/Button";
@@ -58,7 +59,12 @@ function Network() {
   const save = useSaveNow();
   const out = grid?.outages;
   const value = (save.isPending ? save.variables?.power_network : system?.power_network) ?? "auto";
-  const found = out?.network_auto && out.network ? `Automatic (${out.network.name})` : "Automatic";
+  const found =
+    out?.network_auto && out.network
+      ? `Automatic (${out.network.name})`
+      : out && !out.location_set
+        ? "Automatic (needs your location)"
+        : "Automatic";
   return (
     <SettingsCard padded aria-labelledby="h-network" className="gap-4">
       <CardTitle
@@ -99,7 +105,7 @@ function Network() {
           {out.fetched_at ? `, and shows the outages as they were at ${hhmm(out.fetched_at)} meanwhile.` : "."}
         </HelpText>
       )}
-      {value === "auto" && !out?.network && (
+      {value === "auto" && !out?.network && out?.location_set && (
         <HelpText>
           No supported network found for {locationLabel(system)}. Only Queensland's networks (Energex and Ergon Energy)
           are supported so far.
@@ -305,7 +311,12 @@ function Market() {
   const { data: grid } = useQuery(gridQuery);
   const save = useSaveNow();
   const value = (save.isPending ? save.variables?.nem_region : system?.nem_region) ?? "auto";
-  const found = grid?.region_auto && grid.region_name ? `Automatic (${grid.region_name})` : "Automatic";
+  const found =
+    grid?.region_auto && grid.region_name
+      ? `Automatic (${grid.region_name})`
+      : grid && !grid.location_set
+        ? "Automatic (needs your location)"
+        : "Automatic";
   return (
     <SettingsCard padded aria-labelledby="h-market" className="gap-4">
       <CardTitle
@@ -347,6 +358,7 @@ function Market() {
 /** Manage → Integrations → Grid: the electricity network's outages, the street they're matched to, and AEMO. */
 export function GridSettings() {
   const system = useLive()?.system;
+  const located = useLocationSet();
   return (
     <>
       <SubPageHeader
@@ -355,6 +367,11 @@ export function GridSettings() {
         title="Grid"
         sub="Power outages around your house from your electricity network, weather and fire warnings, and the wholesale market from AEMO, for the Grid page."
       />
+      {located === false && (
+        <LocationPrompt>
+          Outages, warnings and your region are worked out from where your house is, so they need your location.
+        </LocationPrompt>
+      )}
       {/* Started afresh once the saved street is known, and after it's saved. */}
       <Network />
       <Street key={`${system?.home_street},${system?.home_suburb}`} />

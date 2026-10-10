@@ -1,3 +1,4 @@
+import { ChannelBadge } from "~/features/updates/components/ChannelBadge";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
@@ -356,21 +357,15 @@ function VersionTag({ full }: { full: boolean }) {
         )}
       </button>
     );
-  const channel = updates && updates.channel !== "stable" ? updates.channel : null;
-  const release = channel ? channel.charAt(0).toUpperCase() + channel.slice(1) : null;
+  const channel = updates?.channel ?? null;
   const newer = updates?.available ? updates.latest : null;
   const title = `WattsMyPower ${app.version}${channel ? `, on the ${channel} channel` : ""}${newer ? ". A newer version is available." : ""}`;
-  const pill = release && (
-    <span className="rounded-full border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-warn">
-      {release}
-    </span>
-  );
+  const pill = channel && <ChannelBadge channel={channel} />;
   return full ? (
     <>
       {newer && (
         <Link
-          to="/system"
-          hash="updates"
+          to="/system/updates"
           className="flex items-center gap-2 rounded-xl border border-brand/25 bg-brand-subtle px-3 py-2 text-[12.5px] font-medium text-brand no-underline transition-colors hover:border-brand/45 hover:text-brand"
         >
           <span aria-hidden className="size-1.5 flex-none rounded-full bg-brand" />
@@ -392,8 +387,7 @@ function VersionTag({ full }: { full: boolean }) {
     </>
   ) : (
     <Link
-      to="/system"
-      hash={newer ? "updates" : undefined}
+      to={newer ? "/system/updates" : "/system"}
       title={title}
       aria-label={title}
       className="relative flex no-underline"

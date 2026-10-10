@@ -67,6 +67,8 @@ export type Outage = {
 export type OutagesView = {
   network: { id: string; name: string; site: string } | null;
   network_auto: boolean;
+  /** The house's location has been chosen: no outages are followed until it is. */
+  location_set: boolean;
   /** The house is somewhere a network is supported (Queensland, for now), or one was chosen. */
   supported: boolean;
   radius_km: number;
@@ -120,6 +122,8 @@ export type FireWarning = {
 
 export type HazardsView = {
   enabled: boolean;
+  /** The house's location has been chosen: no warnings are fetched until it is. */
+  location_set: boolean;
   /** The Bureau's forecast town nearest the house, whose districts its warnings are matched by. */
   town: string | null;
   /** Fires are followed (in Queensland). */
@@ -144,6 +148,9 @@ export type GridView = {
   region_name: string | null;
   /** The region was worked out from the location rather than chosen. */
   region_auto: boolean;
+  /** The house's location has been chosen. Until it is, an automatic region isn't worked out (one chosen still is
+   * followed), and outages and warnings aren't. */
+  location_set: boolean;
   market: Market | null;
   prices: WholesalePrice[];
   notices: MarketNotice[];

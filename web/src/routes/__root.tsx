@@ -18,7 +18,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "WattsMyPower" },
-      // Added to a phone's home screen, it opens like an app: on an iPhone, that's what lets it get notifications.
+      // Added to a phone's home screen, it opens like an app, full screen without the browser's bars.
       { name: "apple-mobile-web-app-title", content: "WattsMyPower" },
       { name: "mobile-web-app-capable", content: "yes" },
     ],
@@ -26,12 +26,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: "icon", href: FAVICON },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap",
-      },
+      // The fonts come with it (styles/fonts.css), not from Google Fonts.
       { rel: "stylesheet", href: appCss },
     ],
   }),

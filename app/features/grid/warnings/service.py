@@ -91,6 +91,10 @@ class HazardService:
     def enabled(self) -> bool:
         return bool(self.settings.get("hazard_warnings"))
 
+    def following(self) -> bool:
+        """Whether warnings are fetched: turned on, and the house's location chosen (they're for where it is)."""
+        return self.enabled() and self.settings.location_set()
+
     # ------------------------------------------------------------------ fetching
     async def start(self) -> None:
         self._wake = asyncio.Event()
@@ -110,7 +114,7 @@ class HazardService:
     async def _run(self) -> None:
         await asyncio.sleep(2)  # just after start-up, so the page has warnings within moments
         while True:
-            if self.enabled():
+            if self.following():
                 try:
                     await asyncio.to_thread(self.refresh)
                 except Exception:  # a failed fetch must never end the loop
@@ -121,9 +125,13 @@ class HazardService:
             self._wake.clear()
 
     def place(self) -> dict[str, Any] | None:
-        """Where the house is in the Bureau's areas (its nearest forecast town, districts and catchments)."""
+        """Where the house is in the Bureau's areas (its nearest forecast town, districts and catchments). None
+        until its location has been chosen."""
+        where = self.settings.location()
+        if where is None:
+            return None
         now = self.clock()
-        lat, lon = self.settings.get("latitude"), self.settings.get("longitude")
+        lat, lon = where
         with self._lock:
             places = self._places
         if places is None or now - places[0] >= PLACES_EVERY:
@@ -142,6 +150,8 @@ class HazardService:
         """Fetch both, each on its own: the Fire Department's first (one quick file), then the Bureau's (the house's
         districts, looked up once a day, and the warnings in force). Each keeps when it last answered and why it
         didn't, so the page can tell "no warnings" from "couldn't ask"."""
+        if not self.settings.location_set():
+            return  # nothing to follow until the house's location is chosen
         if self.region() == "QLD1":
             try:
                 fires = self.fires()
@@ -178,9 +188,10 @@ class HazardService:
         """The Bureau's warnings for the house's districts (or drawn around it), and fires with a warning within the
         radius (or whose warning area covers the house), or without one, close by. Most serious first."""
         now = self.clock() if now is None else now
-        if not self.enabled():
+        where = self.settings.location()
+        if not self.enabled() or where is None:
             return {"weather": [], "fires": []}
-        lat, lon = self.settings.get("latitude"), self.settings.get("longitude")
+        lat, lon = where
         radius = self.settings.get("outage_radius_km")
         with self._lock:
             place, weather, fires = self._place, list(self._weather), list(self._fire)
@@ -226,6 +237,8 @@ class HazardService:
         answered = [s["at"] for s in sources.values() if s["at"] is not None]
         return {
             "enabled": self.enabled(),
+            # Whether the house's location has been chosen: none are fetched until it is.
+            "location_set": self.settings.location_set(),
             "town": (place or {}).get("town"),
             "fires_followed": fires,
             "radius_km": self.settings.get("outage_radius_km"),

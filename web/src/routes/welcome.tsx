@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { sessionQuery } from "~/features/auth/api";
 import { useSignOutOnExpiry } from "~/features/auth/hooks/useSignOutOnExpiry";
 import { LiveProvider } from "~/features/common/live/components/LiveProvider";
+import { useSiteZone } from "~/features/common/time/hooks";
 import { onboardingQuery } from "~/features/onboarding/api";
 import { WelcomePage } from "~/features/onboarding/components/WelcomePage";
 import type { StepId } from "~/features/onboarding/types";
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/welcome")({
 
 function WelcomeRoute() {
   useSignOutOnExpiry();
+  useSiteZone();
   const { step } = Route.useSearch();
   return (
     <LiveProvider>

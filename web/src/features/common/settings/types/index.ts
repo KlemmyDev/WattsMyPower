@@ -1,7 +1,9 @@
 /** Settings editable from the dashboard (GET/PUT /api/settings). */
 export type Settings = {
-  latitude: number;
-  longitude: number;
+  /** Where the house is: null until it's chosen (the set-up guide, Manage → Integrations → Weather). Nothing that
+   * depends on it (the forecast, weather, outages, warnings, the automatic AEMO region) is fetched until then. */
+  latitude: number | null;
+  longitude: number | null;
   /** The billing period: every 1, 2 or 3 months from this day of the month (1-28), in step with a month (1-12) a bill starts in. */
   bill_months: number;
   bill_day: number;
@@ -59,7 +61,7 @@ export type Settings = {
   battery_places: ("wall" | "garage")[];
   /**
    * Cost and warranty (Manage → System): what the system cost in dollars, and when it went in, for payback on Bills;
-   * when the battery went in if later, and its warranty in years and in MWh delivered, for Health. 0 = not set. Dates
+   * when the battery went in if later, and its warranty in years and in MWh delivered, for Battery. 0 = not set. Dates
    * are unix seconds at local midnight.
    */
   system_cost: number;

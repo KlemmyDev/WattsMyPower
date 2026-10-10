@@ -9,7 +9,7 @@ import type { TariffEdit } from "~/features/settings/utils";
 export const numberInput = (v: string): number | "" => (v === "" ? "" : +v);
 
 const winControl =
-  "h-10 rounded-lg border border-line bg-surface px-2.5 font-sans text-sm text-ink tabular-nums focus:border-brand focus:shadow-focus focus:outline-none";
+  "h-10 rounded-xl border border-line-subtle bg-surface px-2.5 font-sans text-sm text-ink tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line focus:border-brand focus:shadow-focus focus:outline-none";
 
 const NEVER_APPLIES =
   "Never applies: the other rates already cover every hour. To use two rates, select “Use for all other times” on one of them, then remove this one.";
@@ -79,7 +79,7 @@ export function BandEditor({
   edit: (e: TariffEdit) => void;
 }) {
   return (
-    <div className="flex flex-col items-start gap-2.5 rounded-xl border border-line-subtle p-4">
+    <div className="flex flex-col items-start gap-2.5 rounded-2xl bg-canvas/60 p-4 light:bg-canvas">
       <div className="flex w-full flex-wrap items-center gap-2.5">
         <Swatch color={bandColor(index)} size={10} />
         <Input

@@ -1,4 +1,4 @@
-"""Longer-term figures for the Health page (the insights feature)."""
+"""Longer-term figures for the Solar and Battery pages (the insights feature)."""
 
 from __future__ import annotations
 

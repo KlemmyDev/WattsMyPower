@@ -333,7 +333,8 @@ function DeviceRow({
 }
 
 /**
- * Manage → Integrations → a smart-home integration (Hisense, through ConnectLife; the demo in mock mode): connect
+ * Manage → Integrations → a smart-home integration (Tapo, Shelly, Home Assistant, Hisense through ConnectLife, Bluetti,
+ * EcoFlow; the demo in mock mode): connect
  * its account, and the devices it brought.
  */
 export function HomeIntegrationSettings({ id }: { id: string }) {

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { kWh } from "~/features/common/formatting/utils/number";
 import { hourLabel } from "~/features/common/formatting/utils/date";
+import { hourOf } from "~/features/common/time/utils";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import { codeIcon, codeName, degrees, hourIconColor } from "~/features/common/weather/utils";
@@ -36,7 +37,7 @@ export function DayWeather({ date, made }: { date: string; made: number | null }
   const fahrenheit = useFahrenheit();
   if (!data?.hours.length) return null;
   const s = data.summary;
-  const every3 = data.hours.filter((h) => new Date(h.ts * 1000).getHours() % 3 === 0);
+  const every3 = data.hours.filter((h) => hourOf(h.ts) % 3 === 0);
   const facts = [
     s.rain_mm != null && s.rain_mm >= 0.1 ? `${s.rain_mm} mm of rain` : "No rain",
     s.cloud != null && `${s.cloud}% cloud through the day`,
@@ -49,9 +50,7 @@ export function DayWeather({ date, made }: { date: string; made: number | null }
           const icon = codeIcon(h.code ?? 0, !!h.is_day);
           return (
             <div key={h.ts} className="flex flex-col items-center gap-1">
-              <span className="text-[11px] text-ink-faint tabular-nums">
-                {hourLabel(new Date(h.ts * 1000).getHours())}
-              </span>
+              <span className="text-[11px] text-ink-faint tabular-nums">{hourLabel(hourOf(h.ts))}</span>
               <span style={{ color: hourIconColor(icon) }} title={h.code != null ? codeName(h.code) : undefined}>
                 <Icon name={icon} size={18} />
               </span>

@@ -1,6 +1,7 @@
 import type { ForecastHour } from "~/features/common/weather/types";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { COLOR } from "~/features/common/theme/utils/colors";
+import { hourOf } from "~/features/common/time/utils";
 import { isWet } from "~/features/common/weather/utils";
 import { hourEnd } from "~/features/plan/utils";
 
@@ -33,7 +34,7 @@ export function moments(
         : { t: fullAt, title: "Battery full", sub: "Extra solar goes to the grid", color: COLOR.battery },
     );
 
-  const drop = hrs.find((h, k) => k > 0 && h.is_day && new Date(h.ts * 1000).getHours() >= 13 && h.pv_kw < h.load_kw);
+  const drop = hrs.find((h, k) => k > 0 && h.is_day && hourOf(h.ts) >= 13 && h.pv_kw < h.load_kw);
   if (drop)
     out.push({
       t: drop.ts,
@@ -47,7 +48,7 @@ export function moments(
   const res = hrs.find((h, k) => low(h) && (k === 0 || !low(hrs[k - 1])) && (fullAt == null || h.start > fullAt));
   if (res) {
     const t = Math.min(end, hourEnd(res));
-    const morning = new Date(t * 1000).getHours() < 12;
+    const morning = hourOf(t) < 12;
     out.push({
       t,
       title: "Battery reaches reserve",
@@ -64,8 +65,7 @@ export function moments(
     out.push({
       t: hrs[k0].start,
       title: `Showers until ${hhmm(until)}`,
-      sub:
-        new Date(hrs[k0].start * 1000).getHours() < 12 ? "Lower solar early in the day" : "Lower solar while it rains",
+      sub: hourOf(hrs[k0].start) < 12 ? "Lower solar early in the day" : "Lower solar while it rains",
       color: COLOR.link,
     });
   }

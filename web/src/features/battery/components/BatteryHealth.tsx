@@ -112,8 +112,8 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
     return (
       <Muted>
         Add the battery's warranty in{" "}
-        <Link to="/system" className="text-link">
-          Manage → System
+        <Link to="/system/cost" className="text-link">
+          Manage → System → Cost and warranty
         </Link>{" "}
         to track how much of it is used.
       </Muted>

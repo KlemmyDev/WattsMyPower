@@ -7,7 +7,9 @@ import type { PlanTariff } from "~/features/settings/types";
 import type { Tariff } from "~/features/common/tariffs/types";
 import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
-import { Segmented } from "~/features/common/ui/components/Segmented";
+import type { IconName } from "~/features/common/ui/components/Icon";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { ChoiceTiles } from "~/features/settings/components/SettingsSection";
 import { cn } from "~/features/common/ui/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { MAX_BANDS, usedBands } from "~/features/common/tariffs/utils";
@@ -18,10 +20,10 @@ import { SettingsCard, SettingsTitle } from "~/features/settings/components/Sett
 import type { EditorAction, EditorState, TariffEdit } from "~/features/settings/utils";
 import { TariffTimeline } from "~/features/settings/components/TariffTimeline";
 
-const RATE_TYPES: { value: Tariff["type"]; label: string }[] = [
-  { value: "flat", label: "Single rate" },
-  { value: "tou", label: "Time of use" },
-  { value: "amber", label: "Amber" },
+const RATE_TYPES: { value: Tariff["type"]; label: string; icon: IconName }[] = [
+  { value: "flat", label: "Single rate", icon: "bolt" },
+  { value: "tou", label: "Time of use", icon: "clock" },
+  { value: "amber", label: "Amber", icon: "dollar" },
 ];
 
 const RATE_HELP: Record<Tariff["type"], string> = {
@@ -64,7 +66,10 @@ function MoneyField({
 
 function ImportNote({ plan, saveLabel }: { plan: PlanTariff; saveLabel: string }) {
   return (
-    <div role="status" className="rounded-xl bg-brand-subtle px-4 py-3.5 text-[13px] leading-5 text-ink-muted">
+    <div
+      role="status"
+      className="animate-pop rounded-2xl bg-brand-subtle px-5 py-4 text-[13px] leading-5 text-ink-muted"
+    >
       <b className="font-semibold text-ink">
         Loaded {plan.plan.brand} · {plan.plan.name}.
       </b>{" "}
@@ -82,7 +87,7 @@ function ImportNote({ plan, saveLabel }: { plan: PlanTariff; saveLabel: string }
 
 function SourceLine({ source }: { source: NonNullable<Tariff["source"]> }) {
   return (
-    <div className="rounded-[10px] bg-canvas px-3.5 py-2.5 text-[13px] leading-5 text-ink-muted">
+    <div className="rounded-2xl bg-canvas/60 px-4 py-3 text-[13px] leading-5 text-ink-muted light:bg-canvas">
       Imported from {source.brand} · {source.plan_name} (plan {source.plan_id}), published {source.updated || "—"}. Edit
       anything that differs from your bill.
     </div>
@@ -181,14 +186,15 @@ export function RatesFields({
       )}
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold">Rate type</span>
-        <Segmented
+        <ChoiceTiles
           label="Rate type"
-          className="self-start"
-          options={types}
+          min="12rem"
+          phone={1}
+          color={COLOR.good}
+          options={types.map((r) => ({ value: r.value, title: r.label, sub: RATE_HELP[r.value], icon: r.icon }))}
           value={draft.type}
-          onChange={(v) => v !== draft.type && edit({ type: "set-rate-type", value: v })}
+          onChange={(v) => edit({ type: "set-rate-type", value: v })}
         />
-        <HelpText>{RATE_HELP[draft.type]}</HelpText>
       </div>
       {dynamic && (
         <HelpText className="text-[13px] leading-5">

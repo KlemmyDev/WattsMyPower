@@ -25,6 +25,11 @@ def secured(config: Config) -> Iterator[TestClient]:
         yield c
 
 
+def setup_code(c: TestClient) -> str:
+    """The set-up code the dashboard wrote to the logs and data/setup-code when it started without an account."""
+    return c.app.state.services.auth.code_path.read_text().strip()  # type: ignore[attr-defined]
+
+
 def test_status_before_the_first_reading(client: TestClient) -> None:
     body = client.get("/api/live").json()
     assert body["snapshot"] is None and body["mock"] is True
@@ -73,8 +78,11 @@ def test_everything_needs_signing_in_when_auth_is_on(secured: TestClient) -> Non
 
 
 def test_account_setup_sign_in_and_out(secured: TestClient) -> None:
-    assert secured.post("/api/auth/setup", json={"username": "home", "password": "short"}).status_code == 422
-    r = secured.post("/api/auth/setup", json={"username": "home", "password": "correct horse"})
+    code = setup_code(secured)
+    assert (
+        secured.post("/api/auth/setup", json={"username": "home", "password": "short", "code": code}).status_code == 422
+    )
+    r = secured.post("/api/auth/setup", json={"username": "home", "password": "correct horse", "code": code})
     assert r.status_code == 200 and "wmp_session" in r.cookies
     assert secured.get("/api/live").status_code == 200  # the cookie is sent from now on
     assert secured.post("/api/auth/setup", json={"username": "x", "password": "another one"}).status_code == 409
@@ -88,7 +96,7 @@ def test_account_setup_sign_in_and_out(secured: TestClient) -> None:
 
 
 def test_sign_in_pauses_after_repeated_failures(secured: TestClient) -> None:
-    secured.post("/api/auth/setup", json={"username": "home", "password": "correct horse"})
+    secured.post("/api/auth/setup", json={"username": "home", "password": "correct horse", "code": setup_code(secured)})
     secured.post("/api/auth/logout")
     for _ in range(5):
         assert secured.post("/api/auth/login", json={"username": "home", "password": "nope nope"}).status_code == 401

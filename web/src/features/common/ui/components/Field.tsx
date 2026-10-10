@@ -1,4 +1,4 @@
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import { cn } from "~/features/common/ui/utils";
 
 /** A labelled form control with optional help text and error. */
@@ -46,8 +46,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <span
       className={cn(
-        "flex h-11 items-center gap-2 rounded-lg border bg-surface px-3.5 focus-within:border-brand focus-within:shadow-focus",
-        invalid ? "border-bad" : "border-line",
+        "flex h-11 items-center gap-2 rounded-xl border bg-canvas/60 px-3.5 transition-[border-color,box-shadow] duration-150 focus-within:border-brand focus-within:shadow-focus light:bg-canvas",
+        invalid ? "border-bad" : "border-line-subtle hover:border-line",
         boxClassName,
       )}
     >
@@ -73,13 +73,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     <select
       ref={ref}
       className={cn(
-        "h-11 rounded-lg border border-line bg-surface px-3 font-sans text-[15px] text-ink focus:border-brand focus:shadow-focus focus:outline-none",
+        "h-11 rounded-xl border border-line-subtle bg-canvas/60 px-3 font-sans text-[15px] text-ink transition-[border-color,box-shadow] duration-150 hover:border-line focus:border-brand focus:shadow-focus focus:outline-none light:bg-canvas",
         className,
       )}
       {...rest}
     />
   );
 });
-
-/** Stable id for aria wiring. */
-export const useFieldId = useId;
