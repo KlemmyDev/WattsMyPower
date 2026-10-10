@@ -23,7 +23,16 @@ export default defineConfig(({ mode }) => {
       // Fail if the port is taken rather than quietly moving to another, so the URL stays put.
       strictPort: true,
       proxy: {
-        "/api": { target, changeOrigin: true },
+        "/api": {
+          target,
+          changeOrigin: true,
+          // The backend refuses changes whose Origin isn't its own address (cross-site requests), and through this
+          // proxy the page's origin is the dev server's: pass the backend's own instead.
+          configure: (proxy) =>
+            proxy.on("proxyReq", (req) => {
+              if (req.getHeader("origin")) req.setHeader("origin", new URL(target).origin);
+            }),
+        },
         "/healthz": { target, changeOrigin: true },
       },
     },

@@ -139,6 +139,14 @@ class UpdateService:
                     log.exception("Checking for updates failed")
             await asyncio.sleep(EVERY)
 
+    def _make_folder(self) -> None:
+        """The folder shared with updater.sh, if it isn't there yet, open to the host's user (the app's umask would
+        otherwise keep it to the app's own)."""
+        if not self.folder.is_dir():
+            self.folder.mkdir(parents=True, exist_ok=True)
+            with contextlib.suppress(OSError):
+                self.folder.chmod(0o755)
+
     def channel(self) -> str:
         """The release channel it follows (nightly, beta or stable), as the host's install.sh reads it too."""
         try:
@@ -152,7 +160,7 @@ class UpdateService:
         if channel not in CHANNELS:
             raise ValueError(f"There's no {channel!r} channel: it's one of {', '.join(CHANNELS)}.")
         try:
-            self.folder.mkdir(parents=True, exist_ok=True)
+            self._make_folder()
             tmp = self.folder / ".channel.tmp"
             tmp.write_text(f"{channel}\n")
             tmp.chmod(0o644)  # install.sh reads it, as whoever runs it (the dashboard's own files are its alone)
@@ -294,7 +302,7 @@ class UpdateService:
         if current["state"] in ("requested", "running"):
             raise UpdateRefused("An update is already under way.")
         try:
-            self.folder.mkdir(parents=True, exist_ok=True)
+            self._make_folder()
             (self.folder / "request").write_text(f"{int(time.time())}\n")
         except OSError as e:
             raise UpdateRefused(f"Couldn't ask the updater: {e.strerror or e}.") from e

@@ -182,7 +182,7 @@ curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install
 
 ### Open the dashboard
 
-**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
+**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password), with the one-time set-up code: `install.sh` shows it when it finishes, and it's also in `docker compose logs wattsmypower` and `data/setup-code`. After that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
 
 - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
 - **Your system:** the solar array's size (the forecast starts from it, and it's 6.6 kW until it's entered), and the battery details your inverter can't report.
@@ -255,7 +255,7 @@ docker compose start
 
 On Windows, also remove the scheduled task and firewall rule (`Unregister-ScheduledTask WattsMyPower` and `Remove-NetFirewallHyperVRule -Name WattsMyPower`, in PowerShell as administrator); `wsl --unregister WattsMyPower` then deletes the whole distribution, data included. See [Windows](#windows).
 
-> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
+> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account and prints a new set-up code, and the next visit asks for a new account. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
 
@@ -330,7 +330,10 @@ Almost everything is set up in the dashboard (**Manage**, and **Bills → Rates 
 | `PV_KW`, `BATTERY_KWH` | `6.6`, `0` | **Only read once:** the solar array's size and the battery's capacity (`0` = read it from the inverter) are set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts, it moves the values here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets the array's size); after that they're ignored, and the log says so. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |
 | `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Manage → Integrations → Weather.** |
-| `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
+| `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. Only `false`, `0`, `no` or `off` turns it off: an empty or mistyped value keeps it on. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Behind a reverse proxy, set this to the proxy's address so sign-in sees each browser's own address (from `X-Forwarded-For`), not the proxy's. Otherwise every browser shares the proxy's address, and too many wrong passwords from one person pause sign-in for everyone using that username. The proxy also needs to pass on the `Host` header (or set `X-Forwarded-Host`): changes whose origin doesn't match it are refused. |
+| `API_DOCS` | `false` | Serve the API's documentation at `/api/docs` (behind sign-in). |
+| `COLLECTOR_ALLOW_PUBLIC_HOSTS` | `false` | Inverters connected in the dashboard must be on your home network (a private address, or a name that resolves to one). Set `true` on the collector to allow any address, for example an inverter reached over a VPN. |
 | `BLUETOOTH` | `auto` | Whether `install.sh` connects the server's Bluetooth through to the dashboard (`auto`: when it finds an adapter with BlueZ running; `on`; `off`). See [Bluetooth](#bluetooth). |
 | `BLUETOOTH_DBUS` | `/run/dbus` | The folder with the D-Bus socket BlueZ is on. `install.sh` sets it to `/mnt/host-dbus` in a Proxmox LXC set up as in [Bluetooth](#bluetooth). |
 | `LOG_DEBUG` | *(empty)* | Loggers to turn up to DEBUG, comma-separated (`tesla_fleet_api`, `bleak`), to see what a device says message by message when the log doesn't say why something failed. |

@@ -19,6 +19,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const busy = login.isPending || create.isPending;
 
@@ -27,7 +28,8 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
     setError("");
     if (setup && password !== confirm) return setError("The passwords don't match.");
     try {
-      await (setup ? create : login).mutateAsync({ username, password });
+      if (setup) await create.mutateAsync({ username, password, code });
+      else await login.mutateAsync({ username, password });
       navigate({ to: redirectTo || "/", replace: true });
     } catch (err) {
       setError(errorMessage(err));
@@ -51,19 +53,43 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
             </h1>
             <p className="m-0 text-sm leading-[22px] text-pretty text-ink-muted">
               {setup
-                ? "Choose a username and password for this dashboard. Anyone on your network will need them to see your data or change settings."
+                ? "Enter the set-up code, then choose a username and password for this dashboard. Anyone on your network will need them to see your data or change settings."
                 : "Sign in to see your solar, battery and savings."}
             </p>
           </div>
         </div>
         <div className="flex flex-col gap-4">
+          {setup && (
+            <Field
+              label="Set-up code"
+              help={
+                <>
+                  It's in the dashboard's logs: from the install folder, run{" "}
+                  <code className="font-mono">docker compose logs wattsmypower</code>, or open{" "}
+                  <code className="font-mono">data/setup-code</code>. It's only needed this once.
+                </>
+              }
+            >
+              <Input
+                autoComplete="one-time-code"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="ABCD-EFGH"
+                className="font-mono"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+                autoFocus
+              />
+            </Field>
+          )}
           <Field label="Username">
             <Input
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              autoFocus
+              autoFocus={!setup}
             />
           </Field>
           <Field label="Password" help={setup ? "At least 8 characters." : undefined}>

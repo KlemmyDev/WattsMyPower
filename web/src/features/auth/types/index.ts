@@ -9,3 +9,6 @@ export type Session = {
 };
 
 export type Credentials = { username: string; password: string };
+
+/** The first account also needs the one-time set-up code the server writes to its logs (and data/setup-code). */
+export type NewAccount = Credentials & { code: string };

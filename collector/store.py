@@ -20,7 +20,7 @@ import os
 import sqlite3
 import time
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from typing import NamedTuple
 
 from collector.devices import DeviceConfig, Words
@@ -99,6 +99,14 @@ class Store:
         with closing(self.connect()) as conn:
             yield conn
             conn.commit()
+
+    def keep_private(self) -> None:
+        """The database's files readable by this user only, where they're more open (from before the collector's
+        umask). Best effort: a file it can't change is left as it is."""
+        for path in (self.path, self.path + "-wal", self.path + "-shm"):
+            with suppress(OSError):
+                if os.stat(path).st_mode & 0o077:
+                    os.chmod(path, 0o600)
 
     def migrate(self) -> int:
         """Create the database if needed and bring its schema up to date. Returns the schema version.
