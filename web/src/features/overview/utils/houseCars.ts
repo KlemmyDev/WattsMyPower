@@ -12,7 +12,7 @@ export type HouseCar = SceneCar & { park: Park };
 /**
  * The cars parked at the house: each EV connected through an integration, drawn as what it is (its make and model's
  * shape; its dashboard car's paint, else the paint the car gives, else its model's usual), labelled with its name, level
- * and whether it's charging or away, and linking to its page in Integrations. Then any car added by hand before cars
+ * and whether it's charging or away, and linking to its own page under EV. Then any car added by hand before cars
  * came from an integration, not tied to one, as it was set up, so nobody's car goes missing.
  *
  * An EV not tied to a dashboard car (charging with its model's figures) takes the paint and parking of an untied
@@ -41,7 +41,7 @@ export function houseCars(evs: EvBrief[] | null | undefined, cars: CarView[] | u
       ]
         .filter(Boolean)
         .join(" · "),
-      href: look.page(own ? own.id : null),
+      href: `/ev/${encodeURIComponent(v.vin)}`,
       charging,
       park: record?.car.car_park ?? "garage",
     };
@@ -50,7 +50,7 @@ export function houseCars(evs: EvBrief[] | null | undefined, cars: CarView[] | u
     body: c.car.car_body,
     paint: paintOf(c.car.car_colour).hex,
     label: [carName(c), c.level && `${Math.round(c.level.soc)}%`].filter(Boolean).join(" · "),
-    href: `/integrations/ev/tesla/car/${c.id}`,
+    href: "/ev",
     park: c.car.car_park,
   }));
   return [...connected, ...byHand];

@@ -5,6 +5,7 @@ import { carsQuery } from "~/features/car/api";
 import { CarDetailsForm } from "~/features/car/components/CarDetailsForm";
 import { useCarChange } from "~/features/car/hooks";
 import { BODY, carName } from "~/features/car/utils";
+import { carTitle } from "~/features/ev/utils";
 import { lookOf } from "~/features/ev/utils/looks";
 import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
@@ -65,7 +66,7 @@ export function CarPage({ carId }: { carId: number }) {
         title="Remove this car"
         sub={
           vehicle
-            ? `Its recorded levels go with it. The Tesla carries on with ${vehicle.model ?? "its model's"} figures.`
+            ? `Its recorded levels go with it. The Tesla carries on as a standard ${carTitle(vehicle)}.`
             : "Its recorded levels go with it."
         }
         aside={

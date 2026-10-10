@@ -15,7 +15,7 @@ import { BluetoothPair } from "~/features/ev/components/BluetoothPair";
 import { TeslaConnect } from "~/features/ev/components/TeslaConnect";
 import { useEvChange } from "~/features/ev/hooks";
 import type { EvVehicle, TeslaProvider, TeslaStatus } from "~/features/ev/types";
-import { MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
+import { carTitle, MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
 
 const OTHER: Record<TeslaProvider, TeslaProvider> = { bluetooth: "tessie", tessie: "bluetooth" };
 
@@ -127,10 +127,10 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
           disabled={configure.isPending}
           onChange={(e) => configure.mutate({ vin: v.vin, car: e.target.value ? Number(e.target.value) : null })}
         >
-          <option value="">{v.model ? `${v.model} figures` : "Its model's figures"}</option>
+          <option value="">{carTitle(v)}</option>
           {cars?.map((c) => (
             <option key={c.id} value={c.id}>
-              {carName(c)}&apos;s details
+              {carName(c)}
             </option>
           ))}
         </Select>
