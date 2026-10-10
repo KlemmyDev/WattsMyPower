@@ -933,6 +933,26 @@
   }
 }
 
+/* The set-up guide's finish: a piece of confetti flying out to (--dx, --dy), turning, then falling away. */
+.confetti {
+  opacity: 0;
+  animation: wmpConfetti 1500ms cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+}
+@keyframes wmpConfetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(0.6);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy)) rotate(calc(var(--rot) * 0.6)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--dx) * 1.1), calc(var(--dy) + 120px)) rotate(var(--rot)) scale(0.9);
+  }
+}
+
 /* An outage that reaches the house, on the Grid page's radar: a ring spreading from it and fading. */
 .radar-ripple {
   transform-box: fill-box;
