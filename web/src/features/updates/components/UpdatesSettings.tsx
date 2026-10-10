@@ -21,7 +21,7 @@ import {
   SettingsSection,
   SettingsSplit,
 } from "~/features/settings/components/SettingsSection";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
 import { CHANNEL } from "~/features/updates/utils";
 import type { Channel, UpdateStatus } from "~/features/updates/types";
@@ -73,9 +73,7 @@ function changesUrl(s: UpdateStatus) {
 export function UpdatesSettings() {
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-updates-page"
+      <SettingsPageHeader
         title="Updates"
         sub="The version you're running, the release channel it follows, and installing newer ones."
       />

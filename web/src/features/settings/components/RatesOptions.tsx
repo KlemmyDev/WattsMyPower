@@ -109,7 +109,6 @@ export function RatesOptions({
         pending={save.isPending}
         error={state.status?.bad ? state.status.text : undefined}
         saveLabel="Save rates"
-        inline
         onDiscard={onDiscard}
         onSave={() => save.save(draft, () => toast("Rates saved. Savings on every page now use them."))}
       />

@@ -7,18 +7,13 @@ import { BackupCard } from "~/features/storage/components/BackupCard";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
 import { StorageFacts, StorageVisual } from "~/features/storage/components/StorageOverview";
 import { SettingsSplit } from "~/features/settings/components/SettingsSection";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /** Settings → Data: everything stored, in both databases, how much room each part takes, and a backup to download. */
 export function DatabaseSettings() {
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-data-page"
-        title="Data"
-        sub="What's stored, how much room it takes, and a backup to download."
-      />
+      <SettingsPageHeader title="Data" sub="What's stored, how much room it takes, and a backup to download." />
       <Storage />
     </>
   );

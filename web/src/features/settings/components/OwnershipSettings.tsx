@@ -14,7 +14,7 @@ import {
   SettingsSection,
   SettingsSplit,
 } from "~/features/settings/components/SettingsSection";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 type Values = Record<OwnershipKey, string>;
 
@@ -53,9 +53,7 @@ export function OwnershipSettings() {
   const s = useLive()?.system;
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-sys-own"
+      <SettingsPageHeader
         title="Cost and warranty"
         sub="Optional. With these, Bills shows when the system pays for itself, and Battery how much of its warranty is used."
       />
@@ -130,17 +128,18 @@ function Ownership({ system: s }: { system: SystemInfo }) {
         <OptionList>
           {(["battery_installed", "battery_warranty_years", "battery_warranty_mwh"] as OwnershipKey[]).map(row)}
         </OptionList>
+        {/* Saves both sections' changes, at the foot of the last. */}
+        <SaveBanner
+          dirty={changed.length > 0}
+          pending={save.isPending}
+          error={error}
+          onDiscard={() => {
+            setValues(valuesOf(s));
+            setError("");
+          }}
+          onSave={submit}
+        />
       </SettingsSection>
-      <SaveBanner
-        dirty={changed.length > 0}
-        pending={save.isPending}
-        error={error}
-        onDiscard={() => {
-          setValues(valuesOf(s));
-          setError("");
-        }}
-        onSave={submit}
-      />
     </SettingsSplit>
   );
 }
