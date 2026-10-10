@@ -160,8 +160,8 @@ function Scan({
       <div className="flex flex-col gap-1">
         <h3 className="text-[15px] font-semibold">Find inverters on your network</h3>
         <span className="text-[13px] text-ink-muted">
-          Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle), then asks what's there. Takes up
-          to a minute.
+          Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle, Fronius' Solar API), then asks
+          what's there. Takes up to a minute.
         </span>
       </div>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
@@ -264,7 +264,7 @@ function Manual({
         <h3 className="text-[15px] font-semibold">Or enter its address</h3>
         <span className="text-[13px] text-ink-muted">
           The dongle's IP address is in your router's list of connected devices, or in the inverter's app (iSolarCloud,
-          SEMS).
+          SEMS, Solar.web).
         </span>
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-4">

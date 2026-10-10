@@ -202,7 +202,7 @@ class ReadingsRepository:
 
         def moved(before: float | None, after: float | None, by_power: float | None) -> float | None:
             step = after - before if before is not None and after is not None else None
-            if step is not None and 0 <= step <= MAX_W / 1000 * 24:
+            if step is not None and 0 <= step <= MAX_W_THREE_PHASE / 1000 * 24:
                 return round(step, 2)
             return round(by_power, 2) if by_power is not None else None
 
