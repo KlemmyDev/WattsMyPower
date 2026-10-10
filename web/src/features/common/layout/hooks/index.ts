@@ -10,6 +10,7 @@ import { carTitle, evTitle, statusColor } from "~/features/ev/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
+import { useStreamState } from "~/features/common/live/components/LiveProvider";
 import { useNow } from "~/features/common/time/hooks";
 
 function subscribe(onChange: () => void) {
@@ -69,16 +70,23 @@ export function useNavItems() {
   );
 }
 
-export type LiveState = "live" | "stale" | "error";
+export type LiveState = "live" | "stale" | "error" | "reconnecting";
 
-/** Whether readings are coming in from the inverter, in a word and a sentence, and the time now (to the minute). */
+/**
+ * Whether readings are coming in from the inverter, in a word and a sentence, and the time now (to the minute). While
+ * the dashboard's own link to the server is down, that comes first: nothing new arrives until it's back.
+ */
 export function useLiveStatus(): { state: LiveState; status: string; now: number } {
   const st = useLive();
+  const stream = useStreamState();
   const now = useNow(30_000);
   const last = st?.last_success;
   let state: LiveState = "live";
   let status = last ? `Live from your inverter, last reading ${hhmm(last)}` : "Connecting to your inverter";
-  if (!last) state = st?.error ? "error" : "stale";
+  if (stream === "reconnecting") {
+    state = "reconnecting";
+    status = `Reconnecting to WattsMyPower's server${last ? `, last reading ${hhmm(last)}` : ""}`;
+  } else if (!last) state = st?.error ? "error" : "stale";
   else if (!isFresh(st, now)) {
     state = st?.error ? "error" : "stale";
     status = `No new readings since ${hhmm(last)}`;

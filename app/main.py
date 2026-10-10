@@ -13,6 +13,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.container import build_services
 from app.core.config import Config
+from app.core.errors import install_error_handlers
 from app.core.spa import mount_spa
 from app.features.amber.router import router as amber_router
 from app.features.auth.middleware import AuthMiddleware
@@ -122,6 +123,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
     app.state.services = services
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(AuthMiddleware)
+    install_error_handlers(app)
     for router in ROUTERS:
         app.include_router(router)
     if serve_dashboard:

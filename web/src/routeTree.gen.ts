@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSplatRouteImport } from './routes/_app/$'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppBatteryRouteImport } from './routes/_app/battery'
 import { Route as AppBillsRouteImport } from './routes/_app/bills'
@@ -69,6 +70,11 @@ const WelcomeRoute = WelcomeRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSplatRoute = AppSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAccountRoute = AppAccountRouteImport.update({
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/integrations': typeof AppIntegrationsRouteRouteWithChildren
+  '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
+  '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
@@ -358,6 +366,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/_app/integrations': typeof AppIntegrationsRouteRouteWithChildren
+  '/_app/$': typeof AppSplatRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/battery': typeof AppBatteryRoute
   '/_app/bills': typeof AppBillsRoute
@@ -404,6 +413,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/integrations'
+    | '/$'
     | '/account'
     | '/battery'
     | '/bills'
@@ -445,6 +455,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/welcome'
+    | '/$'
     | '/account'
     | '/battery'
     | '/bills'
@@ -489,6 +500,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/_app/integrations'
+    | '/_app/$'
     | '/_app/account'
     | '/_app/battery'
     | '/_app/bills'
@@ -563,6 +575,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/$': {
+      id: '/_app/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AppSplatRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/account': {
@@ -869,6 +888,7 @@ const AppIntegrationsRouteRouteWithChildren =
 
 interface AppRouteChildren {
   AppIntegrationsRouteRoute: typeof AppIntegrationsRouteRouteWithChildren
+  AppSplatRoute: typeof AppSplatRoute
   AppAccountRoute: typeof AppAccountRoute
   AppBatteryRoute: typeof AppBatteryRoute
   AppBillsRoute: typeof AppBillsRoute
@@ -899,6 +919,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppIntegrationsRouteRoute: AppIntegrationsRouteRouteWithChildren,
+  AppSplatRoute: AppSplatRoute,
   AppAccountRoute: AppAccountRoute,
   AppBatteryRoute: AppBatteryRoute,
   AppBillsRoute: AppBillsRoute,
