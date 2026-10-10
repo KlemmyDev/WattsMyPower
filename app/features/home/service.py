@@ -562,6 +562,8 @@ class HomeService:
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
 
     def wake(self) -> None:
         """Poll what's due now (after connecting or signing in) rather than at the next check. Call from the event

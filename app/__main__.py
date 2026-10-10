@@ -15,7 +15,7 @@ import datetime as dt
 import logging
 import sys
 
-from app.core.config import Config
+from app.core.config import Config, ConfigError
 from app.core.database import Database
 from app.features.auth.service import AuthService
 from app.features.live.client import CollectorClient
@@ -23,7 +23,11 @@ from app.features.live.reprocess import reprocess
 
 
 def main(argv: list[str]) -> int:
-    config = Config.from_env()
+    try:
+        config = Config.from_env()
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 1
     db = Database(config.db_path)
     if argv == ["reset-account"]:
         db.migrate()

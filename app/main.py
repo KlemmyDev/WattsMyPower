@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.container import build_services
-from app.core.config import Config
+from app.core.config import Config, ConfigError
 from app.core.spa import mount_spa
 from app.features.amber.router import router as amber_router
 from app.features.auth.middleware import AuthMiddleware
@@ -134,4 +134,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 # message by message when the INFO log doesn't say why something failed.
 for _name in filter(None, (n.strip() for n in os.environ.get("LOG_DEBUG", "").split(","))):
     logging.getLogger(_name).setLevel(logging.DEBUG)
-app = create_app()
+try:
+    app = create_app()
+except ConfigError as e:  # a mistyped setting: say which, once, rather than a traceback on every restart
+    raise SystemExit(f"WattsMyPower can't start. {e}") from None

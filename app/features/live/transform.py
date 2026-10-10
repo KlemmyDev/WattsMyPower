@@ -12,8 +12,9 @@ from dataclasses import dataclass, field
 from itertools import groupby
 from typing import Any
 
+from app.core.schema import SAMPLE_BOUNDS
 from app.features.inverters import drivers
-from app.features.inverters.limits import clean, outside
+from app.features.inverters.limits import Bounds, clean, outside
 from app.features.inverters.merge import merge_pv2
 from app.features.inverters.types import HybridDriver, Snapshot, SolarValues
 
@@ -32,8 +33,8 @@ def _garbled(ts: int, device: str, what: str) -> None:
     log.info("Dropped a garbled %s reading at %s: %s", device, _when(ts), what)
 
 
-def _note_outside(ts: int, device: str, values: dict[str, Any]) -> None:
-    if bad := outside(values):
+def _note_outside(ts: int, device: str, values: dict[str, Any], bounds: Bounds) -> None:
+    if bad := outside(values, bounds):
         _garbled(ts, device, ", ".join(f"{k}={values[k]}" for k in bad))
 
 
@@ -105,10 +106,18 @@ class Freeze:
 
 
 def snapshots(
-    rows: list[Row], *, has_pv2: bool, behind_meter: bool, poll_interval: int, carry: Pv2Carry, freeze: Freeze
+    rows: list[Row],
+    *,
+    has_pv2: bool,
+    behind_meter: bool,
+    poll_interval: int,
+    carry: Pv2Carry,
+    freeze: Freeze,
+    bounds: Bounds = SAMPLE_BOUNDS,
 ) -> list[tuple[int, Snapshot]]:
     """(ts, snapshot) for each fresh poll the hybrid answered, oldest first. Updates `carry` and
-    `freeze` as it goes, so a batch picks up where the last one left off."""
+    `freeze` as it goes, so a batch picks up where the last one left off. Values outside `bounds` (the
+    system's: limits.bounds_for) are dropped as garbled."""
     out: list[tuple[int, Snapshot]] = []
     for ts, polled in groupby(sorted(rows, key=lambda r: (r["ts"], r["device"])), key=lambda r: int(r["ts"])):
         by_device = {r["device"]: r for r in polled}
@@ -118,8 +127,8 @@ def snapshots(
                 if (pv2_read := solar.decode(row)) is None:
                     _garbled(ts, "pv2", "the reading as a whole")
                 else:
-                    _note_outside(ts, "pv2", pv2_read)
-                    pv2_read, carry.info = clean(pv2_read), solar.decode_info(row)
+                    _note_outside(ts, "pv2", pv2_read, bounds)
+                    pv2_read, carry.info = clean(pv2_read, bounds), solar.decode_info(row)
             else:
                 _unknown_driver("pv2", row.get("driver"))
         pv2 = carry.values_at(ts, pv2_read, poll_interval) if has_pv2 else None
@@ -131,8 +140,8 @@ def snapshots(
         if freeze.check(ts, row, main):
             continue  # the second inverter's reading still counted towards its carry, above
         snap = main.decode(row)
-        _note_outside(ts, "hybrid", snap)
-        snap = clean(snap)
+        _note_outside(ts, "hybrid", snap, bounds)
+        snap = clean(snap, bounds)
         if has_pv2:
             snap = merge_pv2(snap, pv2, behind_meter)
         out.append((ts, snap))
