@@ -13,7 +13,7 @@ import { Pill } from "~/features/common/ui/components/Pill";
 import { cn } from "~/features/common/ui/utils";
 import { HouseScene } from "~/features/overview/components/HouseScene";
 import { houseOptions } from "~/features/overview/utils/house/options";
-import { HOUSE_STYLES, THUMB_FLOWS } from "~/features/settings/components/HouseSettings";
+import { HOUSE_STYLES, THUMB_FLOWS } from "~/features/settings/components/HouseFields";
 import { SettingsGroup, SettingsRow } from "~/features/settings/components/SettingsList";
 import { updatesQuery } from "~/features/updates/api";
 import { ChannelDot } from "~/features/updates/components/ChannelBadge";
