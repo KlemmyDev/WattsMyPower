@@ -31,6 +31,13 @@ TEXT: dict[str, int] = {
     "home_street": 80,
     "home_suburb": 60,
 }
+# The electricity networks whose outages can be followed (app.features.grid.outages.networks), by state.
+POWER_NETWORKS = (
+    "energex", "ergon",
+    "ausgrid", "evoenergy", "endeavour", "essential",
+    "citipower", "jemena", "united", "ausnet", "powercor",
+    "sapn", "tasnetworks", "westernpower", "horizon",
+)  # fmt: skip
 # Text settings with a fixed set of values: key -> (allowed values, default).
 CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # Open-Meteo's weather model for the forecast: its own pick for the location, or one model.
@@ -46,8 +53,8 @@ CHOICES: dict[str, tuple[tuple[str, ...], str]] = {
     # location ("auto"), one region, or none (outside the NEM, or not wanted: then nothing is asked of AEMO).
     "nem_region": (("auto", "QLD1", "NSW1", "VIC1", "SA1", "TAS1", "none"), "auto"),
     # The electricity network (distributor) whose outages the Grid page follows: worked out from the location, one of
-    # those supported, or none.
-    "power_network": (("auto", "energex", "ergon", "none"), "auto"),
+    # those supported (app.features.grid.outages.networks), or none.
+    "power_network": (("auto", *POWER_NETWORKS, "none"), "auto"),
 }
 # Text settings holding a short list of choices: key -> (allowed values, most items). Where each inverter and
 # battery is, in the order they're connected, for the drawing of the house: on an outside wall, or in the garage.

@@ -1,0 +1,154 @@
+{
+ "plannedOutages": [
+  {
+   "startDateTime": "2026-10-12T08:30:00",
+   "endDateTime": "2026-10-12T15:00:00",
+   "reason": "Maintaining and upgrading the electricity network",
+   "affectedCustomers": 20,
+   "affectedSuburbs": [
+    {
+     "name": "Burrungule",
+     "postcode": "5291"
+    },
+    {
+     "name": "German Creek",
+     "postcode": "5280"
+    }
+   ],
+   "geometry": [
+    {
+     "lat": -37.81559,
+     "lng": 140.53895
+    },
+    {
+     "lat": -37.81412,
+     "lng": 140.53745
+    },
+    {
+     "lat": -37.811,
+     "lng": 140.53585
+    },
+    {
+     "lat": -37.80139,
+     "lng": 140.54532
+    },
+    {
+     "lat": -37.80144,
+     "lng": 140.57003
+    },
+    {
+     "lat": -37.81264,
+     "lng": 140.57309
+    }
+   ],
+   "jobID": "177581",
+   "status": "Scheduled",
+   "feeders": [
+    "MG30 74",
+    "MG30 39"
+   ]
+  },
+  {
+   "startDateTime": "2026-10-11T08:30:00",
+   "endDateTime": "2026-10-11T15:30:00",
+   "reason": "Installing new electricity equipment",
+   "affectedCustomers": 16,
+   "affectedSuburbs": [
+    {
+     "name": "Burton",
+     "postcode": "5110"
+    },
+    {
+     "name": "Direk",
+     "postcode": "5110"
+    }
+   ],
+   "geometry": [
+    {
+     "lat": -34.72873,
+     "lng": 138.60736
+    },
+    {
+     "lat": -34.7284,
+     "lng": 138.60164
+    },
+    {
+     "lat": -34.72592,
+     "lng": 138.60382
+    },
+    {
+     "lat": -34.72734,
+     "lng": 138.60605
+    }
+   ],
+   "jobID": "181646",
+   "status": "Scheduled",
+   "feeders": [
+    "SA744C 9",
+    "SA744C 1"
+   ]
+  },
+  {
+   "startDateTime": "2026-10-11T08:30:00",
+   "endDateTime": "2026-10-11T15:30:00",
+   "reason": "Maintaining and upgrading the electricity network",
+   "affectedCustomers": 38,
+   "affectedSuburbs": [
+    {
+     "name": "Port Pirie",
+     "postcode": "5540"
+    },
+    {
+     "name": "Solomontown",
+     "postcode": "5540"
+    }
+   ],
+   "geometry": [
+    {
+     "lat": -33.1897,
+     "lng": 138.01809
+    },
+    {
+     "lat": -33.18765,
+     "lng": 138.01367
+    },
+    {
+     "lat": -33.18665,
+     "lng": 138.01264
+    },
+    {
+     "lat": -33.18771,
+     "lng": 138.01606
+    },
+    {
+     "lat": -33.18782,
+     "lng": 138.01632
+    },
+    {
+     "lat": -33.18906,
+     "lng": 138.01842
+    },
+    {
+     "lat": -33.18944,
+     "lng": 138.01837
+    }
+   ],
+   "jobID": "182244",
+   "status": "Scheduled",
+   "feeders": [
+    "PP04 103",
+    "PP04 137"
+   ]
+  }
+ ],
+ "lastUpdated": "2026-10-10T18:27:09",
+ "searchCriteria": {
+  "postcode": null,
+  "suburb": null,
+  "street": null,
+  "number": null,
+  "lat": null,
+  "lng": null,
+  "isEmpty": true
+ }
+}

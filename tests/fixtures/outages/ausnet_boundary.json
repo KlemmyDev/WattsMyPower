@@ -1,0 +1,26 @@
+{
+ "data": [
+  {
+   "longitude": 145.26423,
+   "latitude": -38.49368
+  },
+  {
+   "longitude": 145.26399,
+   "latitude": -38.49337
+  },
+  {
+   "longitude": 145.26405,
+   "latitude": -38.49299
+  },
+  {
+   "longitude": 145.26497,
+   "latitude": -38.4936
+  },
+  {
+   "longitude": 145.26423,
+   "latitude": -38.49368
+  }
+ ],
+ "errors": [],
+ "success": true
+}

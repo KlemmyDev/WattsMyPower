@@ -1,0 +1,239 @@
+[
+ {
+  "EventId": 133361,
+  "OutageDisplayType": "P",
+  "PowerStatus": "Planned",
+  "Cause": "working on underground cables or equipment in your area to make your power supply more resilient",
+  "Reason": null,
+  "Area": [
+   "Dee Why"
+  ],
+  "WhenUpdated": "2026-10-01T21:13:23Z",
+  "StartDateTime": "2026-11-11T20:00:00Z",
+  "EstRestTime": "2026-11-12T04:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": null,
+  "MarkerLocation": {
+   "lat": -33.75299,
+   "lng": 151.29147
+  },
+  "Bounds": {
+   "bottomleftlat": -33.7537,
+   "bottomleftlng": 151.28992,
+   "toprightlat": -33.75228,
+   "toprightlng": 151.29302
+  },
+  "StreetsAffected": [
+   "Avon Rd",
+   "Howard Ave"
+  ],
+  "AffectedCustomers": 93
+ },
+ {
+  "EventId": 135004,
+  "OutageDisplayType": "P",
+  "PowerStatus": "Cancelled",
+  "Cause": "upgrading the electricity network to support new community and businesses in your area",
+  "Reason": "an unexpected complication on site",
+  "Area": [
+   "Camperdown"
+  ],
+  "WhenUpdated": "2026-09-15T22:48:04Z",
+  "StartDateTime": "2026-11-06T20:00:00Z",
+  "EstRestTime": "2026-11-07T07:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": null,
+  "MarkerLocation": {
+   "lat": -33.88948,
+   "lng": 151.18221
+  },
+  "Bounds": {
+   "bottomleftlat": -33.89001,
+   "bottomleftlng": 151.18001,
+   "toprightlat": -33.88896,
+   "toprightlng": 151.1844
+  },
+  "StreetsAffected": [
+   "Missenden Rd"
+  ],
+  "AffectedCustomers": 2
+ },
+ {
+  "EventId": 135222,
+  "OutageDisplayType": "P",
+  "PowerStatus": "ProceedingAsScheduled",
+  "Cause": "working on overhead powerlines in your neighbourhood to prevent future outages and improve service",
+  "Reason": null,
+  "Area": [
+   "Dangar Island"
+  ],
+  "WhenUpdated": "2026-09-22T04:14:19Z",
+  "StartDateTime": "2026-10-11T20:00:00Z",
+  "EstRestTime": "2026-10-12T06:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": null,
+  "MarkerLocation": {
+   "lat": -33.53944,
+   "lng": 151.2394
+  },
+  "Bounds": {
+   "bottomleftlat": -33.54253,
+   "bottomleftlng": 151.2345,
+   "toprightlat": -33.53634,
+   "toprightlng": 151.24431
+  },
+  "StreetsAffected": [
+   "Baroona St",
+   "Dangar Island Wharf",
+   "Grantham Cres",
+   "Neotsfield Ave",
+   "Riverview Ave",
+   "Yallaroi Pde"
+  ],
+  "AffectedCustomers": 215
+ },
+ {
+  "EventId": 137243,
+  "OutageDisplayType": "P",
+  "PowerStatus": "Completed",
+  "Cause": "turning off power temporarily for nearby construction",
+  "Reason": null,
+  "Area": [
+   "Ultimo"
+  ],
+  "WhenUpdated": "2026-09-16T22:30:29Z",
+  "StartDateTime": "2026-10-09T10:00:00Z",
+  "EstRestTime": "2026-10-09T20:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": "2026-10-09T21:00:00Z",
+  "MarkerLocation": {
+   "lat": -33.88148,
+   "lng": 151.19758
+  },
+  "Bounds": {
+   "bottomleftlat": -33.8824,
+   "bottomleftlng": 151.1964,
+   "toprightlat": -33.88056,
+   "toprightlng": 151.19877
+  },
+  "StreetsAffected": [
+   "Jones St",
+   "Mary Ann St",
+   "Wattle St"
+  ],
+  "AffectedCustomers": 32
+ },
+ {
+  "EventId": 142425,
+  "OutageDisplayType": "P",
+  "PowerStatus": "RestorationHasCommenced",
+  "Cause": "connecting power to a home or business nearby",
+  "Reason": null,
+  "Area": [
+   "Berowra",
+   "Berowra Heights"
+  ],
+  "WhenUpdated": "2026-10-10T05:09:39Z",
+  "StartDateTime": "2026-10-09T20:00:00Z",
+  "EstRestTime": "2026-10-10T07:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": null,
+  "MarkerLocation": {
+   "lat": -33.61444,
+   "lng": 151.14347
+  },
+  "Bounds": {
+   "bottomleftlat": -33.61648,
+   "bottomleftlng": 151.14121,
+   "toprightlat": -33.6124,
+   "toprightlng": 151.14574
+  },
+  "StreetsAffected": [
+   "Berowra Waters Rd",
+   "Warrina St",
+   "Woodcourt Rd"
+  ],
+  "AffectedCustomers": 71
+ },
+ {
+  "EventId": 736009999,
+  "OutageDisplayType": "U",
+  "PowerStatus": "InProgress",
+  "Cause": "Under investigation",
+  "Reason": null,
+  "Area": [
+   "Yagoona"
+  ],
+  "WhenUpdated": "2026-10-09T14:00:10Z",
+  "StartDateTime": "2026-10-08T20:50:00Z",
+  "EstRestTime": "2026-10-09T11:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": null,
+  "MarkerLocation": {
+   "lat": -33.90623,
+   "lng": 151.02107
+  },
+  "Bounds": {
+   "bottomleftlat": -33.90628,
+   "bottomleftlng": 151.02102,
+   "toprightlat": -33.90618,
+   "toprightlng": 151.02112
+  },
+  "StreetsAffected": [],
+  "AffectedCustomers": 37
+ },
+ {
+  "EventId": 736010148,
+  "OutageDisplayType": "U",
+  "PowerStatus": "InProgress",
+  "Cause": "customer equipment fault",
+  "Reason": null,
+  "Area": [
+   "Beacon Hill"
+  ],
+  "WhenUpdated": "2026-10-10T02:16:12Z",
+  "StartDateTime": "2026-10-10T01:40:00Z",
+  "EstRestTime": "2026-10-10T07:00:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": null,
+  "MarkerLocation": {
+   "lat": -33.74709,
+   "lng": 151.26124
+  },
+  "Bounds": {
+   "bottomleftlat": -33.74714,
+   "bottomleftlng": 151.26119,
+   "toprightlat": -33.74704,
+   "toprightlng": 151.26129
+  },
+  "StreetsAffected": [],
+  "AffectedCustomers": 37
+ },
+ {
+  "EventId": 736010062,
+  "OutageDisplayType": "U",
+  "PowerStatus": "Restored",
+  "Cause": "Under investigation",
+  "Reason": null,
+  "Area": [
+   "Greenacre"
+  ],
+  "WhenUpdated": "2026-10-09T20:19:53Z",
+  "StartDateTime": "2026-10-09T15:45:00Z",
+  "EstRestTime": "2026-10-09T21:30:00Z",
+  "DelayInHours": 0,
+  "ActualRestoreTime": "2026-10-09T20:19:53Z",
+  "MarkerLocation": {
+   "lat": -33.90129,
+   "lng": 151.0456
+  },
+  "Bounds": {
+   "bottomleftlat": -33.90134,
+   "bottomleftlng": 151.04555,
+   "toprightlat": -33.90124,
+   "toprightlng": 151.04565
+  },
+  "StreetsAffected": [],
+  "AffectedCustomers": 15
+ }
+]

@@ -2,14 +2,20 @@
 Power outages around the house, from its electricity network (the distributor that owns the poles and wires, not the
 retailer): outages now within a radius, planned work coming up, and which of them reach the house's own street.
 
-Only Queensland's networks so far (energyq.py: Energex and Ergon Energy); others slot in as providers with the same
-shape. The network is worked out from where the house is (its service area), or chosen in Manage → Integrations →
-Electricity network. An outage "affects you" when it lists the house's street in its suburb (home_street, home_suburb:
-the street's name only, no number, entered there), or, for an outage drawn as an area, when the area covers the
-house's location.
+Every state's and territory's networks but the Northern Territory's (networks.py: one module per state, each network a
+provider with the same shape, base.py). The network is worked out from where the house is, or chosen in Manage →
+Integrations → Grid. Worked out, the house's state comes from its NEM region (or, in Western Australia, its place name
+or longitude), and each of that state's networks is asked whether it serves the house: from its service area (Energex,
+Ergon, Ausgrid), Victoria's suburb list (the house's suburb), the place name (the ACT), or else its rough bounds. The
+first that's sure is followed alone; when none is (a house near where two networks meet, or in a suburb split between
+them), every one that might is followed, and their outages are matched to the house together.
+
+An outage "affects you" when it lists the house's street in its suburb (home_street, home_suburb: the street's name
+only, no number, entered there), or, for an outage drawn as an area, when the area covers the house's location.
 
 Fetched about every 15 minutes (the networks refresh as often; give or take a few, at random), planned work to come
-every hour, a network's service area once a day. Kept in memory only.
+every hour, what tells where a network is once a day, and the areas of outages near the house that a feed only draws
+when asked, once each (an hour for outages now, whose area changes as power comes back). Kept in memory only.
 """
 
 from __future__ import annotations
@@ -25,7 +31,18 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from app.features.grid.outages.energyq import NETWORKS, EnergyQueensland, OutageFeedError, Ring, get_feed
+from app.features.grid.outages.base import (
+    Around,
+    Get,
+    House,
+    OutageFeedError,
+    Provider,
+    Ring,
+    distance_km,
+    fetch,
+    inside,
+)
+from app.features.grid.outages.networks import NETWORKS, place_state, place_suburb, states_for
 from app.features.settings.store import SettingsStore
 
 log = logging.getLogger(__name__)
@@ -37,6 +54,8 @@ AREA_EVERY = 24 * 3600
 PLANNED_AHEAD = 14 * 86400  # planned work nearby is listed this far ahead (work at the house's street, however far)
 SOON = 86400  # planned work at the house starting within this is a warning, not just worth knowing
 WIDESPREAD = (5, 2000)  # this many outages, or homes off, within the radius is more than the usual
+AREAS_EACH_TIME = 20  # outages' areas asked for at most per fetch (the nearest first)
+AREA_KEPT = 3600  # an outage's area, asked for, is asked for again after this while it's on (planned work's isn't)
 
 # The kinds of street the networks abbreviate (as Australia Post does), so "Beatrice Court" matches "BEATRICE CT".
 STREET_TYPES = {
@@ -49,6 +68,8 @@ STREET_TYPES = {
 }  # fmt: skip
 _TYPE = {abbr: full for full, abbrs in STREET_TYPES.items() for abbr in (full, *abbrs)}
 
+__all__ = ["NETWORKS", "OutageService", "bearing", "distance_km", "inside", "next_wait", "street_key", "suburb_key"]
+
 
 def street_key(s: str | None) -> str:
     """A street's name to compare: capitals, no punctuation, its type spelled out ("BEATRICE COURT")."""
@@ -60,12 +81,6 @@ def street_key(s: str | None) -> str:
 
 def suburb_key(s: str | None) -> str:
     return " ".join(re.sub(r"[^A-Z0-9 ]+", " ", (s or "").upper()).split())
-
-
-def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
-    return 6371.0 * 2 * math.asin(math.sqrt(a))
 
 
 def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
@@ -84,69 +99,77 @@ def next_wait(rand: Callable[[float, float], float] = random.uniform) -> float:
     return EVERY * rand(1 - JITTER, 1 + JITTER)
 
 
-def inside(lat: float, lon: float, ring: Ring) -> bool:
-    """Whether a point is inside a polygon's ring (of (lon, lat)), by counting the edges a ray east of it crosses."""
-    hit = False
-    j = len(ring) - 1
-    for i in range(len(ring)):
-        xi, yi = ring[i]
-        xj, yj = ring[j]
-        if (yi > lat) != (yj > lat) and lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
-            hit = not hit
-        j = i
-    return hit
-
-
 class OutageService:
     def __init__(
         self,
         settings: SettingsStore,
         region: Callable[[], str | None],
-        get: Callable[[str], Any] = get_feed,
+        get: Get = fetch,
         clock: Callable[[], float] = time.time,
-        networks: dict[str, EnergyQueensland] = NETWORKS,
+        networks: dict[str, Provider] = NETWORKS,
     ):
         self.settings = settings
-        self.region = region  # the house's NEM region (GridService), to know it's in Queensland
+        self.region = region  # the house's NEM region (GridService), to know which state's networks to ask
         self.get = get
         self.clock = clock
         self.networks = networks
         self._lock = threading.Lock()
-        self._areas: dict[str, tuple[float, list[Ring]]] = {}  # network -> (fetched, rings)
-        self._current: list[dict[str, Any]] = []
-        self._future: list[dict[str, Any]] = []
-        self._network: str | None = None  # whose outages these are
-        self._fetched_at: float | None = None
-        self._future_at: float | None = None
+        self._where: dict[str, tuple[float, Any]] = {}  # where_key -> (fetched, what tells where the network is)
+        self._current: dict[str, list[dict[str, Any]]] = {}  # network -> its outages now
+        self._future: dict[str, list[dict[str, Any]]] = {}  # network -> its planned work to come
+        self._fetched_at: dict[str, float] = {}
+        self._future_at: dict[str, float] = {}
+        self._areas: dict[str, tuple[float, list[Ring]]] = {}  # outage -> (asked, its area), for feeds drawn apart
         self._error: str | None = None
         self._task: asyncio.Task[None] | None = None
         self._wake: asyncio.Event | None = None
 
     # ------------------------------------------------------------------ which network
-    def network(self) -> tuple[EnergyQueensland | None, bool]:
-        """The house's network, and whether it was worked out (True) rather than chosen. None until the house's
-        location has been chosen: what's around it can't be told without it."""
-        choice = self.settings.get_choice("power_network")
+    def _house(self) -> House | None:
+        """The house, for telling its network: None until its location has been chosen."""
         where = self.settings.location()
-        if choice == "none" or (where is None and choice != "auto"):
-            return None, False
+        if where is None:
+            return None
+        place = self.settings.get_text("location_name")
+        suburb = suburb_key(self.settings.get_text("home_suburb")) or place_suburb(place)
+        return House(where[0], where[1], suburb, place_state(place))
+
+    def _candidates(self) -> list[Provider]:
+        """The networks in the house's state (and the ACT with NSW), in the order they're asked."""
+        h = self._house()
+        if h is None:
+            return []
+        states = states_for(self.region(), self.settings.get_text("location_name"), h.lat, h.lon)
+        return [n for n in self.networks.values() if n.state in states]
+
+    def followed(self) -> tuple[Provider | None, list[Provider], bool]:
+        """The house's network, every network whose outages are followed (it first), and whether they were worked
+        out (True) rather than chosen. None until the house's location has been chosen: what's around it can't be
+        told without it."""
+        choice = self.settings.get_choice("power_network")
+        house = self._house()
+        if choice == "none" or (house is None and choice != "auto"):
+            return None, [], False
         if choice != "auto":
-            return self.networks.get(choice), False
-        if where is None or self.region() != "QLD1":
-            return None, True  # only Queensland's networks so far
-        lat, lon = where
+            net = self.networks.get(choice)
+            return net, [net] if net else [], False
+        if house is None:
+            return None, [], True
         with self._lock:
-            areas = dict(self._areas)
-        for net in self.networks.values():  # Energex first: Ergon's area surrounds it
-            rings = areas.get(net.id, (0, []))[1]
-            if rings:
-                if any(inside(lat, lon, r) for r in rings):
-                    return net, True
-            else:
-                s, w, n, e = net.bounds
-                if s <= lat <= n and w <= lon <= e:
-                    return net, True
-        return None, True
+            where = {k: v for k, (_, v) in self._where.items()}
+        maybe: list[Provider] = []
+        for net in self._candidates():
+            serves = net.serves(house, where.get(net.where_key))
+            if serves:
+                return net, [net], True
+            if serves is None:
+                maybe.append(net)
+        return (maybe[0] if maybe else None), maybe, True
+
+    def network(self) -> tuple[Provider | None, bool]:
+        """The house's network, and whether it was worked out (True) rather than chosen."""
+        net, _, auto = self.followed()
+        return net, auto
 
     # ------------------------------------------------------------------ fetching
     async def start(self) -> None:
@@ -160,7 +183,7 @@ class OutageService:
                 await self._task
 
     def wake(self) -> None:
-        """Fetch now (the network or the location changed). Call from the event loop."""
+        """Fetch now (the network, the location or the radius changed). Call from the event loop."""
         if self._wake:
             self._wake.set()
 
@@ -176,44 +199,98 @@ class OutageService:
                 await asyncio.wait_for(self._wake.wait(), timeout=next_wait())
             self._wake.clear()
 
+    def _refresh_where(self, now: float) -> None:
+        """What tells where each of the state's networks is, once a day (shared ones once)."""
+        for net in self._candidates():
+            with self._lock:
+                fetched = self._where.get(net.where_key, (0.0, None))[0]
+            if now - fetched < AREA_EVERY:
+                continue
+            try:
+                found = net.where(self.get)
+            except OutageFeedError as e:
+                log.warning("Power outages: %s", e)
+                continue
+            with self._lock:
+                self._where[net.where_key] = (now, found)
+
     def refresh(self) -> None:
-        """Fetch the network's outages now, its planned work when due, and the service areas once a day."""
+        """Fetch the followed networks' outages now, their planned work when due, where they are once a day, and the
+        areas of outages near the house that their feeds draw apart."""
         now = self.clock()
-        auto = self.settings.get_choice("power_network") == "auto"
-        if auto and self.settings.location_set() and self.region() == "QLD1":
-            for each in self.networks.values():
+        if self.settings.get_choice("power_network") == "auto":
+            self._refresh_where(now)
+        _, nets, _ = self.followed()
+        where = self.settings.location()
+        if where is None:
+            nets = []  # (followed() gives none until there's a location)
+        around = Around(*(where or (0.0, 0.0)), self.settings.get("outage_radius_km"), now)
+        errors: list[str] = []
+        for net in nets:
+            try:
+                current = net.outages("current", self.get, around)
                 with self._lock:
-                    fetched = self._areas.get(each.id, (0.0, []))[0]
-                if now - fetched >= AREA_EVERY:
-                    try:
-                        rings = each.area(self.get)
-                        with self._lock:
-                            self._areas[each.id] = (now, rings)
-                    except OutageFeedError as e:
-                        log.warning("Power outages: %s", e)
-        net, _ = self.network()
-        if net is None:
+                    due = net.id not in self._future_at or now - self._future_at[net.id] >= FUTURE_EVERY
+                future = net.outages("future", self.get, around) if due else None
+            except OutageFeedError as e:
+                errors.append(str(e))
+                log.warning("Power outages: %s", e)
+                continue
             with self._lock:
-                self._current, self._future, self._network, self._error = [], [], None, None
-            return
-        try:
-            current = net.outages("current_unplanned", self.get) + net.outages("current_planned", self.get)
-            due = net.id != self._network or self._future_at is None or now - self._future_at >= FUTURE_EVERY
-            future = net.outages("future_planned", self.get) if due else None
-            with self._lock:
-                if net.id != self._network:
-                    self._future = []
-                self._current, self._network, self._fetched_at, self._error = current, net.id, now, None
+                self._current[net.id], self._fetched_at[net.id] = current, now
                 if future is not None:
-                    self._future, self._future_at = future, now
-        except OutageFeedError as e:
-            with self._lock:
-                self._error = str(e)
-            log.warning("Power outages: %s", e)
+                    self._future[net.id], self._future_at[net.id] = future, now
+        ids = {n.id for n in nets}
+        with self._lock:
+            for kept in (self._current, self._future, self._fetched_at, self._future_at):
+                for k in [k for k in kept if k not in ids]:  # no longer followed: its outages aren't the house's
+                    del kept[k]
+            self._error = " ".join(errors) or None
+        for net in nets:
+            self._fill_areas(net, around)
+
+    def _fill_areas(self, net: Provider, around: Around) -> None:
+        """Ask for the areas of the network's outages near the house that its feed doesn't draw: those within the
+        radius on now or starting in the next day or two, nearest first, each once (an hour, while it's on)."""
+        now = around.now
+        with self._lock:
+            mine = self._current.get(net.id, []) + self._future.get(net.id, [])
+            asked = dict(self._areas)
+        want: list[tuple[float, dict[str, Any]]] = []
+        for o in mine:
+            if o["area"] or o["lat"] is None:
+                continue
+            if o["planned"] and o["start"] is not None and o["start"] - now > 2 * SOON:
+                continue
+            at = asked.get(o["id"])
+            if at and (o["planned"] or now - at[0] < AREA_KEPT):
+                continue
+            km = distance_km(around.lat, around.lon, o["lat"], o["lon"])
+            if km <= around.km:
+                want.append((km, o))
+        want.sort(key=lambda w: w[0])
+        ask = [o for _, o in want[:AREAS_EACH_TIME]]
+        found: dict[str, list[Ring]] | None = {}
+        if ask:
+            try:
+                found = net.areas(ask, self.get)
+            except OutageFeedError as e:
+                found = None  # tried again next time
+                log.warning("Power outages: %s", e)
+        live = {o["id"] for o in mine}
+        with self._lock:
+            for o in ask if found is not None else []:  # one it gave no area for isn't asked about again for a while
+                self._areas[o["id"]] = (now, found.get(o["id"], []) if found else [])
+            for oid in [k for k, (_, _r) in self._areas.items() if k.split(":", 1)[0] == net.id and k not in live]:
+                del self._areas[oid]  # over: no longer on the map
 
     # ------------------------------------------------------------------ around the house
-    def _place(self, o: dict[str, Any], lat: float, lon: float, street: str, suburb: str) -> dict[str, Any]:
-        """An outage as the house sees it: how far, which way, and whether it reaches the house."""
+    def _place(
+        self, o: dict[str, Any], lat: float, lon: float, street: str, suburb: str, areas: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """An outage as the house sees it: how far, which way, and whether it reaches the house. None for one listed
+        only by street (no place on the map) that doesn't list the house's."""
+        area = o["area"] or areas.get(o["id"], (0, []))[1]
         affects = None
         if (
             street
@@ -221,8 +298,12 @@ class OutageService:
             and (not suburb or suburb in {suburb_key(s) for s in o["suburbs"]})
         ):
             affects = "street"
-        elif any(inside(lat, lon, r) for r in o["area"]):
+        elif any(inside(lat, lon, r) for r in area):
             affects = "area"
+        if o["lat"] is None:  # nowhere to put it but the street it lists: the house's, or it doesn't count
+            if affects != "street":
+                return None
+            o = {**o, "lat": lat, "lon": lon}
         return {
             **{k: v for k, v in o.items() if k != "area"},
             "distance_km": round(distance_km(lat, lon, o["lat"], o["lon"]), 1),
@@ -241,9 +322,16 @@ class OutageService:
         radius = self.settings.get("outage_radius_km")
         street = street_key(self.settings.get_text("home_street"))
         suburb = suburb_key(self.settings.get_text("home_suburb"))
+        _, nets, _ = self.followed()
         with self._lock:
-            current, future = list(self._current), list(self._future)
-        placed = [self._place(o, lat, lon, street, suburb) for o in current]
+            current = [o for n in nets for o in self._current.get(n.id, [])]
+            future = [o for n in nets for o in self._future.get(n.id, [])]
+            areas = dict(self._areas)
+
+        def place(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return [p for p in (self._place(o, lat, lon, street, suburb, areas) for o in items) if p]
+
+        placed = place(current)
         on_now = [
             o
             for o in placed
@@ -253,7 +341,7 @@ class OutageService:
         # The networks' planned work to come includes today's, already in the current file: each once, and only
         # what hasn't started (what has is an outage now).
         known = {o["id"] for o in current}
-        later = [self._place(o, lat, lon, street, suburb) for o in future if o["id"] not in known] + [
+        later = place([o for o in future if o["id"] not in known]) + [
             o for o in placed if o["planned"] and o["start"] is not None and o["start"] > now
         ]
         later = [o for o in later if o["start"] is None or o["start"] > now]
@@ -268,17 +356,22 @@ class OutageService:
 
     def view(self) -> dict[str, Any]:
         now = self.clock()
-        net, auto = self.network()
+        net, nets, auto = self.followed()
         around = self.around(now) if net else {"now": [], "planned": []}
         with self._lock:
-            fetched_at, planned_at, error = self._fetched_at, self._future_at, self._error
+            fetched_at = self._fetched_at.get(net.id) if net else None
+            planned_at = self._future_at.get(net.id) if net else None
+            error = self._error
         unplanned = [o for o in around["now"] if not o["planned"]]
+        choice = self.settings.get_choice("power_network")
         return {
             "network": {"id": net.id, "name": net.name, "site": net.site} if net else None,
+            # Every network followed, the house's first: more than one where it can't be told which serves it.
+            "networks": [{"id": n.id, "name": n.name, "site": n.site} for n in nets],
             "network_auto": auto,
             # Whether the house's location has been chosen: no outages are followed until it is.
             "location_set": self.settings.location_set(),
-            "supported": self.region() == "QLD1" or self.settings.get_choice("power_network") not in ("auto", "none"),
+            "supported": bool(self._candidates()) or choice not in ("auto", "none"),
             "radius_km": self.settings.get("outage_radius_km"),
             "street": self.settings.get_text("home_street"),
             "suburb": self.settings.get_text("home_suburb"),
@@ -289,8 +382,8 @@ class OutageService:
                 "customers": sum(o["customers"] or 0 for o in unplanned),
                 "nearest_km": min((o["distance_km"] for o in unplanned), default=None),
             },
-            "fetched_at": fetched_at if net else None,
-            "planned_at": planned_at if net else None,  # planned work to come is fetched hourly, apart
+            "fetched_at": fetched_at,
+            "planned_at": planned_at,  # planned work to come is fetched hourly, apart
             "error": error if net else None,
         }
 

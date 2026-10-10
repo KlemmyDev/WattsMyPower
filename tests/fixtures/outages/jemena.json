@@ -1,0 +1,1047 @@
+[
+ {
+  "EstimatedRestorationTime": "2026-10-09T20:00:00",
+  "DispatchedTime": "2026-10-09T00:06:51",
+  "EventId": "J.26.0150158",
+  "Type": "Unplanned",
+  "Status": "Completed",
+  "Cause": "Third party asset damage",
+  "StartTime": "2026-10-09T12:46:30",
+  "RestorationTime": "2026-10-09T20:15:11",
+  "ImpactedCustomers": 0,
+  "LocationGeoJson": null,
+  "Location": null,
+  "ImpactedSuburbs": [],
+  "ImpactedAreaGeoJson": null,
+  "ImpactedArea": null,
+  "LastUpdatedTime": "2026-10-10T07:51:39.775Z",
+  "FeedReceivedTime": "2026-10-09T11:55:59.805Z",
+  "History": [
+   {
+    "ImpactedSuburbs": [
+     {
+      "SuburbName": "PRESTON",
+      "PostCode": 3072,
+      "Streets": [
+       "BAYLISS ST",
+       "BIRDWOOD ST",
+       "CLARA ST",
+       "RAYNER CT",
+       "REGENT ST"
+      ]
+     },
+     {
+      "SuburbName": "RESERVOIR",
+      "PostCode": 3073,
+      "Streets": [
+       "BIRDWOOD ST"
+      ]
+     }
+    ],
+    "ImpactedAreaGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Historical",
+      "customersOff": 49,
+      "eventId": "J.26.0150158",
+      "startTime": "2026-10-09T12:46:30",
+      "restoreTime": "2026-10-09T20:15:11",
+      "suburbs": [
+       {
+        "suburbName": "PRESTON",
+        "postcode": 3072,
+        "streets": [
+         "BAYLISS ST",
+         "BIRDWOOD ST",
+         "CLARA ST",
+         "RAYNER CT",
+         "REGENT ST"
+        ]
+       },
+       {
+        "suburbName": "RESERVOIR",
+        "postcode": 3073,
+        "streets": [
+         "BIRDWOOD ST"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         144.99522,
+         -37.73245
+        ],
+        [
+         144.9946,
+         -37.73238
+        ],
+        [
+         144.99453,
+         -37.73234
+        ],
+        [
+         144.9945,
+         -37.73228
+        ],
+        [
+         144.99488,
+         -37.73016
+        ],
+        [
+         144.99573,
+         -37.72928
+        ],
+        [
+         144.99628,
+         -37.72921
+        ],
+        [
+         144.99691,
+         -37.72922
+        ],
+        [
+         144.99701,
+         -37.72924
+        ],
+        [
+         144.99705,
+         -37.72927
+        ],
+        [
+         144.99708,
+         -37.72933
+        ],
+        [
+         144.99705,
+         -37.72953
+        ],
+        [
+         144.99657,
+         -37.73124
+        ],
+        [
+         144.99613,
+         -37.73242
+        ],
+        [
+         144.99609,
+         -37.73246
+        ],
+        [
+         144.996,
+         -37.73248
+        ],
+        [
+         144.99561,
+         -37.73249
+        ],
+        [
+         144.99522,
+         -37.73245
+        ]
+       ]
+      ]
+     }
+    },
+    "ImpactedArea": [
+     [
+      {
+       "Latitude": -37.73245192194458,
+       "Longitude": 144.99521626428742
+      },
+      {
+       "Latitude": -37.73238469543287,
+       "Longitude": 144.99460462800423
+      },
+      {
+       "Latitude": -37.73234377406678,
+       "Longitude": 144.99453292593915
+      },
+      {
+       "Latitude": -37.73227821860303,
+       "Longitude": 144.99450214066505
+      },
+      {
+       "Latitude": -37.73015795289839,
+       "Longitude": 144.994876004596
+      },
+      {
+       "Latitude": -37.729279883971934,
+       "Longitude": 144.99573355279554
+      },
+      {
+       "Latitude": -37.729208882940625,
+       "Longitude": 144.99627582848098
+      },
+      {
+       "Latitude": -37.729217280573344,
+       "Longitude": 144.99691023612235
+      },
+      {
+       "Latitude": -37.729235685340015,
+       "Longitude": 144.99700639988225
+      },
+      {
+       "Latitude": -37.7292666262107,
+       "Longitude": 144.99705105555677
+      },
+      {
+       "Latitude": -37.729332009995616,
+       "Longitude": 144.99708218389634
+      },
+      {
+       "Latitude": -37.7295292864725,
+       "Longitude": 144.99705164668256
+      },
+      {
+       "Latitude": -37.731241100408575,
+       "Longitude": 144.99656984427614
+      },
+      {
+       "Latitude": -37.73242046329837,
+       "Longitude": 144.99613322955153
+      },
+      {
+       "Latitude": -37.73245861890734,
+       "Longitude": 144.99609248908322
+      },
+      {
+       "Latitude": -37.732483832118106,
+       "Longitude": 144.9960042150408
+      },
+      {
+       "Latitude": -37.732492530318154,
+       "Longitude": 144.99560726422467
+      },
+      {
+       "Latitude": -37.73245192194458,
+       "Longitude": 144.99521626428742
+      }
+     ]
+    ],
+    "RestorationTime": "2026-10-09T20:15:11",
+    "ImpactedCustomers": 49,
+    "LocationGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Historical",
+      "customersOff": 49,
+      "eventId": "J.26.0150158",
+      "startTime": "2026-10-09T12:46:30",
+      "restoreTime": "2026-10-09T20:15:11",
+      "suburbs": [
+       {
+        "suburbName": "PRESTON",
+        "postcode": 3072,
+        "streets": [
+         "BAYLISS ST",
+         "BIRDWOOD ST",
+         "CLARA ST",
+         "RAYNER CT",
+         "REGENT ST"
+        ]
+       },
+       {
+        "suburbName": "RESERVOIR",
+        "postcode": 3073,
+        "streets": [
+         "BIRDWOOD ST"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       144.99579216228068,
+       -37.73085070662939
+      ]
+     }
+    },
+    "Location": {
+     "Latitude": -37.73085070662939,
+     "Longitude": 144.99579216228068
+    }
+   }
+  ]
+ },
+ {
+  "EstimatedRestorationTime": "2026-10-10T16:00:00",
+  "DispatchedTime": "2026-10-09T17:32:01",
+  "EventId": "J.26.0150185",
+  "Type": "Unplanned",
+  "Status": "In Progress (ZM10)",
+  "Cause": "Animal impact",
+  "StartTime": "2026-10-10T04:22:44",
+  "RestorationTime": null,
+  "ImpactedCustomers": 0,
+  "LocationGeoJson": null,
+  "Location": null,
+  "ImpactedSuburbs": [],
+  "ImpactedAreaGeoJson": null,
+  "ImpactedArea": null,
+  "LastUpdatedTime": "2026-10-10T07:51:39.775Z",
+  "FeedReceivedTime": "2026-10-10T02:32:13.974Z",
+  "History": [
+   {
+    "ImpactedSuburbs": [
+     {
+      "SuburbName": "GLADSTONE PARK",
+      "PostCode": 3043,
+      "Streets": [
+       "THE CIRCUIT"
+      ]
+     },
+     {
+      "SuburbName": "TULLAMARINE",
+      "PostCode": 3043,
+      "Streets": [
+       "CARRICK DR",
+       "CARRICK DRIVE",
+       "CATERPILLAR DR",
+       "COLUMBIA CL",
+       "FORUM PL",
+       "LINDAWAY PL",
+       "LINDAWAY PLACE",
+       "MELROSE CT",
+       "MELROSE DR",
+       "PARAMOUNT CT",
+       "WESTERN RING ROAD"
+      ]
+     }
+    ],
+    "ImpactedAreaGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Historical",
+      "customersOff": 239,
+      "eventId": "J.26.0150185",
+      "startTime": "2026-10-10T04:22:44",
+      "restoreTime": "2026-10-10T04:26:51",
+      "suburbs": [
+       {
+        "suburbName": "GLADSTONE PARK",
+        "postcode": 3043,
+        "streets": [
+         "THE CIRCUIT"
+        ]
+       },
+       {
+        "suburbName": "TULLAMARINE",
+        "postcode": 3043,
+        "streets": [
+         "CARRICK DR",
+         "CARRICK DRIVE",
+         "CATERPILLAR DR",
+         "COLUMBIA CL",
+         "FORUM PL",
+         "LINDAWAY PL",
+         "LINDAWAY PLACE",
+         "MELROSE CT",
+         "MELROSE DR",
+         "PARAMOUNT CT",
+         "WESTERN RING ROAD"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         144.87894,
+         -37.71615
+        ],
+        [
+         144.87685,
+         -37.71579
+        ],
+        [
+         144.87659,
+         -37.71534
+        ],
+        [
+         144.88015,
+         -37.69975
+        ],
+        [
+         144.88084,
+         -37.69895
+        ],
+        [
+         144.88747,
+         -37.69844
+        ],
+        [
+         144.88834,
+         -37.69859
+        ],
+        [
+         144.89164,
+         -37.70216
+        ],
+        [
+         144.89158,
+         -37.70305
+        ],
+        [
+         144.8883,
+         -37.71079
+        ],
+        [
+         144.87953,
+         -37.71617
+        ],
+        [
+         144.87894,
+         -37.71615
+        ]
+       ]
+      ]
+     }
+    },
+    "ImpactedArea": [
+     [
+      {
+       "Latitude": -37.71615352108063,
+       "Longitude": 144.87893521681892
+      },
+      {
+       "Latitude": -37.7157929799408,
+       "Longitude": 144.87685404440268
+      },
+      {
+       "Latitude": -37.71534042203311,
+       "Longitude": 144.8765878959116
+      },
+      {
+       "Latitude": -37.69975108866155,
+       "Longitude": 144.8801459334385
+      },
+      {
+       "Latitude": -37.69895210256666,
+       "Longitude": 144.88084173903172
+      },
+      {
+       "Latitude": -37.69844296621609,
+       "Longitude": 144.8874663296097
+      },
+      {
+       "Latitude": -37.698588845903465,
+       "Longitude": 144.88833943618937
+      },
+      {
+       "Latitude": -37.70215796157672,
+       "Longitude": 144.8916433363792
+      },
+      {
+       "Latitude": -37.70305020947611,
+       "Longitude": 144.89158488679215
+      },
+      {
+       "Latitude": -37.710792837860694,
+       "Longitude": 144.88830332941777
+      },
+      {
+       "Latitude": -37.716172522999216,
+       "Longitude": 144.87953221434822
+      },
+      {
+       "Latitude": -37.71615352108063,
+       "Longitude": 144.87893521681892
+      }
+     ]
+    ],
+    "RestorationTime": "2026-10-10T04:26:51",
+    "ImpactedCustomers": 239,
+    "LocationGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Historical",
+      "customersOff": 239,
+      "eventId": "J.26.0150185",
+      "startTime": "2026-10-10T04:22:44",
+      "restoreTime": "2026-10-10T04:26:51",
+      "suburbs": [
+       {
+        "suburbName": "GLADSTONE PARK",
+        "postcode": 3043,
+        "streets": [
+         "THE CIRCUIT"
+        ]
+       },
+       {
+        "suburbName": "TULLAMARINE",
+        "postcode": 3043,
+        "streets": [
+         "CARRICK DR",
+         "CARRICK DRIVE",
+         "CATERPILLAR DR",
+         "COLUMBIA CL",
+         "FORUM PL",
+         "LINDAWAY PL",
+         "LINDAWAY PLACE",
+         "MELROSE CT",
+         "MELROSE DR",
+         "PARAMOUNT CT",
+         "WESTERN RING ROAD"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       144.88415208347965,
+       -37.707317062579456
+      ]
+     }
+    },
+    "Location": {
+     "Latitude": -37.707317062579456,
+     "Longitude": 144.88415208347965
+    }
+   },
+   {
+    "ImpactedSuburbs": [
+     {
+      "SuburbName": "GLADSTONE PARK",
+      "PostCode": 3043,
+      "Streets": [
+       "AITKEN PL",
+       "ALTAIR CT",
+       "ARCHER CT",
+       "ASHWOOD CL",
+       "AYLESBURY CR",
+       "BARTON CT",
+       "BEGA CT",
+       "BELMONT PL",
+       "BOWER CT",
+       "BRADFORD CL",
+       "BRIAR CL",
+       "BURNLEIGH DR",
+       "CONIFER CL",
+       "DAVA CT",
+       "DERWENT CT",
+       "DUDLEY COURT",
+       "DUDLEY CT",
+       "ELIZA CT",
+       "ELMHURST RD",
+       "FLEETWOOD COURT",
+       "FLEETWOOD CT",
+       "GLADSTONE PARK DR",
+       "GLADSTONE PARK DRIVE",
+       "GREENACRE GR",
+       "HARCOURT CR",
+       "JESSOP CT",
+       "KOONALDA RD",
+       "LATIMER PL",
+       "PENDLE CL",
+       "SAMARA GR",
+       "SHERBOURNE RD",
+       "SOUTH CIRCULAR RD",
+       "SUTTON CL",
+       "WANNON ST",
+       "WARRAH CT",
+       "WINSLOW CT",
+       "WOODSTOCK DR",
+       "WOODSTOCK DRIVE"
+      ]
+     }
+    ],
+    "ImpactedAreaGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Current",
+      "customersOff": 613,
+      "eventId": "J.26.0150185",
+      "startTime": "2026-10-10T04:22:44",
+      "restoreTime": null,
+      "suburbs": [
+       {
+        "suburbName": "GLADSTONE PARK",
+        "postcode": 3043,
+        "streets": [
+         "AITKEN PL",
+         "ALTAIR CT",
+         "ARCHER CT",
+         "ASHWOOD CL",
+         "AYLESBURY CR",
+         "BARTON CT",
+         "BEGA CT",
+         "BELMONT PL",
+         "BOWER CT",
+         "BRADFORD CL",
+         "BRIAR CL",
+         "BURNLEIGH DR",
+         "CONIFER CL",
+         "DAVA CT",
+         "DERWENT CT",
+         "DUDLEY COURT",
+         "DUDLEY CT",
+         "ELIZA CT",
+         "ELMHURST RD",
+         "FLEETWOOD COURT",
+         "FLEETWOOD CT",
+         "GLADSTONE PARK DR",
+         "GLADSTONE PARK DRIVE",
+         "GREENACRE GR",
+         "HARCOURT CR",
+         "JESSOP CT",
+         "KOONALDA RD",
+         "LATIMER PL",
+         "PENDLE CL",
+         "SAMARA GR",
+         "SHERBOURNE RD",
+         "SOUTH CIRCULAR RD",
+         "SUTTON CL",
+         "WANNON ST",
+         "WARRAH CT",
+         "WINSLOW CT",
+         "WOODSTOCK DR",
+         "WOODSTOCK DRIVE"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         144.88216,
+         -37.69008
+        ],
+        [
+         144.88182,
+         -37.68799
+        ],
+        [
+         144.88309,
+         -37.6862
+        ],
+        [
+         144.88487,
+         -37.6862
+        ],
+        [
+         144.88659,
+         -37.68695
+        ],
+        [
+         144.89502,
+         -37.69256
+        ],
+        [
+         144.89507,
+         -37.69283
+        ],
+        [
+         144.89379,
+         -37.69523
+        ],
+        [
+         144.88801,
+         -37.69819
+        ],
+        [
+         144.88748,
+         -37.69811
+        ],
+        [
+         144.88216,
+         -37.69008
+        ]
+       ]
+      ]
+     }
+    },
+    "ImpactedArea": [
+     [
+      {
+       "Latitude": -37.69007925859297,
+       "Longitude": 144.88216274263738
+      },
+      {
+       "Latitude": -37.68798748316765,
+       "Longitude": 144.88182406493002
+      },
+      {
+       "Latitude": -37.68620109053455,
+       "Longitude": 144.88308614997538
+      },
+      {
+       "Latitude": -37.68619680754545,
+       "Longitude": 144.8848652768269
+      },
+      {
+       "Latitude": -37.68694509483318,
+       "Longitude": 144.88659112297688
+      },
+      {
+       "Latitude": -37.692561311125694,
+       "Longitude": 144.89502230736312
+      },
+      {
+       "Latitude": -37.69283484201644,
+       "Longitude": 144.8950699488349
+      },
+      {
+       "Latitude": -37.69523020107817,
+       "Longitude": 144.89379150240515
+      },
+      {
+       "Latitude": -37.698191695870165,
+       "Longitude": 144.88800655292076
+      },
+      {
+       "Latitude": -37.69810903229678,
+       "Longitude": 144.88748377297813
+      },
+      {
+       "Latitude": -37.69007925859297,
+       "Longitude": 144.88216274263738
+      }
+     ]
+    ],
+    "RestorationTime": null,
+    "ImpactedCustomers": 613,
+    "LocationGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Current",
+      "customersOff": 613,
+      "eventId": "J.26.0150185",
+      "startTime": "2026-10-10T04:22:44",
+      "restoreTime": null,
+      "suburbs": [
+       {
+        "suburbName": "GLADSTONE PARK",
+        "postcode": 3043,
+        "streets": [
+         "AITKEN PL",
+         "ALTAIR CT",
+         "ARCHER CT",
+         "ASHWOOD CL",
+         "AYLESBURY CR",
+         "BARTON CT",
+         "BEGA CT",
+         "BELMONT PL",
+         "BOWER CT",
+         "BRADFORD CL",
+         "BRIAR CL",
+         "BURNLEIGH DR",
+         "CONIFER CL",
+         "DAVA CT",
+         "DERWENT CT",
+         "DUDLEY COURT",
+         "DUDLEY CT",
+         "ELIZA CT",
+         "ELMHURST RD",
+         "FLEETWOOD COURT",
+         "FLEETWOOD CT",
+         "GLADSTONE PARK DR",
+         "GLADSTONE PARK DRIVE",
+         "GREENACRE GR",
+         "HARCOURT CR",
+         "JESSOP CT",
+         "KOONALDA RD",
+         "LATIMER PL",
+         "PENDLE CL",
+         "SAMARA GR",
+         "SHERBOURNE RD",
+         "SOUTH CIRCULAR RD",
+         "SUTTON CL",
+         "WANNON ST",
+         "WARRAH CT",
+         "WINSLOW CT",
+         "WOODSTOCK DR",
+         "WOODSTOCK DRIVE"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       144.88844858784586,
+       -37.692156829965185
+      ]
+     }
+    },
+    "Location": {
+     "Latitude": -37.692156829965185,
+     "Longitude": 144.88844858784586
+    }
+   }
+  ]
+ },
+ {
+  "PlannedStartTime": "2026-10-10T08:00:00",
+  "PlannedEndTime": "2026-10-10T17:00:00",
+  "EventId": "J.26.0148162",
+  "Type": "Planned",
+  "Status": "Complete",
+  "Cause": "Essential Maintenance",
+  "StartTime": "2026-10-10T09:12:41",
+  "RestorationTime": "2026-10-10T14:44:32",
+  "ImpactedCustomers": 73,
+  "LocationGeoJson": null,
+  "Location": null,
+  "ImpactedSuburbs": [],
+  "ImpactedAreaGeoJson": null,
+  "ImpactedArea": null,
+  "LastUpdatedTime": "2026-10-10T07:51:39.775Z",
+  "FeedReceivedTime": "2026-10-10T04:55:03.898Z",
+  "History": [
+   {
+    "ImpactedSuburbs": [
+     {
+      "SuburbName": "NEWPORT",
+      "PostCode": 3015,
+      "Streets": [
+       "CHALLIS ST",
+       "JUBILEE ST",
+       "MADDOX RD",
+       "MONMOUTH ST",
+       "SEVERN ST",
+       "SEVERN STREET",
+       "WOODS ST"
+      ]
+     }
+    ],
+    "ImpactedAreaGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Historical",
+      "customersOff": 73,
+      "eventId": "J.26.0148162",
+      "startTime": "2026-10-10T09:12:41",
+      "restoreTime": "2026-10-10T14:44:32",
+      "suburbs": [
+       {
+        "suburbName": "NEWPORT",
+        "postcode": 3015,
+        "streets": [
+         "CHALLIS ST",
+         "JUBILEE ST",
+         "MADDOX RD",
+         "MONMOUTH ST",
+         "SEVERN ST",
+         "SEVERN STREET",
+         "WOODS ST"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         144.86918,
+         -37.84688
+        ],
+        [
+         144.86876,
+         -37.84666
+        ],
+        [
+         144.86872,
+         -37.84662
+        ],
+        [
+         144.86869,
+         -37.84658
+        ],
+        [
+         144.86869,
+         -37.84653
+        ],
+        [
+         144.86877,
+         -37.84603
+        ],
+        [
+         144.86881,
+         -37.84596
+        ],
+        [
+         144.86887,
+         -37.84593
+        ],
+        [
+         144.87035,
+         -37.84586
+        ],
+        [
+         144.87259,
+         -37.8461
+        ],
+        [
+         144.87317,
+         -37.84629
+        ],
+        [
+         144.87323,
+         -37.84632
+        ],
+        [
+         144.87328,
+         -37.84639
+        ],
+        [
+         144.87323,
+         -37.84716
+        ],
+        [
+         144.87318,
+         -37.8474
+        ],
+        [
+         144.8724,
+         -37.84796
+        ],
+        [
+         144.8723,
+         -37.84799
+        ],
+        [
+         144.87201,
+         -37.84796
+        ],
+        [
+         144.86918,
+         -37.84688
+        ]
+       ]
+      ]
+     }
+    },
+    "ImpactedArea": [
+     [
+      {
+       "Latitude": -37.846878511442995,
+       "Longitude": 144.86918426091296
+      },
+      {
+       "Latitude": -37.84665742210762,
+       "Longitude": 144.8687617916543
+      },
+      {
+       "Latitude": -37.846623157853365,
+       "Longitude": 144.8687174279428
+      },
+      {
+       "Latitude": -37.84657850690212,
+       "Longitude": 144.86869186162414
+      },
+      {
+       "Latitude": -37.84652957220805,
+       "Longitude": 144.8686885871456
+      },
+      {
+       "Latitude": -37.8460338712598,
+       "Longitude": 144.86877281535035
+      },
+      {
+       "Latitude": -37.84596337988093,
+       "Longitude": 144.86881382006496
+      },
+      {
+       "Latitude": -37.845932022397626,
+       "Longitude": 144.8688665740436
+      },
+      {
+       "Latitude": -37.84586375996809,
+       "Longitude": 144.87035179343832
+      },
+      {
+       "Latitude": -37.846100127506695,
+       "Longitude": 144.87258630694836
+      },
+      {
+       "Latitude": -37.84628536707563,
+       "Longitude": 144.87317456176558
+      },
+      {
+       "Latitude": -37.84631581831303,
+       "Longitude": 144.87323160439766
+      },
+      {
+       "Latitude": -37.84638825109098,
+       "Longitude": 144.87327704071993
+      },
+      {
+       "Latitude": -37.84716311425816,
+       "Longitude": 144.87322510739597
+      },
+      {
+       "Latitude": -37.8473986873096,
+       "Longitude": 144.87317716749297
+      },
+      {
+       "Latitude": -37.847961196602924,
+       "Longitude": 144.87239834046426
+      },
+      {
+       "Latitude": -37.84799462728565,
+       "Longitude": 144.87229985157802
+      },
+      {
+       "Latitude": -37.8479603241227,
+       "Longitude": 144.87201386025336
+      },
+      {
+       "Latitude": -37.846878511442995,
+       "Longitude": 144.86918426091296
+      }
+     ]
+    ],
+    "RestorationTime": "2026-10-10T14:44:32",
+    "ImpactedCustomers": 73,
+    "LocationGeoJson": {
+     "type": "Feature",
+     "properties": {
+      "type": "Historical",
+      "customersOff": 73,
+      "eventId": "J.26.0148162",
+      "startTime": "2026-10-10T09:12:41",
+      "restoreTime": "2026-10-10T14:44:32",
+      "suburbs": [
+       {
+        "suburbName": "NEWPORT",
+        "postcode": 3015,
+        "streets": [
+         "CHALLIS ST",
+         "JUBILEE ST",
+         "MADDOX RD",
+         "MONMOUTH ST",
+         "SEVERN ST",
+         "SEVERN STREET",
+         "WOODS ST"
+        ]
+       }
+      ]
+     },
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       144.87098281393276,
+       -37.84692919362687
+      ]
+     }
+    },
+    "Location": {
+     "Latitude": -37.84692919362687,
+     "Longitude": 144.87098281393276
+    }
+   }
+  ]
+ }
+]

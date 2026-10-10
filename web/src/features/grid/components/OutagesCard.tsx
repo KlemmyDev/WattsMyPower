@@ -12,6 +12,7 @@ import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
 import type { Outage, OutagesView } from "~/features/grid/types";
+import { listed } from "~/features/grid/utils";
 
 /** Outages now, and planned work: the colours they take on the radar and in the lists. */
 export const UNPLANNED = COLOR.warn;
@@ -265,6 +266,8 @@ export function OutagesCard({
   const radius = save.isPending ? (save.variables?.outage_radius_km ?? view.radius_km) : view.radius_km;
   const list = tab === "now" ? view.now : view.planned;
   const net = view.network;
+  // Where it can't be told which network serves the house, each that might is followed.
+  const sources = listed(view.networks.map((n) => n.name)) || net?.name;
   const s = view.summary;
   const underway = view.now.filter((o) => o.planned).length;
   // Nothing's come from the network's map yet (it can turn the dashboard away): the card stays, with the radius,
@@ -281,7 +284,7 @@ export function OutagesCard({
             ? `Outages within ${radius} km will show here`
             : `No outages within ${radius} km`,
         underway ? `${underway} planned ${underway === 1 ? "job" : "jobs"} under way` : null,
-        `from ${net.name}`,
+        `from ${sources}`,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -366,7 +369,9 @@ export function OutagesCard({
                   className={cn("ml-auto tabular-nums", view.error && "text-warn")}
                   title={`${shortDay.format(new Date(checked * 1000))}, ${hhmm(checked)}${view.error ? ` · ${view.error}` : ""}`}
                 >
-                  {view.error ? `Couldn't reach ${net.name} · last checked ` : `Checked ${net.name} `}
+                  {view.error
+                    ? `Couldn't reach ${view.networks.length > 1 ? "every network" : net.name} · last checked `
+                    : `Checked ${sources} `}
                   {ago(checked, now)}
                 </span>
               )}
@@ -385,7 +390,7 @@ export function OutagesCard({
               </Link>
             </>
           ) : (
-            "Outages come from your electricity network. Only Queensland's (Energex and Ergon Energy) are supported so far."
+            "Outages come from your electricity network. The Northern Territory's isn't supported yet."
           )}
         </div>
       )}

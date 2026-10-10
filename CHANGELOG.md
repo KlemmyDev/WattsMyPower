@@ -32,8 +32,12 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   voltage and frequency at the house.
 - **Battery controls:** standby, a floor it won't discharge below, or charging from the grid, for a set time, then
   back to normal. They stand aside while iSolarCloud has the battery.
-- **Outages and warnings:** Energex and Ergon Energy outages near you (Queensland), matched to your street on your own
-  server; the Bureau of Meteorology's warnings for your district; Queensland Fire Department bushfire warnings.
+- **Outages and warnings:** power outages and planned work near you from your electricity network, matched to your
+  street on your own server: Energex and Ergon Energy (Queensland), Ausgrid, Endeavour Energy and Essential Energy
+  (NSW), Evoenergy (ACT), CitiPower, Powercor, Jemena, United Energy and AusNet Services (Victoria), SA Power
+  Networks, TasNetworks, Western Power and Horizon Power (WA). They come from each network's public outage map
+  (unofficial feeds, which may change). The Bureau of Meteorology's warnings for your district; Queensland Fire
+  Department bushfire warnings.
 - **Plan:** today and the next two days of solar, home use, battery and cost from Open-Meteo's forecast, calibrated to
   your system and learning how your roof turns sunshine into solar, with the best times to use power and warnings
   when the battery will run down or won't fill.
@@ -72,7 +76,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   appliance every 5 minutes, so about 15 appliances at most on one account.
 - The WiNet-S2 sometimes repeats the same readings for a few minutes. Those are left out, so charts show a short gap.
 - Only one app should talk to the inverter over Modbus at a time.
-- Outages and bushfire warnings cover Queensland only. Plan comparison leaves out controlled load and demand charges.
+- Outages don't cover the Northern Territory yet, and bushfire warnings cover Queensland only. The networks' outage
+  feeds aren't official APIs: one can stop working until the dashboard catches up. Plan comparison leaves out
+  controlled load and demand charges.
 - Bluetooth in a Proxmox LXC needs a one-time set-up on the Proxmox host (see the README).
 - Windows 10 isn't supported.
 
