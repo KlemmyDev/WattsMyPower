@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Protocol
 
 
@@ -57,6 +60,17 @@ class CollectorClient:
 
     def _call(self, method: str, path: str, body: dict[str, Any] | None = None, timeout: float = 30) -> Any:
         """A request to the devices, scan or storage API, with its errors as CollectorError."""
+        with self._open(method, path, body, timeout) as resp:
+            try:
+                return json.load(resp)
+            except (urllib.error.URLError, OSError) as e:
+                raise CollectorError(502, f"The collector couldn't be reached ({type(e).__name__}).") from e
+
+    @contextmanager
+    def _open(
+        self, method: str, path: str, body: dict[str, Any] | None = None, timeout: float = 30
+    ) -> Iterator[http.client.HTTPResponse]:
+        """The response to a request, to read as it arrives, with its errors as CollectorError."""
         req = urllib.request.Request(
             f"{self.url}{path}",
             method=method,
@@ -68,8 +82,7 @@ class CollectorClient:
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.load(resp)
+            resp = urllib.request.urlopen(req, timeout=timeout)
         except urllib.error.HTTPError as e:
             try:
                 detail = json.load(e).get("detail")
@@ -79,6 +92,7 @@ class CollectorClient:
             if e.code == 404 and detail in (None, "Not Found"):
                 missing = (
                     "report its database" if path == "/v1/storage"
+                    else "make a backup" if path == "/v1/backup"
                     else "change the battery's settings" if path.endswith("/holding")
                     else "connect inverters"
                 )  # fmt: skip
@@ -88,6 +102,8 @@ class CollectorClient:
             raise CollectorError(e.code, detail if isinstance(detail, str) else f"The collector said {e.code}.") from e
         except (urllib.error.URLError, OSError) as e:
             raise CollectorError(502, f"The collector couldn't be reached ({type(e).__name__}).") from e
+        with resp:
+            yield resp
 
     def status(self) -> dict[str, Any]:
         result: dict[str, Any] = self._get("/v1/status")
@@ -102,6 +118,13 @@ class CollectorClient:
         """The collector's database, measured table by table (it reads every page, so allow it time)."""
         result: dict[str, Any] = self._call("GET", "/v1/storage", timeout=120)
         return result
+
+    @contextmanager
+    def backup(self) -> Iterator[http.client.HTTPResponse]:
+        """A copy of the collector's database (an SQLite file), to read as it arrives (an error reading it is the
+        reader's to handle). The collector makes the copy before it answers, which takes a while for a large one."""
+        with self._open("GET", "/v1/backup", timeout=600) as resp:
+            yield resp
 
     # -- devices --------------------------------------------------------------
     def devices(self) -> dict[str, Any]:

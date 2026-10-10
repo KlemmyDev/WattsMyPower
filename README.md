@@ -236,6 +236,8 @@ An update installs the channel's version, so moving to a channel behind the one 
 
 Every update backs up both databases to `data/backups/` first, named by when they were made and the version (and channel) that made them: `wattsmypower-20261010-093000-2026.10.9-beta.db` and `collector-20261010-093000-2026.10.9-beta.db`. If the dashboard can't make them (it isn't running, or keeps restarting), `install.sh` makes them on this machine instead, and if it can't make them at all it stops before updating (`--no-backup` goes ahead anyway). The newest 5 of each are kept, plus the newest from each of the last 5 versions and from each channel, so the last backup from before you tried a beta stays. They live on the same machine, so for a copy that survives losing it, copy `data/` and `.env` somewhere else now and then (stop it first with `docker compose stop` for a consistent copy, then `docker compose start`).
 
+**Downloading a backup:** **Manage → Data → Download a backup** saves a zip of the dashboard's database, or of both databases with **Everything**, copied safely while the app keeps running. It holds the passwords and tokens you've saved for connected services, so keep it private. To restore it, follow the `README.txt` inside: stop the app, copy the files into `data/`, delete any `-wal` or `-shm` files there, and start it again.
+
 `bash install.sh --rollback` puts back the backup from before the last update (see **Going back**). To restore another by hand, from the `wattsmypower` folder, using the pair of backups from the same time:
 
 ```bash
@@ -543,6 +545,7 @@ collector/              the collector service: reads the inverters, stores raw r
   devices/              the device interface, the reader registry (drivers.py), Modbus helpers, and a
                         package per brand with a reader per model family (sungrow/sh_rs.py, sungrow/sg_d.py)
   storage.py            measures its database for Manage → Data (a copy of app's storage/measure.py)
+  backup.py             copies its database for the dashboard's backups (GET /v1/backup)
 app/
   main.py               the FastAPI app (create_app), its middleware and routers
   container.py          builds every service once from the config; routers get them via app/dependencies.py
@@ -570,7 +573,7 @@ app/
     auth/               sign-in: the household account, sessions, and the /api guard
     onboarding/         the first-run set-up guide's progress, and spotting installs already set up
     storage/            Manage → Data: both databases measured table by table (measure.py) and
-                        described in plain words (catalog.py)
+                        described in plain words (catalog.py), and a backup to download (backup.py)
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)

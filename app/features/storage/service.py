@@ -1,6 +1,7 @@
 """
 What's stored, and how much room it takes (Manage → Data): both SQLite databases, the dashboard's
-and the collector's, measured table by table and described in plain words.
+and the collector's, measured table by table and described in plain words. And a backup of them to
+download (backup.py).
 
 Measuring reads every page of both databases, so a report is kept for a few minutes; `fresh` measures again.
 """
@@ -16,14 +17,15 @@ from app.core.cache import TTLCache
 from app.core.config import Config
 from app.core.database import Database
 from app.features.live.client import CollectorError
+from app.features.storage.backup import Backups, Copies
 from app.features.storage.catalog import COLLECTOR, DASHBOARD, GROUPS, SPECS, Table
 from app.features.storage.measure import WEEK, measure
 
 KEPT_FOR = 300  # seconds a report is reused
 
 
-class Measures(Protocol):
-    """The collector's measure of its own database (CollectorClient, or a fake in tests)."""
+class Measures(Copies, Protocol):
+    """The collector's measure and copy of its own database (CollectorClient, or a fake in tests)."""
 
     def storage(self) -> dict[str, Any]: ...
 
@@ -38,6 +40,7 @@ class StorageService:
         self.db = db
         self.collector = collector
         self._cache = TTLCache()
+        self.backups = Backups(db.path, collector)
 
     def report(self, fresh: bool = False) -> dict[str, Any]:
         if fresh:

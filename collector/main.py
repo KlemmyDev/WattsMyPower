@@ -12,13 +12,19 @@ import json
 import logging
 import os
 import re
+import shutil
 import socket
+import sqlite3
+import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
+from collector import backup as copying
 from collector.config import Config, ConfigError
 from collector.devices import ROLES, Device, DeviceConfig, Settable, Words, WriteRefused
 from collector.devices.drivers import READERS, build_device, env_devices
@@ -104,6 +110,38 @@ async def storage(request: Request) -> dict[str, Any]:
             return measure(conn, store.path, SPECS)
 
     return {**await asyncio.to_thread(run), "retention_days": store.retention_days}
+
+
+@router.get("/backup")
+async def backup(request: Request) -> StreamingResponse:
+    """A copy of the database made with SQLite's online backup (see backup.py), for the dashboard's backups. It's
+    deleted once it's sent. One at a time: 409 while another is being made or sent."""
+    store: Store = request.app.state.store
+    lock: threading.Lock = request.app.state.backing_up
+    if not lock.acquire(blocking=False):
+        raise HTTPException(409, "The collector is already making a backup. Try again once it's done.")
+    done = copying.once(lock.release)
+    try:
+        where = await asyncio.to_thread(copying.folder)
+        done = copying.once(lambda: shutil.rmtree(where, ignore_errors=True), lock.release)
+        path = os.path.join(where, "collector.db")
+        await asyncio.to_thread(copying.snapshot, store.path, path)
+        size = os.path.getsize(path)
+    except sqlite3.Error as e:
+        done()
+        raise HTTPException(500, f"The collector couldn't copy its database: {e}") from e
+    except OSError as e:
+        done()
+        raise HTTPException(507, f"The collector couldn't write a copy of its database ({e.strerror}).") from e
+    except BaseException:
+        done()
+        raise
+    return StreamingResponse(
+        copying.send(path, done),
+        media_type="application/vnd.sqlite3",
+        headers={"Content-Length": str(size), "Cache-Control": "no-store"},
+        background=BackgroundTask(done),  # in case the download stops before the first chunk is read
+    )
 
 
 # -- devices: the inverters to read, connected in the dashboard (Manage → Integrations) ---------
@@ -404,6 +442,7 @@ def create_app(
     app = FastAPI(title="WattsMyPower collector", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.config, app.state.store, app.state.poller = config, store, poller
     app.state.scanner, app.state.reload, app.state.check = scanner, reload, check or device_check
+    app.state.backing_up = threading.Lock()  # held while a backup is made and sent (GET /v1/backup)
     app.include_router(router)
     app.include_router(health_router)
     return app
