@@ -1,6 +1,5 @@
+import { fullDay } from "~/features/common/formatting/utils/date";
 import type { Standout } from "~/features/history/utils/year";
-
-const fullDay = new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
 
 /** The view's record days as cards; choosing one opens it hour by hour. */
 export function StandoutDays({ standouts, onSelect }: { standouts: Standout[]; onSelect: (ts: number) => void }) {
@@ -26,9 +25,7 @@ export function StandoutDays({ standouts, onSelect }: { standouts: Standout[]; o
             <span className="text-[28px] leading-8 font-light tracking-[-1px] text-fg tabular-nums max-sm:text-2xl">
               {s.value}
             </span>
-            <span className="text-xs text-ink-label">
-              {s.date ?? fullDay.format(new Date(s.day.ts * 1000)).replace(/,/g, "")}
-            </span>
+            <span className="text-xs text-ink-label">{s.date ?? fullDay.format(s.day.ts * 1000)}</span>
           </button>
         ))}
       </div>

@@ -124,15 +124,17 @@ class OutageService:
 
     # ------------------------------------------------------------------ which network
     def network(self) -> tuple[EnergyQueensland | None, bool]:
-        """The house's network, and whether it was worked out (True) rather than chosen."""
+        """The house's network, and whether it was worked out (True) rather than chosen. None until the house's
+        location has been chosen: what's around it can't be told without it."""
         choice = self.settings.get_choice("power_network")
-        if choice == "none":
+        where = self.settings.location()
+        if choice == "none" or (where is None and choice != "auto"):
             return None, False
         if choice != "auto":
             return self.networks.get(choice), False
-        if self.region() != "QLD1":
+        if where is None or self.region() != "QLD1":
             return None, True  # only Queensland's networks so far
-        lat, lon = self.settings.get("latitude"), self.settings.get("longitude")
+        lat, lon = where
         with self._lock:
             areas = dict(self._areas)
         for net in self.networks.values():  # Energex first: Ergon's area surrounds it
@@ -177,7 +179,8 @@ class OutageService:
     def refresh(self) -> None:
         """Fetch the network's outages now, its planned work when due, and the service areas once a day."""
         now = self.clock()
-        if self.settings.get_choice("power_network") == "auto" and self.region() == "QLD1":
+        auto = self.settings.get_choice("power_network") == "auto"
+        if auto and self.settings.location_set() and self.region() == "QLD1":
             for each in self.networks.values():
                 with self._lock:
                     fetched = self._areas.get(each.id, (0.0, []))[0]
@@ -231,7 +234,10 @@ class OutageService:
         """Outages now that reach the house or are within the radius, nearest first, and planned work to come that
         reaches the house (however far ahead) or is within the radius in the next two weeks, soonest first."""
         now = self.clock() if now is None else now
-        lat, lon = self.settings.get("latitude"), self.settings.get("longitude")
+        where = self.settings.location()
+        if where is None:
+            return {"now": [], "planned": []}
+        lat, lon = where
         radius = self.settings.get("outage_radius_km")
         street = street_key(self.settings.get_text("home_street"))
         suburb = suburb_key(self.settings.get_text("home_suburb"))
@@ -270,6 +276,8 @@ class OutageService:
         return {
             "network": {"id": net.id, "name": net.name, "site": net.site} if net else None,
             "network_auto": auto,
+            # Whether the house's location has been chosen: no outages are followed until it is.
+            "location_set": self.settings.location_set(),
             "supported": self.region() == "QLD1" or self.settings.get_choice("power_network") not in ("auto", "none"),
             "radius_km": self.settings.get("outage_radius_km"),
             "street": self.settings.get_text("home_street"),

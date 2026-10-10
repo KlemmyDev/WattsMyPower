@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.core.security import inline_scripts, page_policy
+
 WEB = Path(__file__).resolve().parents[2] / "web" / "dist" / "client"
 
 
@@ -27,6 +29,16 @@ class ImmutableStatic(StaticFiles):
 def mount_spa(app: FastAPI, web: Path = WEB) -> None:
     """Register last: it answers every path the API routes don't."""
     app.mount("/assets", ImmutableStatic(directory=web / "assets", check_dir=False), name="assets")
+    # The page's Content Security Policy, allowing the scripts written into it; read again when it's rebuilt.
+    policy: dict[tuple[int, int], str] = {}
+
+    def shell_policy(shell: Path) -> str:
+        st = shell.stat()
+        key = (st.st_mtime_ns, st.st_size)
+        if key not in policy:
+            policy.clear()
+            policy[key] = page_policy(inline_scripts(shell.read_text(encoding="utf-8")))
+        return policy[key]
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str) -> FileResponse:
@@ -39,4 +51,6 @@ def mount_spa(app: FastAPI, web: Path = WEB) -> None:
         file = (web / path).resolve()
         if path and web in file.parents and file.is_file():
             return FileResponse(file, headers={"Cache-Control": "no-cache"})
-        return FileResponse(shell, headers={"Cache-Control": "no-cache"})
+        return FileResponse(
+            shell, headers={"Cache-Control": "no-cache", "Content-Security-Policy": shell_policy(shell)}
+        )

@@ -3,7 +3,7 @@ import { useState, type CSSProperties } from "react";
 import { hhmm, shortDay, weekdayLong } from "~/features/common/formatting/utils/date";
 import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, hourOf, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
@@ -49,7 +49,7 @@ const asleepSpans = (points: EvLevels["points"]) =>
 
 /** Night, when the car should sleep: 10 pm to 6 am. */
 const atNight = (t: number) => {
-  const h = new Date(t * 1000).getHours();
+  const h = hourOf(t);
   return h >= 22 || h < 6;
 };
 

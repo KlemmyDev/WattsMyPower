@@ -17,6 +17,7 @@ from typing import Any
 from app.core.config import Config
 from app.core.database import Database
 from app.features.inverters import drivers
+from app.features.inverters.limits import bounds_for
 from app.features.live.client import Feed
 from app.features.live.service import LiveService
 from app.features.live.transform import Freeze, Pv2Carry, behind_meter, snapshots
@@ -132,6 +133,7 @@ class CollectorIngest:
             poll_interval=self.config.poll_interval,
             carry=self.carry,
             freeze=self.freeze,
+            bounds=bounds_for(self.live.info),
         )
         self.readings.insert_many(conn, snaps)
         self.live.frozen_since = self.freeze.since

@@ -10,6 +10,7 @@ import pytest
 from app.core.config import Config
 from app.core.database import Database
 from app.features.inverters import drivers
+from app.features.inverters.limits import bounds_for
 from app.features.inverters.sungrow import sg_d, sh_rs
 from app.features.live.ingest import CollectorIngest, load_cursor
 from app.features.live.reprocess import reprocess
@@ -69,7 +70,7 @@ def test_decode_info() -> None:
     words.update({5000: 0x0D0F, 5001: 50, 5002: 0, 5639: 1600})
     info = sh_rs.decode_info({"input": words, "holding": {13059: 50}})
     assert info == {"brand": "Sungrow", "serial": "A23A0903744", "model": "SH5.0RS", "nominal_kw": 5.0, "phases": "Single phase",
-                    "battery_kwh": 16.0, "reserve": 5.0}  # fmt: skip
+                    "battery_kwh": 16.0, "reserve": 5.0, "device_type": 0x0D0F}  # fmt: skip
 
 
 def info_for(code: int) -> dict[str, Any]:
@@ -89,7 +90,7 @@ def test_the_sh_family_is_known_by_name(code: int, model: str) -> None:
 def test_a_newer_hybrid_is_read_but_marked_untested() -> None:
     """A device type in the hybrids' ranges that isn't listed yet: the same registers, named by its code."""
     assert info_for(0x0E2A) == {"brand": "Sungrow", "model": "SH hybrid (type 0x0E2A)", "untested": True,
-                                "nominal_kw": 4.6, "phases": "Single phase"}  # fmt: skip
+                                "nominal_kw": 4.6, "phases": "Single phase", "device_type": 0x0E2A}  # fmt: skip
     # Something else answering the same registers (an SG string inverter) isn't a hybrid.
     assert info_for(0x2435)["model"] == "Unknown (0x2435)"
 
@@ -240,3 +241,55 @@ def test_a_garbled_second_inverter_reading_counts_as_missed() -> None:
     feed = [*rows(DAY), *rows(DAY + 60, pv2=False), {"ts": DAY + 60, "device": "pv2", "input": garbled}]
     out = snapshots(feed, has_pv2=True, behind_meter=True, poll_interval=60, carry=carry, freeze=Freeze())
     assert out[1][1]["pv2_power"] == 1800  # the last good values carried, as for a missed read
+
+
+def importing(w: int, ts: int = DAY) -> dict[str, Any]:
+    """A poll importing `w` W from the grid (export power is signed, low word first: importing is negative)."""
+    raw = -w & 0xFFFF_FFFF
+    words = {**hybrid_words(), "13010": raw & 0xFFFF, "13011": raw >> 16, "5035": 900 + ts // 60 % 90}
+    return {"ts": ts, "device": "hybrid", "driver": "sungrow.sh_rs", "input": words}
+
+
+@pytest.mark.parametrize(
+    ("info", "kept"),
+    [
+        ({"phases": "Three phase"}, True),  # an SH25T with a car charging: well past 30 kW, and real
+        ({"phases": "Single phase"}, False),  # no single-phase connection carries 45 kW: a garbled read
+        ({}, False),  # until the inverter says, held to the single-phase figure
+    ],
+)
+def test_a_three_phase_system_can_import_more_than_30_kw(info: dict[str, Any], kept: bool) -> None:
+    out = snapshots([importing(45_000)], has_pv2=False, behind_meter=True, poll_interval=60, carry=Pv2Carry(),
+                    freeze=Freeze(), bounds=bounds_for(info))  # fmt: skip
+    [(_, snap)] = out
+    assert snap["grid_power"] == (45_000 if kept else None)
+
+
+def test_a_torn_read_is_still_dropped_on_a_three_phase_system() -> None:
+    torn = {"input": {**hybrid_words(), "13008": 0xFDA8, "13009": 0}}  # -600 W read as +64,936 W
+    out = snapshots([{"ts": DAY, "device": "hybrid", **torn}], has_pv2=False, behind_meter=True, poll_interval=60,
+                    carry=Pv2Carry(), freeze=Freeze(), bounds=bounds_for({"phases": "Three phase"}))  # fmt: skip
+    [(_, snap)] = out
+    assert snap["load_power"] is None and snap["pv_power"] == 4120
+
+
+class ThreePhaseCollector(FakeCollector):
+    def status(self) -> dict[str, Any]:
+        status = super().status()
+        status["devices"]["hybrid"]["info"]["input"].update({"5000": 0x0E28, "5001": 250, "5002": 1})  # SH25T
+        return status
+
+
+def test_ingest_and_reprocess_keep_a_three_phase_systems_big_imports(db: Database, config: Config) -> None:
+    readings, live = _services(db, config)
+    fake = ThreePhaseCollector([importing(45_000, DAY), importing(52_000, DAY + 60)])
+    ingest = CollectorIngest(config, db, readings, live, fake)
+    ingest.apply_status(fake.status())
+    conn = db.connect()
+    ingest._ingest(conn, fake.readings(0)[0])
+    conn.close()
+    assert live.status()["snapshot"]["grid_power"] == 52_000
+
+    reprocess(config, db, fake)
+    with db.reading() as c:
+        assert c.execute("SELECT grid_power FROM samples ORDER BY ts").fetchall() == [(45_000,), (52_000,)]

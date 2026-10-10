@@ -2,11 +2,13 @@
 # Install or update WattsMyPower with Docker.
 #
 #   Install:  curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
+#             (options after "bash -s --", e.g. curl ... | bash -s -- --channel stable)
 #   Update:   cd wattsmypower && bash install.sh
 #
 # It follows a release channel, chosen in the dashboard (Manage → System → Updates) or with --channel: nightly (every
-# change, as it's merged to main), beta (pre-releases and releases) or stable (releases only). An update goes to the
-# channel's version, so after moving to a channel behind this one (nightly to stable) it goes back to that version.
+# change, as it's merged to main), beta (pre-releases and releases; a new install's) or stable (releases only). An
+# update goes to the channel's version, so after moving to a channel behind this one (nightly to stable) it goes back
+# to that version.
 #
 # Runs on Linux and in WSL (Docker is installed if it's missing), and on a Mac with Docker
 # Desktop (started if it isn't running). On Windows, install.ps1 sets up WSL and runs this.
@@ -15,24 +17,30 @@
 # ./wattsmypower (installing git first if needed) and carries on from there. Run inside
 # that folder, it updates it.
 #
-# Your data (data/) and settings (.env) are never overwritten. Before each update
-# the database is backed up to data/backups/ (the newest 5 are kept), without
-# stopping the app.
+# Your data (data/) and settings (.env) are never overwritten, and only you can read them. Before each update
+# both databases are backed up to data/backups/: the newest 5 are kept, and the newest from each of the last 5
+# versions and from each channel (so the last one from before trying beta stays). If they can't be backed up, it
+# stops before rebuilding. The version it replaces is kept too, for --rollback.
 #
 # Options:  --configure  change your settings (time zone, port), then restart. Your current
 #                        values are the defaults. Inverters are connected, and the array size
-#                        set, in the dashboard: Settings → Integrations and Settings → System.
+#                        set, in the dashboard: Manage → Integrations and Manage → System.
 #           --start      just start it (and Docker if needed): no update, rebuild or
 #                        questions. start.sh does the same.
 #           --no-dashboard-updates
-#                        don't set up updating from the dashboard (Settings → System → Updates).
+#                        don't set up updating from the dashboard (Manage → System → Updates).
 #                        Otherwise a cron job runs updater.sh every minute, which updates when the
 #                        dashboard asks (it runs this script, as you would).
 #           Bluetooth (portable batteries, Teslas) is connected through to the dashboard when this machine has an
 #           adapter with BlueZ running: run this again after adding one. BLUETOOTH=off in .env turns that off.
 #           --channel nightly|beta|stable
-#                        follow this release channel from now on (the default is nightly, or the one chosen
-#                        in the dashboard). Its version is installed, newer or older than this one.
+#                        follow this release channel from now on (otherwise the one chosen in the dashboard;
+#                        beta for a new install). Its version is installed, newer or older than this one.
+#           --rollback   go back to the version before the last update, with the databases put back as they were
+#                        before it (the ones there now are backed up first). Updating again brings the newer one back.
+#           --no-backup  update (or go back) even when the databases can't be backed up first
+#           --uninstall  stop it, and remove its containers, images and updater cron job. Your data (data/, with
+#                        the backups in data/backups/) and settings (.env) stay in this folder: nothing is deleted.
 #           -y, --yes    accept the defaults and don't ask anything. Settings can also be
 #                        passed in, e.g. TZ=Australia/Perth bash install.sh --yes, and on a first
 #                        install PV_KW=10 or INVERTER_HOST=... to set up without the dashboard
@@ -43,6 +51,9 @@ set -euo pipefail
 
 APP=wattsmypower
 REPO=https://github.com/KlemmyDev/WattsMyPower.git
+CRON_TAG="# WattsMyPower: updates from the dashboard"
+BACKUPS=data/backups
+PREVIOUS=data/update/previous  # the version an update replaced, for --rollback
 
 YES=0
 PULL=1
@@ -50,6 +61,9 @@ CONFIGURE=0
 START=0
 HELP=0
 DASHBOARD_UPDATES=1
+BACKUP=1
+ROLLBACK=0
+UNINSTALL=0
 CHANNEL=""
 want_channel=0
 for arg in "$@"; do
@@ -62,6 +76,9 @@ for arg in "$@"; do
     --start) START=1; PULL=0 ;;
     --no-pull) PULL=0 ;;  # internal: used when the script restarts itself after updating
     --no-dashboard-updates) DASHBOARD_UPDATES=0 ;;
+    --no-backup) BACKUP=0 ;;
+    --rollback) ROLLBACK=1; PULL=0 ;;
+    --uninstall) UNINSTALL=1; PULL=0 ;;
     -h|--help) HELP=1 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
@@ -126,7 +143,7 @@ is_app() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/app" ] && [ -f "$1/install
 
 if [ "$HELP" = 1 ]; then
   if [ -n "$SELF_DIR" ]; then awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-  else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash [-s -- --yes]"; fi
+  else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash -s -- [--yes] [--channel nightly|beta|stable]"; fi
   exit 0
 fi
 
@@ -158,24 +175,35 @@ HERE="$SELF_DIR"
 check_folder "$HERE"
 
 # ---------------------------------------------------------------- the release channel
-# Kept in data/update/channel, where the dashboard reads and changes it too (Manage → System → Updates).
+# Kept in data/update/channel, where the dashboard reads and changes it too (Manage → System → Updates). It's saved on
+# every install, so the dashboard shows the one this follows.
 CHANNEL_FILE=data/update/channel
 saved_channel="$(tr -d '[:space:]' <"$CHANNEL_FILE" 2>/dev/null || true)"
 case "$saved_channel" in nightly|beta|stable) ;; *) saved_channel="" ;; esac
+chosen="$CHANNEL"
+if [ -z "$CHANNEL" ] && [ -z "$saved_channel" ]; then
+  # None chosen yet. A new install follows beta. One from before beta was the default (it has its .env, but no channel
+  # saved) has been following nightly, and carries on with it.
+  if [ -f .env ]; then CHANNEL=nightly; else CHANNEL=beta; fi
+fi
 if [ -n "$CHANNEL" ] && [ "$CHANNEL" != "$saved_channel" ]; then
   # Written whole, beside the old one (which the dashboard may have written, as root): this folder is yours.
   if mkdir -p data/update 2>/dev/null && printf '%s\n' "$CHANNEL" >"$CHANNEL_FILE.tmp" 2>/dev/null && mv -f "$CHANNEL_FILE.tmp" "$CHANNEL_FILE"; then
-    info "Following the $CHANNEL channel from now on."
+    if [ -n "$chosen" ]; then info "Following the $CHANNEL channel from now on."
+    else info "Following the $CHANNEL channel. Manage → System → Updates (or --channel) changes it."; fi
   else
-    warn "Couldn't save the channel in $CHANNEL_FILE: this update follows $CHANNEL, later ones ${saved_channel:-nightly}."
+    warn "Couldn't save the channel in $CHANNEL_FILE: this update follows $CHANNEL, but the dashboard may show another."
   fi
 fi
-CHANNEL="${CHANNEL:-${saved_channel:-nightly}}"
+CHANNEL="${CHANNEL:-$saved_channel}"
+# The channel before this run changed it (kept when the script restarts itself), for naming the backups.
+export WMP_FROM_CHANNEL="${WMP_FROM_CHANNEL:-${saved_channel:-$CHANNEL}}"
 
-# The newest release tag on the channel (blank if there's none yet): v2026.10.9 is stable, v2026.10.9-beta (or -alpha,
-# -rc.2…) a pre-release, which beta follows as well. versionsort.suffix puts a version's pre-releases before it.
+# The newest release tag on the channel (blank if there's none yet): v2026.10.9 is stable, v2026.10.9-beta (then
+# -beta.2…) a pre-release, which beta follows as well; no other tags count. versionsort.suffix puts a version's betas
+# before it, and app/features/updates/service.py and scripts/release.sh put them in the same order.
 channel_tag() {
-  local pattern='^v[0-9]+(\.[0-9]+)*(-[0-9A-Za-z.]+)?$'
+  local pattern='^v[0-9]+(\.[0-9]+)*(-beta(\.[0-9]+)?)?$'
   [ "$1" = stable ] && pattern='^v[0-9]+(\.[0-9]+)*$'
   git -c versionsort.suffix=- tag -l 'v[0-9]*' --sort=-v:refname | grep -E "$pattern" | head -n 1 || true
 }
@@ -188,6 +216,7 @@ if [ "$PULL" = 1 ] && [ -d .git ]; then
     die "These files have local changes, so the update would overwrite them. Commit or undo them (git checkout -- <file>) and run this again."
   fi
   before="$(git rev-parse HEAD)"
+  export WMP_FROM_COMMIT="${WMP_FROM_COMMIT:-$before}"  # the version this update started from, across the restart below
   # Tags too, with any removed from GitHub (a release taken back) removed here.
   git fetch --quiet --tags --force --prune --prune-tags origin || die "Couldn't get the latest from GitHub: check this machine's internet connection, and run this again."
   if [ "$CHANNEL" = nightly ]; then
@@ -282,7 +311,12 @@ wait_and_report() {
   if [ "$ok" = 1 ]; then
     local port; port="$(get_env PORT)"
     say "WattsMyPower is running: http://${ip:-localhost}:${port:-8080}"
-    info "New install? Connect your inverter there: Settings → Integrations finds it on your network."
+    # Until the account's made, creating it needs the one-time code the dashboard keeps in data/setup-code.
+    local code; code="$($DOCKER exec "$APP" cat /data/setup-code 2>/dev/null | tr -d '[:space:]' || true)"
+    if [ -n "$code" ]; then
+      info "Set-up code: $code (the dashboard asks for it once, to create its account)"
+    fi
+    info "New install? Connect your inverter there: Manage → Integrations finds it on your network."
     if [ "$OS" = mac ]; then
       info "It only records while Docker Desktop is running: keep 'Start Docker Desktop when you sign in to your computer'"
       info "on (Docker Desktop → Settings → General), and stop this computer sleeping."
@@ -291,6 +325,7 @@ wait_and_report() {
   else
     warn "It started but isn't responding yet. Recent logs:"
     $DC logs --tail=30
+    if [ -f "$PREVIOUS" ]; then warn "If it doesn't come right, bash install.sh --rollback goes back to the version before."; fi
     exit 1
   fi
 }
@@ -359,6 +394,215 @@ fi
 # What the running app was started with, so updates keep its settings (see below).
 RUNNING_ENV="$($DOCKER inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$APP" 2>/dev/null || true)"
 
+# ---------------------------------------------------------------- backups
+# Before an update both databases are copied to data/backups/ as <name>-<when>-<version>.db, the version being the one
+# that made them and its channel (2026.10.9-beta), so the last one from before a change of version is easy to find. The
+# newest 5 of each are kept, the newest from each of the last 5 versions and from each channel (the last on stable
+# before trying beta), and the one --rollback would put back.
+#
+# Files in data/ can belong to root (the containers run as root): priv runs a command as you, then with sudo.
+priv() { "$@" 2>/dev/null || { [ -n "$SUDO" ] && $SUDO "$@"; }; }
+# What data/update/previous notes about the version the last update replaced (blank if there's none).
+noted() { get_env "$1" "$PREVIOUS" || true; }
+# Whether a file in data/ is there (asking sudo only when data/ can't be looked in).
+in_data() { [ -e "$1" ] || { [ ! -x data ] && priv test -e "$1"; }; }
+# The version a commit is, as backups are named: its version and the channel, e.g. 2026.10.9-beta.
+version_label() {
+  local v; v="$(git show "$1:pyproject.toml" 2>/dev/null | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1 | tr -cd '0-9A-Za-z.' || true)"
+  printf '%s-%s' "${v:-unknown}" "$2"
+}
+# The version being replaced: the commit the dashboard running now was built from, else the one this update started
+# from (blank outside a git checkout).
+from_commit() {
+  local c; c="$(printf '%s\n' "$RUNNING_ENV" | sed -n 's/^GIT_COMMIT=//p' | head -n 1)"
+  if [ -n "$c" ] && git cat-file -e "$c^{commit}" 2>/dev/null; then printf '%s' "$c"; return; fi
+  printf '%s' "${WMP_FROM_COMMIT:-$(git rev-parse HEAD 2>/dev/null || true)}"
+}
+# The backup, run with Python in the dashboard's container (or its image): SQLite's online backup, safe while the app
+# keeps recording. Then the older backups are tidied away (see above). Arguments: when, version, the one to keep.
+BACKUP_PY="$(cat <<'PY'
+import os, re, sqlite3, sys
+stamp, label, keep = sys.argv[1:4]
+folder = "/data/backups"
+os.makedirs(folder, exist_ok=True)
+for name in ("wattsmypower", "collector"):  # the dashboard's database, and the collector's raw readings
+    path = f"/data/{name}.db"
+    if not os.path.exists(path):
+        continue
+    dest = f"{folder}/{name}-{stamp}-{label}.db"
+    src, dst = sqlite3.connect(path), sqlite3.connect(dest)
+    try:
+        src.backup(dst)
+    except BaseException:
+        dst.close()
+        os.remove(dest)
+        raise
+    dst.close(); src.close()
+    print("  data/backups/" + os.path.basename(dest))
+    # Newest first. Backups from before versions were in the name have none, and count as one version.
+    pattern = re.compile(rf"{name}-(\d{{8}}-\d{{6}})(?:-(.+))?\.db")
+    found = sorted(((m[1], m[2] or "", f) for f in os.listdir(folder) if (m := pattern.fullmatch(f))), reverse=True)
+    versions, channels = [], set()
+    for i, (_, version, f) in enumerate(found):
+        newest_of_version = version not in versions
+        if newest_of_version:
+            versions.append(version)
+        channel = version.rpartition("-")[2]
+        newest_of_channel = channel not in channels
+        channels.add(channel)
+        if i < 5 or (newest_of_version and len(versions) <= 5) or newest_of_channel or f == f"{name}-{keep}.db":
+            continue
+        for old in (f, f + "-wal", f + "-shm"):
+            if os.path.exists(f"{folder}/{old}"):
+                os.remove(f"{folder}/{old}")
+PY
+)"
+# On this machine instead, when there's no image to run it in: with sqlite3, or by stopping the app and copying the
+# files. $1 sqlite3 or copy, $2 when, $3 version. (These aren't tidied: the next backup in a container does that.)
+host_backup() {
+  local name dest ext
+  if [ "$1" = copy ]; then
+    info "Stopping it to copy them (it starts again after)."
+    $DC stop >/dev/null 2>&1 || return 1
+    STOPPED=1
+  fi
+  priv mkdir -p "$BACKUPS" || return 1
+  for name in wattsmypower collector; do
+    in_data "data/$name.db" || continue
+    dest="$BACKUPS/$name-$2-$3.db"
+    if [ "$1" = sqlite3 ]; then
+      priv sqlite3 "data/$name.db" ".backup '$dest'" || return 1
+    else
+      # With its write-ahead log, if it has one left: the two together are the database.
+      for ext in "" -wal; do
+        ! in_data "data/$name.db$ext" || priv cp -p "data/$name.db$ext" "$dest$ext" || return 1
+      done
+    fi
+    info "$dest"
+  done
+}
+# Back up both databases (when there are any yet), as version $1. Sets BACKUP_MADE to the backup's <when>-<version>;
+# fails if they couldn't be backed up.
+STOPPED=0
+trap 'if [ "$STOPPED" = 1 ]; then $DC start >/dev/null 2>&1 || true; fi' EXIT  # stopped for a backup: started again
+BACKUP_MADE=""
+backup_databases() {
+  local label="$1" stamp image keep
+  in_data data/wattsmypower.db || in_data data/collector.db || return 0
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  keep="$(noted backup)"
+  say "Backing up the databases"
+  # In the dashboard's container; if it isn't running (stopped, or restarting after a crash), in a new one from its
+  # image; failing those, on this machine.
+  if printf '%s\n' "$BACKUP_PY" | $DOCKER exec -i "$APP" python - "$stamp" "$label" "$keep" 2>/dev/null; then :
+  elif image="$($DOCKER inspect -f '{{.Image}}' "$APP" 2>/dev/null)" && [ -n "$image" ] \
+    && info "The dashboard isn't answering, so they're backed up with its image instead." \
+    && printf '%s\n' "$BACKUP_PY" | $DOCKER run --rm -i --network none --entrypoint python -v "$HERE/data:/data" "$image" - "$stamp" "$label" "$keep"; then :
+  elif command -v sqlite3 >/dev/null 2>&1 && host_backup sqlite3 "$stamp" "$label"; then :
+  elif host_backup copy "$stamp" "$label"; then :
+  else return 1; fi
+  BACKUP_MADE="$stamp-$label"
+  info "Backups are in $HERE/$BACKUPS."
+  info "Now and then, copy one somewhere other than this machine: a backup on the same disk is no help if the disk fails."
+}
+
+# ---------------------------------------------------------------- go back (--rollback)
+# Each update that changes the version keeps the one it replaced: its images, tagged :previous, and in data/update/previous
+# its commit, version and the backup made before it. Going back checks out that commit, starts those images again (or
+# rebuilds them), and puts that backup back, after backing up the databases as they are.
+running_images() {  # "<image name> <image id>" for each container
+  local c
+  for c in "$APP" "$APP-collector"; do $DOCKER inspect -f '{{.Config.Image}} {{.Image}}' "$c" 2>/dev/null || true; done
+}
+# Remove those of these images that no name points to any more (replaced by an update, or by going back), unless a
+# container still uses one.
+drop_unnamed() {
+  local id
+  for id in "$@"; do
+    [ "$($DOCKER image inspect -f '{{len .RepoTags}}' "$id" 2>/dev/null || echo 1)" = 0 ] && $DOCKER rmi "$id" >/dev/null 2>&1 || true
+  done
+}
+rollback() {
+  local commit version backup images when name src restore="" img build=0 replaced
+  [ -f .env ] || die "WattsMyPower isn't installed in this folder."
+  [ -f "$PREVIOUS" ] || die "There's no earlier version to go back to: one is kept by each update that changes the version."
+  commit="$(noted commit)"; version="$(noted version)"; backup="$(noted backup)"
+  images="$(noted images)"; when="$(noted when)"
+  { [ -d .git ] && git cat-file -e "$commit^{commit}" 2>/dev/null; } || die "The version from before the last update ($version) isn't in this folder's git history, so it can't go back to it."
+  if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    git status --short --untracked-files=no
+    die "These files have local changes, which going back would overwrite. Commit or undo them (git checkout -- <file>) and run this again."
+  fi
+  for name in wattsmypower collector; do
+    [ -n "$backup" ] && in_data "$BACKUPS/$name-$backup.db" && restore="$restore $name"
+  done
+  say "Going back to $version, as it was before the update on $when"
+  if [ -n "$restore" ]; then
+    info "The databases are put back as they were then, so what's been recorded since is left out of them. The ones there"
+    info "now are backed up first, so this can be undone."
+  else
+    warn "The backup from before that update isn't in $BACKUPS any more, so the databases stay as they are."
+  fi
+  confirm "Go back to $version?" || die "Left as it is."
+  if [ "$BACKUP" = 0 ]; then
+    warn "Not backing up the databases first (--no-backup)."
+  elif ! backup_databases "$(version_label "$(from_commit)" "$CHANNEL")"; then
+    die "Couldn't back up the databases as they are now (see above), so nothing was changed. bash install.sh --rollback --no-backup goes back without."
+  fi
+  say "Going back"
+  $DC stop
+  STOPPED=1
+  for name in $restore; do
+    src="$BACKUPS/$name-$backup.db"
+    # Copied in beside it first; then the current write-ahead log goes (it belongs to the newer database), and it's
+    # swapped in.
+    { priv cp -p "$src" "data/$name.db.restoring" && priv rm -f "data/$name.db-wal" "data/$name.db-shm" \
+      && priv mv -f "data/$name.db.restoring" "data/$name.db"; } || die "Couldn't put back data/$name.db from $src."
+    if in_data "$src-wal"; then priv cp -p "$src-wal" "data/$name.db-wal" || die "Couldn't put back data/$name.db-wal from $src-wal."; fi
+    info "data/$name.db: put back from $src"
+  done
+  git -c advice.detachedHead=false checkout --quiet --detach "$commit"
+  replaced="$(running_images | awk '{ print $2 }')"
+  [ -n "$images" ] || build=1
+  for img in $images; do $DOCKER tag "$img:previous" "$img" 2>/dev/null || build=1; done
+  bluetooth_setup
+  if [ "$build" = 1 ]; then
+    info "Its images aren't here any more, so it's built again."
+    $DC build --build-arg "GIT_COMMIT=$commit"
+  fi
+  $DC up -d --no-build --force-recreate --remove-orphans
+  STOPPED=0
+  # shellcheck disable=SC2086  # a list of image IDs
+  drop_unnamed $replaced
+  rm -f "$PREVIOUS"
+  wait_and_report
+  info "Updating again (bash install.sh, or Update now in the dashboard) goes to the $CHANNEL channel's newest version."
+}
+if [ "$ROLLBACK" = 1 ]; then rollback; exit 0; fi  # (on one line: the checkout above may have changed this file)
+
+# ---------------------------------------------------------------- uninstall (--uninstall)
+# Removes what Docker and cron have of it. data/ and .env are left in this folder, always: deleting them is up to you.
+if [ "$UNINSTALL" = 1 ]; then
+  [ -f .env ] || die "WattsMyPower isn't installed in this folder."
+  say "Uninstalling WattsMyPower"
+  info "This stops it, removes its containers and images, and stops updates from the dashboard. Your data and settings"
+  info "stay in $HERE: nothing in data/ or .env is deleted."
+  confirm "Uninstall it?" || die "Left as it is."
+  images="$(running_images | awk '{ sub(/:latest$/, "", $1); print $1 }') $(noted images)"
+  $DC down --rmi local --remove-orphans
+  for img in $images; do $DOCKER rmi "$img:previous" >/dev/null 2>&1 || true; done
+  if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; then
+    { crontab -l 2>/dev/null | grep -vF "$CRON_TAG" || true; } | crontab - && info "Removed the cron job for updates from the dashboard."
+  fi
+  say "Uninstalled. Your data is still here:"
+  info "$HERE/data             the databases (wattsmypower.db, collector.db)"
+  info "$HERE/data/backups     their backups, from before each update"
+  info "$HERE/.env             your settings"
+  info "bash install.sh in this folder puts it back as it was. To delete it all for good, copy anything you want to"
+  info "keep somewhere else first, then: rm -rf '$HERE' (with sudo on Linux, where the app's files belong to root)."
+  exit 0
+fi
+
 # ---------------------------------------------------------------- an existing install elsewhere
 # (for example a copy unzipped into another folder before this was a git checkout)
 if $DOCKER ps -a --format '{{.Names}}' | grep -qx "$APP"; then
@@ -395,8 +639,8 @@ system_tz() {
 }
 
 configure() {
-  # Inverters are connected in the dashboard (Settings → Integrations), and the array size and battery
-  # are set there too (Settings → System). Ones passed in on a first install (INVERTER_HOST=... or
+  # Inverters are connected in the dashboard (Manage → Integrations), and the array size and battery
+  # are set there too (Manage → System). Ones passed in on a first install (INVERTER_HOST=... or
   # PV_KW=... bash install.sh --yes) are still taken, and moved into the databases when it starts.
   local v
   for v in INVERTER_HOST PV2_HOST PV2_BEHIND_METER PV_KW BATTERY_KWH; do
@@ -411,7 +655,7 @@ configure() {
 
 if [ ! -f .env ]; then
   say "First install: a few questions (press Enter to keep the suggestion)"
-  cp .env.example .env
+  (umask 077 && cp .env.example .env)  # yours alone, from the start (it'll hold COLLECTOR_TOKEN)
   configure
 else
   # Keep the running app's settings: anything .env doesn't set (because it came from an older
@@ -438,27 +682,19 @@ if [ -z "$(get_env COLLECTOR_TOKEN)" ]; then
 fi
 mkdir -p data
 PORT="$(get_env PORT)"; PORT="${PORT:-8080}"
+# Your settings (.env holds COLLECTOR_TOKEN) and data are yours alone: no one else on this machine can read them.
+# Only what's yours is changed; data/ may belong to the containers' own user, and is left as it is then.
+[ -d "$BACKUPS" ] || mkdir "$BACKUPS" 2>/dev/null || true
+[ -O .env ] && chmod 600 .env 2>/dev/null || true
+for d in data "$BACKUPS"; do [ -O "$d" ] && chmod 700 "$d" 2>/dev/null || true; done
 
 # ---------------------------------------------------------------- back up, then build and start
-if $DOCKER ps --format '{{.Names}}' | grep -qx "$APP"; then
-  say "Backing up the databases"
-  # SQLite's online backup, run inside the container: safe while the app keeps recording.
-  $DOCKER exec -i "$APP" python - <<'PY'
-import glob, os, sqlite3, time
-os.makedirs("/data/backups", exist_ok=True)
-stamp = time.strftime("%Y%m%d-%H%M%S")
-for name in ("wattsmypower", "collector"):  # the dashboard's database, and the collector's raw readings
-    path = f"/data/{name}.db"
-    if not os.path.exists(path):
-        continue
-    dest = f"/data/backups/{name}-{stamp}.db"
-    src, dst = sqlite3.connect(path), sqlite3.connect(dest)
-    src.backup(dst)
-    dst.close(); src.close()
-    for old in sorted(glob.glob(f"/data/backups/{name}-*.db"))[:-5]:  # keep the newest 5 of each
-        os.remove(old)
-    print("  data/backups/" + os.path.basename(dest))
-PY
+FROM_COMMIT="$(from_commit)"
+FROM_VERSION="$(version_label "$FROM_COMMIT" "$WMP_FROM_CHANNEL")"
+if [ "$BACKUP" = 0 ]; then
+  warn "Not backing up the databases (--no-backup)."
+elif ! backup_databases "$FROM_VERSION"; then
+  die "Couldn't back up the databases (see above), so it stopped before rebuilding: the app is still the version it was. Check there's space (df -h $HERE/data). To update without a backup, run bash install.sh --no-backup."
 fi
 
 # ---------------------------------------------------------------- updates from the dashboard
@@ -466,18 +702,37 @@ fi
 # script when the dashboard asks. Its folder is made here, as you, so it can write in it (the dashboard only adds a
 # request to it).
 mkdir -p data/update
-CRON_TAG="# WattsMyPower: updates from the dashboard"
 if [ "$DASHBOARD_UPDATES" = 1 ]; then
   if ! command -v crontab >/dev/null 2>&1; then
     info "Updating from the dashboard needs cron, which isn't installed here: update with bash install.sh."
   elif ! crontab -l 2>/dev/null | grep -qF "$HERE/updater.sh"; then
     say "Setting up updates from the dashboard"
     { crontab -l 2>/dev/null | grep -vF "$CRON_TAG" || true; printf '* * * * * bash "%s/updater.sh" >/dev/null 2>&1 %s\n' "$HERE" "$CRON_TAG"; } | crontab - \
-      && info "Settings → System → Updates can now update it. (bash install.sh --no-dashboard-updates turns this off.)" \
+      && info "Manage → System → Updates can now update it. (bash install.sh --no-dashboard-updates turns this off.)" \
       || warn "Couldn't add the cron job, so updates are by bash install.sh only."
   fi
 elif crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; then
   crontab -l 2>/dev/null | grep -vF "$CRON_TAG" | crontab - && info "Updating from the dashboard is off."
+fi
+
+# ---------------------------------------------------------------- keep the version being replaced (for --rollback)
+# Its images are tagged :previous, and its commit, version and backup noted in data/update/previous. Only when the
+# version changes: rebuilding the same one keeps what's there. The images replaced are removed once the new ones are up.
+OLD_IMAGES="$(running_images | awk '{ print $2 }')"
+if [ -n "$FROM_COMMIT" ] && [ "$FROM_COMMIT" != "$(git rev-parse HEAD 2>/dev/null || true)" ] && [ -n "$OLD_IMAGES" ]; then
+  names=""
+  while read -r name id; do
+    [ -n "$id" ] || continue
+    name="${name%:latest}"
+    OLD_IMAGES="$OLD_IMAGES $($DOCKER image inspect -f '{{.Id}}' "$name:previous" 2>/dev/null || true)"
+    $DOCKER tag "$id" "$name:previous" && names="$names $name"
+  done <<<"$(running_images)"
+  if printf 'commit=%s\nversion=%s\nbackup=%s\nimages=%s\nwhen=%s\n' "$FROM_COMMIT" "$FROM_VERSION" "$BACKUP_MADE" \
+    "${names# }" "$(date '+%-d %b %Y, %H:%M')" >"$PREVIOUS.tmp" && mv -f "$PREVIOUS.tmp" "$PREVIOUS"; then
+    info "Kept $FROM_VERSION, to go back to with bash install.sh --rollback if this one gives you trouble."
+  else
+    warn "Couldn't note the version it replaces in $PREVIOUS, so --rollback can't go back to it."
+  fi
 fi
 
 say "Building and starting"
@@ -486,6 +741,12 @@ bluetooth_setup
 # than the environment, which sudo would leave behind.
 $DC build --build-arg "GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || true)"
 $DC up -d --remove-orphans
+STOPPED=0
 
-$DOCKER image prune -f >/dev/null 2>&1 || true  # drop the previous build's image
+# The images replaced (and the :previous ones they replaced), and this app's build leftovers. Only this app's own:
+# anything else on this machine is left alone.
+# shellcheck disable=SC2086  # a list of image IDs
+drop_unnamed $OLD_IMAGES
+project="$($DOCKER inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$APP" 2>/dev/null || true)"
+[ -z "$project" ] || $DOCKER image prune -f --filter "label=com.docker.compose.project=$project" >/dev/null 2>&1 || true
 wait_and_report

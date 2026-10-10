@@ -5,7 +5,7 @@ import { inverterName } from "~/features/common/live/utils";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { onboardingQuery } from "~/features/onboarding/api";
 import { StepBody, StepFooter, StepIntro, type StepProps } from "~/features/onboarding/components/StepParts";
-import { SystemDetailsFields, useSystemDetails } from "~/features/settings/components/SystemSettings";
+import { SystemDetailsFields, useSystemDetails } from "~/features/settings/components/SolarBatterySettings";
 
 /**
  * Step 2: what the inverter can't report, chiefly the size of the solar array. Until it's entered the app

@@ -10,7 +10,7 @@ import { centsShort, kWh, money } from "~/features/common/formatting/utils/numbe
 import { minutesLabel } from "~/features/common/formatting/utils/date";
 import { priceLabel } from "~/features/amber/utils";
 import { bandColor, bandTable, tariffNumber, usedBands } from "~/features/common/tariffs/utils";
-import { dateKey, isWeekend, midnight } from "~/features/common/time/utils";
+import { dateKey, isWeekend, midnight, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** Today so far: cost and savings, split by rate. `wide`: the row to itself (with no Battery card beside it). */
@@ -105,9 +105,9 @@ const COLS =
 function RateTable({ c, t, now }: { c: CostDay; t: Tariff; now: number }) {
   const tou = t.type === "tou";
   const used = usedBands(t);
-  const d = new Date(now * 1000);
-  const nowMin = d.getHours() * 60 + d.getMinutes();
-  const today = bandTable(t, isWeekend(d) ? "weekend" : "weekday").tab;
+  const d = partsOf(now);
+  const nowMin = d.hour * 60 + d.minute;
+  const today = bandTable(t, isWeekend(now) ? "weekend" : "weekday").tab;
   const startsAt = (i: number) => {
     const m = today.findIndex((x, k) => k >= nowMin && x === i);
     return m < 0 ? null : minutesLabel(m);

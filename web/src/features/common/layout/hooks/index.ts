@@ -5,11 +5,12 @@ import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { NAV, type NavPage, type SectionPages } from "~/features/common/layout/utils";
+import { MANAGE_COLOR, NAV, type NavPage, type SectionPages } from "~/features/common/layout/utils";
 import { carTitle, evTitle, statusColor } from "~/features/ev/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
+import { useStreamState } from "~/features/common/live/components/LiveProvider";
 import { useNow } from "~/features/common/time/hooks";
 
 function subscribe(onChange: () => void) {
@@ -70,17 +71,25 @@ export function useNavItems() {
   );
 }
 
-/** `none`: no inverter connected yet, so nothing to wait for. */
-export type LiveState = "live" | "stale" | "error" | "none";
+/** `none`: no inverter connected yet, so nothing to wait for. `reconnecting`: the dashboard's own link to the server
+ * is down, and being tried again. */
+export type LiveState = "live" | "stale" | "error" | "none" | "reconnecting";
 
-/** Whether readings are coming in from the inverter, in a word and a sentence, and the time now (to the minute). */
+/**
+ * Whether readings are coming in from the inverter, in a word and a sentence, and the time now (to the minute). While
+ * the dashboard's own link to the server is down, that comes first: nothing new arrives until it's back.
+ */
 export function useLiveStatus(): { state: LiveState; status: string; now: number } {
   const st = useLive();
+  const stream = useStreamState();
   const now = useNow(30_000);
   const last = st?.last_success;
   let state: LiveState = "live";
   let status = last ? `Live from your inverter, last reading ${hhmm(last)}` : "Connecting to your inverter";
-  if (!last && st?.system.inverter_connected === false) {
+  if (stream === "reconnecting") {
+    state = "reconnecting";
+    status = `Reconnecting to WattsMyPower's server${last ? `, last reading ${hhmm(last)}` : ""}`;
+  } else if (!last && st?.system.inverter_connected === false) {
     state = "none";
     status = "No inverter connected";
   } else if (!last) {
@@ -112,7 +121,7 @@ export function useMedia(query: string): boolean {
 /** Where the side nav docks in full (the `xl` breakpoint); below it, it's a rail, or a menu on a phone. */
 export const NAV_DOCKED = "(min-width: 1000px)";
 
-/** The pages within a section, for the navigation to list; null for a section without any (Overview, System…). */
+/** The pages within a section, for the navigation to list; null for a section without any (Overview, Integrations…). */
 export function useSectionPages(section: string): SectionPages | null {
   const home = useHomeNavPages(section === "/home");
   const ev = useLive()?.ev;
@@ -162,5 +171,28 @@ export function useSectionPages(section: string): SectionPages | null {
         },
       ],
     };
+  if (section === "/system")
+    return {
+      title: "System",
+      sub: "Your system, the dashboard, and updates",
+      root: { link: { to: "/system" }, label: "All settings", active: path === "/system" },
+      pages: SYSTEM_PAGES.map(([to, label, icon]) => ({
+        key: to,
+        label,
+        icon,
+        color: MANAGE_COLOR,
+        link: { to },
+        active: path === to,
+      })),
+    };
   return null;
 }
+
+/** System's pages, as the navigation lists them (the hub lists them with what's set). */
+const SYSTEM_PAGES = [
+  ["/system/solar-battery", "Solar and battery", "sun"],
+  ["/system/location", "Location", "pin"],
+  ["/system/cost", "Cost and warranty", "dollar"],
+  ["/system/house", "Your house", "home"],
+  ["/system/updates", "Updates", "download"],
+] as const;
