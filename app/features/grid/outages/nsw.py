@@ -11,8 +11,8 @@ Ausgrid    /api/outages-map/outages/list?futureDayLimit=N   outages now and plan
            /api/outages-map/network-area                    the network's area (one polygon), to tell if it serves a house
 Endeavour  /api/public/outage-areas-fast                    outages now and planned work, each with its area. Never its
                                                             single-premise jobs, nor /api/outage-points: one house each
-Essential  ee-ai-api.pollen.au/v3/outages/{active|future}   GeoJSON for a box around the house (a contractor's server,
-                                                            the one Essential's map uses)
+Essential  ee-ai-api.pollen.au/v3/outages/{active|future}   GeoJSON for a box: one fixed box over its whole area
+                                                            (a contractor's server, the one Essential's map uses)
 Evoenergy  /outages                                         the page itself: its map's outages are in its script
 """
 
@@ -186,15 +186,18 @@ def essential_outage(f: dict[str, Any]) -> dict[str, Any] | None:
     )
 
 
+# Essential's whole area (west, south, east, north): NSW outside Sydney, and the Queensland towns over the border it
+# serves. Its feed answers only for a box; one fixed box for everyone, so where the house is never leaves the
+# dashboard. Its planned work to come is half a megabyte (compressed) for all of it, fetched hourly.
+ESSENTIAL_BOX = (140.9, -37.6, 153.7, -27.9)
+
+
 @dataclass(frozen=True)
 class Essential(Provider):
     feed: str = "https://ee-ai-api.pollen.au/v3/outages"
 
     def outages(self, which: str, get: Get, around: Around | None = None) -> list[dict[str, Any]]:
-        """Only the box around the house (its feed takes one): the whole state's planned work is half a megabyte."""
-        if around is None:
-            raise OutageFeedError(f"{self.name}'s outages are asked for around the house.")
-        box = ",".join(f"{x:.4f}" for x in around.bbox())
+        box = ",".join(f"{x:g}" for x in ESSENTIAL_BOX)
         url = f"{self.feed}/{'future' if which == 'future' else 'active'}?bbox={box}"
         data = ask(self.name, get, url, headers={"Accept": "application/geo+json"})
         feats = data.get("features") if isinstance(data, dict) else None

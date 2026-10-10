@@ -58,7 +58,7 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
     if {"power_network", "nem_region", "latitude", "longitude", "location_name", "home_suburb", "outage_radius_km"} & (
         changes.keys()
     ):
-        svc.outages.wake()  # the network may have changed (or a feed asked for the area around the house)
+        svc.outages.wake()  # the network may have changed (the suburb tells Victoria's), or the outages to draw
     if {"hazard_warnings", "nem_region", "latitude", "longitude"} & changes.keys():
         svc.hazards.wake()  # the house's districts may have changed
     if moved:  # coordinates typed in by hand: look up a place name for them

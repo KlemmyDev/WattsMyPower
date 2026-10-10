@@ -156,9 +156,8 @@ function Network() {
         </HelpText>
       )}
       <HelpText>
-        From each network's public outage map (there's no official feed, so it may change). The network's outages are
-        downloaded and matched here: your street is never sent anywhere. Essential Energy's map only gives an area's
-        outages, so it's asked for the area within your radius.
+        From each network's public outage map (there's no official feed, so it may change). The whole network's outages
+        are downloaded and matched here: your street is never sent anywhere.
       </HelpText>
     </SettingsCard>
   );

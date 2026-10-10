@@ -62,20 +62,14 @@ class OutageFeedError(Exception):
 
 @dataclass(frozen=True)
 class Around:
-    """Where the house is and how far around it outages matter, and the time: for the feeds asked for an area (not
-    the whole network), and for telling a job that's finished from one that's on."""
+    """Where the house is and how far around it outages matter, and the time: for telling a job that's finished from
+    one that's on, and for choosing which outages' areas to ask for. Never sent to a network: each is asked for the
+    same thing whoever asks (its whole network's outages), and they're matched to the house here."""
 
     lat: float
     lon: float
     km: float
     now: float
-
-    def bbox(self, margin_km: float = 5) -> tuple[float, float, float, float]:
-        """West, south, east, north around the house, the radius and a little more."""
-        km = self.km + margin_km
-        dlat = km / 111.32
-        dlon = km / (111.32 * max(0.1, math.cos(math.radians(self.lat))))
-        return (self.lon - dlon, self.lat - dlat, self.lon + dlon, self.lat + dlat)
 
 
 @dataclass(frozen=True)

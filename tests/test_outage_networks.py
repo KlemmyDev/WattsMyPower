@@ -142,13 +142,14 @@ def test_endeavour() -> None:
     assert work["planned"] and work["start"] == at(SYDNEY, 2026, 10, 13, 8) and work["reason"] == "Maintenance Work"
 
 
-def test_essential_asks_for_the_area_around_the_house() -> None:
+def test_essential_is_asked_for_its_whole_area_never_the_houses() -> None:
     feeds = Feeds()
     now = by_id(nsw.ESSENTIAL.outages("current", feeds, AROUND))
     url, kw = feeds.asked[-1]
-    assert "/active?bbox=" in url and kw["headers"]["Accept"] == "application/geo+json"
-    w, s, e, n = (float(x) for x in url.split("bbox=")[1].split(","))
-    assert w < 151.21 < e and s < -33.87 < n and 0.3 < n - s < 0.4  # 15 km and a little more each way
+    assert url.endswith("/active?bbox=140.9,-37.6,153.7,-27.9") and kw["headers"]["Accept"] == "application/geo+json"
+    elsewhere = Feeds()
+    nsw.ESSENTIAL.outages("current", elsewhere, Around(-32.2569, 148.6011, 50, NOW))  # Dubbo, a wider radius
+    assert elsewhere.urls() == [url]  # the same for every house
     work = now["essential:INCD-43278-w"]
     assert (
         work["planned"] and work["start"] == at(SYDNEY, 2026, 10, 9, 16) and work["end"] == at(SYDNEY, 2026, 10, 12, 7)
