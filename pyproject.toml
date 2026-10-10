@@ -1,7 +1,7 @@
 [project]
 name = "wattsmypower"
 # The date it was released (a second release that day adds .1, .2…).
-version = "2026.10.9"
+version = "2026.10.10"
 description = "Local-first, self-hosted home energy dashboard: Sungrow solar and battery, the grid, EVs and smart-home devices, live and on your own network"
 readme = "README.md"
 license = "MIT"

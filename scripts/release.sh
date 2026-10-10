@@ -6,10 +6,11 @@
 #   scripts/release.sh stable                     the latest on main, as a release: v2026.10.10
 #   scripts/release.sh stable v2026.10.10-beta    a beta that's been tried, promoted to a release
 #
-# The version is the commit's own (pyproject.toml): bump it, and merge that, before a stable release of new changes, as
-# a stable release's tag can only be used once. Releases are only made from commits on main whose CI (the GitHub
-# Actions workflow named CI) has passed. It tags the commit, pushes the tag, and makes a GitHub release of it with the
-# changes since the channel's last release (with gh, if it's there). The first release on a channel has no last
+# The version is the commit's own (pyproject.toml): the date of its last change, in Brisbane, kept up to date on main by
+# the Version workflow (scripts/version.sh). A stable release's tag can only be used once, so a second stable release
+# on the same day needs the version set to 2026.10.10.1 by hand (and merged) first. Releases are only made from
+# commits on main whose CI (the GitHub Actions workflow named CI) has passed. It tags the commit, pushes the tag, and
+# makes a GitHub release of it with the changes since the channel's last release (with gh, if it's there). The first release on a channel has no last
 # release to start from, so its notes are --notes-file's, or a short note pointing at CHANGELOG.md. Installs on the
 # channel pick it up at their next check, within a few hours.
 #
@@ -100,7 +101,7 @@ if [ "$CHANNEL" = stable ]; then
   TAG="v$VERSION"
   if exists "$TAG"; then
     [ "$(git rev-parse "$TAG^{commit}")" = "$COMMIT" ] && die "$TAG is already released, on this commit."
-    die "$TAG is already released, on another commit: bump the version in pyproject.toml (and merge that) first."
+    die "$TAG is already released, on another commit: set the version in pyproject.toml to $VERSION.1 (and merge that) first."
   fi
 else
   TAG="v$VERSION-beta"

@@ -502,7 +502,7 @@ def test_release_script_tags_each_channel(tmp_path: Path) -> None:
     assert release("beta").returncode == 0
     assert tags() == ["v2026.10.10-beta", "v2026.10.10-beta.2"]
     assert release("stable", "v2026.10.10-beta").returncode == 0  # the first beta, promoted
-    assert "bump the version" in release("stable").stderr  # v2026.10.10 is taken, by another commit
+    assert "to 2026.10.10.1" in release("stable").stderr  # v2026.10.10 is taken, by another commit
     commit("2026.10.11")
     assert release("stable").returncode == 0
     assert tags() == ["v2026.10.10", "v2026.10.10-beta", "v2026.10.10-beta.2", "v2026.10.11"]

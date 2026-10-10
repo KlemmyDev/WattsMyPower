@@ -1,0 +1,54 @@
+# The version is the date of the last change, in Brisbane (2026.10.10): after each merge to main, scripts/version.sh
+# moves it to today if it's from an earlier day, and commits that to main. A push made with this workflow's token
+# doesn't start other workflows, so it starts CI on the new commit itself (scripts/release.sh only releases commits CI
+# has passed on).
+name: Version
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+# One at a time: two merges in quick succession move it once.
+concurrency:
+  group: version
+  cancel-in-progress: false
+
+jobs:
+  date:
+    name: Today's date
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Move the version to today
+        id: version
+        run: |
+          before="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -n 1)"
+          after="$(scripts/version.sh)"
+          echo "version=$after" >> "$GITHUB_OUTPUT"
+          [ "$before" = "$after" ] && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Commit it to main
+        if: steps.version.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Version $VERSION"
+          # Someone may have merged meanwhile: put this on top of theirs and try again.
+          for attempt in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1
+      - name: Start CI on it
+        if: steps.version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref main
