@@ -27,7 +27,7 @@ export function InverterNotice() {
           </Link>
           .
         </span>
-        <ButtonLink to="/integrations/inverters/connect" variant="primary" size="sm">
+        <ButtonLink to="/integrations/inverters" variant="primary" size="sm">
           Connect one
         </ButtonLink>
       </Notice>

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
@@ -16,7 +17,7 @@ import type {
   IntegrationsOverview,
   InverterRole,
 } from "~/features/integrations/types";
-import { brandSlug, deviceName, ROLE_NAME } from "~/features/integrations/utils";
+import { BRAND_ABOUT, brandSlug, deviceName, ROLE_NAME } from "~/features/integrations/utils";
 
 /** Connect an inverter, then refresh what's connected (and the scan, which marks it connected). */
 function useConnect(onConnected: (device: ConnectResult) => void) {
@@ -127,21 +128,29 @@ function FoundRow({
   );
 }
 
-/** Scanning the home network for inverters, and what it found. */
-const SCAN_SUB =
-  "Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle, Fronius' Solar API), then asks what's there. Takes up to a minute.";
-const MANUAL_SUB =
-  "The dongle's IP address is in your router's list of connected devices, or in the inverter's app (iSolarCloud, SEMS, Solar.web).";
+/** What scanning does, and where an inverter's address can be found: for every brand, or for one. */
+const scanSub = (brand?: string) =>
+  brand
+    ? `Checks each address on your network for a ${brand} inverter, then asks what's there. Takes up to a minute.`
+    : "Checks each address for an inverter (Sungrow's Modbus port, GoodWe's dongle, Fronius' Solar API), then asks what's there. Takes up to a minute.";
+const manualSub = (brand?: string) =>
+  `The dongle's IP address is in your router's list of connected devices, or in the inverter's app (${
+    (brand && BRAND_ABOUT[brand]?.app) || "iSolarCloud, SEMS, Solar.web"
+  }).`;
 
+/** Scanning the home network for inverters, and what it found: of `brand` only, when given (the others it found are
+ * pointed to their own brand's page). */
 function Scan({
   overview,
   busy,
   onConnect,
+  brand,
   bare,
 }: {
   overview: IntegrationsOverview;
   busy: boolean;
   onConnect: (f: FoundDevice) => void;
+  brand?: string;
   /** Without its own heading: it's in a section that has one. */
   bare?: boolean;
 }) {
@@ -153,7 +162,10 @@ function Scan({
     onSuccess: (s) => qc.setQueryData(scanQuery.queryKey, s),
   });
   const running = !!scan?.running || start.isPending;
-  const found = scan?.found ?? [];
+  const all = scan?.found ?? [];
+  const found = brand ? all.filter((f) => f.brand === brand) : all;
+  // Another brand's inverter, found while looking for this one: connected from its own brand's page.
+  const elsewhere = brand ? all.filter((f) => f.supported && f.brand && f.brand !== brand && !f.connected_as) : [];
   const checked = scan?.checked ?? 0;
   const total = scan?.total ?? 0;
   const asking = running && total > 0 && checked >= total;
@@ -169,7 +181,7 @@ function Scan({
       {!bare && (
         <div className="flex flex-col gap-1">
           <h3 className="text-[15px] font-semibold">Find inverters on your network</h3>
-          <span className="text-[13px] text-ink-muted">{SCAN_SUB}</span>
+          <span className="text-[13px] text-ink-muted">{scanSub(brand)}</span>
         </div>
       )}
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
@@ -205,7 +217,7 @@ function Scan({
           </div>
           <span className="text-xs text-ink-muted tabular-nums">
             {asking
-              ? `Asking ${found.length || "each"} ${found.length === 1 ? "device" : "devices"} what ${found.length === 1 ? "it is" : "they are"}…`
+              ? `Asking ${all.length || "each"} ${all.length === 1 ? "device" : "devices"} what ${all.length === 1 ? "it is" : "they are"}…`
               : `Checked ${checked} of ${total} addresses on ${scan?.network}`}
           </span>
         </div>
@@ -227,9 +239,30 @@ function Scan({
       )}
       {done && !running && found.length === 0 && !scan.error && (
         <div className="rounded-xl bg-canvas px-[18px] py-4 text-sm leading-[22px] text-ink-muted">
-          Nothing on {scan.network} answered like an inverter. Check the inverter's dongle is on this network (its
-          address is in your router's device list or the inverter's app), or enter its address below.
+          Nothing on {scan.network} answered like {brand ? `a ${brand}` : "an"} inverter. Check the inverter's dongle is
+          on this network (its address is in your router's device list or the inverter's app), or enter its address
+          below.
         </div>
+      )}
+      {done && !running && elsewhere.length > 0 && (
+        <p className="m-0 text-[13px] leading-5 text-ink-muted">
+          Also found:{" "}
+          {elsewhere.map((f, n) => (
+            <span key={`${f.host}:${f.port}`}>
+              {n > 0 && ", "}
+              {deviceName(f)} at {f.host} (
+              <Link
+                to="/integrations/inverters/$brand/connect"
+                params={{ brand: brandSlug(f.brand) }}
+                className="text-brand"
+              >
+                connect it from {f.brand}
+              </Link>
+              )
+            </span>
+          ))}
+          .
+        </p>
       )}
     </div>
   );
@@ -248,13 +281,13 @@ function Manual({
   busy: boolean;
   error: unknown;
   onConnect: (role: InverterRole, body: ConnectRequest) => void;
-  /** The brand to offer first. */
+  /** Only this brand's inverters, without choosing a brand. */
   brand?: string;
   bare?: boolean;
 }) {
   const brands = [...new Set(overview.kinds.map((k) => k.brand))];
   // Given as a name ("GoodWe") or as it's written in an address ("goodwe").
-  const given = brands.find((b) => brandSlug(b) === brandSlug(initialBrand));
+  const given = initialBrand ? brands.find((b) => brandSlug(b) === brandSlug(initialBrand)) : undefined;
   const [brand, setBrand] = useState(given ?? brands[0] ?? "");
   const kinds = overview.kinds.filter((k) => k.brand === brand);
   const [driver, setDriver] = useState(kinds[0]?.driver ?? "");
@@ -281,10 +314,10 @@ function Manual({
       {!bare && (
         <div className="flex flex-col gap-1">
           <h3 className="text-[15px] font-semibold">Or enter its address</h3>
-          <span className="text-[13px] text-ink-muted">{MANUAL_SUB}</span>
+          <span className="text-[13px] text-ink-muted">{manualSub(given)}</span>
         </div>
       )}
-      {brands.length > 1 && (
+      {!given && brands.length > 1 && (
         <ChoiceTiles
           label="Brand"
           value={brand}
@@ -350,8 +383,9 @@ function Manual({
 }
 
 /**
- * Connecting an inverter, by scanning the network or by address: in a card of its own (the set-up guide), or as two
- * sections (`sections`: Manage → Integrations → Inverters → Connect). `brand` is the one the address form offers first.
+ * Connecting an inverter, by scanning the network or by address: in a card of its own, for any brand (the set-up
+ * guide), or as two sections (`sections`: Manage → Integrations → Inverters → a brand → Connect). Given a `brand`, it's
+ * that brand's inverters only.
  */
 export function ConnectInverter({
   overview,
@@ -375,6 +409,7 @@ export function ConnectInverter({
       <Scan
         overview={overview}
         busy={busy}
+        brand={brand}
         bare={sections}
         onConnect={(f) => {
           if (!f.role || !f.driver) return;
@@ -402,10 +437,10 @@ export function ConnectInverter({
   if (sections)
     return (
       <>
-        <SettingsSection id="h-scan" title="Find it on your network" sub={SCAN_SUB}>
+        <SettingsSection id="h-scan" title="Find it on your network" sub={scanSub(brand)}>
           {scan}
         </SettingsSection>
-        <SettingsSection id="h-manual" title="Or enter its address" sub={MANUAL_SUB}>
+        <SettingsSection id="h-manual" title="Or enter its address" sub={manualSub(brand)}>
           {manual}
         </SettingsSection>
       </>

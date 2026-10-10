@@ -78,21 +78,20 @@ function InverterRow({ inverter: { device, name, status, on, reading, hybrid } }
   );
 }
 
-/** The main and second inverter at a glance, whatever their brands, and adding one. */
-function Summary({ brand }: { brand?: Brand }) {
+/** A brand's inverters at a glance: its main and second inverter, how they're doing, and connecting one. */
+function Summary({ brand }: { brand: Brand }) {
   const { data, isPending, error, inverters } = useInverters();
   const live = useLive();
-  const shown = brand ? brand.inverters : inverters;
+  const shown = brand.inverters;
   const main = shown.find((i) => i.hybrid);
   const second = shown.find((i) => !i.hybrid);
   const canConnect = !!data?.available && !data.read_only;
   const anyMain = inverters.some((i) => i.hybrid);
-  const brands = [...new Set((data?.kinds ?? []).map((k) => k.brand))];
   return (
     <SummaryCard
       icon="sun"
       color={main && !main.on ? COLOR.warn : COLOR.solar}
-      label={brand ? `Your ${brand.name} inverters` : "Your inverters"}
+      label={`Your ${brand.name} inverters`}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -103,33 +102,29 @@ function Summary({ brand }: { brand?: Brand }) {
                   ? errorMessage(error)
                   : data && !data.available
                     ? data.error
-                    : brand && !shown.length
+                    : !shown.length
                       ? `No ${brand.name} inverter is connected.`
                       : !main
-                        ? brand
-                          ? `A second inverter: the main one is ${inverters.find((i) => i.hybrid)?.name ?? "not connected yet"}.`
-                          : "Nothing is recorded until your main inverter (with the meter, and the battery if there is one) is connected."
+                        ? `A second inverter: the main one is ${inverters.find((i) => i.hybrid)?.name ?? "not connected yet"}.`
                         : main.frozen
                           ? `Readings frozen since ${hhmm(main.frozen)}: the dongle isn't refreshing them.`
                           : main.last
                             ? `Last read at ${hhmm(main.last)}, every ${live?.poll_interval ?? 60} seconds.`
                             : "Waiting for its first reading."}
             </span>
-            {brand && (
-              <span className="flex flex-wrap gap-3">
-                <ReachTag reach="local" />
-                {!brand.verified && <UntestedTag />}
-              </span>
-            )}
+            <span className="flex flex-wrap gap-3">
+              <ReachTag reach="local" />
+              {!brand.verified && <UntestedTag />}
+            </span>
           </span>
           {canConnect && (
             <ButtonLink
-              to="/integrations/inverters/connect"
-              search={brand ? { brand: brand.name } : {}}
+              to="/integrations/inverters/$brand/connect"
+              params={{ brand: brand.slug }}
               variant={anyMain ? "outline" : "primary"}
               size="sm"
             >
-              {brand ? `Connect a ${brand.name}` : anyMain ? "Add an inverter" : "Find your inverter"}
+              {anyMain ? `Add a ${brand.name}` : `Connect a ${brand.name}`}
             </ButtonLink>
           )}
         </div>
@@ -137,8 +132,8 @@ function Summary({ brand }: { brand?: Brand }) {
     >
       <SummaryStat
         label="Main inverter"
-        value={main?.name ?? (brand ? "None" : "None yet")}
-        sub={main ? [main.device.brand, main.status].filter(Boolean).join(" · ") : "With the meter and battery"}
+        value={main?.name ?? "None"}
+        sub={main ? main.status : "With the meter and battery"}
       />
       <SummaryStat
         label="Second inverter"
@@ -151,22 +146,19 @@ function Summary({ brand }: { brand?: Brand }) {
         color={(main ?? second) && !(main ?? second)?.on ? COLOR.warn : undefined}
         sub={(main ?? second)?.reading}
       />
-      {brand ? (
-        <SummaryStat label="It reads" value={brand.kinds.length} sub={brand.kinds.map((k) => k.label).join(", ")} />
-      ) : (
-        <SummaryStat label="Brands it reads" value={brands.length || "—"} sub={brands.join(", ")} />
-      )}
+      <SummaryStat label="It reads" value={brand.kinds.length} sub={brand.kinds.map((k) => k.label).join(", ")} />
     </SummaryCard>
   );
 }
 
 /**
- * Manage → Integrations → Inverters: both inverters at a glance, then each brand WattsMyPower reads, saying which are
- * connected, each opening to its own page (its inverters, connecting one, and anything only that brand has).
+ * Manage → Integrations → Inverters: each brand WattsMyPower reads (connected first), saying how its inverters are
+ * doing, each opening to its own page: its inverters, connecting one, and anything only that brand has.
  */
 export function InverterSettings() {
-  const { data, isPending } = useInverters();
+  const { data, isPending, error } = useInverters();
   const brands = useBrands();
+  const order = [...brands.filter((b) => b.inverters.length), ...brands.filter((b) => !b.inverters.length)];
   return (
     <>
       <SubPageHeader
@@ -175,15 +167,17 @@ export function InverterSettings() {
         title="Inverters"
         sub="Read every minute over your home network, straight from each inverter, with no cloud in between."
       />
-      <Summary />
+      {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
+      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {data && !data.available && <p className="m-0 text-sm leading-[22px] text-ink-muted">{data.error}</p>}
       <SettingsSection
         id="h-brands"
         title="Brands"
-        sub="One main inverter (with the meter, and the battery if there is one) and an optional second, AC-coupled one, of any brand here. Open one for its inverters and connecting one."
+        sub="One main inverter (with the meter, and the battery if there is one) and an optional second, AC-coupled one, of any brand here. Open yours to connect it."
       >
-        {brands.length > 0 && (
+        {order.length > 0 && (
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
-            {brands.map((b) => {
+            {order.map((b) => {
               const s = brandStatus(b.inverters);
               return (
                 <IntegrationLink
@@ -196,9 +190,11 @@ export function InverterSettings() {
                   on={s.on}
                   attention={s.attention}
                   detail={
-                    b.inverters.length
-                      ? b.inverters.map((i) => `${i.name} (${ROLE_NAME[i.device.role]})`).join(", ")
-                      : (BRAND_ABOUT[b.name]?.about ?? b.kinds.map((k) => k.label).join(", "))
+                    <span className="line-clamp-2">
+                      {b.inverters.length
+                        ? b.inverters.map((i) => `${i.name} (${ROLE_NAME[i.device.role]})`).join(", ")
+                        : (BRAND_ABOUT[b.name]?.about ?? b.kinds.map((k) => k.label).join(", "))}
+                    </span>
                   }
                   tags={
                     <>
