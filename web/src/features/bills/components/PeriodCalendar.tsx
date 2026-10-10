@@ -9,7 +9,7 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
 import { billHeatColor, COLOR, heatColor, rampColor } from "~/features/common/theme/utils/colors";
 import { bandColor, bandHours, usedBands } from "~/features/common/tariffs/utils";
-import { kWh, kWhInt, money } from "~/features/common/formatting/utils/number";
+import { kWh, kWhInt, money, plural } from "~/features/common/formatting/utils/number";
 import { dayMonth, fullDate, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
 
 type MetricKey = "cost" | "imp" | "exp" | "pv" | "peak";
@@ -121,8 +121,15 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
     return { color: shade(metric, n), strong: n > 0.55 };
   };
 
+  // Added up at full precision and rounded once, so the cost comes to the bill so far. Days are at the rates
+  // alone, though: with a discount or credits the bill takes those off too, and the total says so.
   const recorded = days.map(metric.value).filter((v): v is number => v != null);
   const total = recorded.reduce((a, v) => a + v, 0);
+  const { discount, credits } = bills.current.so_far;
+  const before =
+    metric.key !== "cost" || (discount <= 0 && credits <= 0)
+      ? ""
+      : ` before ${discount > 0 && credits > 0 ? "discount and credits" : discount > 0 ? "discount" : "credits"}`;
   const avgOf = (f: (d: BillDay) => number | null) => {
     const v = whole.map(f).filter((x): x is number => x != null);
     return v.length ? v.reduce((a, x) => a + x, 0) / v.length : null;
@@ -146,7 +153,7 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
           title="This billing period, day by day"
           sub={
             recorded.length
-              ? `${metric.label}: ${metric.format(total)} over ${days.length} days${avg != null ? ` · ${metric.format(avg)} on an average day` : ""}`
+              ? `${metric.label}: ${metric.format(total)} over ${days.length} ${plural(days.length, "day")}${before}${avg != null ? ` · ${metric.format(avg)} on an average day` : ""}`
               : "Fills in from the first day of readings"
           }
         />

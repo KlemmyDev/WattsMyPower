@@ -272,6 +272,7 @@ function TodayCard({
       </div>
       {series ? (
         <TimeLine
+          label="Power from and to the grid through the day"
           points={pts}
           start={start}
           end={addDays(start, 1)}
@@ -386,6 +387,7 @@ function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
             {today.length > 0 && <span className="tabular-nums">Today up to {wholesaleCents(top * 10)}</span>}
           </div>
           <TimeLine
+            label="Wholesale price through the day, with AEMO's forecast"
             points={pts}
             start={start}
             end={end}
@@ -481,6 +483,7 @@ function QualityCard({
         <div className="text-[13px] text-ink-faint">Your inverter doesn't report the grid's voltage.</div>
       ) : series ? (
         <TimeLine
+          label="Grid voltage through the day"
           points={volts}
           start={start}
           end={addDays(start, 1)}

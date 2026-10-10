@@ -97,6 +97,7 @@ export function UsualDayCard({
         )}
       </div>
       <TimeLine
+        label={`Power through today, against ${day}`}
         points={points}
         compare={p.days ? { points: usual, color: USUAL } : undefined}
         start={start}

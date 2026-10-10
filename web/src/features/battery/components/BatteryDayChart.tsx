@@ -195,7 +195,10 @@ export function BatteryDayChart({
   const reserve = reserveOf(s);
 
   const [hoverAt, setHoverAt] = useState<number | null>(null);
-  const range = useDragRange(from, to, zoom.zoom);
+  const range = useDragRange(from, to, zoom.zoom, {
+    label: "Battery level and power through the day",
+    onReset: zoom.reset,
+  });
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setHoverAt(from + ((e.clientX - r.left) / r.width) * (to - from));
@@ -283,6 +286,7 @@ export function BatteryDayChart({
       </ul>
 
       <div
+        {...range.keys}
         onPointerMove={(e) => {
           onPoint(e);
           range.handlers.onPointerMove?.(e);

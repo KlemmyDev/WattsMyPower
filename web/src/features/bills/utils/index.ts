@@ -1,6 +1,6 @@
 import type { Basis, BillSpan } from "~/features/bills/types";
 import { dayMonth, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
-import { dollars, money } from "~/features/common/formatting/utils/number";
+import { dollars, minus, money } from "~/features/common/formatting/utils/number";
 
 /** A bill in whole dollars, with credits saying so: "$412", "$38 credit". */
 export const billAmount = (v: number) => (v < 0 ? `${dollars(-v)} credit` : dollars(v));
@@ -31,7 +31,10 @@ export function basisNote(basis: Basis): string {
 }
 
 /** Cents per kWh, rounded: "24c", "−3c". */
-export const centsPerKwh = (v: number) => `${v < 0 ? "−" : ""}${Math.round(Math.abs(v) * 100)}c`;
+export function centsPerKwh(v: number) {
+  const shown = String(Math.round(Math.abs(v) * 100));
+  return `${minus(v, shown)}${shown}c`;
+}
 
 /**
  * The first day of the billing period `day` falls in: periods of `months` months starting on

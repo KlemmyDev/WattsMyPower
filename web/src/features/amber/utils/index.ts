@@ -1,8 +1,11 @@
 import type { AmberPrices, AmberStatus, PriceInterval } from "~/features/amber/types";
-import { centsShort } from "~/features/common/formatting/utils/number";
+import { centsShort, minus } from "~/features/common/formatting/utils/number";
 
 /** A $/kWh price in cents, with a true minus sign: "23.4c", "−2.1c". */
-export const priceLabel = (rate: number) => (rate < 0 ? `−${centsShort(-rate)}` : centsShort(rate));
+export function priceLabel(rate: number) {
+  const shown = centsShort(Math.abs(rate));
+  return `${minus(rate, shown)}${shown}`;
+}
 
 /** The interval covering a moment, if there's a price for it. */
 export function intervalAt(list: PriceInterval[], ts: number): PriceInterval | null {

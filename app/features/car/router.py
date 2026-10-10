@@ -1,4 +1,4 @@
-"""The cars (Settings → Integrations → Electric vehicle, and the Overview's drawing): their details and levels."""
+"""The cars (Manage → Integrations → Electric vehicle, and the Overview's drawing): their details and levels."""
 
 from __future__ import annotations
 

@@ -208,6 +208,7 @@ function TodayCard({
       </div>
       {series ? (
         <TimeLine
+          label="Solar through the day, against what was expected"
           points={actual}
           compare={{ points: expected, color: EXPECTED }}
           start={start}

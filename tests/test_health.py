@@ -1,4 +1,4 @@
-"""The Health page: the checkup, the solar trend and its likely causes, and the battery's run."""
+"""Insights for the Solar and Battery pages: the checkup, the solar trend and its causes, and the battery's run."""
 
 from __future__ import annotations
 

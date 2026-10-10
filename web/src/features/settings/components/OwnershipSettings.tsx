@@ -30,7 +30,7 @@ const NAMES: Record<OwnershipKey, string> = {
   battery_warranty_mwh: "the battery warranty's energy",
 };
 
-/** What the system cost and when it went in (for payback on Bills), and the battery's warranty (for Health). */
+/** What the system cost and when it went in (for payback on Bills), and the battery's warranty (for Battery). */
 export function OwnershipSettings({ system: s }: { system: SystemInfo }) {
   const save = useSaveSettings();
   const toast = useToast();
@@ -73,7 +73,7 @@ export function OwnershipSettings({ system: s }: { system: SystemInfo }) {
       <SettingsTitle
         id="h-sys-own"
         title="Cost and warranty"
-        sub="Optional. With these, Bills shows when the system pays for itself, and Health how much of the battery's warranty is used."
+        sub="Optional. With these, Bills shows when the system pays for itself, and Battery how much of the battery's warranty is used."
       />
       <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-5">

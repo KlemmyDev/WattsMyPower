@@ -1,4 +1,4 @@
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import { cn } from "~/features/common/ui/utils";
 
 /** A labelled form control with optional help text and error. */
@@ -80,6 +80,3 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     />
   );
 });
-
-/** Stable id for aria wiring. */
-export const useFieldId = useId;

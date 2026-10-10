@@ -1,3 +1,4 @@
+import { minus } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { NemRegion, NoticeKind, OutlookLevel } from "~/features/grid/types";
 
@@ -14,12 +15,18 @@ export const REGIONS: { id: NemRegion; label: string }[] = [
 ];
 
 /** A wholesale price ($/MWh) in cents a kWh, as the bills have it: $412.50/MWh is 41.3c. */
-export const wholesaleCents = (mwh: number | null | undefined) =>
-  mwh == null ? "—" : `${mwh < 0 ? "−" : ""}${Math.abs(mwh / 10).toFixed(1)}c`;
+export function wholesaleCents(mwh: number | null | undefined) {
+  if (mwh == null) return "—";
+  const shown = Math.abs(mwh / 10).toFixed(1);
+  return `${minus(mwh, shown)}${shown}c`;
+}
 
 /** A wholesale price as AEMO gives it: "$412/MWh", "−$40/MWh". */
-export const perMWh = (mwh: number | null | undefined) =>
-  mwh == null ? "—" : `${mwh < 0 ? "−" : ""}$${Math.round(Math.abs(mwh)).toLocaleString("en-AU")}/MWh`;
+export function perMWh(mwh: number | null | undefined) {
+  if (mwh == null) return "—";
+  const shown = Math.round(Math.abs(mwh)).toLocaleString("en-AU");
+  return `${minus(mwh, shown)}$${shown}/MWh`;
+}
 
 /** Each level of the outlook: a word for it, its colour and its icon. */
 export const LEVEL: Record<OutlookLevel, { word: string; color: string; sub: string }> = {

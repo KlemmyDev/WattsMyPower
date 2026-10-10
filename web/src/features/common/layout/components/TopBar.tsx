@@ -55,7 +55,9 @@ export function HeaderClock({ className }: { className?: string }) {
       )}
       title={`${fullDate.format(d)}, ${hhmm(now)} ${tzName}. ${status}.`}
     >
-      <span className="live-dot" data-state={state} />
+      <span className="live-dot" data-state={state} aria-hidden />
+      {/* The dot's colour, in words, for a screen reader (the title isn't read out everywhere). */}
+      <span className="sr-only">{status}.</span>
       <span className="text-ink-dim max-xs:hidden">{pillDate.format(d)}</span>
       <span>{hhmm(now)}</span>
     </span>

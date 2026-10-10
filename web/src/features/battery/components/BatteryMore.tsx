@@ -337,6 +337,7 @@ export function BatteryReadings({
       </div>
       {vs.length > 1 && (
         <TimeLine
+          label="Battery temperature through today"
           points={temps}
           start={start}
           end={addDays(start, 1)}

@@ -190,6 +190,7 @@ export function DayChart({
           zoom.zoom(a, b);
         }
       : undefined,
+    { label: "Solar, home use, the grid and the battery through the day", onReset: zoom.reset },
   );
   const hovered = range.dragging ? null : hover;
 
@@ -271,6 +272,7 @@ export function DayChart({
       {!zoom.zoomed && top}
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
+        {...range.keys}
         onPointerMove={(e) => {
           onPoint(e);
           range.handlers.onPointerMove?.(e);
