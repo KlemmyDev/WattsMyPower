@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
 import pytest
 
+from collector import store as store_module
 from collector.store import MIGRATIONS, Row, Store
 
 
@@ -102,3 +104,36 @@ def test_migrate_is_idempotent_and_versioned(store: Store) -> None:
     assert store.migrate() == len(MIGRATIONS)
     with sqlite3.connect(store.path) as conn:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+
+
+def test_a_step_that_fails_part_way_is_undone_and_runs_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The steps' CREATE TABLEs have no IF NOT EXISTS: one left behind by a failed step would fail every start after."""
+    s = Store(str(tmp_path / "half.db"))
+    s.migrate()
+    disk_full = True
+
+    def _notes(conn: sqlite3.Connection) -> None:
+        conn.execute("CREATE TABLE notes (ts INTEGER PRIMARY KEY)")
+        if disk_full:
+            raise sqlite3.OperationalError("database or disk is full")
+
+    monkeypatch.setattr(store_module, "MIGRATIONS", [*MIGRATIONS, _notes])
+    with pytest.raises(sqlite3.OperationalError, match="disk is full"):
+        s.migrate()
+    assert "(notes) failed and was undone" in caplog.text
+    with sqlite3.connect(s.path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'notes'").fetchone() == (0,)
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+    disk_full = False
+    assert s.migrate() == len(MIGRATIONS) + 1
+
+
+def test_a_database_from_a_newer_version_is_used_with_a_warning(store: Store, caplog: pytest.LogCaptureFixture) -> None:
+    with sqlite3.connect(store.path) as conn:
+        conn.execute(f"PRAGMA user_version = {len(MIGRATIONS) + 1}")
+    with caplog.at_level(logging.WARNING):
+        store.migrate()
+    assert "newer version of WattsMyPower" in caplog.text
+    assert store.devices() == []  # and it carries on

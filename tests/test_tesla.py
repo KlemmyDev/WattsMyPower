@@ -1766,3 +1766,12 @@ def test_failed_reads_are_spaced_out_even_while_the_car_is_followed_closely(ble:
     assert ble.status()["error"] is None and ble._retry_at == 0
     assert ble.status()["vehicles"][0]["hold"]  # (the command from the page put it on hold: read every five minutes)
     assert ble.status()["next_read"] - int(clock.t) <= POLL_IDLE
+
+
+def test_wakes_are_kept_as_long_as_levels(db: Database) -> None:
+    h = history.History(db)
+    h.add_wake(VIN, 1_000, "first")
+    h.add_wake("OTHERVIN", 1_000, "first")
+    h.add_wake(VIN, 1_000 + history.LEVELS_KEPT + 60, "solar")  # 90 days on: the first goes
+    assert [w["reason"] for w in h.wakes(VIN, 0, 2**40)] == ["solar"]
+    assert [w["reason"] for w in h.wakes("OTHERVIN", 0, 2**40)] == ["first"]  # each car's own
