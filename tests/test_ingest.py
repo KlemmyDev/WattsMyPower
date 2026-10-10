@@ -69,7 +69,7 @@ def test_decode_info() -> None:
     words.update({5000: 0x0D0F, 5001: 50, 5002: 0, 5639: 1600})
     info = sh_rs.decode_info({"input": words, "holding": {13059: 50}})
     assert info == {"brand": "Sungrow", "serial": "A23A0903744", "model": "SH5.0RS", "nominal_kw": 5.0, "phases": "Single phase",
-                    "battery_kwh": 16.0, "reserve": 5.0}  # fmt: skip
+                    "battery_kwh": 16.0, "reserve": 5.0, "device_type": 0x0D0F}  # fmt: skip
 
 
 def info_for(code: int) -> dict[str, Any]:
@@ -89,7 +89,7 @@ def test_the_sh_family_is_known_by_name(code: int, model: str) -> None:
 def test_a_newer_hybrid_is_read_but_marked_untested() -> None:
     """A device type in the hybrids' ranges that isn't listed yet: the same registers, named by its code."""
     assert info_for(0x0E2A) == {"brand": "Sungrow", "model": "SH hybrid (type 0x0E2A)", "untested": True,
-                                "nominal_kw": 4.6, "phases": "Single phase"}  # fmt: skip
+                                "nominal_kw": 4.6, "phases": "Single phase", "device_type": 0x0E2A}  # fmt: skip
     # Something else answering the same registers (an SG string inverter) isn't a hybrid.
     assert info_for(0x2435)["model"] == "Unknown (0x2435)"
 

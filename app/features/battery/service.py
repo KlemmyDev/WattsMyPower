@@ -12,6 +12,10 @@ external energy manager, or anything else has the battery, the controls only sho
 nothing is written, not even putting back a floor that ended meanwhile (that waits until the battery is back
 in self-consumption). And when the battery's settings stop being what the dashboard wrote (changed in
 iSolarCloud, or the inverter didn't take them), the dashboard lets go rather than writing them again.
+
+Controls only start on a model they've been tried on (the driver's VERIFIED_TYPES), unless they've been turned on
+for this inverter as an experiment (kv `battery_experimental`, kept to its model and serial). Ending a control and
+putting the battery back always goes ahead.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ log = logging.getLogger(__name__)
 
 CONTROL_KEY = "battery_control"  # kv: the control in effect (JSON), if any
 LOG_KEY = "battery_control_log"  # kv: what the controls did lately (JSON list, newest last)
+EXPERIMENTAL_KEY = "battery_experimental"  # kv: the inverter the controls were turned on for, untried on its model
 LOG_KEPT = 200
 TICK = 30  # seconds between the loop's checks while a control is in effect
 FRESH = 20  # how long a read of the settings is shown before reading again
@@ -322,6 +327,52 @@ class BatteryService:
     def _driver(self) -> ControlDriver | None:
         return drivers.control(self.live.driver) if self.registers else None
 
+    def _inverter(self) -> dict[str, Any]:
+        """Which inverter is connected, to keep an experiment to it: its driver, model (device type) and serial."""
+        info = self.live.info or {}
+        return {"driver": self.live.driver, "device_type": info.get("device_type"), "serial": info.get("serial")}
+
+    def verified(self, driver: ControlDriver) -> bool:
+        """Whether the inverter is a model the controls have been tried on."""
+        return (self.live.info or {}).get("device_type") in driver.VERIFIED_TYPES
+
+    def experimental(self) -> bool:
+        """Whether the controls were turned on for this inverter, on a model they haven't been tried on."""
+        saved = self._kv(EXPERIMENTAL_KEY)
+        here = self._inverter()
+        return bool(saved) and here["device_type"] is not None and all(saved.get(k) == v for k, v in here.items())
+
+    def untried(self, driver: ControlDriver) -> str | None:
+        """Why the controls are off for this inverter's model, in words; None when they can be used (a model they've
+        been tried on, or turned on for this inverter)."""
+        if self.verified(driver) or self.experimental():
+            return None
+        code = (self.live.info or {}).get("device_type")
+        if code is None:
+            return "The inverter hasn't said which model it is yet, so the battery controls are off until it does."
+        model = self.live.model
+        this = f"this {model}" if model and not model.startswith("Unknown") else f"this inverter (model 0x{code:04X})"
+        return f"The battery controls have only been tried on {driver.VERIFIED_LABEL}, so they're off for {this}."
+
+    def set_experimental(self, on: Any) -> dict[str, Any]:
+        """Turn the controls on for this inverter though they haven't been tried on its model, or back off."""
+        if not isinstance(on, bool):
+            raise BatteryError("Say whether to turn them on (true) or off (false).")
+        driver = self._driver()
+        if driver is None:
+            raise BatteryError("This inverter's battery can't be controlled from the dashboard.", 409)
+        with self._lock:
+            if on and not self.verified(driver) and not self.experimental():
+                here = self._inverter()
+                if here["device_type"] is None:
+                    raise BatteryError("The inverter hasn't said which model it is yet. Try again once it has.", 409)
+                self._put(EXPERIMENTAL_KEY, {**here, "model": self.live.model, "at": int(self.clock())})
+                self._note(f"Battery controls turned on for this {self.live.model or 'inverter'}, untried on its model")
+            elif not on and self._kv(EXPERIMENTAL_KEY) is not None:
+                self._put(EXPERIMENTAL_KEY, None)
+                self._note("Experimental battery controls turned off")
+        return self.view()
+
     def _took(self, words: dict[int, int], driver: ControlDriver) -> BatterySettings | None:
         """Note settings just read (empty: none came back)."""
         if not words:
@@ -383,8 +434,15 @@ class BatteryService:
         settings = self.known()
         control = self.control()
         who = owner(settings, control)
+        verified = self.verified(driver)
         return {
             "supported": True,
+            "model": self.live.model,
+            # A model the controls have been tried on; if not, whether they were turned on for this inverter anyway,
+            # or why they're off.
+            "verified": verified,
+            "experimental": not verified and self.experimental(),
+            "untried": self.untried(driver),
             "settings": settings,
             "read_at": self._read_at or None,
             "error": self._read_error,
@@ -444,6 +502,8 @@ class BatteryService:
         driver = self._driver()
         if driver is None:
             raise BatteryError("This inverter's battery can't be controlled from the dashboard.", 409)
+        if reason := self.untried(driver):
+            raise BatteryError(reason, 409)
         settings = self.known()
         if settings is None:
             raise BatteryError("The inverter's battery settings couldn't be read.", 502)
@@ -508,6 +568,8 @@ class BatteryService:
         driver = self._driver()
         if driver is None:
             raise BatteryError("This inverter's battery can't be controlled from the dashboard.", 409)
+        if reason := self.untried(driver):  # nothing is written to a model the controls haven't been tried on
+            raise BatteryError(reason, 409)
         if body.get("kind") not in KINDS:
             raise BatteryError(f"Choose a control: {', '.join(KINDS)}.")
         with self._lock:
@@ -662,14 +724,16 @@ class BatteryService:
 
     def summary(self) -> dict[str, Any] | None:
         """The battery's mode for every page (the live status's `battery_mode`): who has it (see owner), the control
-        in effect here, or what another controller is doing; and the floor. From the last read; None when this
-        inverter's battery can't be controlled."""
-        if self._driver() is None:
+        in effect here, or what another controller is doing; the floor; and why the controls are off for this model
+        (`untried`), if they are. From the last read; None when this inverter's battery can't be controlled."""
+        driver = self._driver()
+        if driver is None:
             return None
         settings, control = self._settings, self.control()
         who = owner(settings, control)
         out: dict[str, Any] = {
             "owner": who,
+            "untried": self.untried(driver),
             "min_soc": (settings or {}).get("min_soc"),
             "max_soc": (settings or {}).get("max_soc"),
         }

@@ -214,6 +214,7 @@ def decode_info(raw: Raw) -> Info:
         info["serial"] = b"".join(x.to_bytes(2, "big") for x in w).decode("ascii", "replace").strip("\x00 ")
     w = span(inp, 5000, 3)  # device type, nominal power (0.1 kW), output type
     if w:
+        info["device_type"] = w[0]  # which model, for the battery controls (sh_control.VERIFIED_TYPES)
         if w[0] in DEVICE_TYPES:
             info["model"] = DEVICE_TYPES[w[0]]
         elif hybrid_code(w[0]):  # a hybrid newer than the list: same registers, model not named yet

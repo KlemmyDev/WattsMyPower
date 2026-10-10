@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { SystemInfo } from "~/features/common/live/types";
+import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { inverterName } from "~/features/common/live/utils";
 import { useSaveSettings } from "~/features/common/settings/hooks";
@@ -12,14 +13,15 @@ import { HouseScene, type HouseFlows } from "~/features/overview/components/Hous
 import type { HouseStyle, Place } from "~/features/overview/utils/house/layout";
 import { cn } from "~/features/common/ui/utils";
 import { houseOptions } from "~/features/overview/utils/house/options";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 type HouseValues = Pick<
   Settings,
   "house_style" | "house_storeys" | "garage_spaces" | "inverter_places" | "battery_places"
 >;
 
-const STYLES: { value: HouseStyle; name: string; blurb: string }[] = [
+export const HOUSE_STYLES: { value: HouseStyle; name: string; blurb: string }[] = [
   { value: "estate", name: "Estate", blurb: "Brick veneer under a tiled gable roof" },
   { value: "modern", name: "Modern", blurb: "White boxes, glass and a flat roof" },
   { value: "queenslander", name: "Queenslander", blurb: "Weatherboards on stumps, a verandah and an iron roof" },
@@ -60,7 +62,7 @@ function Choice<T extends string>({
 }
 
 /** The style tiles show the house still: no power moving, so a page of them stays quiet. */
-const THUMB_FLOWS: HouseFlows = { pv: 0, grid: 0, bat: 0, soc: 0.6, tesla: 0, conn: false };
+export const THUMB_FLOWS: HouseFlows = { pv: 0, grid: 0, bat: 0, soc: 0.6, tesla: 0, conn: false };
 
 /** What the preview shows: the live readings if there are some, else a sunny afternoon charging the battery. */
 function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFlows {
@@ -80,7 +82,23 @@ function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFl
  * Manage → System → Your house: how the Overview draws the house. Storeys, a garage, and where each inverter and
  * battery is (as many as are connected), with the drawing updating as they're chosen.
  */
-export function HouseSettings({ system }: { system: SystemInfo }) {
+export function HouseSettings() {
+  const live = useLive();
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/system">System</BackLink>}
+        id="h-house"
+        title="Your house"
+        sub="How the Overview draws your home. Choose what's closest: it's only the picture, nothing's worked out from it."
+      />
+      {/* Mounted once the status has loaded, so the choices start from the saved ones. */}
+      {live && <HouseCard system={live.system} />}
+    </>
+  );
+}
+
+function HouseCard({ system }: { system: SystemInfo }) {
   const save = useSaveSettings();
   const toast = useToast();
   const snapshot = useSnapshot();
@@ -119,18 +137,13 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
 
   return (
     <SettingsCard padded aria-labelledby="h-house">
-      <SettingsTitle
-        id="h-house"
-        title="Your house"
-        sub="How the Overview draws your home. Choose what's closest: it's only the picture, nothing's worked out from it."
-      />
       <div className="relative aspect-[2/1] w-full overflow-hidden rounded-2xl bg-[#dcebff] max-sm:aspect-[4/3]">
         <HouseScene flows={previewFlows(snapshot, system)} sky="sunny" house={house} />
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] font-semibold">Style</span>
         <div role="group" aria-label="Style" className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
-          {STYLES.map((st) => {
+          {HOUSE_STYLES.map((st) => {
             const on = house.style === st.value;
             return (
               <button

@@ -7,11 +7,20 @@ import { isFull, nextAt, when } from "~/features/battery/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { errorMessage } from "~/features/common/api/utils";
 import { useNow } from "~/features/common/time/hooks";
+import { Button } from "~/features/common/ui/components/Button";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 
-type Shortcut = { label: string; hint: string; body: ControlRequest; said: string; off?: boolean };
+/** `ask`: what it does and the button that sends it, asked first (a charge from the grid buys power). */
+type Shortcut = {
+  label: string;
+  hint: string;
+  body: ControlRequest;
+  said: string;
+  off?: boolean;
+  ask?: { text: string; yes: string };
+};
 
 const MORNING = "06:00";
 const MENU_W = 272; // px
@@ -51,6 +60,10 @@ function shortcuts(now: number, full: boolean): Shortcut[] {
       off: full,
       body: { kind: "charge", until: null },
       said: "Charging the battery to full.",
+      ask: {
+        text: "This buys power from the grid to charge the battery to full, for whatever solar can't cover. It stops once it's full, or when you choose Back to normal.",
+        yes: "Charge from the grid",
+      },
     },
   ];
 }
@@ -80,6 +93,7 @@ export function BatteryShortcuts() {
   const { start, stop } = useBatteryChange();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null); // the shortcut asking before it's sent
   const [place, setPlace] = useState<Place | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -89,6 +103,7 @@ export function BatteryShortcuts() {
   }, []);
   const close = useCallback((refocus = false) => {
     setOpen(false);
+    setAsking(null);
     if (refocus) button.current?.focus();
   }, []);
 
@@ -111,8 +126,30 @@ export function BatteryShortcuts() {
     };
   }, [open, measure, close]);
 
+  // Asking before a shortcut's sent: to its button at once, and back to the shortcut on Cancel.
+  const asked = useRef<string | null>(null);
+  useEffect(() => {
+    const back = asked.current;
+    asked.current = asking;
+    if (!open) return;
+    if (asking) menu.current?.querySelector<HTMLElement>("[data-ask]")?.focus();
+    else if (back) menu.current?.querySelector<HTMLElement>(`[data-label="${back}"]`)?.focus();
+  }, [asking, open]);
+
   if (!mode) return null;
   const pending = start.isPending || stop.isPending;
+  // Not a model the controls have been tried on: the Battery page says why, and can turn them on.
+  if (mode.untried)
+    return (
+      <Link
+        to="/battery"
+        title={mode.untried}
+        aria-label={`Battery controls off. ${mode.untried}`}
+        className="flex-none pr-1.5 text-[13px] font-semibold text-link"
+      >
+        Controls off
+      </Link>
+    );
   const free = mode.owner === "normal" || mode.owner === "dashboard";
   if (!free)
     return (
@@ -123,6 +160,10 @@ export function BatteryShortcuts() {
   const active = !!mode.kind && !mode.ending;
 
   const run = (s: Shortcut) => {
+    if (s.ask && asking !== s.label) {
+      setAsking(s.label);
+      return;
+    }
     close(true);
     start.mutate(s.body, { onSuccess: () => toast(s.said), onError: (e) => toast(errorMessage(e)) });
   };
@@ -138,7 +179,8 @@ export function BatteryShortcuts() {
     const at = items.indexOf(document.activeElement as HTMLElement);
     if (e.key === "Escape") {
       e.preventDefault();
-      close(true);
+      if (asking) setAsking(null);
+      else close(true);
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const step = e.key === "ArrowDown" ? 1 : -1;
@@ -192,21 +234,43 @@ export function BatteryShortcuts() {
                 <div role="separator" className="mx-2 my-1 h-px bg-line-subtle" />
               </>
             )}
-            {shortcuts(now, isFull(soc, mode.max_soc)).map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                role="menuitem"
-                tabIndex={-1}
-                disabled={s.off}
-                aria-disabled={s.off}
-                onClick={() => run(s)}
-                className={cn(item, "disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent")}
-              >
-                <span className="font-medium">{s.label}</span>
-                <span className="text-xs text-ink-muted">{s.hint}</span>
-              </button>
-            ))}
+            {shortcuts(now, isFull(soc, mode.max_soc)).map((s) =>
+              s.ask && asking === s.label ? (
+                <div key={s.label} className="flex flex-col gap-2 rounded-md bg-surface-raised px-3 py-2">
+                  <span className="text-sm font-medium">{s.label}?</span>
+                  <span className="text-xs text-pretty text-ink-muted">{s.ask.text}</span>
+                  <div className="flex items-center gap-3">
+                    <Button data-ask variant="outline" size="sm" role="menuitem" tabIndex={-1} onClick={() => run(s)}>
+                      {s.ask.yes}
+                    </Button>
+                    <Button
+                      variant="muted-link"
+                      size="sm"
+                      role="menuitem"
+                      tabIndex={-1}
+                      onClick={() => setAsking(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  key={s.label}
+                  data-label={s.label}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={-1}
+                  disabled={s.off}
+                  aria-disabled={s.off}
+                  onClick={() => run(s)}
+                  className={cn(item, "disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent")}
+                >
+                  <span className="font-medium">{s.label}</span>
+                  <span className="text-xs text-ink-muted">{s.hint}</span>
+                </button>
+              ),
+            )}
             <div role="separator" className="mx-2 my-1 h-px bg-line-subtle" />
             <Link
               to="/battery"

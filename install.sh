@@ -2,11 +2,13 @@
 # Install or update WattsMyPower with Docker.
 #
 #   Install:  curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash
+#             (options after "bash -s --", e.g. curl ... | bash -s -- --channel stable)
 #   Update:   cd wattsmypower && bash install.sh
 #
 # It follows a release channel, chosen in the dashboard (Manage → System → Updates) or with --channel: nightly (every
-# change, as it's merged to main), beta (pre-releases and releases) or stable (releases only). An update goes to the
-# channel's version, so after moving to a channel behind this one (nightly to stable) it goes back to that version.
+# change, as it's merged to main), beta (pre-releases and releases; a new install's) or stable (releases only). An
+# update goes to the channel's version, so after moving to a channel behind this one (nightly to stable) it goes back
+# to that version.
 #
 # Runs on Linux and in WSL (Docker is installed if it's missing), and on a Mac with Docker
 # Desktop (started if it isn't running). On Windows, install.ps1 sets up WSL and runs this.
@@ -32,8 +34,8 @@
 #           Bluetooth (portable batteries, Teslas) is connected through to the dashboard when this machine has an
 #           adapter with BlueZ running: run this again after adding one. BLUETOOTH=off in .env turns that off.
 #           --channel nightly|beta|stable
-#                        follow this release channel from now on (the default is nightly, or the one chosen
-#                        in the dashboard). Its version is installed, newer or older than this one.
+#                        follow this release channel from now on (otherwise the one chosen in the dashboard;
+#                        beta for a new install). Its version is installed, newer or older than this one.
 #           --rollback   go back to the version before the last update, with the databases put back as they were
 #                        before it (the ones there now are backed up first). Updating again brings the newer one back.
 #           --no-backup  update (or go back) even when the databases can't be backed up first
@@ -141,7 +143,7 @@ is_app() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/app" ] && [ -f "$1/install
 
 if [ "$HELP" = 1 ]; then
   if [ -n "$SELF_DIR" ]; then awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-  else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash [-s -- --yes]"; fi
+  else echo "Usage: curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash -s -- [--yes] [--channel nightly|beta|stable]"; fi
   exit 0
 fi
 
@@ -173,26 +175,35 @@ HERE="$SELF_DIR"
 check_folder "$HERE"
 
 # ---------------------------------------------------------------- the release channel
-# Kept in data/update/channel, where the dashboard reads and changes it too (Manage → System → Updates).
+# Kept in data/update/channel, where the dashboard reads and changes it too (Manage → System → Updates). It's saved on
+# every install, so the dashboard shows the one this follows.
 CHANNEL_FILE=data/update/channel
 saved_channel="$(tr -d '[:space:]' <"$CHANNEL_FILE" 2>/dev/null || true)"
 case "$saved_channel" in nightly|beta|stable) ;; *) saved_channel="" ;; esac
+chosen="$CHANNEL"
+if [ -z "$CHANNEL" ] && [ -z "$saved_channel" ]; then
+  # None chosen yet. A new install follows beta. One from before beta was the default (it has its .env, but no channel
+  # saved) has been following nightly, and carries on with it.
+  if [ -f .env ]; then CHANNEL=nightly; else CHANNEL=beta; fi
+fi
 if [ -n "$CHANNEL" ] && [ "$CHANNEL" != "$saved_channel" ]; then
   # Written whole, beside the old one (which the dashboard may have written, as root): this folder is yours.
   if mkdir -p data/update 2>/dev/null && printf '%s\n' "$CHANNEL" >"$CHANNEL_FILE.tmp" 2>/dev/null && mv -f "$CHANNEL_FILE.tmp" "$CHANNEL_FILE"; then
-    info "Following the $CHANNEL channel from now on."
+    if [ -n "$chosen" ]; then info "Following the $CHANNEL channel from now on."
+    else info "Following the $CHANNEL channel. Manage → System → Updates (or --channel) changes it."; fi
   else
-    warn "Couldn't save the channel in $CHANNEL_FILE: this update follows $CHANNEL, later ones ${saved_channel:-nightly}."
+    warn "Couldn't save the channel in $CHANNEL_FILE: this update follows $CHANNEL, but the dashboard may show another."
   fi
 fi
-CHANNEL="${CHANNEL:-${saved_channel:-nightly}}"
+CHANNEL="${CHANNEL:-$saved_channel}"
 # The channel before this run changed it (kept when the script restarts itself), for naming the backups.
 export WMP_FROM_CHANNEL="${WMP_FROM_CHANNEL:-${saved_channel:-$CHANNEL}}"
 
-# The newest release tag on the channel (blank if there's none yet): v2026.10.9 is stable, v2026.10.9-beta (or -alpha,
-# -rc.2…) a pre-release, which beta follows as well. versionsort.suffix puts a version's pre-releases before it.
+# The newest release tag on the channel (blank if there's none yet): v2026.10.9 is stable, v2026.10.9-beta (then
+# -beta.2…) a pre-release, which beta follows as well; no other tags count. versionsort.suffix puts a version's betas
+# before it, and app/features/updates/service.py and scripts/release.sh put them in the same order.
 channel_tag() {
-  local pattern='^v[0-9]+(\.[0-9]+)*(-[0-9A-Za-z.]+)?$'
+  local pattern='^v[0-9]+(\.[0-9]+)*(-beta(\.[0-9]+)?)?$'
   [ "$1" = stable ] && pattern='^v[0-9]+(\.[0-9]+)*$'
   git -c versionsort.suffix=- tag -l 'v[0-9]*' --sort=-v:refname | grep -E "$pattern" | head -n 1 || true
 }
