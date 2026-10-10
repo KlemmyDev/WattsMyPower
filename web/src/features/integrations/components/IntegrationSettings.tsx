@@ -53,6 +53,8 @@ type Entry = {
   local: boolean;
   /** One of the inverter brands offered until an inverter's connected: they count as one integration. */
   brand?: boolean;
+  /** A smart-home brand that's connected: counted, but shown inside the one Smart home card. */
+  rolled?: boolean;
   /** Its card under Connected (when connected), or its tile under Available (when not). */
   view: ReactElement;
 };
@@ -383,6 +385,7 @@ function homeEntry(i: HomeIntegration): Entry {
     connected: !!a,
     attention,
     local: reach !== "cloud",
+    rolled: !!a,
     view: (
       <IntegrationLink
         card={!!a}
@@ -396,6 +399,40 @@ function homeEntry(i: HomeIntegration): Entry {
         attention={attention}
         detail={<span className="line-clamp-2">{detail}</span>}
         tags={tags(reach)}
+      />
+    ),
+  };
+}
+
+/** Every connected smart-home brand as one card, opening to Smart home (its brands, each with its devices). */
+function smartHomeEntry(integrations: HomeIntegration[]): Entry | null {
+  const on = integrations.filter((i) => i.account);
+  if (!on.length) return null;
+  const trouble = on.find((i) => i.account?.signed_out || i.account?.error);
+  const devices = on.reduce((n, i) => n + (i.account?.devices ?? 0), 0);
+  const reaches = [...new Set(on.map(integrationReach))];
+  return {
+    id: "smart-home",
+    group: "home",
+    name: "Smart home",
+    connected: true,
+    attention: !!trouble,
+    local: !reaches.includes("cloud"),
+    view: (
+      <IntegrationLink
+        card
+        to="/integrations/home"
+        icon="plug"
+        name="Smart home"
+        status={
+          trouble ? `${trouble.name}: ${trouble.account?.signed_out ? "sign in again" : "not updating"}` : "Connected"
+        }
+        on={!trouble}
+        attention={!!trouble}
+        detail={
+          <span className="line-clamp-2">{`${on.map((i) => i.name).join(", ")} · ${plural(devices, "device")}`}</span>
+        }
+        tags={tags(reaches)}
       />
     ),
   };
@@ -501,9 +538,10 @@ export function IntegrationSettings() {
   ];
   const devices = (home?.integrations ?? []).reduce((n, i) => n + (i.account?.devices ?? 0), 0);
   const order = (e: Entry) => GROUPS.findIndex((g) => g.id === e.group);
-  const connected = entries
-    .filter((e) => e.connected)
-    .sort((a, b) => Number(b.attention) - Number(a.attention) || order(a) - order(b));
+  const smartHome = smartHomeEntry(home?.integrations ?? []);
+  const connected = [...entries.filter((e) => e.connected && !e.rolled), ...(smartHome ? [smartHome] : [])].sort(
+    (a, b) => Number(b.attention) - Number(a.attention) || order(a) - order(b),
+  );
   const available = entries.filter((e) => !e.connected);
   // The inverter brands on offer count as one integration (an inverter), however many brands there are.
   const firstBrand = available.find((e) => e.brand);

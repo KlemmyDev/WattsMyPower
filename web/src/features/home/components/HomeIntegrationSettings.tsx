@@ -2,28 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
-import { kW } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
-import { Field, HelpText, Input, Select } from "~/features/common/ui/components/Field";
-import { Icon } from "~/features/common/ui/components/Icon";
+import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
-import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
-import { deviceRawQuery, homeHintsQuery, homeQuery } from "~/features/home/api";
+import { homeHintsQuery, homeQuery } from "~/features/home/api";
 import { useHomeChange } from "~/features/home/hooks";
-import type { HomeDevice, HomeIntegration, HomeOverview } from "~/features/home/types";
-import { GroupInput } from "~/features/home/components/GroupInput";
-import {
-  groupNames,
-  integrationIcon,
-  integrationReach,
-  kindIcon,
-  nowLine,
-  suggestedGroup,
-} from "~/features/home/utils";
+import type { HomeDevice, HomeIntegration } from "~/features/home/types";
+import { integrationIcon, integrationReach, kindIcon, nowLine } from "~/features/home/utils";
+import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { REACH } from "~/features/integrations/components/ReachTag";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
@@ -223,160 +213,19 @@ function Summary({ integration: i, devices }: { integration: HomeIntegration; de
   );
 }
 
-/** What the integration last sent for a device, to check how its properties are read. */
-function Properties({ device }: { device: HomeDevice }) {
-  const { data, isPending, error } = useQuery(deviceRawQuery(device.id));
-  const toast = useToast();
-  const text = data ? JSON.stringify(data.properties, null, 2) : "";
-  return (
-    <div className="flex basis-full flex-col gap-2 pl-[60px] max-sm:pl-0">
-      {isPending && <HelpText>Loading…</HelpText>}
-      {error && <HelpText tone="bad">{errorMessage(error)}</HelpText>}
-      {data && (
-        <>
-          <HelpText>
-            {data.ts ? `As read at ${hhmm(data.ts)}.` : "Not read since the dashboard started."} Share these when a
-            device reads wrongly, so its properties can be mapped.
-          </HelpText>
-          <pre className="m-0 max-h-[320px] overflow-auto rounded-xl bg-canvas p-3 font-mono text-xs leading-5 text-ink-soft">
-            {text}
-          </pre>
-          <Button
-            variant="outline"
-            size="sm"
-            className="self-start"
-            onClick={() => void navigator.clipboard?.writeText(text).then(() => toast("Copied."))}
-          >
-            Copy
-          </Button>
-        </>
-      )}
-    </div>
-  );
-}
-
 /**
- * For an appliance that doesn't report its power (a Hisense washer or dryer): showing what its runs usually draw while
- * it runs, once enough runs have finished with their energy.
- */
-function Estimate({ device }: { device: HomeDevice }) {
-  const { update } = useHomeChange();
-  const e = device.estimate!;
-  const runs = (n: number) => `${n} ${n === 1 ? "run" : "runs"}`;
-  return (
-    <div className="flex basis-full flex-col gap-1.5 pl-[60px] max-sm:pl-0">
-      <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-        <Switch
-          on={e.on}
-          label="Estimate its power while it runs"
-          disabled={update.isPending}
-          onChange={(on) => update.mutate({ id: device.id, estimate: on })}
-        />
-        Estimate its power while it runs
-      </label>
-      <HelpText>
-        {e.w != null
-          ? `It only says what a run used once it's finished. With this on, while it runs it shows what its runs usually draw: about ${kW(e.w)}, from its last ${runs(e.runs)}. That's only shown: what's counted is still what it reports at the end.`
-          : `It only says what a run used once it's finished. Once ${runs(e.needs)} have finished with their energy (${e.runs} so far), this can show what its runs usually draw while it runs.`}
-      </HelpText>
-    </div>
-  );
-}
-
-/**
- * A device the account brought: rename it, say what it is, put it in a group, keep it out of the breakdown, estimate
- * its power while it runs (an appliance that doesn't report it), see what it sends.
- */
-function DeviceRow({
-  device,
-  kinds,
-  groups,
-}: {
-  device: HomeDevice;
-  kinds: HomeOverview["kinds"];
-  groups: Map<string, number>;
-}) {
-  const { update } = useHomeChange();
-  const [name, setName] = useState(device.name);
-  const [raw, setRaw] = useState(false);
-  const now = nowLine(device);
-  const save = () => name.trim() && name.trim() !== device.name && update.mutate({ id: device.id, name: name.trim() });
-  return (
-    <div className="flex flex-wrap items-center gap-4 border-b border-line-subtle px-6 py-5 last:border-b-0">
-      <span className="flex size-11 flex-none items-center justify-center rounded-full bg-canvas text-ink">
-        <Icon name={kindIcon(device.kind)} size={22} />
-      </span>
-      <div className="flex min-w-[220px] flex-1 flex-col gap-1">
-        <Input
-          aria-label="Name"
-          value={name}
-          maxLength={60}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={save}
-          onKeyDown={(e) => e.key === "Enter" && (e.currentTarget.blur(), save())}
-          boxClassName="h-9 max-w-[320px]"
-        />
-        <span className="text-[13px] text-ink-muted">{[device.model, now.text].filter(Boolean).join(" · ")}</span>
-      </div>
-      <Select
-        aria-label="What it is"
-        className="w-[190px]"
-        value={device.kind}
-        disabled={update.isPending}
-        onChange={(e) => update.mutate({ id: device.id, kind: e.target.value })}
-      >
-        {kinds.map((k) => (
-          <option key={k.id} value={k.id}>
-            {k.label}
-          </option>
-        ))}
-      </Select>
-      <GroupInput
-        key={device.group ?? ""}
-        className="w-[190px]"
-        value={device.group}
-        groups={groups}
-        suggestion={suggestedGroup(device.name)}
-        disabled={update.isPending}
-        onChange={(group) => update.mutate({ id: device.id, group })}
-      />
-      <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-        <Switch
-          on={!device.hidden}
-          label="Show in the breakdown"
-          disabled={update.isPending}
-          onChange={(on) => update.mutate({ id: device.id, hidden: !on })}
-        />
-        In the breakdown
-      </label>
-      <Button variant="icon" size="sm" title="What it sends" aria-pressed={raw} onClick={() => setRaw(!raw)}>
-        <Icon name="code" size={16} />
-      </Button>
-      {device.estimate && <Estimate device={device} />}
-      {update.isError && (
-        <div className="basis-full pl-[60px] max-sm:pl-0">
-          <HelpText tone="bad">{errorMessage(update.error)}</HelpText>
-        </div>
-      )}
-      {raw && <Properties device={device} />}
-    </div>
-  );
-}
-
-/**
- * Manage → Integrations → a smart-home integration (Tapo, Shelly, Home Assistant, Hisense through ConnectLife, Bluetti,
- * EcoFlow; the demo in mock mode): connect
- * its account, and the devices it brought.
+ * Manage → Integrations → Smart home → a brand (Tapo, Shelly, Home Assistant, Hisense through ConnectLife, Electrolux,
+ * Bluetti, EcoFlow; the demo in mock mode): connecting its account, how it's going, and the devices it brought, each
+ * opening to its own page.
  */
 export function HomeIntegrationSettings({ id }: { id: string }) {
   const { data, isPending, error } = useQuery(homeQuery);
   const integration = data?.integrations.find((i) => i.id === id);
   const devices = (data?.devices ?? []).filter((d) => d.integration === id);
-  const groups = groupNames(data?.devices ?? []); // a group can hold devices from any integration
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/integrations">Integrations</BackLink>}
+        back={<BackLink to="/integrations/home">Smart home</BackLink>}
         id="h-home-integration"
         title={integration ? `${integration.name}` : "Smart home"}
         sub={integration?.about ?? ""}
@@ -423,15 +272,43 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
           title="Devices"
           sub={
             devices.length
-              ? "Name each one, and say what it is: a smart plug can be set as the appliance it powers, so its runs are recorded. Put plugs in the same room in a group, and the Home page shows them as one. Turn one out of the breakdown to leave it off the Home page."
+              ? "Open one to name it, say what it is (a smart plug as the appliance it powers), put it in a group, or leave it out of the breakdown."
               : "Its devices appear here after the first reading, within a minute or so."
           }
         >
           {devices.length > 0 && (
             <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
-              {devices.map((d) => (
-                <DeviceRow key={d.id} device={d} kinds={data.kinds} groups={groups} />
-              ))}
+              {devices.map((d) => {
+                const now = nowLine(d);
+                const live = !!d.now && d.now.online && !d.now.stale;
+                return (
+                  <IntegrationLink
+                    key={d.id}
+                    to="/integrations/home/$integration/$device"
+                    params={{ integration: id, device: String(d.id) }}
+                    icon={kindIcon(d.kind)}
+                    name={d.name}
+                    status={
+                      now.running
+                        ? "Running"
+                        : live
+                          ? undefined
+                          : d.now
+                            ? d.now.online
+                              ? "Not read"
+                              : "Offline"
+                            : "Waiting"
+                    }
+                    on={now.running}
+                    detail={[data.kinds.find((k) => k.id === d.kind)?.label, d.group && `in ${d.group}`, now.text]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    tags={
+                      d.hidden ? <span className="text-xs text-ink-faint">Left out of the breakdown</span> : undefined
+                    }
+                  />
+                );
+              })}
             </div>
           )}
         </SettingsSection>
