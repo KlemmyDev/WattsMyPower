@@ -11,8 +11,8 @@ export function Payback() {
   const { data: p } = useQuery(paybackQuery);
   if (!p) return null;
   const settings = (
-    <Link to="/system" className="text-link">
-      Manage → System
+    <Link to="/system/cost" className="text-link">
+      Manage → System → Cost and warranty
     </Link>
   );
   return (
