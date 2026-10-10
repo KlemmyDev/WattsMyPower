@@ -362,6 +362,13 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
                 finished, not their power as they run.
               </Notice>
             )}
+            {integration.id === "electrolux" && (
+              <Notice tone="info">
+                Electrolux, AEG and +home appliances only talk to Electrolux's cloud (there's no way to reach them on
+                your network), so this needs the internet. It only reads them. They don't report their power: a fridge
+                shows its temperatures, doors and alerts, and the rest show when they run.
+              </Notice>
+            )}
             <SignInForm integration={integration} />
           </div>
         )}

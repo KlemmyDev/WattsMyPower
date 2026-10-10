@@ -424,7 +424,10 @@ export function SpikesCard({
   );
 }
 
-/** What the device says about itself (its Wi-Fi signal, how long it's been on, its firmware), and when it was read. */
+/**
+ * What the device says about itself (its Wi-Fi signal, how long it's been on, its firmware), what else it reports now
+ * (a fridge's temperatures, doors and alerts), and when it was read.
+ */
 export function AboutCard({
   device,
   kindLabel,
@@ -434,7 +437,8 @@ export function AboutCard({
   kindLabel: string;
   className?: string;
 }) {
-  const info = Object.entries(device.now?.info ?? {});
+  // What it reports now first, then about itself; a label said by both is shown once.
+  const info = Object.entries({ ...device.now?.details, ...device.now?.info });
   const rows: [string, string][] = [
     ["What it is", kindLabel],
     ...(device.model ? ([["Model", device.model]] as [string, string][]) : []),

@@ -519,6 +519,7 @@ def test_home_through_the_api(client: TestClient) -> None:
         "tapo",
         "shelly",
         "connectlife",
+        "electrolux",
         "homeassistant",
         "bluetti",
         "ecoflow",
