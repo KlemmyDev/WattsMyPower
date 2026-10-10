@@ -16,6 +16,8 @@ import { houseOptions } from "~/features/overview/utils/house/options";
 import { HOUSE_STYLES, THUMB_FLOWS } from "~/features/settings/components/HouseSettings";
 import { SettingsGroup, SettingsRow } from "~/features/settings/components/SettingsList";
 import { updatesQuery } from "~/features/updates/api";
+import { ChannelDot } from "~/features/updates/components/ChannelBadge";
+import { CHANNEL } from "~/features/updates/utils";
 
 const join = (parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" · ");
 
@@ -106,14 +108,28 @@ function UpdatesRow() {
   const { data: u } = useQuery(updatesQuery);
   const app = useLive()?.app;
   const version = u?.current.version ?? app?.version;
-  const channel = u ? `${u.channel.charAt(0).toUpperCase()}${u.channel.slice(1)} channel` : null;
+  const channel = u && (
+    <span className="inline-flex items-center gap-1.5">
+      <ChannelDot channel={u.channel} />
+      {CHANNEL[u.channel].label} channel
+    </span>
+  );
   return (
     <SettingsRow
       to="/system/updates"
       icon="download"
       color={COLOR.export}
       label="Updates"
-      detail={join([version && `v${version}`, channel]) || "The version you're running"}
+      detail={
+        version ? (
+          <>
+            v{version}
+            {channel && <> · {channel}</>}
+          </>
+        ) : (
+          "The version you're running"
+        )
+      }
       aside={
         u?.available ? (
           <Pill tone="brand" size="sm">
