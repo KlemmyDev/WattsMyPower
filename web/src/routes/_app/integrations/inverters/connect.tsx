@@ -1,15 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { InverterConnect } from "~/features/integrations/components/InverterConnect";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { brandSlug } from "~/features/integrations/utils";
 
-/** `brand` (from Add an integration) picks which brand's inverters the address form offers first. */
+/** Connecting had one page for every brand: each brand has its own now (/integrations/inverters/connect?brand=GoodWe →
+ * /integrations/inverters/goodwe/connect); without a brand, it's choosing one. */
 export const Route = createFileRoute("/_app/integrations/inverters/connect")({
-  validateSearch: (search: Record<string, unknown>): { brand?: string } =>
-    typeof search.brand === "string" && search.brand ? { brand: search.brand } : {},
-  head: () => ({ meta: [{ title: "Connect an inverter · Integrations · WattsMyPower" }] }),
-  component: ConnectPage,
+  beforeLoad: ({ search }) => {
+    const brand = (search as Record<string, unknown>).brand;
+    throw typeof brand === "string" && brand
+      ? redirect({ to: "/integrations/inverters/$brand/connect", params: { brand: brandSlug(brand) }, replace: true })
+      : redirect({ to: "/integrations/inverters", replace: true });
+  },
 });
-
-function ConnectPage() {
-  const { brand } = Route.useSearch();
-  return <InverterConnect brand={brand} />;
-}
