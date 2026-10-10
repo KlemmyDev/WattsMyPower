@@ -328,8 +328,8 @@ def live(config: Config, db: Database, settings: SettingsStore) -> LiveService:
     return LiveService(config, settings, TariffStore(db, config))
 
 
-# 10:00 on a day in Brisbane: the sun's up at home.
-DAY = time.mktime((2026, 10, 7, 10, 0, 0, 0, 0, -1))
+# 10:00 on a day in Brisbane, wherever the tests run: the sun's up at home.
+DAY = datetime(2026, 10, 7, 10, tzinfo=ZoneInfo("Australia/Brisbane")).timestamp()
 
 
 def service(
@@ -609,7 +609,7 @@ def test_disconnecting_forgets_the_account_and_its_cars(
 
 
 def test_the_made_up_ioniq_charges_when_its_told() -> None:
-    t = [DAY]
+    t = [time.mktime((2026, 10, 7, 10, 0, 0, 0, 0, -1))]  # its day is in local time
     demo = mock.DemoBluelink(lambda: HOME, lambda: t[0])
     st = demo.read()[0]["state"]
     assert st["plugged"] and not st["charging"] and st["soc"] == round(mock.START_SOC)
