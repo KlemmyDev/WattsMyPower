@@ -19,9 +19,10 @@ router = APIRouter(prefix="/api")
 
 def name_location(svc: Services) -> dict[str, Any] | None:
     """Give the forecast location a place name if it doesn't have one yet (a network lookup)."""
-    if svc.settings.get_text("location_name"):
-        return None
-    name = svc.geocoder.reverse(svc.settings.get("latitude"), svc.settings.get("longitude"))
+    where = svc.settings.location()
+    if where is None or svc.settings.get_text("location_name"):
+        return None  # none chosen yet, or it's named
+    name = svc.geocoder.reverse(*where)
     return svc.settings.save({"location_name": name}) if name else None
 
 
@@ -34,7 +35,7 @@ async def get_settings(svc: ServicesDep):
 async def put_settings(svc: ServicesDep, changes: JsonBody):
     """Save the forecast location (and its place name), billing period or system details. Only known keys are accepted."""
     moved = ("latitude" in changes or "longitude" in changes) and "location_name" not in changes
-    before = (svc.settings.get("latitude"), svc.settings.get("longitude"))
+    before = svc.settings.location()
     if moved:
         changes = {**changes, "location_name": None}  # the old name no longer applies
     try:
@@ -45,8 +46,10 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
         svc.live.publish()
     if WEATHER & changes.keys():  # fetch for the new place or model, and retrain for new panels
         svc.weather.invalidate()
-        after = (svc.settings.get("latitude"), svc.settings.get("longitude"))
-        if any(abs(a - b) > 0.01 for a, b in zip(before, after, strict=True)):
+        after = svc.settings.location()
+        if before is None and after is not None:
+            svc.weather.request_backfill()  # the location's been chosen: fill in the weather for days past
+        elif before and after and any(abs(a - b) > 0.01 for a, b in zip(before, after, strict=True)):
             svc.weather.request_backfill(refetch=True)  # the weather stored for days past was another place's
         else:
             svc.weather.wake()

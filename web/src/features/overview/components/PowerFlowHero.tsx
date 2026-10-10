@@ -19,12 +19,14 @@ import type { Forecast, ForecastHour, WeatherTiming } from "~/features/common/we
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { clock, duration, hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import { hourOf } from "~/features/common/time/utils";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { batteryState, batteryTone, gridVerb, ON } from "~/features/common/energy/utils";
 import { historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { ModeBadge } from "~/features/battery/components/ModeBadge";
+import { noBattery } from "~/features/battery/utils";
 import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number";
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import {
@@ -303,7 +305,7 @@ const AHEAD = 4;
 const MODEL_NAMES: Record<string, string> = { ecmwf_ifs025: "ECMWF", gfs_seamless: "GFS", icon_seamless: "ICON" };
 
 /** An hour's label, short: "15:00", or "3pm". */
-const shortHour = (ts: number) => hourLabel(new Date(ts * 1000).getHours()).replace(" ", "");
+const shortHour = (ts: number) => hourLabel(hourOf(ts)).replace(" ", "");
 
 /**
  * The hours ahead, a column each: the hour, its weather, the temperature, the chance of rain when it's worth a mention,
@@ -573,6 +575,7 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
   const parts = (w: number | null | undefined) => (w == null ? [DASH, "kW"] : powerParts(w));
   const [pv, grid, use] = [parts(tween.pv), parts(tween.g), parts(tween.l)];
   const st = batteryState(b);
+  const solarOnly = noBattery(s); // no battery card: solar and the grid share the row
   const devices = home?.devices ?? [];
   const carW = useHomeCharging();
   const split = liveBreakdown(devices, l, { carW });
@@ -618,7 +621,7 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
       <div className="flex w-[212px] flex-col gap-2 max-2xl:contents 2xl:pointer-events-auto">
         {/* on phones, where the drawing has no heading to put it under */}
         <Timing ts={p.ts} className="justify-between px-1.5 text-ink-muted md:hidden" />
-        <div className="grid grid-cols-3 gap-2 max-2xl:order-last 2xl:grid-cols-1">
+        <div className={cn("grid gap-2 max-2xl:order-last 2xl:grid-cols-1", solarOnly ? "grid-cols-2" : "grid-cols-3")}>
           <Cell
             {...cell}
             i={0}
@@ -661,44 +664,46 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
             v={grid[0]}
             unit={grid[1]}
           />
-          <Cell
-            {...cell}
-            i={2}
-            to="/battery"
-            go="Battery"
-            tint={batColor}
-            spark={spark("battery_soc", COLOR.battery, p.battery_soc, [0, 100], {
-              field: "battery_power",
-              live: b,
-              color: batteryTone,
-            })}
-            icon={
-              // the Battery card's ring, small: drawn in, easing to each reading, with its streak while power moves
-              <>
-                <BatteryArc frac={soc} st={st} size={ARC_SMALL} />
-                <Icon
-                  key={st === "discharge" ? "out" : "in"}
-                  name={st === "discharge" ? "batteryDraining" : "battery"}
-                  size={15}
-                  className="relative animate-fade transition-colors duration-500"
-                  style={{ color: batColor }}
-                />
-                <ModeBadge now={now} ring="var(--tile)" />
-              </>
-            }
-            iconClassName="relative"
-            iconStyle={{}}
-            k="Battery"
-            v={String(Math.round(p.battery_soc ?? 0))}
-            unit="%"
-            // in the corner, so the card's no taller than the others; the Battery card just below shows the rate, so
-            // phones (three cells across) drop it
-            corner={
-              st === "charge" || st === "discharge" ? (
-                <BatteryPower st={st} w={tween.b} className="max-md:hidden" />
-              ) : null
-            }
-          />
+          {!solarOnly && (
+            <Cell
+              {...cell}
+              i={2}
+              to="/battery"
+              go="Battery"
+              tint={batColor}
+              spark={spark("battery_soc", COLOR.battery, p.battery_soc, [0, 100], {
+                field: "battery_power",
+                live: b,
+                color: batteryTone,
+              })}
+              icon={
+                // the Battery card's ring, small: drawn in, easing to each reading, with its streak while power moves
+                <>
+                  <BatteryArc frac={soc} st={st} size={ARC_SMALL} />
+                  <Icon
+                    key={st === "discharge" ? "out" : "in"}
+                    name={st === "discharge" ? "batteryDraining" : "battery"}
+                    size={15}
+                    className="relative animate-fade transition-colors duration-500"
+                    style={{ color: batColor }}
+                  />
+                  <ModeBadge now={now} ring="var(--tile)" />
+                </>
+              }
+              iconClassName="relative"
+              iconStyle={{}}
+              k="Battery"
+              v={String(Math.round(p.battery_soc ?? 0))}
+              unit="%"
+              // in the corner, so the card's no taller than the others; the Battery card just below shows the rate, so
+              // phones (three cells across) drop it
+              corner={
+                st === "charge" || st === "discharge" ? (
+                  <BatteryPower st={st} w={tween.b} className="max-md:hidden" />
+                ) : null
+              }
+            />
+          )}
         </div>
       </div>
       <Cell

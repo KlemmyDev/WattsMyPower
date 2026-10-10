@@ -311,6 +311,11 @@ wait_and_report() {
   if [ "$ok" = 1 ]; then
     local port; port="$(get_env PORT)"
     say "WattsMyPower is running: http://${ip:-localhost}:${port:-8080}"
+    # Until the account's made, creating it needs the one-time code the dashboard keeps in data/setup-code.
+    local code; code="$($DOCKER exec "$APP" cat /data/setup-code 2>/dev/null | tr -d '[:space:]' || true)"
+    if [ -n "$code" ]; then
+      info "Set-up code: $code (the dashboard asks for it once, to create its account)"
+    fi
     info "New install? Connect your inverter there: Manage → Integrations finds it on your network."
     if [ "$OS" = mac ]; then
       info "It only records while Docker Desktop is running: keep 'Start Docker Desktop when you sign in to your computer'"

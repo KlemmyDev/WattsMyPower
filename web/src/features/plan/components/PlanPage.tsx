@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { useAmberPrices } from "~/features/amber/hooks";
 import { costsQuery, historyQuery } from "~/features/common/readings/api";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
+import { useLocationSet } from "~/features/common/settings/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card, Footnote, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -33,6 +35,7 @@ const FIELDS = ["pv_power", "load_power", "grid_power", "battery_soc", "battery_
 export function PlanPage({ day: selected = 0 }: { day?: number }) {
   const forecast = useForecast();
   const accuracy = useForecastAccuracy();
+  const located = useLocationSet();
   const snapshot = useSnapshot();
   const system = useSystem();
   const now = useNow();
@@ -89,8 +92,12 @@ export function PlanPage({ day: selected = 0 }: { day?: number }) {
   return (
     <>
       <PageHeader title="Plan" sub="What today and the next two days should bring, and the best times to use power" />
-      <LocationChip />
-      {forecast === null ? (
+      {located !== false && <LocationChip />}
+      {located === false ? (
+        <LocationPrompt>
+          The outlook comes from the weather where your panels are, so it needs your location.
+        </LocationPrompt>
+      ) : forecast === null ? (
         <Card>
           <div className="text-sm text-ink-faint">
             Forecast unavailable. The server could not reach the Open-Meteo weather service, or the forecast is turned

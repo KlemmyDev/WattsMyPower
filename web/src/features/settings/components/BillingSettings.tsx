@@ -7,6 +7,7 @@ import { Segmented } from "~/features/common/ui/components/Segmented";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { ChoiceTiles } from "~/features/settings/components/SettingsSection";
 import { dayMonth } from "~/features/common/formatting/utils/date";
+import { addDays, nowS, partsOf, siteTime } from "~/features/common/time/utils";
 import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
 
 const FREQUENCIES = [
@@ -14,8 +15,6 @@ const FREQUENCIES = [
   { value: "2", title: "Every 2 months", sub: "6 bills a year", icon: "calendar" as const },
   { value: "3", title: "Quarterly", sub: "4 bills a year", icon: "calendar" as const },
 ];
-
-const dm = (d: Date) => dayMonth(d.getTime() / 1000);
 
 /** Bills → Rates & settings: how often bills come and when a period starts, so estimates line up with the retailer's. */
 export function BillingSettings() {
@@ -40,14 +39,16 @@ export function BillingFields() {
   const day = pending?.bill_day ?? s?.bill_day ?? 1;
   const anchor = pending?.bill_anchor ?? s?.bill_anchor ?? 1;
 
-  const today = new Date();
-  const start = periodStart(today, months, day, anchor);
-  const next = new Date(start.getFullYear(), start.getMonth() + months, day);
-  const last = new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1);
-  const length = Math.round((next.getTime() - start.getTime()) / 86_400_000);
+  const now = nowS();
+  const today = partsOf(now);
+  const start = periodStart(now, months, day, anchor);
+  const from = partsOf(start);
+  const next = siteTime(from.year, from.month + months, day);
+  const last = addDays(next, -1);
+  const length = Math.round((next - start) / 86_400);
   // When a bill covers more than a month, the dates alone don't say which month a period starts in.
-  const base = today.getMonth() - (today.getDate() < day ? 1 : 0);
-  const starts = Array.from({ length: months }, (_, k) => new Date(today.getFullYear(), base - k, day)).reverse();
+  const base = today.month - (today.day < day ? 1 : 0);
+  const starts = Array.from({ length: months }, (_, k) => siteTime(today.year, base - k, day)).reverse();
 
   return (
     <>
@@ -60,7 +61,7 @@ export function BillingFields() {
           color={COLOR.good}
           options={FREQUENCIES}
           value={String(months)}
-          onChange={(v) => save.mutate({ bill_months: Number(v), bill_anchor: start.getMonth() + 1 })}
+          onChange={(v) => save.mutate({ bill_months: Number(v), bill_anchor: from.month })}
         />
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-5">
@@ -82,8 +83,11 @@ export function BillingFields() {
             <span className="text-[13px] font-semibold">Current period started on</span>
             <Segmented
               label="Current period started on"
-              options={starts.map((d) => ({ value: String(d.getMonth() + 1), label: `${dm(d)} ${d.getFullYear()}` }))}
-              value={String(start.getMonth() + 1)}
+              options={starts.map((d) => {
+                const { month, year } = partsOf(d);
+                return { value: String(month), label: `${dayMonth(d)} ${year}` };
+              })}
+              value={String(from.month)}
               onChange={(v) => save.mutate({ bill_anchor: Number(v) })}
               className="w-fit max-w-full max-sm:w-full"
               buttonClassName="tabular-nums max-sm:flex-1 max-sm:justify-center max-sm:px-2"
@@ -93,8 +97,8 @@ export function BillingFields() {
         )}
       </div>
       <div className="rounded-2xl bg-canvas/60 px-5 py-4 text-sm leading-[22px] text-pretty text-ink-muted light:bg-canvas">
-        Your current billing period is {dm(start)} to {dm(last)} ({length} days). The next one starts on {dm(next)}.
-        Bill estimates across the app use these dates.
+        Your current billing period is {dayMonth(start)} to {dayMonth(last)} ({length} days). The next one starts on{" "}
+        {dayMonth(next)}. Bill estimates across the app use these dates.
       </div>
       {save.isError && <HelpText tone="bad">{saveSettingsError(save.error)}</HelpText>}
     </>

@@ -4,7 +4,7 @@ import { duration, hhmm, shortDay } from "~/features/common/formatting/utils/dat
 import { kW, kWh, money } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { alpha } from "~/features/common/theme/utils/colors";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, midnight, mondayFirst, partsOf } from "~/features/common/time/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -33,7 +33,7 @@ const NARROW = "col-span-5 max-xl:col-span-12";
 /** Monday 00:00 of the week `ts` is in. */
 function weekStart(ts: number) {
   const day = midnight(ts);
-  return addDays(day, -((new Date(day * 1000).getDay() + 6) % 7));
+  return addDays(day, -mondayFirst(day));
 }
 
 /** Bars, oldest first, the last one (the one still going) drawn in full colour, with a label under each. */
@@ -225,9 +225,7 @@ export function DevicePage({ id }: { id: number }) {
           {usage.data ? (
             <Bars
               values={byDay.map((d) => d.kwh)}
-              labels={byDay.map((d, i) =>
-                i % 5 === 4 || i === byDay.length - 1 ? String(new Date(d.t * 1000).getDate()) : "",
-              )}
+              labels={byDay.map((d, i) => (i % 5 === 4 || i === byDay.length - 1 ? String(partsOf(d.t).day) : ""))}
               color={color}
               title="What it used each day"
             />

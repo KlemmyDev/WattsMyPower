@@ -10,7 +10,9 @@ import hmac
 import ipaddress
 import json
 import logging
+import os
 import re
+import socket
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any, cast
@@ -136,6 +138,26 @@ def _device_from(role: str, body: dict[str, Any]) -> DeviceConfig:
     return DeviceConfig(role, driver, host, port, unit, settings)
 
 
+def _local_host(host: str, port: int) -> None:
+    """Refuse (HTTPException 422) a host that isn't on the local network: a private, link-local or loopback address,
+    or a name every address of which is one. Blocks while a name is looked up."""
+    try:
+        addresses = {ipaddress.ip_address(host)}
+    except ValueError:
+        try:
+            found = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+        except (OSError, UnicodeError):
+            raise HTTPException(422, f"Couldn't find {host} on the network. Enter the inverter's IP address.") from None
+        addresses = {ipaddress.ip_address(str(info[4][0]).split("%")[0]) for info in found}
+    local = all(a.is_private or a.is_link_local or a.is_loopback for a in addresses)
+    if not addresses or not local:
+        raise HTTPException(
+            422,
+            f"{host} isn't on your home network. Enter the inverter's local IP address, e.g. 192.168.1.20 "
+            "(or set COLLECTOR_ALLOW_PUBLIC_HOSTS=true on the collector to allow any address).",
+        )
+
+
 @router.get("/devices")
 async def list_devices(request: Request) -> dict[str, Any]:
     """The connected devices, and the drivers that can read them (driver id -> role)."""
@@ -150,6 +172,9 @@ async def put_device(request: Request, role: str, body: Annotated[dict[str, Any]
     false, it must answer its driver's probe first; what that read comes back as `input`."""
     store: Store = request.app.state.store
     device = _device_from(role, body)
+    config: Config = request.app.state.config
+    if not (config.allow_public_hosts or config.mock):  # mock mode connects to made-up hosts
+        await asyncio.to_thread(_local_host, device.host, device.port)
     current = next((d for d in await asyncio.to_thread(store.devices) if d.role == role), None)
     same = current is not None and (current.driver, current.host, current.port, current.unit) == (
         device.driver, device.host, device.port, device.unit,
@@ -345,6 +370,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        await asyncio.to_thread(store.keep_private)
         await asyncio.to_thread(store.migrate)
         if await asyncio.to_thread(store.seed_devices, env_devices(config)):
             seeded = await asyncio.to_thread(store.devices)
@@ -376,6 +402,8 @@ def create_app(
     return app
 
 
+# Files the collector creates (its database) are readable by its own user only.
+os.umask(0o077)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 try:
     app = create_app()

@@ -29,6 +29,8 @@ services:
       POLL_INTERVAL: ${POLL_INTERVAL:-60}
       COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-365}
       COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:?COLLECTOR_TOKEN is not set; run bash install.sh}
+      # Inverters connected in the dashboard must be on the local network unless this is true.
+      COLLECTOR_ALLOW_PUBLIC_HOSTS: ${COLLECTOR_ALLOW_PUBLIC_HOSTS:-false}
       # Where days roll over. Unset, it's Brisbane, and the log says to set it (TZ_CHOSEN: docker-entrypoint.sh).
       TZ: ${TZ:-Australia/Brisbane}
       TZ_CHOSEN: ${TZ:-}
@@ -78,9 +80,12 @@ services:
       IMPORT_RATE: ${IMPORT_RATE:-0.32}
       FEED_IN_RATE: ${FEED_IN_RATE:-0.05}
       SUPPLY_CHARGE: ${SUPPLY_CHARGE:-1.05}
-      LATITUDE: ${LATITUDE:--27.47}
-      LONGITUDE: ${LONGITUDE:-153.03}
+      LATITUDE: ${LATITUDE:-}
+      LONGITUDE: ${LONGITUDE:-}
       AUTH: ${AUTH:-true}
+      # Behind a reverse proxy: its address, so sign-in sees each browser's address rather than the proxy's.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      API_DOCS: ${API_DOCS:-false}
     logging:
       driver: json-file
       options:

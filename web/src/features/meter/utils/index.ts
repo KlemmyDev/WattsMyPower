@@ -1,4 +1,5 @@
-import { dayMonth, parseYmd } from "~/features/common/formatting/utils/date";
+import { dayMonth } from "~/features/common/formatting/utils/date";
+import { fromDateKey, partsOf, sameDay } from "~/features/common/time/utils";
 import { intAU, plural } from "~/features/common/formatting/utils/number";
 import type { MeterChannel } from "~/features/meter/types";
 
@@ -7,15 +8,13 @@ export const intervalName = (minutes: number) =>
   minutes === 30 ? "half-hourly" : minutes === 5 ? "five-minute" : `${minutes}-minute`;
 
 /** "1 Jul to 30 Sep 2026", or "28 Dec 2025 to 3 Jan 2026" across a new year. */
-export function dateSpan(first: Date, last: Date): string {
-  const label = (d: Date) => dayMonth(d.getTime() / 1000);
-  if (first.toDateString() === last.toDateString()) return `${label(first)} ${first.getFullYear()}`;
-  return first.getFullYear() === last.getFullYear()
-    ? `${label(first)} to ${label(last)} ${last.getFullYear()}`
-    : `${label(first)} ${first.getFullYear()} to ${label(last)} ${last.getFullYear()}`;
+export function dateSpan(first: number, last: number): string {
+  const [a, b] = [partsOf(first).year, partsOf(last).year];
+  if (sameDay(first, last)) return `${dayMonth(first)} ${a}`;
+  return a === b ? `${dayMonth(first)} to ${dayMonth(last)} ${b}` : `${dayMonth(first)} ${a} to ${dayMonth(last)} ${b}`;
 }
 
-export const ymdSpan = (first: string, last: string) => dateSpan(parseYmd(first), parseYmd(last));
+export const ymdSpan = (first: string, last: string) => dateSpan(fromDateKey(first), fromDateKey(last));
 
 /** How the dashboard's figure compares with the meter's: "4% less than your meter", "within 2% of your meter". */
 export function versusMeter(dashboard: number, meter: number): string {

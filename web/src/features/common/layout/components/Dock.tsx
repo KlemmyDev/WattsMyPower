@@ -7,7 +7,7 @@ import { kW } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import { ModeBadge } from "~/features/battery/components/ModeBadge";
-import { useBatteryMode } from "~/features/battery/hooks";
+import { useBatteryMode, useNoBattery } from "~/features/battery/hooks";
 import { describeMode } from "~/features/battery/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { cn } from "~/features/common/ui/utils";
@@ -16,6 +16,7 @@ import { cn } from "~/features/common/ui/utils";
 function usePowerNow() {
   const p = useSnapshot();
   const batMode = useBatteryMode();
+  const none = useNoBattery();
   const now = useNow(30_000);
   // The figures glide to each minute's reading (hooks before the early return).
   const t = {
@@ -35,8 +36,13 @@ function usePowerNow() {
   const mode = batMode ? describeMode(batMode, now) : null;
   const special = mode?.special ? mode : null;
   const moving = st === "charge" || st === "discharge";
+  const bat = none
+    ? ""
+    : `, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}${special ? `, ${special.label}${special.detail ? ` ${special.detail}` : ""}` : ""}`;
   return {
     now,
+    /** Whether to show the battery: not on a system known to have none (solar only). */
+    hasBattery: !none,
     pv,
     g,
     soc,
@@ -49,7 +55,7 @@ function usePowerNow() {
     battery: moving ? kW(t.b) : special?.label === "Standby" ? "Standby" : "Idle",
     arrow: st === "charge" ? "↑ " : st === "discharge" ? "↓ " : "",
     batColor: st === "charge" ? COLOR.batterySoft : st === "discharge" ? COLOR.warn : alpha(COLOR.fg, 0.75),
-    label: `Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}, battery ${Math.round(soc)}% ${batVerb.toLowerCase()}${special ? `, ${special.label}${special.detail ? ` ${special.detail}` : ""}` : ""}. Open overview.`,
+    label: `Power flow now: solar ${kW(pv)}, home ${kW(l)}, ${verb.toLowerCase()} ${kW(g)}${bat}. Open overview.`,
   };
 }
 
@@ -89,23 +95,27 @@ export function Dock() {
           className="w-3.5 max-xs:w-2.5"
         />
         <DockItem icon="grid" color={COLOR.gridSoft} v={f.grid} />
-        <span aria-hidden className="h-4 w-px flex-none bg-fg/10" />
-        <span className="flex items-center gap-2 max-xs:gap-[5px]">
-          <SocRing
-            ring={f.ring}
-            now={f.now}
-            behind="var(--color-dock)"
-            className="size-6 max-xs:size-[22px]"
-            inner="size-[19px] max-xs:size-[17px]"
-          />
-          <span
-            className="text-xs font-semibold tracking-[-0.2px] tabular-nums max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
-            style={{ color: f.batColor }}
-          >
-            {f.arrow}
-            {f.battery}
-          </span>
-        </span>
+        {f.hasBattery && (
+          <>
+            <span aria-hidden className="h-4 w-px flex-none bg-fg/10" />
+            <span className="flex items-center gap-2 max-xs:gap-[5px]">
+              <SocRing
+                ring={f.ring}
+                now={f.now}
+                behind="var(--color-dock)"
+                className="size-6 max-xs:size-[22px]"
+                inner="size-[19px] max-xs:size-[17px]"
+              />
+              <span
+                className="text-xs font-semibold tracking-[-0.2px] tabular-nums max-xs:text-[11.5px] max-xs:tracking-[-0.3px]"
+                style={{ color: f.batColor }}
+              >
+                {f.arrow}
+                {f.battery}
+              </span>
+            </span>
+          </>
+        )}
       </Link>
     </div>
   );
@@ -113,7 +123,7 @@ export function Dock() {
 
 /**
  * The same power flow, always at the foot of the side nav, opening Overview. In full, solar → home ← grid on a
- * row, with the battery under them; on the rail, a column of each reading under its icon.
+ * row, with the battery (if there is one) under them; on the rail, a column of each reading under its icon.
  */
 export function NavPower({ full }: { full: boolean }) {
   const f = usePowerNow();
@@ -134,10 +144,12 @@ export function NavPower({ full }: { full: boolean }) {
         <RailItem icon="sun" color={COLOR.solar} v={f.solar} />
         <RailItem icon="home" color={COLOR.ink} v={f.home} />
         <RailItem icon="grid" color={COLOR.gridSoft} v={f.grid} />
-        <span className="flex flex-col items-center gap-1">
-          <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
-          <span className="text-[10.5px] font-semibold tabular-nums">{Math.round(f.soc)}%</span>
-        </span>
+        {f.hasBattery && (
+          <span className="flex flex-col items-center gap-1">
+            <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
+            <span className="text-[10.5px] font-semibold tabular-nums">{Math.round(f.soc)}%</span>
+          </span>
+        )}
       </Link>
     );
   return (
@@ -160,17 +172,19 @@ export function NavPower({ full }: { full: boolean }) {
         {/* "Importing" and "Exporting" are too wide for the column; the dot shows which way it goes. */}
         <FlowItem icon="grid" color={COLOR.gridSoft} k={f.verb.replace(/ing$/, "")} v={f.grid} />
       </span>
-      <span className="flex items-center gap-2 border-t border-fg/6 px-0.5 pt-2">
-        <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
-        <span className="text-[12.5px] font-medium text-ink-soft">Battery {Math.round(f.soc)}%</span>
-        <span
-          className="ml-auto text-[12.5px] font-semibold tracking-[-0.2px] tabular-nums"
-          style={{ color: f.batColor }}
-        >
-          {f.arrow}
-          {f.battery}
+      {f.hasBattery && (
+        <span className="flex items-center gap-2 border-t border-fg/6 px-0.5 pt-2">
+          <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
+          <span className="text-[12.5px] font-medium text-ink-soft">Battery {Math.round(f.soc)}%</span>
+          <span
+            className="ml-auto text-[12.5px] font-semibold tracking-[-0.2px] tabular-nums"
+            style={{ color: f.batColor }}
+          >
+            {f.arrow}
+            {f.battery}
+          </span>
         </span>
-      </span>
+      )}
     </Link>
   );
 }

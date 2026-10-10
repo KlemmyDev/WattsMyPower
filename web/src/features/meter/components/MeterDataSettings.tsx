@@ -111,7 +111,7 @@ function ImportRow({ item }: { item: MeterImport }) {
       meterChanged(qc);
     },
   });
-  const span = dateSpan(new Date(item.start * 1000), new Date((item.end - 1) * 1000));
+  const span = dateSpan(item.start, item.end - 1);
 
   return (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-3 ${ROW}`}>

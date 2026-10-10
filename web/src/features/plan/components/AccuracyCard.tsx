@@ -5,6 +5,7 @@ import { Card, CardHeader, Eyebrow, Muted } from "~/features/common/ui/component
 import { parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, plural } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { partsOf } from "~/features/common/time/utils";
 import { cn } from "~/features/common/ui/utils";
 
 const SHOWN = 14; // days in the chart
@@ -275,7 +276,7 @@ function Chart({
               key={d.date}
               className={cn("min-w-0 flex-1 text-center", d.date === shown?.date && "font-semibold text-ink")}
             >
-              {parseYmd(d.date).getDate()}
+              {partsOf(parseYmd(d.date)).day}
             </span>
           ))}
         </div>

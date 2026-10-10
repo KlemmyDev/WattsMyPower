@@ -4,6 +4,7 @@ reached. Every request to Tessie, and the radio, is faked."""
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import itertools
 import json
@@ -1766,6 +1767,25 @@ def test_failed_reads_are_spaced_out_even_while_the_car_is_followed_closely(ble:
     assert ble.status()["error"] is None and ble._retry_at == 0
     assert ble.status()["vehicles"][0]["hold"]  # (the command from the page put it on hold: read every five minutes)
     assert ble.status()["next_read"] - int(clock.t) <= POLL_IDLE
+
+
+def test_without_the_houses_location_the_car_is_still_read(
+    db: Database, config: Config, tessie: FakeTessie, radio: FakeRadio, live: FakeLive, clock: Clock
+) -> None:
+    """Before the location's chosen, a car's read and shown as ever; it just can't be told it's home from where it is."""
+    config = dataclasses.replace(config, latitude=None, longitude=None)
+    settings = SettingsStore(db, config)
+    settings.load()
+    svc = TeslaService(
+        config, db, live, CarService(db), settings,  # type: ignore[arg-type]
+        tessie=lambda _: tessie, radio=radio, clock=clock, spawn=lambda fn: fn(),  # type: ignore[arg-type]
+    )  # fmt: skip
+    status = connect(svc, "tessie")
+    assert status["home"] is None and status["error"] is None
+    assert status["vehicles"][0]["state"]["soc"] is not None
+    assert svc._states[VIN].at_home is None
+    clock.t = time.mktime((2026, 10, 10, 23, 0, 0, 0, 0, -1))
+    assert svc._night()  # the night's taken as 7 pm to 6 am
 
 
 def test_wakes_are_kept_as_long_as_levels(db: Database) -> None:

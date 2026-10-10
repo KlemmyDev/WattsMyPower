@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { ApiError, errorMessage } from "~/features/common/api/utils";
-import { hhmm, minutesLabel } from "~/features/common/formatting/utils/date";
+import { hhmm, minutesLabel, shortDay } from "~/features/common/formatting/utils/date";
+import { sameDay } from "~/features/common/time/utils";
 import { pct } from "~/features/common/formatting/utils/number";
 import { useNow } from "~/features/common/time/hooks";
 import { Button } from "~/features/common/ui/components/Button";
@@ -37,10 +38,8 @@ const UPDATE: Record<string, string> = {
 /** When a group was read, in a few words: "read 9:42", or a day and time when it's older than today. */
 function readAt(as_of: number | null, now: number): string {
   if (!as_of) return "Not read yet";
-  const today = new Date(now * 1000).toDateString() === new Date(as_of * 1000).toDateString();
-  return today
-    ? `Read ${hhmm(as_of)}`
-    : `Read ${new Date(as_of * 1000).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}, ${hhmm(as_of)}`;
+  const today = sameDay(now, as_of);
+  return today ? `Read ${hhmm(as_of)}` : `Read ${shortDay.format(as_of * 1000)}, ${hhmm(as_of)}`;
 }
 
 /** One group's card: its rows once it's been read, why not when the car won't share it, and when it was read. */

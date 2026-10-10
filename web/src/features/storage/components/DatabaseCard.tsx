@@ -1,34 +1,44 @@
 import { useId, useState, type ReactNode } from "react";
 import { hhmm, longDate } from "~/features/common/formatting/utils/date";
+import { nowS, sameDay } from "~/features/common/time/utils";
 import { intAU, plural } from "~/features/common/formatting/utils/number";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { cn } from "~/features/common/ui/utils";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { Card } from "~/features/common/ui/components/Card";
 import type { MeasuredDatabase, StorageDatabase, StorageGroup, StorageTable } from "~/features/storage/types";
 import { bytes, compact, share } from "~/features/storage/utils";
 
 /** "Today 14:05", or "3 July 2026". */
 function when(ts: number): string {
-  const d = new Date(ts * 1000);
-  return d.toDateString() === new Date().toDateString() ? `Today ${hhmm(ts)}` : longDate.format(d);
+  return sameDay(ts, nowS()) ? `Today ${hhmm(ts)}` : longDate.format(ts * 1000);
 }
 
 /** One database: where it is, what it's made of, then its tables by group, each opening to show everything known about it. */
 export function DatabaseCard({ db }: { db: StorageDatabase }) {
   const titleId = `h-db-${db.id}`;
+  const color = db.id === "collector" ? COLOR.teal : COLOR.battery;
   const head = (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line-subtle p-6 max-sm:p-5">
-      <div className="flex min-w-0 flex-1 items-start gap-4">
-        <div className="flex size-11 flex-none items-center justify-center rounded-full bg-canvas text-ink max-sm:hidden">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex min-w-[min(100%,18rem)] flex-1 items-center gap-4">
+        <span
+          className="flex size-12 flex-none items-center justify-center rounded-2xl"
+          style={{ background: alpha(color, 0.16), color }}
+        >
           <Icon name={db.id === "collector" ? "pulse" : "database"} size={22} />
+        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 id={titleId}>{db.name}</h2>
+          <span className="text-[13px] leading-5 text-pretty text-ink-muted">{db.about}</span>
         </div>
-        <SettingsTitle id={titleId} title={db.name} sub={db.about} />
       </div>
       {db.available && (
         <div className="flex flex-col items-end gap-0.5">
-          <span className="font-display text-2xl leading-none font-bold tabular-nums">{bytes(db.total_bytes)}</span>
+          <span className="text-[28px] leading-8 font-light tracking-[-0.6px] tabular-nums">
+            {bytes(db.total_bytes)}
+          </span>
           <span className="text-xs text-ink-muted">
             {intAU(db.rows)} {plural(db.rows, "row")}
           </span>
@@ -39,40 +49,36 @@ export function DatabaseCard({ db }: { db: StorageDatabase }) {
 
   if (!db.available)
     return (
-      <SettingsCard aria-labelledby={titleId}>
+      <Card aria-labelledby={titleId}>
         {head}
-        <div className="p-6 max-sm:p-5">
-          <Notice tone="warn">{db.error}</Notice>
-        </div>
-      </SettingsCard>
+        <Notice tone="warn">{db.error}</Notice>
+      </Card>
     );
 
   const used = db.groups.filter((g) => g.rows > 0 || g.id === "sqlite");
   const unused = db.groups.filter((g) => !used.includes(g));
   const measuredTotal = db.groups.reduce((s, g) => s + (g.bytes ?? 0), 0);
   return (
-    <SettingsCard aria-labelledby={titleId}>
+    <Card aria-labelledby={titleId}>
       {head}
-      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-line-subtle px-6 py-3 text-xs text-ink-muted max-sm:px-5">
-        <span className="font-mono break-all text-ink-body">{db.path}</span>
-        <span>SQLite {db.sqlite_version}</span>
-        <span>Schema version {db.schema_version}</span>
-        <span>{bytes(db.page_size)} pages</span>
-        <span>{db.journal_mode.toUpperCase()} journal</span>
+      <div className="flex flex-wrap gap-1.5 text-xs text-ink-muted">
+        <Chip mono>{db.path}</Chip>
+        <Chip>{`SQLite ${db.sqlite_version}`}</Chip>
+        <Chip>{`Schema version ${db.schema_version}`}</Chip>
+        <Chip>{`${bytes(db.page_size)} pages`}</Chip>
+        <Chip>{`${db.journal_mode.toUpperCase()} journal`}</Chip>
       </div>
       {!db.measured && (
-        <div className="border-b border-line-subtle px-6 py-4 max-sm:px-5">
-          <Notice tone="info">
-            This server's SQLite can't measure each table's size, so only row counts are shown. The file sizes below are
-            exact.
-          </Notice>
-        </div>
+        <Notice tone="info">
+          This server's SQLite can't measure each table's size, so only row counts are shown. The file sizes below are
+          exact.
+        </Notice>
       )}
       {used.map((g) => (
         <Group key={g.id} group={g} total={measuredTotal} />
       ))}
       {unused.length > 0 && (
-        <div className="border-b border-line-subtle px-6 py-4 text-[13px] leading-5 text-ink-muted max-sm:px-5">
+        <div className="px-1 text-[13px] leading-5 text-ink-muted">
           <span className="font-medium text-ink">Not in use yet: </span>
           {unused.map((g) => g.name).join(", ")}.{" "}
           {db.measured &&
@@ -80,14 +86,29 @@ export function DatabaseCard({ db }: { db: StorageDatabase }) {
         </div>
       )}
       <Files db={db} />
-    </SettingsCard>
+    </Card>
+  );
+}
+
+/** A fact about the database in a small pill. */
+function Chip({ mono, children }: { mono?: boolean; children: string }) {
+  return (
+    <span
+      title={mono ? children : undefined}
+      className={cn(
+        "max-w-full truncate rounded-full bg-canvas/60 px-2.5 py-1 light:bg-canvas",
+        mono && "font-mono text-ink-body",
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
 function Group({ group, total }: { group: StorageGroup; total: number }) {
   return (
-    <section aria-label={group.name} className="border-b border-line-subtle">
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 bg-surface-inset px-6 pt-4 pb-3 max-sm:px-5">
+    <section aria-label={group.name} className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-5 pt-4 pb-3 max-sm:px-4">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h3 className="text-[15px] font-semibold">{group.name}</h3>
           <span className="text-[13px] text-ink-muted">{group.about}</span>
@@ -118,7 +139,7 @@ function TableRow({ table: t, total }: { table: StorageTable; total: number }) {
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className="grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-x-6 gap-y-2 border-0 bg-transparent px-6 py-4 text-left text-ink transition-colors hover:bg-canvas/60 max-sm:px-5 md:grid-cols-[minmax(0,1fr)_110px_180px_20px]"
+        className="grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-x-6 gap-y-2 border-0 bg-transparent px-5 py-3.5 text-left text-ink transition-colors hover:bg-surface-inset max-sm:px-4 md:grid-cols-[minmax(0,1fr)_110px_180px_20px]"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="flex flex-wrap items-baseline gap-x-2">
@@ -137,8 +158,8 @@ function TableRow({ table: t, total }: { table: StorageTable; total: number }) {
           {t.bytes != null && (
             <span aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-track max-md:w-20">
               <span
-                className="block h-full rounded-full bg-ink-muted"
-                style={{ width: `${total ? Math.max((t.bytes / total) * 100, 1) : 0}%` }}
+                className="block h-full rounded-full"
+                style={{ width: `${total ? Math.max((t.bytes / total) * 100, 1) : 0}%`, background: COLOR.teal }}
               />
             </span>
           )}
@@ -152,7 +173,7 @@ function TableRow({ table: t, total }: { table: StorageTable; total: number }) {
         </span>
       </button>
       {open && (
-        <div id={id} className="flex flex-col gap-5 px-6 pb-6 max-sm:px-5">
+        <div id={id} className="flex animate-pop flex-col gap-5 px-5 pb-5 max-sm:px-4">
           <TableDetails table={t} total={total} />
         </div>
       )}
@@ -284,13 +305,10 @@ function Files({ db }: { db: MeasuredDatabase }) {
     ["Empty pages", db.free_bytes, "Inside the database file: left by deleted rows, and reused as rows are added."],
   ];
   return (
-    <div className="overflow-hidden">
-      <dl className="m-0 -mr-px -mb-px grid grid-cols-2 xl:grid-cols-4">
+    <div>
+      <dl className="m-0 grid grid-cols-2 gap-2 xl:grid-cols-4">
         {files.map(([label, size, about]) => (
-          <div
-            key={label}
-            className="flex min-w-0 flex-col gap-1 border-r border-b border-line-subtle px-6 py-4 max-sm:px-5"
-          >
+          <div key={label} className="flex min-w-0 flex-col gap-1 rounded-2xl bg-canvas/60 p-4 light:bg-canvas">
             <dt className="text-xs text-ink-muted">{label}</dt>
             <dd className="m-0 flex flex-col gap-1">
               <span className="text-[15px] font-medium tabular-nums">{bytes(size)}</span>

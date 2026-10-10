@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
+import { sameDay } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
@@ -16,9 +18,7 @@ const FIRE_COLOR: Record<FireWarning["level"], string> = {
 };
 
 const when = (ts: number, now: number) =>
-  new Date(ts * 1000).toDateString() === new Date(now * 1000).toDateString()
-    ? hhmm(ts)
-    : `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
+  sameDay(ts, now) ? hhmm(ts) : `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
 
 function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
   const [open, setOpen] = useState(false);
@@ -101,11 +101,13 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
   const asked = (s: typeof bom) => !!s && s.at != null;
   const sub = !view.enabled
     ? "Turned off"
-    : count
-      ? `${count} ${count === 1 ? "warning" : "warnings"} for your area`
-      : asked(bom) && (!view.fires_followed || asked(qfd))
-        ? "All clear for your area"
-        : "Weather and fire warnings for your area";
+    : !view.location_set
+      ? "Weather and fire warnings for your area"
+      : count
+        ? `${count} ${count === 1 ? "warning" : "warnings"} for your area`
+        : asked(bom) && (!view.fires_followed || asked(qfd))
+          ? "All clear for your area"
+          : "Weather and fire warnings for your area";
   // What's known, source by source: no warnings from those that answered; those that haven't, said plainly.
   const clear = [
     asked(bom) &&
@@ -116,7 +118,9 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
   return (
     <Card>
       <TitleBlock title="Warnings" sub={sub} />
-      {view.enabled ? (
+      {view.enabled && !view.location_set ? (
+        <LocationPrompt>Warnings are matched to where your house is, so they need your location.</LocationPrompt>
+      ) : view.enabled ? (
         <>
           {(view.weather.length > 0 || view.fires.length > 0) && (
             <ul className="-my-1 flex flex-col">

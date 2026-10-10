@@ -211,8 +211,11 @@ class InsightsService:
 
     # ------------------------------------------------------------------ solar performance
     def _radiation(self) -> Radiation | None:
-        """Past hourly radiation as (hour start, kWh/m²). Open-Meteo stamps each hour's mean at its end."""
-        where: Where = (self.settings.get("latitude"), self.settings.get("longitude"))
+        """Past hourly radiation as (hour start, kWh/m²), None without a location. Open-Meteo stamps each hour's
+        mean at its end."""
+        where: Where | None = self.settings.location()
+        if where is None:
+            return None
         _, hit = self._cache.get(_RAD, RAD_CACHE_SECONDS)
         if hit and hit[0] == where:
             return hit[1]
