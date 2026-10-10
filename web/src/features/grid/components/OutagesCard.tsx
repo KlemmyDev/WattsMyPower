@@ -5,6 +5,7 @@ import { intAU } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Select } from "~/features/common/ui/components/Field";
+import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Segmented } from "~/features/common/ui/components/Segmented";
@@ -374,6 +375,8 @@ export function OutagesCard({
             </div>
           </div>
         </div>
+      ) : !view.location_set ? (
+        <LocationPrompt>Outages are found around your house, so they need to know where it is.</LocationPrompt>
       ) : (
         <div className="text-[13px] text-ink-muted">
           {view.supported ? (

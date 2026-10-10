@@ -88,6 +88,12 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
                 c.battery_reserve,
                 c.battery_max_kw,
             )
+        if where := await asyncio.to_thread(services.settings.seed_location):
+            log.info(
+                "Saved the location this install has been using (%g, %g), now that a new install starts without one. "
+                "It's changed in the dashboard (Manage → Integrations → Weather).",
+                *where,
+            )
         await asyncio.to_thread(services.settings.load)
         await asyncio.to_thread(services.tariffs.load)
         await asyncio.to_thread(services.amber.load)

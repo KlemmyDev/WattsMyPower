@@ -3,6 +3,8 @@ import { useAmberPrices } from "~/features/amber/hooks";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { GridOverviewCard } from "~/features/grid/components/GridOverviewCard";
 import { RunningNowCard } from "~/features/home/components/RunningNowCard";
+import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
+import { useLocationSet } from "~/features/common/settings/hooks";
 import { useForecast } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -19,11 +21,17 @@ export function OverviewPage() {
   const s = useSystem();
   const f = useForecast();
   const prices = useAmberPrices(now);
+  const located = useLocationSet();
   return (
     <>
       <PageHeader title={greeting(new Date(now * 1000))} sub="Here is how your home is running right now" />
       <div className="grid grid-cols-12 gap-5">
         <PowerFlowHero p={p} s={s} f={f} now={now} />
+        {located === false && (
+          <LocationPrompt className="col-span-12">
+            The solar forecast, the weather, and power outages and warnings near you need your location.
+          </LocationPrompt>
+        )}
         <GridOverviewCard now={now} />
         <BatteryCard p={p} s={s} f={f} now={now} />
         <RunningNowCard />

@@ -235,7 +235,7 @@ All settings are environment variables (see `.env.example`):
 | `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
 | `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |
-| `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Manage → Integrations → Weather.** |
+| `LATITUDE` / `LONGITUDE` | none | The house's location, for the forecast, weather, outages and warnings. Usually chosen in the set-up guide or Manage → Integrations → Weather instead; nothing that needs it is fetched until it's set. |
 | `FORECAST` | `true` | Set to `false` to turn off the Open-Meteo forecast |
 | `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
 
@@ -389,7 +389,7 @@ COLLECTOR_URL=http://<server IP>:8081 COLLECTOR_TOKEN=<token> DB_PATH=./data/loc
 
 It builds its own database from the collector's raw history (whatever the collector holds), then follows it live. Its settings, rates and account are its own, so changes there never touch the server. `python -m app reprocess` with the same variables rebuilds it after changing how registers are decoded.
 
-**Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
+**Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. The demo is in Brisbane, so the forecast and the Grid page have something to show; add `LATITUDE= LONGITUDE=` to start without a location, as a new install does. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
 
 Checks (`uv run …`): `pytest` (tests), `ruff check` and `ruff format` (lint and format), `mypy` (types).
 

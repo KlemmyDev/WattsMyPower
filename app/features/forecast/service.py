@@ -217,6 +217,8 @@ class ForecastService:
     def _signature(self) -> list[Any]:
         """What the model's sunlight figures depend on: retrain when any of it changes."""
         p = self.weather.panels()
+        if p is None:  # no location chosen yet
+            return [None, None, None, None, self.settings.get("pv_kw")]
         return [round(p.latitude, 2), round(p.longitude, 2), p.tilt, p.bearing, self.settings.get("pv_kw")]
 
     def learned(self) -> dict[str, Any] | None:
@@ -250,7 +252,7 @@ class ForecastService:
         solar power readings, scaled to what the inverters counted that day (see `counted`)."""
         panels = self.weather.panels()
         rows = self.weather.hours(start, end)
-        if not rows:
+        if not rows or panels is None:
             return []
         scale = self.counted(start, end)
         made: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])  # hour -> [W sum, rollups, full]
@@ -309,6 +311,8 @@ class ForecastService:
 
     def tick(self, now: int | None = None) -> None:
         """After each weather refresh: retrain if due, and keep the day-ahead forecast. Blocking."""
+        if not self.settings.location_set():
+            return  # no weather to learn from or forecast with until the location's chosen
         now = int(now or time.time())
         saved = self.learned()
         if (
@@ -330,9 +334,9 @@ class ForecastService:
 
     def _pv_kw(self, hour: Hour, k: float, model: SolarModel | None) -> float:
         """Forecast solar (mean kW, so kWh) for an hour."""
-        if model is None:
-            return k * hour["rad"]
         panels = self.weather.panels()
+        if model is None or panels is None:
+            return k * hour["rad"]
         return model.predict(learning.sample(hour["weather"], panels, local_date(hour["ts"])))
 
     def accuracy(self, now: int | None = None, days: int = 30) -> dict[str, Any]:
@@ -491,8 +495,8 @@ class ForecastService:
 
     def steps(self, now: int | None = None, days: int = OUTLOOK_DAYS) -> list[Hour] | None:
         """The forecast's steps from now to the end of the `days`th day, as far as the weather forecast reaches
-        (see _steps), for planning around: None when there's no forecast."""
-        if not self.config.forecast:
+        (see _steps), for planning around: None when there's no forecast (or no location to forecast for)."""
+        if not self.config.forecast or not self.settings.location_set():
             return None
         now = int(now or time.time())
         hours = self._hours(now, days)
@@ -502,7 +506,8 @@ class ForecastService:
         return self._steps(hours, now, k, self._active_model(), days) or None
 
     def build(self, latest: Snapshot | None, battery_kwh: float, reserve_pct: float) -> dict[str, Any] | None:
-        if not self.config.forecast:
+        """The forecast, or None: turned off, no location chosen yet, or no weather forecast stored for the hours ahead."""
+        if not self.config.forecast or not self.settings.location_set():
             return None
         now = int(time.time())
         hours = self._hours(now)

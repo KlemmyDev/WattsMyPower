@@ -142,7 +142,8 @@ export type TeslaStatus = {
   tick: number;
   /** What each timing may be: its default, lowest and highest. */
   timing: Record<EvTimingKey, { default: number; min: number; max: number }>;
-  home: [number, number];
+  /** The house's location (null until it's chosen). */
+  home: [number, number] | null;
   vehicles: EvVehicle[];
 };
 

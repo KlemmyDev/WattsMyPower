@@ -5,7 +5,7 @@ import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm, longDate, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { intAU, kWh, plural } from "~/features/common/formatting/utils/number";
 import { useLive } from "~/features/common/live/hooks/useLive";
-import { useSaveSettings } from "~/features/common/settings/hooks";
+import { useLocationSet, useSaveSettings } from "~/features/common/settings/hooks";
 import type { Settings, WeatherModel } from "~/features/common/settings/types";
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { Button } from "~/features/common/ui/components/Button";
@@ -73,16 +73,21 @@ function useSaveNow() {
 /** Where the forecast is for, and changing it. */
 export function WeatherLocation() {
   const system = useLive()?.system;
+  const located = useLocationSet();
   return (
     <SettingsCard padded aria-labelledby="h-location" className="gap-4">
       <CardTitle
         id="h-location"
         title="Location"
         sub={
-          <>
-            The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
-            to change it.
-          </>
+          located === false ? (
+            "No location is set yet, so there's no forecast, and no power outages or warnings near you. Search for your suburb to set it."
+          ) : (
+            <>
+              The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
+              to change it.
+            </>
+          )
         }
       />
       {/* Started afresh once the location is known, and again when it's changed. */}
