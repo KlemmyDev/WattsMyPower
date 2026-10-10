@@ -182,7 +182,7 @@ curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install
 
 ### Open the dashboard
 
-**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password), with the one-time set-up code it prints when it starts: run `docker compose logs wattsmypower` in the install folder, or open `data/setup-code`. After that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
+**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password), with the one-time set-up code: `install.sh` shows it when it finishes, and it's also in `docker compose logs wattsmypower` and `data/setup-code`. After that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
 
 - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
 - **Your system:** the solar array's size (the forecast starts from it, and it's 6.6 kW until it's entered), and the battery details your inverter can't report.
