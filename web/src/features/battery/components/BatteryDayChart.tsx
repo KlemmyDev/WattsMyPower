@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useState, type PointerEvent, type ReactNode } from "react";
 import { controlHistoryQuery } from "~/features/battery/api";
 import type {
   BatteryPlan,
@@ -12,7 +12,7 @@ import type {
 } from "~/features/battery/types";
 import { KIND_COLOR, KIND_LABEL, recordLabel } from "~/features/battery/utils";
 import { batteryState, reserveOf } from "~/features/common/energy/utils";
-import { hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
+import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import type { SystemInfo } from "~/features/common/live/types";
 import { historyQuery } from "~/features/common/readings/api";
@@ -21,6 +21,7 @@ import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { DragBand, timeTicks, useDragRange, useZoom, ZoomOut } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
 
 const W = 1000;
@@ -82,6 +83,15 @@ function labelled(bands: Band[], X: (t: number) => number): Band[] {
   return kept;
 }
 
+/** The part of a line from `from` to `to`, with the point either side so it runs on to the edges (clipped there). */
+function slice<T>(pts: T[], at: (p: T) => number, from: number, to: number): T[] {
+  const a = pts.findIndex((p) => at(p) >= from);
+  if (a < 0) return [];
+  let b = pts.findIndex((p) => at(p) > to);
+  if (b < 0) b = pts.length;
+  return pts.slice(Math.max(0, a - 1), Math.min(pts.length, b + 1));
+}
+
 /** The level a line has nearest a time (within half an hour), or null. */
 function levelAt(line: Line, t: number): number | null {
   let best: [number, number] | null = null;
@@ -135,7 +145,9 @@ export function BatteryDayChart({
   });
   const { data: hist } = useQuery({ ...controlHistoryQuery(start, end), placeholderData: keepPreviousData });
 
-  const X = (t: number) => ((t - start) / (end - start)) * W;
+  const zoom = useZoom(start, end); // a stretch of the day dragged across, shown on its own
+  const { from, to } = zoom;
+  const X = (t: number) => ((t - from) / (to - from)) * W; // not held to the stretch: the plot clips it
   const points = useMemo<Point[]>(() => {
     if (!data || future) return [];
     const sr = data.series;
@@ -182,14 +194,25 @@ export function BatteryDayChart({
       preview.kind !== draft.kind);
   const reserve = reserveOf(s);
 
-  const box = useRef<HTMLDivElement>(null);
   const [hoverAt, setHoverAt] = useState<number | null>(null);
-  const onMove = (e: MouseEvent) => {
-    const r = box.current?.getBoundingClientRect();
-    if (r) setHoverAt(start + ((e.clientX - r.left) / r.width) * (end - start));
+  const range = useDragRange(from, to, zoom.zoom);
+  const onPoint = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setHoverAt(from + ((e.clientX - r.left) / r.width) * (to - from));
   };
-  const hover = hoverAt == null ? null : readingNear(points, hoverAt);
+  const inView = points.filter((p) => p.t >= from && p.t <= to);
+  const hover = hoverAt == null ? null : readingNear(inView, hoverAt);
   const hoverBand = hoverAt == null ? null : (bands.find((b) => b.from <= hoverAt && hoverAt < b.to) ?? null);
+
+  // What's drawn of the stretch shown: the lines run on to its edges, the controls are cut off at them.
+  const cut = (l: Line) => slice(l, ([t]) => t, from, to);
+  const drawn = runs.map((r) => slice(r, (p) => p.t, from, to)).filter((r) => r.length > 1);
+  const seen = bands.filter((b) => b.to > from && b.from < to);
+  const named = labelled(
+    seen.map((b) => ({ ...b, from: Math.max(b.from, from), to: Math.min(b.to, to) })),
+    X,
+  );
+  const nowIn = isToday && now >= from && now <= to;
 
   const path = (pts: Line) => pts.map(([t, v], i) => `${i ? "L" : "M"}${X(t).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
   const kinds = [...new Set(bands.map((b) => b.kind))];
@@ -210,6 +233,7 @@ export function BatteryDayChart({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} />}
           <Button variant="icon" aria-label="The day before" onClick={() => setDay(addDays(day, -1))}>
             <Icon name="chevL" size={16} />
           </Button>
@@ -255,19 +279,29 @@ export function BatteryDayChart({
         <Key swatch={<span className="w-4 border-t border-dashed" style={{ borderColor: alpha(COLOR.fg, 0.35) }} />}>
           Reserve {pct(reserve)}
         </Key>
+        <li className="text-ink-faint max-md:hidden">Drag across the chart to look closer</li>
       </ul>
 
       <div
-        ref={box}
-        onMouseMove={onMove}
-        onMouseLeave={() => setHoverAt(null)}
-        className="relative h-[260px] cursor-crosshair max-sm:h-[200px]"
+        onPointerMove={(e) => {
+          onPoint(e);
+          range.handlers.onPointerMove?.(e);
+        }}
+        onPointerDown={(e) => {
+          onPoint(e);
+          range.handlers.onPointerDown?.(e);
+        }}
+        onPointerUp={range.handlers.onPointerUp}
+        onPointerCancel={range.handlers.onPointerCancel}
+        onPointerLeave={() => setHoverAt(null)}
+        className="relative h-[260px] cursor-crosshair touch-pan-y max-sm:h-[200px]"
       >
+        <DragBand band={range.band} />
         <svg
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           aria-hidden
-          className="absolute inset-0 block size-full"
+          className="absolute inset-0 block size-full overflow-hidden"
         >
           <defs>
             <linearGradient id="bday-fill" x1="0" y1="0" x2="0" y2="1">
@@ -286,7 +320,7 @@ export function BatteryDayChart({
               style={{ stroke: alpha(COLOR.fg, 0.06) }}
             />
           ))}
-          {bands.map((b, i) => (
+          {seen.map((b, i) => (
             <g key={i}>
               <rect
                 x={X(b.from)}
@@ -319,14 +353,14 @@ export function BatteryDayChart({
             vectorEffect="non-scaling-stroke"
             style={{ stroke: alpha(COLOR.fg, 0.25) }}
           />
-          {runs.map((r, i) => (
+          {drawn.map((r, i) => (
             <path
               key={`a${i}`}
               d={`${path(r.map((p) => [p.t, p.soc]))} L${X(r[r.length - 1].t).toFixed(1)} ${H} L${X(r[0].t).toFixed(1)} ${H} Z`}
               fill="url(#bday-fill)"
             />
           ))}
-          {runs.map((r, i) => (
+          {drawn.map((r, i) => (
             <path
               key={`l${i}`}
               d={path(r.map((p) => [p.t, p.soc]))}
@@ -340,7 +374,7 @@ export function BatteryDayChart({
           ))}
           {without.length > 1 && (
             <path
-              d={path(without)}
+              d={path(cut(without))}
               fill="none"
               strokeWidth="1.5"
               strokeDasharray="5 5"
@@ -350,7 +384,7 @@ export function BatteryDayChart({
           )}
           {expected.length > 1 && (
             <path
-              d={path(expected)}
+              d={path(cut(expected))}
               fill="none"
               strokeWidth="2"
               strokeDasharray="6 5"
@@ -360,7 +394,7 @@ export function BatteryDayChart({
           )}
           {previewLine.length > 1 && (
             <path
-              d={path(previewLine)}
+              d={path(cut(previewLine))}
               fill="none"
               strokeWidth="2.5"
               strokeDasharray="1 5"
@@ -370,7 +404,7 @@ export function BatteryDayChart({
               style={{ stroke: COLOR.batterySoft }}
             />
           )}
-          {isToday && (
+          {nowIn && (
             <line
               x1={X(now)}
               x2={X(now)}
@@ -382,7 +416,7 @@ export function BatteryDayChart({
           )}
         </svg>
         {/* The controls' names over their stretch, and the axis labels, in HTML so they don't stretch. */}
-        {labelled(bands, X).map((b, i) => {
+        {named.map((b, i) => {
           // Each name starts at its stretch and may run past a short one; near the right edge it ends there instead.
           const late = X(b.from) / W > 0.72;
           return (
@@ -405,7 +439,7 @@ export function BatteryDayChart({
             {v}%
           </span>
         ))}
-        {isToday && (
+        {nowIn && (
           <span
             className="pointer-events-none absolute -bottom-5 -translate-x-1/2 text-[10px] font-semibold text-ink-muted"
             style={{ left: `${(X(now) / W) * 100}%` }}
@@ -413,7 +447,7 @@ export function BatteryDayChart({
             Now
           </span>
         )}
-        {hoverAt != null && (
+        {hoverAt != null && !range.dragging && (
           <Readout
             at={hover?.t ?? hoverAt}
             left={(X(hover?.t ?? hoverAt) / W) * 100}
@@ -427,13 +461,17 @@ export function BatteryDayChart({
         )}
       </div>
       <div className="relative mt-1 h-4 font-mono text-[10px] text-ink-faint tabular-nums">
-        {[0, 6, 12, 18, 24].map((h) => (
+        {timeTicks(from, to, 6).map((k, i) => (
           <span
-            key={h}
-            className={cn("absolute", h === 0 ? "" : h === 24 ? "-translate-x-full" : "-translate-x-1/2")}
-            style={{ left: `${(h / 24) * 100}%` }}
+            key={k.t}
+            className={cn(
+              "absolute whitespace-nowrap",
+              k.left < 3 ? "" : k.left > 97 ? "-translate-x-full" : "-translate-x-1/2",
+              zoom.zoomed && k.odd && i !== 0 && "max-md:hidden",
+            )}
+            style={{ left: `${k.left}%` }}
           >
-            {hourLabel(h % 24)}
+            {k.label}
           </span>
         ))}
       </div>

@@ -2,8 +2,15 @@ import { useMemo, useState, type PointerEvent } from "react";
 import type { AmberPrices, PriceInterval } from "~/features/amber/types";
 import { intervalAt, priceLabel } from "~/features/amber/utils";
 import { ChartTooltip, TooltipRow } from "~/features/common/ui/components/ChartHover";
-import { cn } from "~/features/common/ui/utils";
-import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import {
+  DragBand,
+  TimeTicks,
+  timeTicks,
+  useDragRange,
+  useZoom,
+  ZoomOut,
+} from "~/features/common/ui/components/TimeLine";
+import { hhmm } from "~/features/common/formatting/utils/date";
 import { DASH } from "~/features/common/formatting/utils/number";
 import { addDays } from "~/features/common/time/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -47,10 +54,12 @@ function steps(list: PriceInterval[], X: (t: number) => number, Y: (r: number) =
   return out;
 }
 
+/** The prices from `start` to `end` (the whole day, or a stretch of it zoomed into), scaled to fill the plot. A step
+ * partly outside is cut off at the plot's edge. */
 function plot(p: AmberPrices, start: number, end: number) {
-  const inDay = (l: PriceInterval[]) => l.filter((x) => x.end > start && x.start < end);
-  const buy = inDay(p.general);
-  const sell = inDay(p.feed_in);
+  const within = (l: PriceInterval[]) => l.filter((x) => x.end > start && x.start < end);
+  const buy = within(p.general);
+  const sell = within(p.feed_in);
   const rates = [...buy, ...sell].map((x) => x.rate);
   const lo = Math.min(0, ...rates);
   const hi = Math.max(0.1, ...rates) * 1.08;
@@ -79,23 +88,31 @@ const Dot = ({ left, top, color }: { left: number; top: number; color: string })
 /**
  * Today's import and feed-in prices from midnight to midnight, as step lines (each Amber interval
  * is one flat step), with the forecast dashed, now marked, and the interval under the pointer in a tooltip.
+ * Dragging across it shows just that stretch, with a button back to the whole day.
  */
 export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: number; now: number }) {
   const end = addDays(day, 1);
-  const chart = useMemo(() => plot(prices, day, end), [prices, day, end]);
+  const zoom = useZoom(day, end);
+  const { from, to } = zoom;
+  const whole = useMemo(() => plot(prices, day, end), [prices, day, end]);
+  const zoomed = useMemo(() => (zoom.zoomed ? plot(prices, from, to) : null), [prices, from, to, zoom.zoomed]);
+  const chart = zoomed ?? whole;
+  const range = useDragRange(from, to, zoom.zoom);
   const [hoverAt, setHoverAt] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setWidth(e.currentTarget.offsetWidth); // layout px, as the tooltip is placed in (r is zoomed with the page)
-    setHoverAt(day + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * (end - day));
+    setHoverAt(from + Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * (to - from));
   };
-  const buy = hoverAt != null ? intervalAt(chart.buy, hoverAt) : null;
-  const sell = hoverAt != null ? intervalAt(chart.sell, hoverAt) : null;
+  // Nothing's read off the chart while a stretch is dragged across.
+  const at = range.dragging ? null : hoverAt;
+  const buy = at != null ? intervalAt(chart.buy, at) : null;
+  const sell = at != null ? intervalAt(chart.sell, at) : null;
   const shown = buy ?? sell;
-  const nowLeft = now >= day && now < end ? chart.leftOf(now) : null;
+  const nowLeft = now >= from && now < to ? chart.leftOf(now) : null;
 
-  if (!chart.buy.length && !chart.sell.length) {
+  if (!whole.buy.length && !whole.sell.length) {
     return <div className="py-10 text-center text-sm text-ink-faint">No prices for today yet.</div>;
   }
 
@@ -116,14 +133,26 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
             Forecast
           </span>
         </span>
-        <span className="tabular-nums">Up to {priceLabel(chart.top)}</span>
+        <span className="flex items-center gap-3">
+          {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} />}
+          <span className="tabular-nums">Up to {priceLabel(chart.top)}</span>
+        </span>
       </div>
       <div
         className="relative h-[160px] cursor-crosshair touch-pan-y max-sm:h-[130px] compact:h-[120px]"
-        onPointerMove={onPoint}
-        onPointerDown={onPoint}
+        onPointerMove={(e) => {
+          onPoint(e);
+          range.handlers.onPointerMove?.(e);
+        }}
+        onPointerDown={(e) => {
+          onPoint(e);
+          range.handlers.onPointerDown?.(e);
+        }}
+        onPointerUp={range.handlers.onPointerUp}
+        onPointerCancel={range.handlers.onPointerCancel}
         onPointerLeave={() => setHoverAt(null)}
       >
+        <DragBand band={range.band} />
         <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
         <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
         {shown && (
@@ -192,10 +221,10 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
             <span className="absolute -top-0.5 left-1.5 font-mono text-[10px] text-ink-faint">Now</span>
           </div>
         )}
-        {hoverAt != null && buy && <Dot left={chart.leftOf(hoverAt)} top={chart.topOf(buy.rate)} color={BUY} />}
-        {hoverAt != null && sell && <Dot left={chart.leftOf(hoverAt)} top={chart.topOf(sell.rate)} color={SELL} />}
-        {hoverAt != null && shown && (
-          <ChartTooltip left={chart.leftOf(hoverAt)} flip={chart.leftOf(hoverAt) > 60} width={width}>
+        {at != null && buy && <Dot left={chart.leftOf(at)} top={chart.topOf(buy.rate)} color={BUY} />}
+        {at != null && sell && <Dot left={chart.leftOf(at)} top={chart.topOf(sell.rate)} color={SELL} />}
+        {at != null && shown && (
+          <ChartTooltip left={chart.leftOf(at)} flip={chart.leftOf(at) > 60} width={width}>
             <span className="flex items-center justify-between font-medium text-ink">
               {hhmm(shown.start)} to {hhmm(shown.end)}
               {!shown.actual && <span className="text-[11px] font-normal text-ink-faint">Forecast</span>}
@@ -208,21 +237,7 @@ export function PriceChart({ prices, day, now }: { prices: AmberPrices; day: num
           </ChartTooltip>
         )}
       </div>
-      <div className="relative h-3.5">
-        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h, i, all) => (
-          <span
-            key={h}
-            className={cn(
-              "absolute font-mono text-[11px] text-ink-faint",
-              i === 0 ? "" : i === all.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
-              i % 2 === 1 && "max-md:hidden",
-            )}
-            style={{ left: `${(h / 24) * 100}%` }}
-          >
-            {hourLabel(h)}
-          </span>
-        ))}
-      </div>
+      <TimeTicks ticks={timeTicks(from, to, 3)} />
     </div>
   );
 }

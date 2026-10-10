@@ -1,25 +1,37 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { hhmm, shortDay, weekdayLong } from "~/features/common/formatting/utils/date";
-import { kW } from "~/features/common/formatting/utils/number";
+import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
+import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
-import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
+import {
+  DragBand,
+  TimeLine,
+  TimeTicks,
+  timeTicks,
+  useDragRange,
+  useZoom,
+  ZoomOut,
+  type LinePoint,
+} from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
 import { levelsQuery } from "~/features/ev/api";
-import type { EvEvent, EvLevels, EvVehicle } from "~/features/ev/types";
+import type { EvLevels, EvVehicle } from "~/features/ev/types";
 import { EVENT_COLOR } from "~/features/ev/utils";
 
 const GAP = 25 * 60; // readings further apart than this have an estimated line between them
 const STEP = 5 * 60; // estimated points along it, so the pointer reads a value anywhere
 const ROLLUP = 5 * 60; // what the car drew is kept per five minutes
+const SLOT = 30 * 60; // and is shown per half hour
+const HOUR = 3600;
 const AWAY = COLOR.inkMuted;
 const CHARGING = COLOR.good;
 const LINE = COLOR.battery;
-const POWER = COLOR.solar;
+const SOLAR = COLOR.solar;
 const GRID = COLOR.import;
 const WAKE = COLOR.lilac;
 const NEAR = 10 * 60; // a wake or an event within this of the pointer shows in its tooltip
@@ -61,19 +73,113 @@ function line(points: EvLevels["points"]): LinePoint[] {
   return out;
 }
 
-/** What it drew (kW) as a line that drops to nothing between the stretches it charged in, so the fill shows each. */
-function powerLine(rows: EvLevels["power"], pick: (r: EvLevels["power"][number]) => number): LinePoint[] {
-  const out: LinePoint[] = [];
-  rows.forEach((r, i) => {
-    const prev = rows[i - 1];
-    if (!prev || r.t - prev.t > ROLLUP) {
-      if (prev) out.push({ t: prev.t + ROLLUP, v: 0 });
-      out.push({ t: r.t, v: 0 });
-    }
-    out.push({ t: r.t + ROLLUP / 2, v: pick(r) / 1000 });
-    if (i === rows.length - 1) out.push({ t: r.t + ROLLUP, v: 0 });
-  });
+/** How long each bar is: half an hour across the day, finer zoomed in (down to the five minutes it's kept in). */
+const slotFor = (span: number) => (span <= 3 * HOUR ? ROLLUP : span <= 8 * HOUR ? 15 * 60 : SLOT);
+
+/** What went into it in each `size` from `start` to `end` (kWh): from the grid, and the rest (from solar or the home
+ * battery), with the most it drew in any five minutes of it (W). */
+function slots(rows: EvLevels["power"], start: number, end: number, size: number) {
+  const first = Math.floor(start / size) * size;
+  const out = Array.from({ length: Math.ceil((end - first) / size) }, (_, i) => ({
+    t: first + i * size,
+    solar: 0,
+    grid: 0,
+    peak: 0,
+  }));
+  const kwh = ROLLUP / 3600 / 1000;
+  for (const r of rows) {
+    const s = out[Math.floor((r.t - first) / size)];
+    if (!s) continue;
+    s.grid += r.grid_w * kwh;
+    s.solar += Math.max(0, r.w - r.grid_w) * kwh;
+    s.peak = Math.max(s.peak, r.w);
+  }
   return out;
+}
+
+/**
+ * What went into the car from `start` to `end`, a bar each half hour (finer zoomed in) on the same time scale as the
+ * chart above: from solar (or the home battery) at the bottom, and from the grid stacked on it. Dragging across it
+ * picks a stretch to look at more closely, as on the chart above.
+ */
+function ChargeBars({
+  power,
+  start,
+  end,
+  perAmp,
+  onRange,
+}: {
+  power: EvLevels["power"];
+  start: number;
+  end: number;
+  perAmp: number | null;
+  onRange: (from: number, to: number) => void;
+}) {
+  const { hover: h, width, plot, bar } = useBarHover();
+  const range = useDragRange(start, end, onRange);
+  const size = slotFor(end - start);
+  const bars = slots(power, start, end, size);
+  const top = Math.max(0.25, ...bars.map((s) => s.solar + s.grid)) * 1.08;
+  const pc = (v: number) => `${(v / top) * 100}%`;
+  const leftOf = (t: number) => ((t - start) / (end - start)) * 100;
+  const s = h != null && !range.dragging ? bars[h] : null;
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="relative h-24 cursor-crosshair touch-pan-y overflow-x-clip" {...plot} {...range.handlers}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-fg/5" />
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-fg/5" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-fg/12" />
+        <DragBand band={range.band} />
+        {bars.map((x, i) => {
+          const total = x.solar + x.grid;
+          return (
+            <button
+              key={x.t}
+              type="button"
+              {...bar(i)}
+              disabled={total <= 0}
+              aria-label={`${hhmm(x.t)}: ${kWh(total)}, ${kWh(x.grid)} from the grid`}
+              className={cn(
+                "absolute inset-y-0 flex flex-col-reverse border-0 bg-transparent px-[0.5px] py-0 transition-opacity duration-150 enabled:cursor-crosshair",
+                s && h !== i && "opacity-50",
+              )}
+              style={{ left: `${leftOf(x.t)}%`, width: `${(size / (end - start)) * 100}%` }}
+            >
+              {total > 0 && (
+                <span
+                  className="bar-grow flex w-full flex-col-reverse overflow-hidden rounded-t-[2px]"
+                  style={{ height: pc(total), "--i": i } as CSSProperties}
+                >
+                  <span
+                    className="w-full flex-none"
+                    style={{ height: `${(x.solar / total) * 100}%`, background: SOLAR }}
+                  />
+                  <span
+                    className="w-full flex-none"
+                    style={{ height: `${(x.grid / total) * 100}%`, background: GRID }}
+                  />
+                </span>
+              )}
+            </button>
+          );
+        })}
+        {s && (
+          <ChartTooltip left={leftOf(s.t + size / 2)} flip={leftOf(s.t) > 50} width={width}>
+            <span className="font-medium text-ink">
+              {hhmm(s.t)} – {hhmm(s.t + size)}
+            </span>
+            <TooltipRow label="Solar or battery" value={kWh(s.solar)} color={SOLAR} />
+            <TooltipRow label="Grid" value={kWh(s.grid)} color={GRID} />
+            <TooltipRow
+              label="Drew up to"
+              value={`${kW(s.peak)}${perAmp ? ` · ${Math.round(s.peak / perAmp)} A` : ""}`}
+            />
+          </ChartTooltip>
+        )}
+      </div>
+      <TimeTicks ticks={timeTicks(start, end, 6)} />
+    </div>
+  );
 }
 
 function dayName(start: number, now: number): string {
@@ -96,51 +202,28 @@ function Key({ color, label, dashed, area }: { color: string; label: string; das
   );
 }
 
-function Dot({ color, label }: { color: string; label: string }) {
+function Dot({ color, label, square }: { color: string; label: string; square?: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-xs text-ink-muted">
-      <span className="size-2 rounded-full" style={{ background: color }} />
+      <span className={cn("size-2", square ? "rounded-xs" : "rounded-full")} style={{ background: color }} />
       {label}
     </span>
-  );
-}
-
-/** The day's activity, in order, each with when: what the dashboard did with the car, and what it saw done. */
-function Activity({ events }: { events: EvEvent[] }) {
-  if (!events.length) return <span className="text-[13px] text-ink-muted">Nothing to tell this day.</span>;
-  return (
-    <ol className="m-0 flex list-none flex-col p-0">
-      {events.map((e, i) => (
-        <li key={`${e.ts}-${i}`} className="relative flex gap-3 pb-2.5 last:pb-0">
-          <span className="relative flex w-3 flex-none justify-center">
-            <span
-              aria-hidden
-              className="z-1 mt-1.5 size-2.5 rounded-full ring-4 ring-surface"
-              style={{ background: e.kind ? EVENT_COLOR[e.kind] : COLOR.inkMuted }}
-            />
-            {i < events.length - 1 && <span aria-hidden className="absolute top-3 -bottom-1 w-px bg-line" />}
-          </span>
-          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-xs text-ink-faint tabular-nums">{hhmm(e.ts)}</span>
-            <span className="text-[13px] text-pretty">{e.text}</span>
-          </span>
-        </li>
-      ))}
-    </ol>
   );
 }
 
 /**
  * The car's day, in one place, day by day: its charge as read (a solid line; estimated in a straight line across the
  * time it wasn't, dashed), when it was away and when it charged at home (shaded), its charge limit, each time the
- * dashboard woke it; what it drew while charging at home (and of that, what came from the grid); and everything the
- * dashboard did with it or saw done, marked on the chart and listed below it.
+ * dashboard woke it, and everything the dashboard did with it or saw done, marked along the top; and what went into it
+ * while charging at home each half hour, from solar and from the grid.
  */
 export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; className?: string }) {
   const vin = v.vin;
   const [back, setBack] = useState(0);
   const start = addDays(midnight(now), -back);
   const end = addDays(start, 1);
+  const zoom = useZoom(start, end); // a stretch of the day dragged across, both charts showing just that
+  const { from, to } = zoom;
   const { data } = useQuery({ ...levelsQuery(vin, start, end), placeholderData: keepPreviousData });
   const day = data && data.start === start ? data : null;
   const points = day ? line(day.points) : [];
@@ -171,9 +254,6 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
       ? `charged ${kwh.toFixed(1)} kWh${kwh > 0 ? `, ${Math.round((1 - gridKwh / kwh) * 100)}% from solar or the battery` : ""}`
       : null;
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
-  const drawn = powerLine(power, (r) => r.w);
-  const fromGrid = powerLine(power, (r) => r.grid_w);
-  const top = Math.max(1, ...power.map((r) => r.w / 1000));
 
   return (
     <Card aria-labelledby={`h-tlv-${vin}`} className={cn("gap-4", className)}>
@@ -192,6 +272,7 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
             .join(" · ")}
         />
         <div className="flex items-center gap-1">
+          {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} className="mr-1" />}
           <Button variant="round" aria-label="The day before" disabled={back >= 89} onClick={() => setBack(back + 1)}>
             <Icon name="chevL" size={16} />
           </Button>
@@ -202,8 +283,9 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
       </div>
       <TimeLine
         points={points}
-        start={start}
-        end={end}
+        start={from}
+        end={to}
+        onRange={zoom.zoom}
         now={back === 0 ? now : undefined}
         color={LINE}
         height={150}
@@ -243,34 +325,12 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
             </>
           )
         }
-        empty="No readings this day."
+        empty={zoom.zoomed ? "No readings in this stretch." : "No readings this day."}
       />
       {power.length > 0 && (
         <div className="flex flex-col gap-1">
           <span className="text-[13px] font-medium text-ink-muted">What went into it</span>
-          <TimeLine
-            points={drawn}
-            compare={{ points: fromGrid, color: GRID }}
-            start={start}
-            end={end}
-            now={back === 0 ? now : undefined}
-            color={POWER}
-            height={80}
-            domain={[0, top]}
-            fill
-            tip={(p, other) =>
-              p.v == null ? null : (
-                <>
-                  <span className="font-semibold tabular-nums">{kW(p.v * 1000)}</span>
-                  <span className="text-ink-muted">
-                    {perAmp ? ` · ${Math.round((p.v * 1000) / perAmp)} A` : ""} · {hhmm(p.t)}
-                    {other?.v ? ` · ${kW(other.v * 1000)} from the grid` : p.v > 0 ? " · all solar or battery" : ""}
-                  </span>
-                </>
-              )
-            }
-            empty=""
-          />
+          <ChargeBars power={power} start={from} end={to} perAmp={perAmp} onRange={zoom.zoom} />
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -278,13 +338,10 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
         <Key color={LINE} label="Estimated (not read)" dashed />
         <Key color={AWAY} label="Away" area />
         <Key color={CHARGING} label="Charging at home" area />
-        {power.length > 0 && <Key color={POWER} label="Going into the car" area />}
-        {power.length > 0 && <Key color={GRID} label="Of it, from the grid" dashed />}
+        {power.length > 0 && <Dot color={SOLAR} label="Into the car from solar or battery" square />}
+        {power.length > 0 && <Dot color={GRID} label="Into the car from the grid" square />}
         <Dot color={WAKE} label="Woken by the dashboard" />
-      </div>
-      <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-4">
-        <span className="text-sm font-semibold">What happened</span>
-        <Activity events={events} />
+        <span className="text-xs text-ink-faint max-md:hidden">Drag across a chart to look closer</span>
       </div>
     </Card>
   );

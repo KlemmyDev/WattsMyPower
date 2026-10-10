@@ -1,5 +1,5 @@
 import { useId, useMemo, useState, type PointerEvent, type ReactNode } from "react";
-import { hourLabel } from "~/features/common/formatting/utils/date";
+import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { ChartTooltip, HoverLine } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
@@ -7,6 +7,157 @@ import { cn } from "~/features/common/ui/utils";
 const W = 1000;
 const PAD = 8;
 const HOUR = 3600;
+const MIN_RANGE = 10 * 60; // the shortest stretch a drag picks
+const SNAP = 5 * 60; // a stretch picked starts and ends on the five minutes
+const DRAG_PX = 6; // how far the pointer moves before a press is a drag
+
+/**
+ * The marks along the bottom of a chart from `start` to `end`: every `every` hours, or, zoomed in to less than twice
+ * that, finer ones (each hour, half hour, quarter hour…) so there are still a few. `odd` ones are left out on a phone.
+ */
+export function timeTicks(start: number, end: number, every: number) {
+  const span = end - start;
+  const fine = span < every * HOUR * 2;
+  const step = !fine ? every * HOUR : ([5, 10, 15, 30, 60, 120, 180].find((m) => span / (m * 60) <= 8) ?? 360) * 60;
+  const out: { t: number; left: number; label: string; odd: boolean }[] = [];
+  if (!fine) {
+    for (let t = Math.ceil(start / HOUR) * HOUR; t <= end; t += HOUR) {
+      const h = new Date(t * 1000).getHours();
+      if (h % every) continue;
+      out.push({ t, left: ((t - start) / span) * 100, label: hourLabel(h), odd: (h / every) % 2 === 1 });
+    }
+    return out;
+  }
+  for (let t = Math.ceil(start / step) * step, i = 0; t <= end; t += step, i++) {
+    const d = new Date(t * 1000);
+    const label = d.getMinutes() === 0 ? hourLabel(d.getHours()) : hhmm(t);
+    out.push({ t, left: ((t - start) / span) * 100, label, odd: Math.round(t / step) % 2 === 1 });
+  }
+  return out;
+}
+
+/** The time marks along a chart's bottom, as `timeTicks` gives them. */
+export function TimeTicks({ ticks }: { ticks: ReturnType<typeof timeTicks> }) {
+  return (
+    <div className="relative h-3.5">
+      {ticks.map((t, i) => (
+        <span
+          key={t.t}
+          className={cn(
+            "absolute font-mono text-[11px] whitespace-nowrap text-ink-faint",
+            t.left < 3 ? "" : t.left > 97 ? "-translate-x-full" : "-translate-x-1/2",
+            t.odd && i !== 0 && "max-md:hidden",
+          )}
+          style={{ left: `${t.left}%` }}
+        >
+          {t.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Dragging across a chart to pick a stretch of it, from `start` to `end`: spread `handlers` on the plot, draw `band`
+ * (from and to as percentages of its width) while it's dragged, and `onRange` is given the stretch picked (at least ten
+ * minutes, on the five minutes) when it's let go. Without `onRange` it does nothing.
+ */
+export function useDragRange(start: number, end: number, onRange?: (from: number, to: number) => void) {
+  const [drag, setDrag] = useState<{ from: number; to: number; x0: number; x: number } | null>(null);
+  const at = (e: PointerEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (end - start);
+  };
+  const moved = drag != null && Math.abs(drag.x - drag.x0) >= DRAG_PX;
+  const pc = (t: number) => ((t - start) / (end - start)) * 100;
+  return {
+    dragging: moved,
+    band: moved ? { from: pc(Math.min(drag.from, drag.to)), to: pc(Math.max(drag.from, drag.to)) } : null,
+    handlers: onRange
+      ? {
+          onPointerDown: (e: PointerEvent<HTMLElement>) => {
+            if (e.button !== 0) return;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            const t = at(e);
+            setDrag({ from: t, to: t, x0: e.clientX, x: e.clientX });
+          },
+          onPointerMove: (e: PointerEvent<HTMLElement>) => {
+            if (drag) setDrag({ ...drag, to: at(e), x: e.clientX });
+          },
+          onPointerUp: () => {
+            if (drag && moved) {
+              // Snapped out to the five minutes either side.
+              const from = Math.floor(Math.min(drag.from, drag.to) / SNAP) * SNAP;
+              const to = Math.ceil(Math.max(drag.from, drag.to) / SNAP) * SNAP;
+              const mid = (from + to) / 2;
+              onRange(
+                Math.max(start, Math.min(from, mid - MIN_RANGE / 2)),
+                Math.min(end, Math.max(to, mid + MIN_RANGE / 2)),
+              );
+            }
+            setDrag(null);
+          },
+          onPointerCancel: () => setDrag(null),
+        }
+      : {},
+  };
+}
+
+/**
+ * A stretch of a chart's `start` to `end` zoomed into (by dragging across it): `from` and `to` are what to show, the
+ * whole of it until something's picked. It's let go when `start` or `end` change (another day).
+ */
+export function useZoom(start: number, end: number) {
+  const [z, setZ] = useState<{ start: number; end: number; from: number; to: number } | null>(null);
+  const on = z && z.start === start && z.end === end ? z : null;
+  return {
+    from: on?.from ?? start,
+    to: on?.to ?? end,
+    zoomed: on != null,
+    zoom: (from: number, to: number) => setZ({ start, end, from, to }),
+    reset: () => setZ(null),
+  };
+}
+
+/** The button back out of a zoomed chart, saying what's shown: "10:00 – 12:00 · Show the whole day". */
+export function ZoomOut({
+  from,
+  to,
+  onClick,
+  label = "Show the whole day",
+  className,
+}: {
+  from: number;
+  to: number;
+  onClick: () => void;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center rounded-full border border-line px-3 py-[5px] text-xs whitespace-nowrap text-ink-muted tabular-nums transition-colors hover:border-fg/25 hover:text-ink",
+        className,
+      )}
+    >
+      {hhmm(from)} – {hhmm(to)} · {label}
+    </button>
+  );
+}
+
+/** The stretch being dragged across, shaded over the plot. */
+export function DragBand({ band }: { band: { from: number; to: number } | null }) {
+  if (!band) return null;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0 z-1 border-x border-fg/25 bg-fg/8"
+      style={{ left: `${band.from}%`, width: `${band.to - band.from}%` }}
+    />
+  );
+}
 
 /** A reading on the line: dashed where it's a forecast. */
 export type LinePoint = { t: number; v: number | null; forecast?: boolean };
@@ -43,12 +194,13 @@ function runs(points: LinePoint[]) {
  * One measure through a stretch of time, as a line (dashed where it's a forecast), with what's under the pointer in a
  * tooltip. `signed` fills above zero in one colour and below in another (the grid: from it, to it); `band` shades the
  * range a value should stay in; `marks` are reference lines with a label. `fill` shades under the line; `compare` draws
- * a second line (dashed: what was expected) on the same scale, and the tooltip is given both.
+ * a second line (dashed: what was expected) on the same scale, and the tooltip is given both. With `onRange`, dragging
+ * across it picks a stretch to look at more closely (the caller then shows just that, as `start` and `end`).
  */
 export function TimeLine({
   points,
-  start,
-  end,
+  start: whole,
+  end: wholeEnd,
   now,
   color,
   height = 160,
@@ -63,6 +215,8 @@ export function TimeLine({
   compare,
   tip,
   empty,
+  onRange,
+  zoom = true,
 }: {
   points: LinePoint[];
   start: number;
@@ -87,10 +241,27 @@ export function TimeLine({
    * and the compared line's. */
   tip: (p: LinePoint, other?: LinePoint | null) => ReactNode;
   empty?: ReactNode;
+  /** A stretch was dragged across, to show just that: the caller zooms (to keep charts together). Without it the
+   * chart zooms itself, with its own button back out, unless `zoom` is false. */
+  onRange?: (from: number, to: number) => void;
+  zoom?: boolean;
 }) {
   const H = height;
+  const own = useZoom(whole, wholeEnd);
+  const self = zoom && !onRange;
+  const start = self ? own.from : whole;
+  const end = self ? own.to : wholeEnd;
   const clip = useId().replace(/:/g, "");
   const chart = useMemo(() => {
+    // What's drawn takes in the point either side of the stretch shown, so a line runs on to its edges (clipped there).
+    const within = (list: LinePoint[]) => {
+      const a = list.findIndex((p) => p.t >= start);
+      if (a < 0) return [];
+      let b = list.findIndex((p) => p.t > end);
+      if (b < 0) b = list.length;
+      return list.slice(Math.max(0, a - 1), Math.min(list.length, b + 1));
+    };
+    const drawn = within(points);
     const shown = points.filter((p) => p.t >= start && p.t <= end);
     const other = (compare?.points ?? []).filter((p) => p.t >= start && p.t <= end);
     const values = [...shown, ...other].map((p) => p.v).filter((v): v is number => v != null);
@@ -102,27 +273,28 @@ export function TimeLine({
     if (!domain || hi > domain[1]) hi += span * 0.08;
     if ((!domain || lo < domain[0]) && !(signed && lo === 0)) lo -= span * 0.08;
     const X = (t: number) => ((Math.max(start, Math.min(end, t)) - start) / (end - start)) * W;
+    const Xd = (t: number) => ((t - start) / (end - start)) * W; // not held to the stretch: clipped instead
     const Y = (v: number) => H - PAD - ((v - lo) / (hi - lo)) * (H - 2 * PAD);
     const path = (pts: LinePoint[]) =>
-      pts.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)} ${Y(p.v ?? 0).toFixed(1)}`).join(" ");
-    const lines = runs(shown).map((r) => ({ d: path(r.pts), forecast: r.forecast, pts: r.pts }));
+      pts.map((p, i) => `${i ? "L" : "M"}${Xd(p.t).toFixed(1)} ${Y(p.v ?? 0).toFixed(1)}`).join(" ");
+    const lines = runs(drawn).map((r) => ({ d: path(r.pts), forecast: r.forecast, pts: r.pts }));
     const zero = Y(0);
     const base = Y(Math.max(lo, 0));
     return {
       shown: shown.filter((p) => p.v != null),
       other: other.filter((p) => p.v != null),
       lines,
-      compared: runs(other.map((p) => ({ ...p, forecast: false }))).map((r) => path(r.pts)),
+      compared: runs(within(compare?.points ?? []).map((p) => ({ ...p, forecast: false }))).map((r) => path(r.pts)),
       fills: fill
         ? lines.map(
             (l) =>
-              `${l.d} L${X(l.pts[l.pts.length - 1].t).toFixed(1)} ${base.toFixed(1)} L${X(l.pts[0].t).toFixed(1)} ${base.toFixed(1)} Z`,
+              `${l.d} L${Xd(l.pts[l.pts.length - 1].t).toFixed(1)} ${base.toFixed(1)} L${Xd(l.pts[0].t).toFixed(1)} ${base.toFixed(1)} Z`,
           )
         : [],
       areas: signed
         ? lines.map(
             (l) =>
-              `${l.d} L${X(l.pts[l.pts.length - 1].t).toFixed(1)} ${zero.toFixed(1)} L${X(l.pts[0].t).toFixed(1)} ${zero.toFixed(1)} Z`,
+              `${l.d} L${Xd(l.pts[l.pts.length - 1].t).toFixed(1)} ${zero.toFixed(1)} L${Xd(l.pts[0].t).toFixed(1)} ${zero.toFixed(1)} Z`,
           )
         : [],
       zero: lo < 0 && hi > 0 ? zero : null,
@@ -133,6 +305,7 @@ export function TimeLine({
   }, [points, compare, start, end, domain, signed, fill, H]);
 
   const [hover, setHover] = useState<{ p: LinePoint; other: LinePoint | null } | null>(null);
+  const range = useDragRange(start, end, onRange ?? (self ? own.zoom : undefined));
   const [width, setWidth] = useState(0);
   const onPoint = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -149,32 +322,45 @@ export function TimeLine({
     setHover(p || other ? { p: p ?? { t: other!.t, v: null }, other } : null);
   };
 
-  // Hour marks every `every` hours (twice that on a phone), on the hour, across the stretch shown.
-  const ticks: { left: number; label: string; odd: boolean }[] = [];
-  const first = Math.ceil(start / HOUR) * HOUR;
-  for (let t = first; t <= end; t += HOUR) {
-    const h = new Date(t * 1000).getHours();
-    if (h % every) continue;
-    ticks.push({ left: chart.leftOf(t), label: hourLabel(h), odd: (h / every) % 2 === 1 });
-  }
+  const ticks = timeTicks(start, end, every);
   const nowLeft = now != null && now >= start && now <= end ? chart.leftOf(now) : null;
 
-  if (!chart.shown.length && !chart.other.length)
+  // Zoomed in by itself, the way back out, over the plot's right.
+  const out = self && own.zoomed && (
+    <div className="flex justify-end">
+      <ZoomOut from={start} to={end} onClick={own.reset} />
+    </div>
+  );
+
+  if (!chart.shown.length && !chart.other.length && !chart.lines.length)
     return (
-      <div className="flex items-center justify-center text-sm text-ink-faint" style={{ height }}>
-        {empty}
+      <div className="flex min-w-0 flex-col gap-2">
+        {out}
+        <div className="flex items-center justify-center text-sm text-ink-faint" style={{ height }}>
+          {empty}
+        </div>
       </div>
     );
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
+      {out}
       <div
         className="relative cursor-crosshair touch-pan-y"
         style={{ height }}
-        onPointerMove={onPoint}
-        onPointerDown={onPoint}
+        onPointerMove={(e) => {
+          onPoint(e);
+          range.handlers.onPointerMove?.(e);
+        }}
+        onPointerDown={(e) => {
+          onPoint(e);
+          range.handlers.onPointerDown?.(e);
+        }}
+        onPointerUp={range.handlers.onPointerUp}
+        onPointerCancel={range.handlers.onPointerCancel}
         onPointerLeave={() => setHover(null)}
       >
+        <DragBand band={range.band} />
         <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
         <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
         {spans.map((s) =>
@@ -218,6 +404,11 @@ export function TimeLine({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
         >
+          <defs>
+            <clipPath id={`${clip}-plot`}>
+              <rect x="0" y={-H} width={W} height={H * 3} />
+            </clipPath>
+          </defs>
           {signed && (
             <defs>
               <clipPath id={`${clip}-up`}>
@@ -228,79 +419,81 @@ export function TimeLine({
               </clipPath>
             </defs>
           )}
-          {signed &&
-            chart.areas.map((d, i) => (
-              <g key={`a${i}`}>
-                <path d={d} clipPath={`url(#${clip}-up)`} style={{ fill: alpha(signed.above, 0.22) }} />
-                <path d={d} clipPath={`url(#${clip}-down)`} style={{ fill: alpha(signed.below, 0.22) }} />
-              </g>
+          <g clipPath={`url(#${clip}-plot)`}>
+            {signed &&
+              chart.areas.map((d, i) => (
+                <g key={`a${i}`}>
+                  <path d={d} clipPath={`url(#${clip}-up)`} style={{ fill: alpha(signed.above, 0.22) }} />
+                  <path d={d} clipPath={`url(#${clip}-down)`} style={{ fill: alpha(signed.below, 0.22) }} />
+                </g>
+              ))}
+            {chart.fills.map((d, i) => (
+              <path key={`f${i}`} d={d} style={{ fill: alpha(color, 0.14) }} />
             ))}
-          {chart.fills.map((d, i) => (
-            <path key={`f${i}`} d={d} style={{ fill: alpha(color, 0.14) }} />
-          ))}
-          {compare &&
-            chart.compared.map((d, i) => (
-              <path
-                key={`c${i}`}
-                d={d}
-                {...STROKE}
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-                style={{ stroke: compare.color }}
+            {compare &&
+              chart.compared.map((d, i) => (
+                <path
+                  key={`c${i}`}
+                  d={d}
+                  {...STROKE}
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
+                  style={{ stroke: compare.color }}
+                />
+              ))}
+            {chart.zero != null && (
+              <line
+                x1="0"
+                x2={W}
+                y1={chart.zero.toFixed(1)}
+                y2={chart.zero.toFixed(1)}
+                vectorEffect="non-scaling-stroke"
+                style={{ stroke: alpha(COLOR.fg, 0.22) }}
+              />
+            )}
+            {marks.map((m) => (
+              <line
+                key={m.label}
+                x1="0"
+                x2={W}
+                y1={chart.Y(m.v).toFixed(1)}
+                y2={chart.Y(m.v).toFixed(1)}
+                vectorEffect="non-scaling-stroke"
+                strokeDasharray="3 4"
+                style={{ stroke: m.color ?? alpha(COLOR.fg, 0.3) }}
               />
             ))}
-          {chart.zero != null && (
-            <line
-              x1="0"
-              x2={W}
-              y1={chart.zero.toFixed(1)}
-              y2={chart.zero.toFixed(1)}
-              vectorEffect="non-scaling-stroke"
-              style={{ stroke: alpha(COLOR.fg, 0.22) }}
-            />
-          )}
-          {marks.map((m) => (
-            <line
-              key={m.label}
-              x1="0"
-              x2={W}
-              y1={chart.Y(m.v).toFixed(1)}
-              y2={chart.Y(m.v).toFixed(1)}
-              vectorEffect="non-scaling-stroke"
-              strokeDasharray="3 4"
-              style={{ stroke: m.color ?? alpha(COLOR.fg, 0.3) }}
-            />
-          ))}
-          {chart.lines.map((l, i) =>
-            signed ? (
-              <g key={i}>
+            {chart.lines.map((l, i) =>
+              signed ? (
+                <g key={i}>
+                  <path
+                    d={l.d}
+                    {...STROKE}
+                    strokeWidth="2"
+                    clipPath={`url(#${clip}-up)`}
+                    style={{ stroke: signed.above }}
+                  />
+                  <path
+                    d={l.d}
+                    {...STROKE}
+                    strokeWidth="2"
+                    clipPath={`url(#${clip}-down)`}
+                    style={{ stroke: signed.below }}
+                  />
+                </g>
+              ) : (
                 <path
+                  key={i}
                   d={l.d}
                   {...STROKE}
                   strokeWidth="2"
-                  clipPath={`url(#${clip}-up)`}
-                  style={{ stroke: signed.above }}
+                  strokeDasharray={l.forecast ? "4 4" : undefined}
+                  strokeOpacity={l.forecast ? 0.75 : 1}
+                  style={{ stroke: color }}
                 />
-                <path
-                  d={l.d}
-                  {...STROKE}
-                  strokeWidth="2"
-                  clipPath={`url(#${clip}-down)`}
-                  style={{ stroke: signed.below }}
-                />
-              </g>
-            ) : (
-              <path
-                key={i}
-                d={l.d}
-                {...STROKE}
-                strokeWidth="2"
-                strokeDasharray={l.forecast ? "4 4" : undefined}
-                strokeOpacity={l.forecast ? 0.75 : 1}
-                style={{ stroke: color }}
-              />
-            ),
-          )}
+              ),
+            )}
+          </g>
         </svg>
         {band?.label && (
           <span
@@ -328,7 +521,7 @@ export function TimeLine({
             <span className="absolute -top-0.5 left-1.5 font-mono text-[10px] text-ink-faint">Now</span>
           </div>
         )}
-        {hover && (
+        {hover && !range.dragging && (
           <>
             <HoverLine left={chart.leftOf(hover.p.t)} />
             {hover.p.v != null && (
@@ -357,21 +550,7 @@ export function TimeLine({
           </>
         )}
       </div>
-      <div className="relative h-3.5">
-        {ticks.map((t, i) => (
-          <span
-            key={`${t.left}`}
-            className={cn(
-              "absolute font-mono text-[11px] whitespace-nowrap text-ink-faint",
-              t.left < 3 ? "" : t.left > 97 ? "-translate-x-full" : "-translate-x-1/2",
-              t.odd && i !== 0 && "max-md:hidden",
-            )}
-            style={{ left: `${t.left}%` }}
-          >
-            {t.label}
-          </span>
-        ))}
-      </div>
+      <TimeTicks ticks={ticks} />
     </div>
   );
 }
