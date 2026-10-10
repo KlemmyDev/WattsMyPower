@@ -95,8 +95,8 @@ export type LiveStatus = {
   /** While the inverter's dongle keeps serving the same registers: when the reading it repeats was taken. The repeats aren't recorded, so `snapshot` stays at that reading. */
   frozen_since?: number | null;
   battery_mode?: BatteryMode | null;
-  /** Which version this is: the date it was released ("2026.10.8"), and how far along it is ("alpha"; null once it's
-   * stable). */
+  /** Which version this is: the date it was released ("2026.10.8"), and how far along it is (e.g. "alpha"; null
+   * once it's stable, as now). */
   app?: { version: string; release: string | null; commit: string | null };
   /** Each EV in brief (app.features.tesla); null when none is connected. */
   ev?: EvBrief[] | null;

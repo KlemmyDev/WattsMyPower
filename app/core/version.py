@@ -1,7 +1,7 @@
 """
 The app's version, as the dashboard and /healthz show it: from pyproject.toml, its `version` (the date it was
 released: 2026.10.8, or 2026.10.8.1 for a second release that day) and `[tool.wattsmypower] release` (how far along it
-is, "alpha", until it's marked stable and left out). The file is next to app/ in the repository and in the image.
+is, e.g. "alpha"; left out, as now, once it's stable). The file is next to app/ in the repository and in the image.
 
 And the commit it was built from, which is what tells an update apart (app.features.updates): GIT_COMMIT, stamped
 into the image by install.sh, or, run from a checkout, the checkout's own.
@@ -57,5 +57,5 @@ def version_key(version: str) -> tuple[int, ...]:
 
 
 def about() -> dict[str, str | None]:
-    """The version, its release ("alpha"), and the commit it was built from, for the dashboard."""
+    """The version, its release (e.g. "alpha", or None), and the commit it was built from, for the dashboard."""
     return {"version": VERSION, "release": RELEASE, "commit": COMMIT}
