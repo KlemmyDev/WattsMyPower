@@ -135,7 +135,7 @@ Windows 11 (22H2 or later). WattsMyPower runs in its own WSL (Windows Subsystem 
    irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1 | iex
    ```
 
-   It asks for administrator permission. If WSL isn't installed yet, it installs it and asks to restart; after you sign in again it carries on by itself (approve the administrator prompt again).
+   It asks for administrator permission. If WSL isn't installed yet, it installs it, turns on the Virtual Machine Platform feature and Windows' hypervisor, and restarts the PC once, after a minute's warning; after you sign in again it carries on by itself. If virtualization is turned off in the PC's firmware (BIOS/UEFI), which Windows can't change, it offers to restart straight into the firmware settings so you can turn it on (often called Intel Virtualization Technology or VT-x, AMD-V or SVM Mode).
 
 2. **It sets everything up,** with no questions:
    - creates the `WattsMyPower` distribution (Ubuntu 24.04) with systemd, so Docker runs as a service in it
@@ -155,7 +155,7 @@ It follows the beta [release channel](#everyday-use). To choose another, pass `-
 
 To update, run the same command again. For everything in [Everyday use](#everyday-use), open the distribution with `wsl -d WattsMyPower`, then `cd ~/wattsmypower`. Its files are at `\\wsl$\WattsMyPower\root\wattsmypower` in File Explorer, for example to copy a backup.
 
-If creating the distribution fails because virtualization is off, turn it on in the PC's BIOS or UEFI settings (often called Intel VT-x, AMD-V or SVM). Windows 10 isn't supported: it doesn't have mirrored networking, which lets other devices reach the dashboard.
+If Windows is itself a virtual machine, turn on nested virtualization for it first. Windows 10 isn't supported: it doesn't have mirrored networking, which lets other devices reach the dashboard.
 
 To remove it, in PowerShell as administrator (this deletes its data, so copy `data/` out first if you want to keep it):
 
