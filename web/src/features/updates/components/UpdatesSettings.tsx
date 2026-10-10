@@ -6,22 +6,21 @@ import { plural } from "~/features/common/formatting/utils/number";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { nowS, sameDay } from "~/features/common/time/utils";
-import { Button } from "~/features/common/ui/components/Button";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { Button, buttonClass } from "~/features/common/ui/components/Button";
+import type { IconName } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
-import { Pill } from "~/features/common/ui/components/Pill";
 import { Spinner } from "~/features/common/ui/components/Progress";
-import { Segmented } from "~/features/common/ui/components/Segmented";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { ChoiceTiles, OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
-import { ChannelDot } from "~/features/updates/components/ChannelBadge";
 import { CHANNEL } from "~/features/updates/utils";
 import type { Channel, UpdateStatus } from "~/features/updates/types";
 
 const short = (commit: string) => commit.slice(0, 7);
-const titled = (release: string | null) => (release ? release.charAt(0).toUpperCase() + release.slice(1) : null);
 const UNDER_WAY = new Set(["requested", "running"]);
 
 const ABOUT: Record<Channel, string> = {
@@ -29,14 +28,13 @@ const ABOUT: Record<Channel, string> = {
   beta: "Pre-releases to try before they're stable, and every stable release.",
   stable: "Releases only, once they've been tried. Updates less often.",
 };
-const CHANNELS = (Object.keys(CHANNEL) as Channel[]).map((value) => ({
+const CHANNEL_ICON: Record<Channel, IconName> = { nightly: "moon", beta: "flask", stable: "shield" };
+const CHANNEL_TILES = (Object.keys(CHANNEL) as Channel[]).map((value) => ({
   value,
-  label: (
-    <span className="flex items-center gap-1.5">
-      <ChannelDot channel={value} />
-      {CHANNEL[value].label}
-    </span>
-  ),
+  title: CHANNEL[value].label,
+  sub: ABOUT[value],
+  icon: CHANNEL_ICON[value],
+  color: CHANNEL[value].color,
 }));
 const channelName = (c: Channel) => CHANNEL[c].label;
 
@@ -75,18 +73,18 @@ export function UpdatesSettings() {
         title="Updates"
         sub="The version you're running, the release channel it follows, and installing newer ones."
       />
-      <UpdatesCard />
+      <UpdatesBody />
     </>
   );
 }
 
 /**
- * Updates (Manage → System → Updates): the release channel followed, the version running, the channel's on GitHub and whether
- * it's newer (or older, after moving to a channel behind this version), checking now, and turning the checks every few
- * hours off. With the updater set up on the machine it's installed on, Update now (or going back); else how to update
+ * Updates (Manage → System → Updates): the version running and the channel's on GitHub at the top, then whether it's
+ * newer (or older, after moving to a channel behind this version) and checking now, the release channel followed, and
+ * turning the checks every few hours off. With the updater set up on the machine it's installed on, Update now (or going back); else how to update
  * by hand.
  */
-function UpdatesCard() {
+function UpdatesBody() {
   const qc = useQueryClient();
   const toast = useToast();
   // Every few seconds while an update is under way (and while the dashboard restarts, when it can't answer).
@@ -139,184 +137,193 @@ function UpdatesCard() {
     return () => clearTimeout(t);
   }, [updated, s, toast]);
 
-  return (
-    <SettingsCard padded aria-labelledby="h-updates" id="updates" className="scroll-mt-6 gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 id="h-updates" className="text-[15px] font-semibold">
-            Check for updates
-          </h3>
-          <span className="text-sm text-pretty text-ink-muted">
-            Every few hours WattsMyPower asks GitHub, where it's published, whether there's a newer version. Nothing
-            about your home is sent.
-          </span>
-        </div>
-        <Switch
-          on={on}
-          disabled={save.isPending || !s}
-          label="Check for updates"
-          onChange={(v) =>
-            save.mutate(
-              { update_check: v ? 1 : 0 },
-              {
-                onSuccess: () => {
-                  qc.invalidateQueries({ queryKey: updatesQuery.queryKey });
-                  toast(v ? "Checking for updates." : "Not checking for updates.");
-                },
-                onError: (e) => toast(saveSettingsError(e)),
-              },
-            )
-          }
-        />
-      </div>
+  const color = CHANNEL[following ?? "nightly"].color;
+  const headline = !s
+    ? "Checking…"
+    : underWay || updated
+      ? "Updating"
+      : s.available
+        ? `${newerWords(s)
+            .replace(/^the /, "")
+            .replace(/^./, (c) => c.toUpperCase())} available`
+        : older
+          ? `v${s.latest!.version} on ${channelName(s.channel)} is older`
+          : s.latest
+            ? "You're up to date"
+            : s.unreleased
+              ? "Nothing released yet"
+              : "Not checked yet";
 
+  return (
+    <>
       {s && following && (
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-ink-muted">Channel</span>
-          <Segmented
-            label="Release channel"
-            options={CHANNELS}
-            value={following}
-            onChange={(c) => c !== following && channel.mutate(c)}
-            className="w-fit max-w-full"
+        <SummaryCard icon="download" color={color} label="Your version">
+          <SummaryStat
+            label="This version"
+            value={s.current.version}
+            sub={s.current.commit ? short(s.current.commit) : undefined}
           />
-          <span className="text-[13px] text-pretty text-ink-muted">{ABOUT[following]}</span>
-        </div>
+          <SummaryStat label="Channel" value={channelName(following)} dot={color} sub="Following" />
+          <SummaryStat
+            label={`Latest on ${channelName(s.channel)}`}
+            value={s.latest ? s.latest.version : "—"}
+            sub={
+              s.available
+                ? s.latest?.changes
+                  ? `${s.latest.changes} ${plural(s.latest.changes, "change")} newer`
+                  : "Newer"
+                : older
+                  ? "Older than this"
+                  : s.latest
+                    ? "Up to date"
+                    : s.unreleased
+                      ? "Nothing released yet"
+                      : "Not checked yet"
+            }
+          />
+          <SummaryStat
+            label="Last checked"
+            value={s.checked_at ? when(s.checked_at) : "Not yet"}
+            sub={s.enabled ? "Every few hours" : "Checking is off"}
+          />
+        </SummaryCard>
       )}
 
-      {s && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-sm:grid-cols-1">
-          <Version
-            label="This version"
-            version={s.current.version}
-            release={s.current.release}
-            commit={s.current.commit}
-            repo={s.repo}
+      <SettingsSection
+        id="h-update"
+        title={headline}
+        sub={
+          s?.available
+            ? "A newer version is on your channel."
+            : "WattsMyPower is published on GitHub. Checking sends nothing about your home."
+        }
+        aside={
+          <div className="flex flex-wrap items-center gap-2">
+            {s?.latest && (
+              <a href={changesUrl(s)} target="_blank" rel="noreferrer" className={buttonClass("muted-link", "sm")}>
+                See what's changed
+              </a>
+            )}
+            <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending || underWay}>
+              {check.isPending ? "Checking…" : "Check now"}
+            </Button>
+          </div>
+        }
+      >
+        {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
+        {s?.unreleased && !channel.isPending && (
+          <Notice tone="info">
+            Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly has
+            every change as it's merged.
+          </Notice>
+        )}
+
+        {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
+        {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
+          <Progress s={s} restarting={status.isError || updated} />
+        )}
+        {!underWay && s?.install.state === "failed" && (
+          <Notice className="flex flex-col gap-2">
+            <span>The update didn't finish. {s.install.error}</span>
+            <Log lines={s.install.log} />
+          </Notice>
+        )}
+        {!underWay && s?.install.state === "expired" && (
+          <Notice tone="warn">
+            The update was asked for while the updater wasn't running, so it was dropped. Try again.
+          </Notice>
+        )}
+
+        {s?.move && !underWay && !updated && (
+          <>
+            {s.install.ready ? (
+              confirming ? (
+                <div className="flex animate-pop flex-col gap-3 rounded-2xl bg-canvas/60 p-5 text-sm light:bg-canvas">
+                  <span className="font-semibold">
+                    {older
+                      ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
+                      : `Update to ${newerWords(s)} now?`}
+                  </span>
+                  {older && (
+                    <span className="text-pretty text-ink-muted">
+                      It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in the
+                      database, for when it's updated again.
+                    </span>
+                  )}
+                  <span className="text-pretty text-ink-muted">
+                    It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away
+                    for a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
+                      {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
+                    {older ? `Go back to v${s.latest!.version}` : "Update now"}
+                  </Button>
+                </div>
+              )
+            ) : (
+              <HowToUpdate s={s} />
+            )}
+          </>
+        )}
+      </SettingsSection>
+
+      {s && following && (
+        <SettingsSection
+          id="h-channel"
+          title="Release channel"
+          sub="Which releases this dashboard follows. Choosing one behind this version offers to go back to it."
+        >
+          <ChoiceTiles
+            label="Release channel"
+            min="11rem"
+            phone={1}
+            value={following}
+            onChange={(c) => channel.mutate(c)}
+            disabled={channel.isPending}
+            options={CHANNEL_TILES}
           />
-          {s.latest ? (
-            <Version
-              label={`Latest on ${channelName(s.channel)}`}
-              version={s.latest.version}
-              release={s.latest.release}
-              commit={s.latest.commit}
-              repo={s.repo}
-              aside={
-                s.available ? (
-                  <Pill tone="brand" size="sm">
-                    {s.latest.changes ? `${s.latest.changes} ${plural(s.latest.changes, "change")} newer` : "Newer"}
-                  </Pill>
-                ) : older ? (
-                  <Pill tone="neutral" size="sm">
-                    Older
-                  </Pill>
-                ) : (
-                  <Pill tone="ok" size="sm">
-                    Up to date
-                  </Pill>
+        </SettingsSection>
+      )}
+
+      <SettingsSection id="h-updates" title="Automatic checks">
+        <OptionList>
+          <OptionRow
+            label="Check for updates"
+            help="Every few hours WattsMyPower asks GitHub whether there's a newer version on your channel."
+            icon="clock"
+            color={COLOR.brand}
+          >
+            <Switch
+              on={on}
+              disabled={save.isPending || !s}
+              label="Check for updates"
+              onChange={(v) =>
+                save.mutate(
+                  { update_check: v ? 1 : 0 },
+                  {
+                    onSuccess: () => {
+                      qc.invalidateQueries({ queryKey: updatesQuery.queryKey });
+                      toast(v ? "Checking for updates." : "Not checking for updates.");
+                    },
+                    onError: (e) => toast(saveSettingsError(e)),
+                  },
                 )
               }
             />
-          ) : (
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-ink-muted">Latest on {channelName(s.channel)}</span>
-              <span className="text-[15px] text-ink-muted">
-                {channel.isPending
-                  ? "Checking…"
-                  : s.unreleased
-                    ? "Nothing released yet"
-                    : s.checked_at
-                      ? "Couldn't check"
-                      : "Not checked yet"}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
-      {s?.unreleased && !channel.isPending && (
-        <Notice tone="info">
-          Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly has
-          every change as it's merged.
-        </Notice>
-      )}
-
-      {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
-      {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
-        <Progress s={s} restarting={status.isError || updated} />
-      )}
-      {!underWay && s?.install.state === "failed" && (
-        <Notice className="flex flex-col gap-2">
-          <span>The update didn't finish. {s.install.error}</span>
-          <Log lines={s.install.log} />
-        </Notice>
-      )}
-      {!underWay && s?.install.state === "expired" && (
-        <Notice tone="warn">
-          The update was asked for while the updater wasn't running, so it was dropped. Try again.
-        </Notice>
-      )}
-
-      {s?.move && !underWay && !updated && (
-        <>
-          {s.install.ready ? (
-            confirming && (
-              <div className="flex flex-col gap-3 rounded-2xl border border-line-subtle bg-surface-inset p-4 text-sm">
-                <span className="font-medium">
-                  {older
-                    ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
-                    : `Update to ${newerWords(s)} now?`}
-                </span>
-                {older && (
-                  <span className="text-pretty text-ink-muted">
-                    It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in the
-                    database, for when it's updated again.
-                  </span>
-                )}
-                <span className="text-pretty text-ink-muted">
-                  It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away for
-                  a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
-                    {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )
-          ) : (
-            <HowToUpdate s={s} />
-          )}
-        </>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        {s?.move && s.install.ready && !underWay && !confirming && !updated && (
-          <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
-            {older ? `Go back to v${s.latest!.version}` : "Update now"}
-          </Button>
-        )}
-        <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending || underWay}>
-          {check.isPending ? "Checking…" : "Check now"}
-        </Button>
-        {s?.latest && (
-          <a
-            href={changesUrl(s)}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[13px] text-link no-underline hover:text-link-hover"
-          >
-            See what's changed
-          </a>
-        )}
-        <span className="ml-auto text-[13px] text-ink-faint">
-          {s?.checked_at ? `Checked ${when(s.checked_at)}` : s?.enabled === false ? "Checking is off" : ""}
-        </span>
-      </div>
-    </SettingsCard>
+          </OptionRow>
+        </OptionList>
+      </SettingsSection>
+    </>
   );
 }
 
@@ -356,43 +363,6 @@ function Log({ lines }: { lines: string[] }) {
   );
 }
 
-function Version({
-  label,
-  version,
-  release,
-  commit,
-  repo,
-  aside,
-}: {
-  label: string;
-  version: string;
-  release: string | null;
-  commit: string | null;
-  repo: string;
-  aside?: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs text-ink-muted">{label}</span>
-      <span className="flex flex-wrap items-center gap-2 text-[15px] font-medium tabular-nums">
-        v{version}
-        {release && <span className="text-ink-muted">· {titled(release)}</span>}
-        {aside}
-      </span>
-      {commit && (
-        <a
-          href={`https://github.com/${repo}/commit/${commit}`}
-          target="_blank"
-          rel="noreferrer"
-          className="w-fit font-mono text-xs text-ink-faint no-underline hover:text-link"
-        >
-          {short(commit)}
-        </a>
-      )}
-    </div>
-  );
-}
-
 /**
  * How to update by hand, while updating from here isn't set up (or can't run), and why not. On Windows, install.ps1
  * again (it runs install.sh in WattsMyPower's WSL distribution), or install.sh in there.
@@ -400,7 +370,7 @@ function Version({
 function HowToUpdate({ s }: { s: UpdateStatus }) {
   const what = `It installs ${channelName(s.channel)}'s version, backs up your data and rebuilds; your settings and history are kept.`;
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-line-subtle bg-surface-inset p-4 text-sm">
+    <div className="flex flex-col gap-2 rounded-2xl bg-canvas/60 p-5 text-sm light:bg-canvas">
       <span className="font-medium">
         {s.move === "older" ? `To go back to v${s.latest!.version}` : `To update to ${newerWords(s)}`}
       </span>
