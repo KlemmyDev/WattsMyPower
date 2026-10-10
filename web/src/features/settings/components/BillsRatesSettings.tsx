@@ -3,16 +3,16 @@ import { AmberTariffRow } from "~/features/amber/components/AmberTariffRow";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { BillAdjustments } from "~/features/settings/components/BillAdjustments";
 import { BillingSettings } from "~/features/settings/components/BillingSettings";
-import { BillPeriodVisual } from "~/features/settings/components/BillPeriodVisual";
 import { RatesDayChart } from "~/features/settings/components/RatesDayChart";
 import { RatesOptions } from "~/features/settings/components/RatesOptions";
-import { SettingsSection, SettingsSplit } from "~/features/settings/components/SettingsSection";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { RatesLoading, useRatesDraft } from "~/features/settings/components/TariffEditor";
 import { EDITOR_START, editorReducer } from "~/features/settings/utils";
 
 /**
- * Bills → Rates & settings: everything a bill is worked out from. On the left the rates through a day (as they're being
- * edited) and where this bill is; on the right the rates, the billing period, and discounts and the budget.
+ * Bills → Rates & settings: everything a bill is worked out from, one under another: the rates through a day (as they're
+ * being edited, with what power costs now), the rates, then the billing period (and where this bill is) beside
+ * discounts and the budget.
  */
 export function BillsRatesSettings() {
   const s = useSystem();
@@ -32,38 +32,30 @@ export function BillsRatesSettings() {
   return (
     <>
       <AmberTariffRow onUse={switchToAmber} />
-      <SettingsSplit
-        visual={
-          <>
-            <SettingsSection
-              id="h-rates-day"
-              title="Your rates through the day"
-              sub={
-                dirty
-                  ? "As you've changed them, not saved yet."
-                  : draft?.type === "amber"
-                    ? "Amber's prices change every 5 or 30 minutes; these are the fallback rates."
-                    : "What grid power costs at each time, and what feed-in earns."
-              }
-            >
-              {draft ? <RatesDayChart tariff={draft} /> : <RatesLoading failed={query.isError} />}
-            </SettingsSection>
-            <SettingsSection id="h-bill-now" title="This billing period">
-              <BillPeriodVisual />
-            </SettingsSection>
-          </>
+      <SettingsSection
+        id="h-rates-day"
+        title="Your rates through the day"
+        sub={
+          dirty
+            ? "As you've changed them, not saved yet."
+            : draft?.type === "amber"
+              ? "Amber's prices change every 5 or 30 minutes; these are the fallback rates."
+              : "What grid power costs at each time of day, and what feed-in earns."
         }
       >
-        {draft ? (
-          <RatesOptions draft={draft} state={editor} dispatch={dispatch} dirty={dirty} onDiscard={discard} />
-        ) : (
-          <SettingsSection id="rates" title="Rates">
-            <RatesLoading failed={query.isError} />
-          </SettingsSection>
-        )}
+        {draft ? <RatesDayChart tariff={draft} /> : <RatesLoading failed={query.isError} />}
+      </SettingsSection>
+      {draft ? (
+        <RatesOptions draft={draft} state={editor} dispatch={dispatch} dirty={dirty} onDiscard={discard} />
+      ) : (
+        <SettingsSection id="rates" title="Rates">
+          <RatesLoading failed={query.isError} />
+        </SettingsSection>
+      )}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
         <BillingSettings />
         {s && <BillAdjustments system={s} />}
-      </SettingsSplit>
+      </div>
     </>
   );
 }

@@ -70,7 +70,8 @@ export function RatesOptions({
       {draft.source && !state.imported && <SourceLine source={draft.source} />}
       <ChoiceTiles
         label="Rate type"
-        rows
+        min="13rem"
+        phone={1}
         color={COLOR.good}
         options={types.map((r) => ({ value: r.value, title: r.label, sub: RATE_HELP[r.value], icon: r.icon }))}
         value={draft.type}
