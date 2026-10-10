@@ -104,12 +104,13 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
     <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle px-5 py-4 last:border-b-0">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[15px] font-semibold">
-          {v.name ?? "Tesla"}
+          {v.name ?? v.model ?? "Tesla"}
           {v.state?.soc != null && (
             <span className="font-normal text-ink-muted tabular-nums"> · {Math.round(v.state.soc)}%</span>
           )}
         </span>
         <span className="font-mono text-xs text-ink-muted">
+          {v.model && <span className="font-sans">{[v.year, v.model].filter(Boolean).join(" ")} · </span>}
           {v.vin}
           <span className="font-sans">
             {" "}
@@ -126,7 +127,7 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
           disabled={configure.isPending}
           onChange={(e) => configure.mutate({ vin: v.vin, car: e.target.value ? Number(e.target.value) : null })}
         >
-          <option value="">Its model's figures</option>
+          <option value="">{v.model ? `${v.model} figures` : "Its model's figures"}</option>
           {cars?.map((c) => (
             <option key={c.id} value={c.id}>
               {carName(c)}&apos;s details
