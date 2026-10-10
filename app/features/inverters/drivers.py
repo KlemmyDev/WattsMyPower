@@ -6,9 +6,12 @@ protocol in types.py and listing it here, plus its reader in the collector.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from app.features.inverters.fronius import inverter as fronius_inverter
+from app.features.inverters.fronius import site as fronius_site
 from app.features.inverters.goodwe import dt as goodwe_dt
 from app.features.inverters.goodwe import et as goodwe_et
 from app.features.inverters.sungrow import sg_d, sh_control, sh_rs
@@ -17,11 +20,13 @@ from app.features.inverters.types import ControlDriver, HybridDriver, SolarDrive
 HYBRIDS: dict[str, HybridDriver] = {
     "sungrow.sh_rs": sh_rs,
     "goodwe.et": goodwe_et,
+    "fronius.site": fronius_site,
 }
 
 SOLAR: dict[str, SolarDriver] = {
     "sungrow.sg_d": sg_d,
     "goodwe.dt": goodwe_dt,
+    "fronius.inverter": fronius_inverter,
 }
 
 # Hybrids whose battery can be controlled from the dashboard (app.features.battery), by driver id.
@@ -65,7 +70,16 @@ KINDS: dict[str, Kind] = {
         0x7F,
         False,
     ),
-}
+    "fronius.site": Kind(
+        "hybrid", "Fronius", "GEN24, or an inverter with a Smart Meter",
+        "Solar API on its network port (on a GEN24, turn it on under Communication → Solar API)", "Primo GEN24 5.0",
+        80, 1, False,
+    ),
+    "fronius.inverter": Kind(
+        "pv2", "Fronius", "Primo, Symo or GEN24 string inverter", "Solar API on its network port", "Primo 5.0-1", 80,
+        1, False,
+    ),
+}  # fmt: skip
 
 
 def hybrid(driver: str | None) -> HybridDriver | None:
@@ -80,8 +94,8 @@ def solar(driver: str | None) -> SolarDriver | None:
     return SOLAR.get(driver or DEFAULT_SOLAR)
 
 
-def identify(driver: str | None, words: dict[str, int]) -> dict[str, Any]:
-    """What a device's identity registers (read by the collector's probe) say it is: brand, model,
+def identify(driver: str | None, words: Mapping[str, Any]) -> dict[str, Any]:
+    """What a device's identity registers (or, for Fronius, the figures read by the collector's probe) say it is: brand, model,
     serial, nominal_kw, whether that model is one this driver supports, and whether it's one the driver reads
     but doesn't know by name yet (`untested`: a newer model of a family that shares its registers)."""
     decoder = HYBRIDS.get(driver or "") or SOLAR.get(driver or "")

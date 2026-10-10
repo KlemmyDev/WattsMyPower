@@ -202,7 +202,7 @@ class IntegrationsService:
                     "driver": driver,
                     "role": kind.role if kind else None,
                     **_kind(driver),
-                    **identify(driver, {k: int(v) for k, v in (f.get("input") or {}).items()}),
+                    **identify(driver, f.get("input") or {}),
                     "connected_as": None,
                     # Connected when it was scanned, so not asked what it is, and removed since.
                     "rescan": bool(f.get("connected")),
@@ -259,7 +259,7 @@ class IntegrationsService:
                 raise IntegrationError(f"Nothing at {where} answered like a {kind.brand} {kind.label}.") from e
             raise IntegrationError(e.detail, e.status if e.status in (404, 409, 422) else 502) from e
         device = self._device(result["device"])
-        return {**device, "identified": identify(driver, {k: int(v) for k, v in (result.get("input") or {}).items()})}
+        return {**device, "identified": identify(driver, result.get("input") or {})}
 
     def update(self, role: str, changes: dict[str, Any]) -> dict[str, Any]:
         """Change a connected inverter's settings (where a second inverter connects), without re-checking it."""

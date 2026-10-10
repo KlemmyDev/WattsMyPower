@@ -2,7 +2,8 @@
 The inverters the collector reads, and what a read returns, whatever the brand.
 
 A device returns raw 16-bit words keyed by register address (as printed in the maker's docs)
-and nothing else: no scaling, signs or sentinels. What the words mean is the API's business (its
+and nothing else: no scaling, signs or sentinels. A device that isn't Modbus (Fronius' Solar API) returns the figures
+it reported, by name, as it reported them. What the words mean is the API's business (its
 driver with the same id decodes them), so a mapping fix there can be re-applied to everything
 already stored. Readers live in a package per brand, one module per model family, and are
 registered by driver id in drivers.py.
@@ -16,6 +17,9 @@ from typing import Any, Protocol
 
 # Register address -> raw unsigned 16-bit word.
 Words = dict[int, int]
+# What one device reported: register words for Modbus devices; for others (Fronius' Solar API), each figure as the
+# device reported it, by name ("flow.P_PV"). Either way stored as it is, for the API's driver to make sense of.
+Values = dict[Any, Any]
 
 # The roles a device can have: the inverter with the battery and the grid meter, and a second,
 # AC-coupled solar inverter. One device per role.
@@ -59,9 +63,9 @@ class RawReading:
     registers (empty on polls that didn't read them), for the status endpoint.
     """
 
-    input: Words
+    input: Values
     holding: Words = field(default_factory=dict)
-    info_input: Words = field(default_factory=dict)
+    info_input: Values = field(default_factory=dict)
     info_holding: Words = field(default_factory=dict)
 
 

@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import closing, contextmanager, suppress
 from typing import NamedTuple
 
-from collector.devices import DeviceConfig, Words
+from collector.devices import DeviceConfig, Values, Words
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
 SEEDED = "devices_seeded"
 
 # One device's words from one poll: (device, driver, input words, holding words - empty if none were read).
-PollRow = tuple[str, str, Words, Words]
+PollRow = tuple[str, str, Values, Words]
 
 
 class Row(NamedTuple):
@@ -68,8 +68,9 @@ class Row(NamedTuple):
     holding: str | None
 
 
-def encode(words: Words) -> str:
-    """Words as a compact JSON object keyed by address (a string), in address order."""
+def encode(words: Values) -> str:
+    """Words as a compact JSON object keyed by address (a string), in address order (or a non-Modbus device's
+    figures, by name)."""
     return json.dumps({str(a): words[a] for a in sorted(words)}, separators=(",", ":"))
 
 

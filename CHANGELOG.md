@@ -20,6 +20,10 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   DT-family string inverters (D-NS, XS, DT) as a second system, read on your network over Modbus on UDP port 8899
   (or Modbus TCP on a newer LAN dongle) and found by the same network scan. Their registers follow the `goodwe`
   library that Home Assistant uses; they haven't been tried on a real GoodWe yet.
+- **Fronius inverters (untested):** a GEN24 (with its battery) or a Symo or Primo with a Fronius Smart Meter as the
+  main inverter, and any Fronius as a second system, read through Fronius' local Solar API and found by the network
+  scan. A GEN24 has no daily counters, so its days' solar, charge and discharge are worked out from its lifetime
+  counter and power.
 - **Overview:** the live power flow as an animated house that follows the weather (and can be made to look like
   yours), today's cost and savings at your rates, the battery's last six hours and the next 24 hours.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,

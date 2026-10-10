@@ -117,7 +117,14 @@ def test_without_devices_nothing_is_read(client: TestClient) -> None:
     body = client.get("/v1/devices", headers=AUTH).json()
     assert body == {
         "devices": [],
-        "drivers": {"sungrow.sh_rs": "hybrid", "sungrow.sg_d": "pv2", "goodwe.et": "hybrid", "goodwe.dt": "pv2"},
+        "drivers": {
+            "sungrow.sh_rs": "hybrid",
+            "sungrow.sg_d": "pv2",
+            "goodwe.et": "hybrid",
+            "goodwe.dt": "pv2",
+            "fronius.site": "hybrid",
+            "fronius.inverter": "pv2",
+        },
     }
 
 
