@@ -51,7 +51,9 @@ function PaybackRing({ pct, children }: { pct: number | null; children: ReactNod
           <span className="text-[11px] text-ink-muted">paid back</span>
         </div>
       </div>
-      <div className="flex min-w-[180px] flex-1 flex-col gap-3">{children}</div>
+      <div className="grid min-w-[180px] flex-1 grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-x-6 gap-y-3">
+        {children}
+      </div>
     </div>
   );
 }
