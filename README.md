@@ -34,6 +34,8 @@ Two services, run together by Docker Compose:
 - **The collector** (`wattsmypower-collector`) is the only thing that talks to the inverters. Every poll it stores the raw register values it read, uninterpreted, in `data/collector.db`, and serves them over a token-protected feed ([collector/PROTOCOL.md](collector/PROTOCOL.md)). It rarely changes, so updates to the dashboard leave it recording without a break.
 - **The dashboard** (`wattsmypower`) follows that feed and does everything else: decoding the registers, merging a second inverter, readings and rollups (`data/wattsmypower.db`), costs, forecast, insights, savings, sign-in, and the web app. If the way a register is read ever turns out to be wrong, `python -m app reprocess` rebuilds the readings from the collector's raw history.
 
+Both run as an ordinary user, not root: whoever owns the `data` folder on the machine, or uid 10001 when that's root ([docker-entrypoint.sh](docker-entrypoint.sh) hands them the folder at each start, so an install from before just carries on). Their logs are kept to 30 MB each.
+
 ## Install
 
 Follow the steps for your computer, then [open the dashboard](#open-the-dashboard). On Linux and a Mac you run the install script; on Windows a PowerShell script sets up WSL and runs it there for you.
@@ -224,14 +226,15 @@ All settings are environment variables (see `.env.example`):
 | `PORT` | `8080` | Port the dashboard is served on |
 | `COLLECTOR_TOKEN` | *(generated)* | Secret the dashboard uses to read the collector's feed. `install.sh` creates one in `.env`. |
 | `COLLECTOR_WRITES` | `true` | Whether the dashboard may change what the collector reads (connect, remove or scan for inverters). Set `false` on a dashboard following another server's collector, such as one you're developing on, so it can't disturb that system. |
-| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
+| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, on this machine only (the dashboard reaches it inside Docker). |
+| `COLLECTOR_BIND` | `127.0.0.1` | Where that port is published. `0.0.0.0` publishes it to your network too, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
 | `COLLECTOR_RETENTION_DAYS` | `365` | Keep the collector's raw registers this many days (what `reprocess` can rebuild from). `0` = keep everything. |
 | `INVERTER_HOST`, `INVERTER_DRIVER`, `INVERTER_PORT`, `INVERTER_UNIT` | *(empty)*, `sungrow.sh_rs`, `502`, `1` | **Only read once:** inverters are connected in **Manage → Integrations** and stored in `data/collector.db`. The first time the collector starts with a database from before that, it moves the hybrid set here into it; after that these are ignored. |
 | `PV2_HOST`, `PV2_DRIVER`, `PV2_PORT`, `PV2_UNIT` | *(empty)*, `sungrow.sg_d`, `502`, `1` | The same, for a second, AC-coupled solar inverter. |
 | `PV2_BEHIND_METER` | `true` | Where a second system connects, unless it's set in **Manage → Integrations**. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
-| `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
+| `TZ` | `Australia/Brisbane` | Your time zone: where "today" and the daily totals roll over. `install.sh` asks for it; left out, the log says it's using Brisbane. |
 | `PV_KW` | `6.6` | **Only read once:** the solar array size is set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts with a database from before that, it moves the value set here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets it); after that this is ignored. |
 | `BATTERY_KWH`, `BATTERY_RESERVE`, `BATTERY_MAX_KW` | `0`, `10`, `5` | The same, for the battery's capacity (`0` = read it from the inverter), the backup reserve used when the inverter doesn't report one, and its maximum charge and discharge rate in kW. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |
@@ -298,6 +301,8 @@ Portable batteries (Bluetti) and Teslas can be reached over the server's Bluetoo
 4. Restart the LXC: `pct reboot 101`.
 
 Then, in the LXC, run `bash install.sh` in the WattsMyPower folder: it finds the host's D-Bus at `/mnt/host-dbus` (`BLUETOOTH_DBUS` in `.env`) and connects it through. In a user namespace like this, the dashboard lets the kernel tell D-Bus who it is, rather than claim to be root.
+
+**With Bluetooth, the dashboard runs as root** in its container (the collector doesn't), as BlueZ answers root wherever it's set up. On an ordinary Linux server or Raspberry Pi you can run it as an ordinary user instead: set `BLUETOOTH_GID` in `.env` to the number of the host's `bluetooth` group (`getent group bluetooth | cut -d: -f3`), then `docker compose up -d`. If the dashboard then says Bluetooth can't be used, take it out again. Not in a Proxmox LXC. [docker-compose.bluetooth.yml](docker-compose.bluetooth.yml) has more.
 
 ### How plan comparison works
 
@@ -387,6 +392,8 @@ Backend (`uv sync --extra collector` gets Python 3.13 and everything both servic
 COLLECTOR_URL=http://<server IP>:8081 COLLECTOR_TOKEN=<token> DB_PATH=./data/local.db uv run uvicorn app.main:app --port 8080
 ```
 
+The server only publishes the collector to itself, so first set `COLLECTOR_BIND=0.0.0.0` in its `.env` and run `docker compose up -d` there.
+
 It builds its own database from the collector's raw history (whatever the collector holds), then follows it live. Its settings, rates and account are its own, so changes there never touch the server. `python -m app reprocess` with the same variables rebuilds it after changing how registers are decoded.
 
 **Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
@@ -456,6 +463,7 @@ app/
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
+docker-entrypoint.sh    starts each container's service as an ordinary user, after handing it the data folder
 updater.sh              run every minute by cron: updates when the dashboard asks (Manage → System → Updates)
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
