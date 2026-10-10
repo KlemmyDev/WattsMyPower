@@ -27,7 +27,7 @@ function runs(tab: number[]): [number, number, number][] {
 
 /**
  * The rates through a day as a step chart: what grid power costs at each time (each rate's stretch filled in its
- * colour), and feed-in as a dashed line under it, the time now marked. Weekdays or weekends, when they differ. Hovering
+ * colour), and feed-in as a dashed line under it, the time now marked with what power costs then. Weekdays or weekends, when they differ. Hovering
  * says the rate in force then. Drawn from the rates as they're being edited.
  */
 export function RatesDayChart({ tariff }: { tariff: Tariff }) {
@@ -67,6 +67,7 @@ export function RatesDayChart({ tariff }: { tariff: Tariff }) {
 
   const y = (v: number) => 100 - (v / top) * 100;
   const nowMin = p.hour * 60 + p.minute;
+  const nowRate = tariffNumber(bands[tab[nowMin]].rate);
   const hb = hover != null ? bands[tab[hover]] : null;
   const run = hover != null ? segs.find(([a, b]) => hover >= a && hover < b) : null;
   const color = (i: number) => (flat ? COLOR.import : bandColor(i));
@@ -100,18 +101,6 @@ export function RatesDayChart({ tariff }: { tariff: Tariff }) {
           role="img"
           aria-label="Your rates through the day"
         >
-          {[0.25, 0.5, 0.75].map((f) => (
-            <line
-              key={f}
-              x1="0"
-              x2={DAY}
-              y1={y(top * f)}
-              y2={y(top * f)}
-              stroke={COLOR.gridLine}
-              strokeWidth="1"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
           {segs.map(([a, b, i]) => {
             const r = tariffNumber(bands[i].rate);
             return (
@@ -135,19 +124,6 @@ export function RatesDayChart({ tariff }: { tariff: Tariff }) {
               </g>
             );
           })}
-          {/* The steps between rates. */}
-          {segs.slice(1).map(([a, , i], k) => (
-            <line
-              key={a}
-              x1={a}
-              x2={a}
-              y1={y(tariffNumber(bands[segs[k][2]].rate))}
-              y2={y(tariffNumber(bands[i].rate))}
-              stroke={COLOR.gridLine}
-              strokeWidth="1.5"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
           {feedIn > 0 && (
             <line
               x1="0"
@@ -163,24 +139,23 @@ export function RatesDayChart({ tariff }: { tariff: Tariff }) {
         </svg>
         {/* Now, on today's kind of day. */}
         {shown === (weekend ? "weekend" : "weekday") && (
-          <div
-            className="pointer-events-none absolute top-0 bottom-0 border-l border-ink/50"
-            style={{ left: `${(nowMin / DAY) * 100}%` }}
-          >
-            <span className="absolute -top-0.5 left-1 rounded-full bg-ink px-1.5 py-px text-[10px] font-semibold text-ink-inverse">
-              Now
+          <>
+            <div
+              className="pointer-events-none absolute top-0 bottom-0 border-l border-dashed border-ink/40"
+              style={{ left: `${(nowMin / DAY) * 100}%` }}
+            />
+            <span
+              className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface"
+              style={{ left: `${(nowMin / DAY) * 100}%`, top: `${y(nowRate)}%`, background: color(tab[nowMin]) }}
+            />
+            <span
+              className={`pointer-events-none absolute top-0 rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-ink-inverse tabular-nums ${nowMin > DAY * 0.7 ? "-ml-1.5 -translate-x-full" : "ml-1.5"}`}
+              style={{ left: `${(nowMin / DAY) * 100}%` }}
+            >
+              Now · {c(nowRate)}/kWh
             </span>
-          </div>
+          </>
         )}
-        {[0.5, 1].map((f) => (
-          <span
-            key={f}
-            className="pointer-events-none absolute right-0 -translate-y-full pb-0.5 text-[10px] text-ink-faint tabular-nums"
-            style={{ top: `${y((top / 1.18) * f)}%` }}
-          >
-            {c((top / 1.18) * f)}
-          </span>
-        ))}
         {hover != null && hb && run && (
           <>
             <HoverLine left={(hover / DAY) * 100} />

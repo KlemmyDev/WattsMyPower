@@ -2,7 +2,11 @@ import type { Tariff, TariffBand, TimeWindow } from "~/features/common/tariffs/t
 import { isWeekend, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
-export const BAND_COLORS = [COLOR.solar, COLOR.battery, COLOR.gridLine, COLOR.good, COLOR.lilac, COLOR.bad];
+/**
+ * Each time-of-use rate's colour, in the order the rates are listed: peak yellow, off-peak blue, shoulder teal, then
+ * red, lilac and green. In this order neighbouring rates stay apart for colour-blind eyes too, in both themes.
+ */
+export const BAND_COLORS = [COLOR.solar, COLOR.battery, COLOR.teal, COLOR.bad, COLOR.lilac, COLOR.good];
 export const bandColor = (i: number) => BAND_COLORS[i % BAND_COLORS.length];
 export const MAX_BANDS = 6;
 export const MAX_WINDOWS = 6;

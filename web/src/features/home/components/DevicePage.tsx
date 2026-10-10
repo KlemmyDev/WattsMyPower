@@ -3,6 +3,7 @@ import { useState } from "react";
 import { duration, hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { kW, kWh, money } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { ButtonLink } from "~/features/common/ui/components/Button";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { addDays, midnight, mondayFirst, partsOf } from "~/features/common/time/utils";
 import { useNow } from "~/features/common/time/hooks";
@@ -154,6 +155,18 @@ export function DevicePage({ id }: { id: number }) {
       <PageHeader
         title={device?.name ?? (overview.data ? "No such device" : "…")}
         sub={[kind?.label, device?.model, device?.group && `In ${device.group}`].filter(Boolean).join(" · ") || " "}
+        action={
+          device?.integration && (
+            <ButtonLink
+              to="/integrations/home/$integration/$device"
+              params={{ integration: device.integration, device: String(device.id) }}
+              variant="outline"
+              size="sm"
+            >
+              Its settings
+            </ButtonLink>
+          )
+        }
       />
       {overview.data && !device && <Notice>There's no such device. It may have been disconnected.</Notice>}
       <div className="grid grid-cols-12 gap-5">
