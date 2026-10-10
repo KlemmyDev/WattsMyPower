@@ -97,7 +97,7 @@ def build_services(config: Config) -> Services:
     insights = InsightsService(db, readings, settings, weather, forecast, tariffs, amber.repo)
     weather.after_refresh.append(forecast.tick)  # learn and keep the day-ahead forecast as the weather updates
     integrations = IntegrationsService(config, collector, live)
-    outages = OutageService(settings, lambda: grid.region()[0])  # in Queensland? (grid is set by the time it asks)
+    outages = OutageService(settings, lambda: grid.region()[0])  # which state? (grid is set by the time it asks)
     hazards = HazardService(settings, lambda: grid.region()[0])
     grid = GridService(settings, weather, lambda: live.latest, outages=outages, hazards=hazards)
     return Services(

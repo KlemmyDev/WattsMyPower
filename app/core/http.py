@@ -17,7 +17,7 @@ from app.core.version import VERSION
 USER_AGENT = f"WattsMyPower/{VERSION} (+https://github.com/KlemmyDev/WattsMyPower)"
 
 
-def _body(resp: HTTPResponse) -> bytes:
+def read_body(resp: HTTPResponse) -> bytes:
     """A response's body, unpacked when it came compressed (for callers that send Accept-Encoding)."""
     body = resp.read()
     encoding = (resp.headers.get("Content-Encoding") or "").strip().lower()
@@ -35,7 +35,7 @@ def fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float =
         url, headers={"User-Agent": USER_AGENT, "Accept": "application/json", **(headers or {})}
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(_body(resp)), resp.headers
+        return json.loads(read_body(resp)), resp.headers
 
 
 def get_json(url: str, headers: dict[str, str] | None = None, timeout: float = 15) -> Any:

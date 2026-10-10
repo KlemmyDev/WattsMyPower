@@ -1,0 +1,37 @@
+{
+ "Outages": [
+  {
+   "Suburb": "ABERFELDIE",
+   "Street": "ABERFELDIE ST",
+   "Date": "15-Oct",
+   "Day": "Thursday",
+   "Time": "0730-1700",
+   "Status": "Scheduled"
+  },
+  {
+   "Suburb": "ABERFELDIE",
+   "Street": "WAVERLEY ST",
+   "Date": "15-Oct",
+   "Day": "Thursday",
+   "Time": "0730-1700",
+   "Status": "Scheduled"
+  },
+  {
+   "Suburb": "ASCOT VALE",
+   "Street": "ADELAIDE ST",
+   "Date": "09-Oct",
+   "Day": "Friday",
+   "Time": "0830-1630",
+   "Status": "Cancelled"
+  },
+  {
+   "Suburb": "SPOTSWOOD",
+   "Street": "FRANCIS ST",
+   "Date": "08-Oct",
+   "Day": "Friday",
+   "Time": "1930-0530",
+   "Status": "Scheduled"
+  }
+ ],
+ "LastUpdatedTime": "2026-10-09T08:50:23.9870000+11:00"
+}

@@ -1,0 +1,58 @@
+[
+ {
+  "outageId": "INCD-2158951-U",
+  "outageType": "U",
+  "startTime": "20261007T085752+08:00",
+  "restorationTime": null,
+  "onMap": false,
+  "outageUpdatedTime": "20261007T005818+00:00",
+  "affectedCustomers": 1,
+  "areas": [
+   "WILLIAMS"
+  ],
+  "latitudeCentroid": -33.0191,
+  "longitudeCentroid": 116.75
+ },
+ {
+  "outageId": "INCD-2161361-U",
+  "outageType": "U",
+  "startTime": "20261010T143426+08:00",
+  "restorationTime": "20261010T190000+08:00",
+  "onMap": true,
+  "outageUpdatedTime": "20261010T063532+00:00",
+  "affectedCustomers": 80,
+  "areas": [
+   "YOKINE"
+  ],
+  "latitudeCentroid": -31.90259,
+  "longitudeCentroid": 115.85803
+ },
+ {
+  "outageId": "INCD-2155331-U",
+  "outageType": "P",
+  "startTime": "20261010T084543+08:00",
+  "restorationTime": "20261010T170000+08:00",
+  "onMap": true,
+  "outageUpdatedTime": "20261001T051826+00:00",
+  "affectedCustomers": 26,
+  "areas": [
+   "ASCOT"
+  ],
+  "latitudeCentroid": -31.93288,
+  "longitudeCentroid": 115.93844
+ },
+ {
+  "outageId": "INCD-202784-X",
+  "outageType": "F",
+  "startTime": "20261017T073000+08:00",
+  "restorationTime": "20261017T140000+08:00",
+  "onMap": true,
+  "outageUpdatedTime": "20261007T160012+00:00",
+  "affectedCustomers": 3,
+  "areas": [
+   "AUSTRALIND"
+  ],
+  "latitudeCentroid": -33.28967,
+  "longitudeCentroid": 115.73921
+ }
+]

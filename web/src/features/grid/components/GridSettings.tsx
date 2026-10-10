@@ -15,14 +15,48 @@ import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { gridQuery } from "~/features/grid/api";
 import { RADII } from "~/features/grid/components/OutagesCard";
-import { REGIONS } from "~/features/grid/utils";
+import { REGIONS, listed } from "~/features/grid/utils";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { useGeocode } from "~/features/settings/hooks/useGeocode";
 
+/** The networks whose outages can be followed, by state. */
 const NETWORKS = [
-  { id: "energex", name: "Energex", area: "South East Queensland" },
-  { id: "ergon", name: "Ergon Energy", area: "regional Queensland" },
+  {
+    state: "Queensland",
+    networks: [
+      { id: "energex", name: "Energex", area: "South East Queensland" },
+      { id: "ergon", name: "Ergon Energy", area: "regional Queensland" },
+    ],
+  },
+  {
+    state: "New South Wales and the ACT",
+    networks: [
+      { id: "ausgrid", name: "Ausgrid", area: "Sydney, the Central Coast and the Hunter" },
+      { id: "endeavour", name: "Endeavour Energy", area: "Western Sydney, Illawarra and the South Coast" },
+      { id: "essential", name: "Essential Energy", area: "regional NSW" },
+      { id: "evoenergy", name: "Evoenergy", area: "the ACT" },
+    ],
+  },
+  {
+    state: "Victoria",
+    networks: [
+      { id: "citipower", name: "CitiPower", area: "inner Melbourne" },
+      { id: "jemena", name: "Jemena", area: "Melbourne's north-west" },
+      { id: "united", name: "United Energy", area: "Melbourne's south-east" },
+      { id: "ausnet", name: "AusNet Services", area: "eastern Victoria" },
+      { id: "powercor", name: "Powercor", area: "western Victoria" },
+    ],
+  },
+  { state: "South Australia", networks: [{ id: "sapn", name: "SA Power Networks", area: "South Australia" }] },
+  { state: "Tasmania", networks: [{ id: "tasnetworks", name: "TasNetworks", area: "Tasmania" }] },
+  {
+    state: "Western Australia",
+    networks: [
+      { id: "westernpower", name: "Western Power", area: "Perth and the South West" },
+      { id: "horizon", name: "Horizon Power", area: "regional WA" },
+    ],
+  },
 ] as const;
 
 function CardTitle({ id, title, sub, aside }: { id: string; title: string; sub: ReactNode; aside?: ReactNode }) {
@@ -90,10 +124,14 @@ function Network() {
             className="h-9 text-sm"
           >
             <option value="auto">{found}</option>
-            {NETWORKS.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.name} ({n.area})
-              </option>
+            {NETWORKS.map((g) => (
+              <optgroup key={g.state} label={g.state}>
+                {g.networks.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name} ({n.area})
+                  </option>
+                ))}
+              </optgroup>
             ))}
             <option value="none">Don't follow outages</option>
           </Select>
@@ -107,8 +145,14 @@ function Network() {
       )}
       {value === "auto" && !out?.network && out?.location_set && (
         <HelpText>
-          No supported network found for {locationLabel(system)}. Only Queensland's networks (Energex and Ergon Energy)
-          are supported so far.
+          No supported network found for {locationLabel(system)}. Every state's and territory's networks are, but the
+          Northern Territory's.
+        </HelpText>
+      )}
+      {value === "auto" && out && out.networks.length > 1 && (
+        <HelpText>
+          {locationLabel(system)} could be served by {listed(out.networks.map((n) => n.name))}, so outages from each are
+          shown. Choose yours to see only its outages.
         </HelpText>
       )}
       <HelpText>
