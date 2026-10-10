@@ -6,6 +6,10 @@ import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+# Where the demo (MOCK) is, so its forecast, weather and grid have something to show: Brisbane. LATITUDE and LONGITUDE
+# still move it, and set empty (LATITUDE= LONGITUDE=) they leave it unset, to see the dashboard as a new install does.
+DEMO_LOCATION = (-27.47, 153.03)
+
 
 @dataclass(frozen=True)
 class Config:
@@ -49,10 +53,11 @@ class Config:
     feed_in_rate: float = 0.05  # per kWh
     supply_charge: float = 1.05  # per day
 
-    # --- forecast (Open-Meteo, no API key): the location can be changed in Settings
+    # --- forecast (Open-Meteo, no API key). The house's location is chosen in the dashboard (Manage → Integrations →
+    # Weather); LATITUDE/LONGITUDE set one here instead. None until one is: nothing that needs it is fetched till then.
     forecast: bool = True
-    latitude: float = -27.47
-    longitude: float = 153.03
+    latitude: float | None = None
+    longitude: float | None = None
 
     # Generate synthetic data instead of following a collector (for local dev and demos).
     mock: bool = False
@@ -87,6 +92,17 @@ class Config:
         def number(name: str, default: float) -> float:
             return _parse(e, name, default, float, "a number", problems)
 
+        mock = flag("MOCK", cls.mock)
+
+        def maybe(name: str, demo: float) -> float | None:
+            """A number that may be left unset (missing or empty); in mock mode, missing is the demo's."""
+            raw = e.get(name)
+            if raw is None and mock:
+                return demo
+            if not (raw or "").strip():
+                return None
+            return _parse(e, name, demo, float, "a number", problems)  # (the demo's is only its example)
+
         d = cls()
         config = cls(
             collector_url=text("COLLECTOR_URL", d.collector_url),
@@ -105,9 +121,9 @@ class Config:
             feed_in_rate=number("FEED_IN_RATE", d.feed_in_rate),
             supply_charge=number("SUPPLY_CHARGE", d.supply_charge),
             forecast=flag("FORECAST", d.forecast),
-            latitude=number("LATITUDE", d.latitude),
-            longitude=number("LONGITUDE", d.longitude),
-            mock=flag("MOCK", d.mock),
+            latitude=maybe("LATITUDE", DEMO_LOCATION[0]),
+            longitude=maybe("LONGITUDE", DEMO_LOCATION[1]),
+            mock=mock,
             auth=unless_off("AUTH"),
             api_docs=flag("API_DOCS", d.api_docs),
         )

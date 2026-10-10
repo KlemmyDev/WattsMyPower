@@ -80,8 +80,8 @@ services:
       IMPORT_RATE: ${IMPORT_RATE:-0.32}
       FEED_IN_RATE: ${FEED_IN_RATE:-0.05}
       SUPPLY_CHARGE: ${SUPPLY_CHARGE:-1.05}
-      LATITUDE: ${LATITUDE:--27.47}
-      LONGITUDE: ${LONGITUDE:-153.03}
+      LATITUDE: ${LATITUDE:-}
+      LONGITUDE: ${LONGITUDE:-}
       AUTH: ${AUTH:-true}
       # Behind a reverse proxy: its address, so sign-in sees each browser's address rather than the proxy's.
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}

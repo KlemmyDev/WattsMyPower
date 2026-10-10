@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { listDays, monthShort, monthYear, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kWh, pct, plural } from "~/features/common/formatting/utils/number";
+import { useLocationSet } from "~/features/common/settings/hooks";
 import { Card, Footnote, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { cn } from "~/features/common/ui/utils";
@@ -29,7 +30,16 @@ const dayLabel = (d: Day) => {
 /** A clear day more than 10% under what the weather allowed. */
 const isLow = (d: Day) => d.clear && d.ratio != null && d.ratio < 0.9;
 
-function performanceNote(P: SolarInsights["performance"], rated: Rated[]): { tone: Tone; note: string } {
+function performanceNote(
+  P: SolarInsights["performance"],
+  rated: Rated[],
+  located: boolean | undefined,
+): { tone: Tone; note: string } {
+  if (!P && located === false)
+    return {
+      tone: "wait",
+      note: "Set your location (Manage → Integrations → Weather) to compare what the panels made with what the weather allowed.",
+    };
   if (!P)
     return {
       tone: "wait",
@@ -59,7 +69,8 @@ const noteDot: Record<Tone, string> = { warn: "bg-solar", ok: "bg-good", wait: "
 export function SolarPerformance({ performance: P }: { performance: SolarInsights["performance"] }) {
   const days = P?.days ?? [];
   const rated = days.filter((d): d is Rated => d.ratio != null);
-  const { tone, note } = performanceNote(P, rated);
+  const located = useLocationSet();
+  const { tone, note } = performanceNote(P, rated, located);
   const { hover: h, width, plot, bar } = useBarHover();
   return (
     <Card aria-labelledby="h-sp">
