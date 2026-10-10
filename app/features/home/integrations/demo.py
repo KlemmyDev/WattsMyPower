@@ -128,8 +128,17 @@ class Demo(Integration):
         return self.at(time.time())
 
     def past(self, start: int, end: int) -> list[tuple[int, list[Reading]]]:
+        """From the first local midnight in the range: a look-back that started part-way through a wash or a dry
+        would record half a cycle as a run of its own (and the demo's runs are tested whole)."""
+        lt = time.localtime(start)
+        midnight = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
+        first = (
+            midnight
+            if midnight == start
+            else int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + 1, 0, 0, 0, 0, 0, -1)))
+        )
         step = 2 * MIN
-        return [(ts, self.at(ts)) for ts in range(start - start % step, end, step)]
+        return [(ts, self.at(ts)) for ts in range(first, end, step)]
 
     def at(self, ts: float) -> list[Reading]:
         wash_start = _wash_start(ts)
