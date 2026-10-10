@@ -7,7 +7,7 @@ import { gridQuery } from "~/features/grid/api";
 import { DaylightVisual } from "~/features/settings/components/DaylightVisual";
 import { LocationForm } from "~/features/settings/components/LocationForm";
 import { OptionList, OptionRow, SettingsSection, SettingsSplit } from "~/features/settings/components/SettingsSection";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const coord = (v: number, pos: string, neg: string) => `${Math.abs(v).toFixed(3)}° ${v < 0 ? neg : pos}`;
 
@@ -31,9 +31,7 @@ export function LocationSettings() {
   const set = lat != null && lon != null && (lat !== 0 || lon !== 0);
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-location-page"
+      <SettingsPageHeader
         title="Location"
         sub="Where your system is. The solar forecast, sunrise and sunset, and the grid's region all follow it."
       />

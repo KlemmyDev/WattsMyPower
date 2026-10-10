@@ -16,7 +16,7 @@ import { COLOR } from "~/features/common/theme/utils/colors";
 import type { ThemeChoice } from "~/features/common/theme/utils";
 import { THEME_OPTIONS } from "~/features/common/theme/utils";
 import { useDisplay } from "~/features/common/display/hooks";
-import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 import type { Clock, Density, Size } from "~/features/common/display/utils";
 import { CLOCK_OPTIONS, DENSITY_OPTIONS, SIZE_OPTIONS } from "~/features/common/display/utils";
 import {
@@ -44,12 +44,7 @@ export function AccountSettings() {
 
   return (
     <>
-      <SubPageHeader
-        back={<BackLink to="/settings">Settings</BackLink>}
-        id="h-account-page"
-        title="Account"
-        sub="Signing in, and how the dashboard looks in this browser."
-      />
+      <SettingsPageHeader title="Account" sub="Signing in, and how the dashboard looks in this browser." />
       <SummaryCard
         icon="user"
         color={COLOR.lilac}
