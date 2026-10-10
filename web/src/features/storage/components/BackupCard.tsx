@@ -55,6 +55,7 @@ export function BackupCard({ report }: { report: StorageReport }) {
       <ChoiceTiles
         label="What to include"
         rows
+        className="md:grid md:grid-cols-2"
         color={COLOR.teal}
         options={options}
         value={what}
