@@ -8,7 +8,6 @@ import { SYSTEM_SETTINGS, type Settings, type SystemSettingKey } from "~/feature
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { inverterName } from "~/features/common/live/utils";
 import { ButtonLink } from "~/features/common/ui/components/Button";
-import { Field, Input } from "~/features/common/ui/components/Field";
 import { useToast } from "~/features/common/ui/components/Toast";
 import {
   NumberRow,
@@ -53,26 +52,8 @@ function Fact({ label, help, children }: { label: string; help?: ReactNode; chil
 function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | null }) {
   const toast = useToast();
   const form = useSystemDetails(s);
-  const v = (k: SystemSettingKey) => (form.values[k].trim() === "" ? null : Number(form.values[k]) || null);
-  const override = v("battery_kwh_override");
-  const figures: DiagramFigures = {
-    pvKw: v("pv_kw") ?? s.pv_kw,
-    batteryKwh: override ?? s.inverter_battery_kwh ?? null,
-    reservePct: s.inverter_reserve ?? v("battery_reserve_fallback"),
-    maxKw: v("battery_max_kw"),
-  };
   const reportedKwh = s.inverter_battery_kwh;
   const reportedReserve = s.inverter_reserve;
-  const row = (key: SystemSettingKey, label: string, help: ReactNode, unit: string, step: string) => (
-    <NumberRow
-      label={label}
-      help={help}
-      unit={unit}
-      step={step}
-      value={form.values[key]}
-      onChange={(value) => form.set(key, value)}
-    />
-  );
 
   return (
     <SettingsSplit
@@ -87,7 +68,7 @@ function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | 
             </ButtonLink>
           }
         >
-          <SystemDiagram system={s} figures={figures} />
+          <SystemDiagram system={s} figures={diagramFigures(s, form)} />
         </SettingsSection>
       }
     >
@@ -96,40 +77,7 @@ function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | 
         title="Details"
         sub="What your inverter can't tell us. The forecast and bills use them as soon as they're saved."
       >
-        <OptionList>
-          {row(
-            "pv_kw",
-            "Solar array size",
-            "All your panels, on every inverter. The forecast starts from it, then learns.",
-            "kW",
-            "0.01",
-          )}
-          {row(
-            "battery_kwh_override",
-            "Battery capacity",
-            reportedKwh
-              ? `0 uses what your inverter reports (${reportedKwh} kWh). Set it only if that's wrong.`
-              : "Your inverter doesn't report one, so set it here.",
-            "kWh",
-            "0.1",
-          )}
-          {row(
-            "battery_reserve_fallback",
-            "Backup reserve",
-            reportedReserve != null
-              ? `Your inverter reports ${pct(reportedReserve)}, which is used instead.`
-              : "The charge kept for blackouts.",
-            "%",
-            "1",
-          )}
-          {row(
-            "battery_max_kw",
-            "Charge and discharge rate",
-            "How fast the battery fills and empties, for the forecast.",
-            "kW",
-            "0.1",
-          )}
-        </OptionList>
+        <SystemDetailRows system={s} form={form} />
         <SaveBanner
           dirty={form.changed.length > 0}
           pending={form.pending}
@@ -221,66 +169,80 @@ export function useSystemDetails(s: SystemInfo, blank: SystemSettingKey[] = []) 
 
 export type SystemDetails = ReturnType<typeof useSystemDetails>;
 
-/** The array size, battery capacity, backup reserve and battery rate, with what the inverter reports where it does. */
-export function SystemDetailsFields({ system: s, form }: { system: SystemInfo; form: SystemDetails }) {
-  const field = (
-    key: SystemSettingKey,
-    label: string,
-    unit: string,
-    step: string,
-    help: ReactNode,
-    placeholder?: string,
-  ) => (
-    <Field label={label} help={help}>
-      <Input
-        type="number"
-        inputMode="decimal"
-        step={step}
-        unit={unit}
-        placeholder={placeholder}
-        value={form.values[key]}
-        onChange={(e) => form.set(key, e.target.value)}
-      />
-    </Field>
-  );
+/** A typed figure, or null while it's blank (or not a number above 0). */
+const typed = (form: SystemDetails, k: SystemSettingKey) =>
+  form.values[k].trim() === "" ? null : Number(form.values[k]) || null;
 
+/** What the diagram draws: the figures as typed, not saved yet, else the system's own. */
+export function diagramFigures(s: SystemInfo, form: SystemDetails): DiagramFigures {
+  return {
+    pvKw: typed(form, "pv_kw") ?? s.pv_kw,
+    batteryKwh: typed(form, "battery_kwh_override") ?? s.inverter_battery_kwh ?? null,
+    reservePct: s.inverter_reserve ?? typed(form, "battery_reserve_fallback"),
+    maxKw: typed(form, "battery_max_kw"),
+  };
+}
+
+/**
+ * The array size, battery capacity, backup reserve and battery rate as rows in a sunken panel, each with what the
+ * inverter reports where it does.
+ */
+export function SystemDetailRows({ system: s, form }: { system: SystemInfo; form: SystemDetails }) {
   const reportedKwh = s.inverter_battery_kwh;
   const reportedReserve = s.inverter_reserve;
+  const row = (
+    key: SystemSettingKey,
+    label: string,
+    help: ReactNode,
+    unit: string,
+    step: string,
+    placeholder?: string,
+  ) => (
+    <NumberRow
+      label={label}
+      help={help}
+      unit={unit}
+      step={step}
+      placeholder={placeholder}
+      value={form.values[key]}
+      onChange={(value) => form.set(key, value)}
+    />
+  );
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-5">
-      {field(
+    <OptionList>
+      {row(
         "pv_kw",
         "Solar array size",
+        "All your panels, on every inverter. The forecast starts from it, then learns.",
         "kW",
         "0.01",
-        "The total of all your panels, on every inverter (not the inverter's size). The forecast starts from this, then learns from what your panels actually make.",
         "e.g. 13.2",
       )}
-      {field(
+      {row(
         "battery_kwh_override",
         "Battery capacity",
+        reportedKwh
+          ? `0 uses what your inverter reports (${reportedKwh} kWh). Set it only if that's wrong.`
+          : "Your inverter doesn't report one, so set it here.",
         "kWh",
         "0.1",
-        reportedKwh
-          ? `Leave at 0 to use what your inverter reports (${reportedKwh} kWh). Set it only if that's wrong.`
-          : "Leave at 0 to use what your inverter reports. Set it if your inverter doesn't report one.",
       )}
-      {field(
+      {row(
         "battery_reserve_fallback",
         "Backup reserve",
+        reportedReserve != null
+          ? `Your inverter reports ${pct(reportedReserve)}, which is used instead.`
+          : "The charge kept for blackouts.",
         "%",
         "1",
-        reportedReserve != null
-          ? `The charge kept for blackouts. Your inverter reports ${pct(reportedReserve)}, so that's used instead of this.`
-          : "The charge kept for blackouts. Used because your inverter doesn't report its own.",
       )}
-      {field(
+      {row(
         "battery_max_kw",
-        "Maximum charge and discharge rate",
+        "Charge and discharge rate",
+        "How fast the battery fills and empties, for the forecast.",
         "kW",
         "0.1",
-        "How fast the battery can charge or discharge. The forecast uses it to work out when the battery fills and empties.",
       )}
-    </div>
+    </OptionList>
   );
 }

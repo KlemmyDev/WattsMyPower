@@ -31,9 +31,9 @@ export function BillingSettings() {
 
 /**
  * The billing period's fields, saved as they change, without a card (the set-up guide shows them too). `rows`: how
- * often as rows, for a narrow column.
+ * often as rows, for a narrow column; `color`, the chosen one's.
  */
-export function BillingFields({ rows }: { rows?: boolean }) {
+export function BillingFields({ rows, color = COLOR.good }: { rows?: boolean; color?: string }) {
   const s = useSystem();
   const save = useSaveSettings();
   const pending = save.isPending ? save.variables : undefined;
@@ -61,7 +61,7 @@ export function BillingFields({ rows }: { rows?: boolean }) {
           rows={rows}
           min="10rem"
           phone={3}
-          color={COLOR.good}
+          color={color}
           options={FREQUENCIES}
           value={String(months)}
           onChange={(v) => save.mutate({ bill_months: Number(v), bill_anchor: from.month })}
