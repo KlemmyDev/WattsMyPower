@@ -4,6 +4,9 @@ export type StepId = "inverter" | "system" | "plan" | "location" | "billing";
 
 export type StepMark = "done" | "skipped";
 
+/** A page of the guide: its welcome, a step, or the end. */
+export type GuidePage = StepId | "start" | "finish";
+
 export type Onboarding = {
   /** Finished, or an install that was already set up when the guide arrived. */
   complete: boolean;
