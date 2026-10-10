@@ -1,0 +1,92 @@
+name: New inverter or hardware
+description: Tell us about an inverter model (working or not), or ask for hardware to be supported.
+title: "Hardware: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WattsMyPower reads Sungrow SH hybrids and SG-D string inverters so far, and has only been tried on an SH5.0RS and an SG5K-D.
+        Hearing that another model works is just as useful as hearing it doesn't: it gets the model named and its battery controls tried.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What it's about
+      options:
+        - A Sungrow inverter that works (a model that isn't listed, or shows as untested)
+        - A Sungrow inverter that doesn't read properly
+        - Another brand of inverter
+        - A battery, plug, appliance or car
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Make and model
+      placeholder: Sungrow SH8.0RT-V112
+    validations:
+      required: true
+
+  - type: input
+    id: type-code
+    attributes:
+      label: Type code (Sungrow)
+      description: |
+        Shown in **Manage → Integrations → Sungrow** for a model WattsMyPower doesn't know by name, as "SH hybrid (type 0x0E0C)".
+        It's the inverter's device type, input register 5000.
+      placeholder: 0x0E0C
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: The inverter's firmware versions, if you know them (the iSolarCloud app shows them under the device's details).
+
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How it's connected to the network
+      options:
+        - WiNet-S
+        - WiNet-S2
+        - The inverter's own network port
+        - An older Wi-Fi dongle
+        - Bluetooth
+        - Through the maker's cloud
+        - Other, or I don't know
+    validations:
+      required: true
+
+  - type: input
+    id: battery
+    attributes:
+      label: Battery, if it has one
+      placeholder: Sungrow SBR128
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What works and what doesn't
+      description: |
+        Which readings look right and which don't (solar, battery level and power, home use, grid import and export, daily totals).
+        Compare with the iSolarCloud app or the maker's app if you can. Screenshots help.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        From the `wattsmypower` folder, run `docker compose logs --tail=200 collector` and paste what it prints.
+        Take out anything you'd rather not share (addresses, serial numbers).
+      render: text
+
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation
+      description: For another brand or a new device, links to its Modbus register map, API or protocol, if there is one.

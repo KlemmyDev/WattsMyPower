@@ -94,6 +94,7 @@ function ConnectionRow({ status }: { status: TeslaStatus }) {
 function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) {
   const { data: cars } = useQuery(carsQuery);
   const { configure, remove } = useEvChange();
+  const [confirming, setConfirming] = useState(false);
   const reach =
     provider === "bluetooth" && v.state
       ? v.state.in_range
@@ -133,12 +134,33 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
         <ButtonLink to="/ev" size="sm" variant="outline">
           Open
         </ButtonLink>
-        {provider === "bluetooth" && (
-          <Button variant="muted-link" size="sm" disabled={remove.isPending} onClick={() => remove.mutate(v.vin)}>
-            Remove
-          </Button>
-        )}
+        {provider === "bluetooth" &&
+          (confirming ? (
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(v.vin, { onSuccess: () => setConfirming(false) })}
+              >
+                {remove.isPending ? "Removing…" : "Remove it"}
+              </Button>
+              <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button variant="muted-link" size="sm" onClick={() => setConfirming(true)}>
+              Remove
+            </Button>
+          ))}
       </div>
+      {confirming && (
+        <HelpText className="basis-full">
+          The dashboard stops reading this car and charging it from solar. To add it back, pair it again here, sitting
+          in the car with your key card in case it asks for a tap.
+        </HelpText>
+      )}
       {(configure.isError || remove.isError) && (
         <HelpText tone="bad" className="basis-full">
           {errorMessage(configure.error ?? remove.error)}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -36,9 +37,13 @@ def _github(head: str, version: str, compare: dict[str, Any] | Exception | None 
 
 @pytest.fixture
 def svc(config: Config, db: Database, tmp_path: Path) -> UpdateService:
+    """On nightly, as install.sh saves it (most checks here are against main)."""
     settings = SettingsStore(db, config)
     settings.load()
-    return UpdateService(settings, tmp_path / "update")
+    folder = tmp_path / "update"
+    folder.mkdir()
+    (folder / "channel").write_text("nightly\n")
+    return UpdateService(settings, folder)
 
 
 def _answer(
@@ -115,9 +120,42 @@ def test_release_tags_in_order() -> None:
     tags = _tags("v2026.10.9-beta", "v2026.10.10-beta", "v2026.10.9", "latest", "v2026.10.10-beta.2", "v2026.10.8.1")
     assert updates.newest_tag(tags, "beta")["name"] == "v2026.10.10-beta.2"
     assert updates.newest_tag(tags, "stable")["name"] == "v2026.10.9"
-    # The release of a version comes after its pre-releases.
-    assert updates.newest_tag(_tags("v2026.10.9-rc.1", "v2026.10.9"), "beta")["name"] == "v2026.10.9"
+    # The release of a version comes after its betas, and the betas go by their number.
+    assert updates.newest_tag(_tags("v2026.10.9-beta.2", "v2026.10.9"), "beta")["name"] == "v2026.10.9"
+    assert updates.newest_tag(_tags("v2026.10.9-beta.10", "v2026.10.9-beta.9"), "beta")["name"] == "v2026.10.9-beta.10"
     assert updates.newest_tag(_tags("v2026.10.9-beta", "nope"), "stable") is None
+
+
+def test_only_betas_are_pre_releases() -> None:
+    # scripts/release.sh only makes -beta tags: others aren't releases, so they can't be ordered differently here and
+    # in install.sh.
+    for name in ("v2026.10.9-rc.1", "v2026.10.9-alpha", "v2026.10.9-beta2", "v2026.10.9-beta.x", "v2026.10.9-"):
+        assert updates.tag_key(name) is None, name
+    assert updates.newest_tag(_tags("v2026.10.9-beta", "v2026.10.10-rc.1"), "beta")["name"] == "v2026.10.9-beta"
+
+
+def test_a_new_install_follows_beta(config: Config, db: Database, tmp_path: Path) -> None:
+    # Without a channel saved (install.sh saves one; this is an image built some other way).
+    settings = SettingsStore(db, config)
+    settings.load()
+    assert updates.DEFAULT_CHANNEL == "beta"
+    assert UpdateService(settings, tmp_path / "update").channel() == "beta"
+
+
+def test_beta_with_nothing_released_yet_stays(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Only release candidates of another kind, which don't count: nothing to move to, and no error.
+    _answer(monkeypatch, _github(NEWER, "2026.10.9") | {"tags": _tags("v2026.10.9-rc.1", "latest")}, HERE)
+    status = svc.set_channel("beta")
+    assert status["unreleased"] is True and status["latest"] is None
+    assert status["move"] is None and status["available"] is False and status["error"] is None
+
+
+def test_on_windows_it_says_to_run_install_ps1(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert svc.status()["windows"] is updates.WINDOWS
+    monkeypatch.setattr(updates, "WINDOWS", True)
+    status = svc.status()
+    assert status["windows"] is True
+    assert "run install.ps1 once more on the PC" in status["install"]["why"]
 
 
 def test_stable_behind_this_one_is_older(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,7 +200,7 @@ def test_an_unknown_channel_is_refused(svc: UpdateService) -> None:
         svc.set_channel("weekly")
     svc.folder.mkdir(parents=True, exist_ok=True)
     (svc.folder / "channel").write_text("weekly\n")
-    assert svc.channel() == "nightly"
+    assert svc.channel() == "beta"
 
 
 def test_without_commits_an_older_version_is_older(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -332,36 +370,131 @@ def test_install_script_follows_the_channel_both_ways(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
-def test_release_script_tags_each_channel(tmp_path: Path) -> None:
-    """scripts/release.sh in a clone, pushing to a repository of its own (without a GitHub release)."""
+def test_install_script_saves_the_channel(tmp_path: Path) -> None:
+    """A new install follows beta; one from before that was the default (with .env, but no channel saved) keeps
+    nightly; one chosen is kept. Saved, so the dashboard shows the same."""
     git = ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=main"]
-    origin = tmp_path / "origin.git"
-    subprocess.run([*git, "init", "-q", "--bare", str(origin)], check=True)
-    work = tmp_path / "work"
-    subprocess.run([*git, "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
-    (work / "scripts").mkdir()
-    shutil.copy(ROOT / "scripts" / "release.sh", work / "scripts" / "release.sh")
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
-           "GIT_COMMITTER_EMAIL": "t@t"}  # fmt: skip
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    script = (ROOT / "install.sh").read_text()
+    cut = script.index("# ---------------------------------------------------------------- Docker")
+    (origin / "install.sh").write_text(script[:cut] + "exit 0\n")
+    (origin / "docker-compose.yml").write_text("services: {}\n")
+    (origin / "app").mkdir()
+    (origin / "app" / "x.txt").write_text("x")
+    subprocess.run([*git, "init", "-q"], cwd=origin, check=True)
+    subprocess.run([*git, "add", "."], cwd=origin, check=True)
+    subprocess.run([*git, "commit", "-qm", "x"], cwd=origin, check=True)
 
-    def commit(version: str, push: bool = True) -> None:
-        (work / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "{version}"\n')
-        (work / "change.txt").write_text(str(time.time()))
-        subprocess.run([*git, "add", "."], cwd=work, check=True)
-        subprocess.run([*git, "commit", "-qm", version], cwd=work, check=True)
+    def install(name: str, env: bool = False, saved: str | None = None) -> tuple[str, str]:
+        app = tmp_path / name
+        subprocess.run([*git, "clone", "-q", str(origin), str(app)], check=True)
+        if env:
+            (app / ".env").write_text("TZ=Australia/Brisbane\n")
+        if saved:
+            (app / "data" / "update").mkdir(parents=True)
+            (app / "data" / "update" / "channel").write_text(f"{saved}\n")
+        done = subprocess.run(["bash", "install.sh", "--yes"], cwd=app, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+        return (app / "data" / "update" / "channel").read_text(), done.stdout + done.stderr
+
+    channel, out = install("new")
+    assert channel == "beta\n"
+    # Nothing released on beta yet: it stays on the version it has, and says so.
+    assert "Nothing has been released on the beta channel yet" in out
+    assert install("before", env=True)[0] == "nightly\n"
+    assert install("chosen", env=True, saved="stable")[0] == "stable\n"
+
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_install_script_orders_tags_as_the_dashboard_does(tmp_path: Path) -> None:
+    """install.sh's channel_tag (git's version sort) and newest_tag pick the same tag, newest first, all the way down."""
+    func = re.search(r"^channel_tag\(\) \{\n.*?^\}\n", (ROOT / "install.sh").read_text(), re.S | re.M)
+    assert func
+    names = [
+        "v2026.9.30", "v2026.10.9-beta", "v2026.10.9-beta.2", "v2026.10.9-beta.9", "v2026.10.9-beta.10", "v2026.10.9",
+        "v2026.10.9.1-beta", "v2026.10.9.1", "v2026.10.10-beta", "v2026.10.10-beta.3", "v2026.10.10",
+        "v2026.10.11-rc.1", "v2026.10.11-alpha", "v2026.10.11-beta2", "latest",
+    ]  # fmt: skip
+    for channel in ("beta", "stable"):
+        repo = tmp_path / channel
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x"],
+            cwd=repo, check=True,
+        )  # fmt: skip
+        for name in names:
+            subprocess.run(["git", "tag", name], cwd=repo, check=True)
+        left = list(names)
+        while True:
+            picked = subprocess.run(
+                ["bash", "-c", f"{func[0]}channel_tag {channel}"], cwd=repo, capture_output=True, text=True, check=True
+            ).stdout.strip()
+            ours = updates.newest_tag(_tags(*left), channel)
+            assert picked == (ours["name"] if ours else ""), (channel, left)
+            if not picked:
+                break
+            subprocess.run(["git", "tag", "-d", picked], cwd=repo, check=True, capture_output=True)
+            left.remove(picked)
+    # scripts/release.sh finds the channel's last release with the same patterns.
+    release = (ROOT / "scripts" / "release.sh").read_text()
+    for pattern in re.findall(r"pattern='([^']+)'", func[0]):
+        assert f"pattern='{pattern}'" in release
+
+
+class _Releasing:
+    """scripts/release.sh in a clone, pushing to a repository of its own, with gh stood in for: its CI answer is
+    FAKE_CI (success, failure, running, none, or missing for a repository without the workflow), and what it was
+    asked to do is in gh.log."""
+
+    def __init__(self, tmp_path: Path):
+        self.git = ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=main"]
+        self.origin = tmp_path / "origin.git"
+        subprocess.run([*self.git, "init", "-q", "--bare", str(self.origin)], check=True)
+        self.work = tmp_path / "work"
+        subprocess.run([*self.git, "clone", "-q", str(self.origin), str(self.work)], check=True, capture_output=True)
+        (self.work / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts" / "release.sh", self.work / "scripts" / "release.sh")
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        self.log = tmp_path / "gh.log"
+        (bin_dir / "gh").write_text(
+            "#!/bin/sh\n"
+            f'echo "$@" >> "{self.log}"\n'
+            'case "$1 $2" in\n'
+            '  "run list") [ "$FAKE_CI" = missing ] && { echo "could not find any workflows named CI" >&2; exit 1; }\n'
+            '              echo "${FAKE_CI:-success}" ;;\n'
+            '  "repo view") echo "someone/wmp" ;;\n'
+            "esac\n"
+        )
+        (bin_dir / "gh").chmod(0o755)
+        self.env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "GIT_AUTHOR_NAME": "t",
+                    "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}  # fmt: skip
+
+    def commit(self, version: str, push: bool = True, tool: str = "") -> None:
+        (self.work / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "{version}"\n{tool}')
+        (self.work / "change.txt").write_text(str(time.time()))
+        subprocess.run([*self.git, "add", "."], cwd=self.work, check=True)
+        subprocess.run([*self.git, "commit", "-qm", version], cwd=self.work, check=True)
         if push:
-            subprocess.run(["git", "push", "-q", "origin", "main"], cwd=work, check=True, capture_output=True)
+            subprocess.run(["git", "push", "-q", "origin", "main"], cwd=self.work, check=True, capture_output=True)
 
-    def release(*args: str) -> subprocess.CompletedProcess[str]:
+    def release(self, *args: str, ci: str = "success", github: bool = False) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", "scripts/release.sh", *args, "--yes", "--tag-only"], cwd=work, env=env, capture_output=True,
-            text=True,
+            ["bash", "scripts/release.sh", *args, "--yes", *([] if github else ["--tag-only"])], cwd=self.work,
+            env=self.env | {"FAKE_CI": ci}, capture_output=True, text=True, stdin=subprocess.DEVNULL,
         )  # fmt: skip
 
-    def tags() -> list[str]:
-        out = subprocess.run(["git", "tag", "-l"], cwd=origin, capture_output=True, text=True).stdout
+    def tags(self) -> list[str]:
+        out = subprocess.run(["git", "tag", "-l"], cwd=self.origin, capture_output=True, text=True).stdout
         return sorted(out.split())
 
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_release_script_tags_each_channel(tmp_path: Path) -> None:
+    r = _Releasing(tmp_path)
+    commit, release, tags = r.commit, r.release, r.tags
     commit("2026.10.10")
     assert release("beta").returncode == 0
     assert "already this commit" in release("beta").stderr
@@ -376,3 +509,49 @@ def test_release_script_tags_each_channel(tmp_path: Path) -> None:
     commit("2026.10.12", push=False)  # not merged
     assert "isn't on main" in release("stable", "HEAD").stderr
     assert "no 'nightly' channel" in release("nightly").stderr
+
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_release_script_needs_ci_to_have_passed(tmp_path: Path) -> None:
+    r = _Releasing(tmp_path)
+    r.commit("2026.10.10")
+    assert "CI didn't pass" in r.release("beta", ci="failure").stderr
+    assert "still running" in r.release("beta", ci="running").stderr
+    assert "CI hasn't run" in r.release("beta", ci="none").stderr
+    # Without the workflow (or gh) it would ask, and with --yes it doesn't.
+    assert "with --yes it doesn't ask" in r.release("beta", ci="missing").stderr
+    assert r.tags() == []
+    assert r.release("beta", "--skip-ci", ci="failure").returncode == 0
+    assert r.tags() == ["v2026.10.10-beta"]
+
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_release_script_refuses_a_label_for_another_channel(tmp_path: Path) -> None:
+    r = _Releasing(tmp_path)
+    r.commit("2026.10.10", tool='\n[tool.wattsmypower]\nrelease = "alpha"\n')
+    assert 'labels it "alpha"' in r.release("beta").stderr
+    r.commit("2026.10.10", tool='\n[tool.wattsmypower]\nrelease = "beta"\n')
+    assert 'labels it "beta"' in r.release("stable").stderr
+    assert r.release("beta").returncode == 0
+
+
+@pytest.mark.skipif(not shutil.which("git") or not shutil.which("bash"), reason="needs git and bash")
+def test_release_script_notes(tmp_path: Path) -> None:
+    r = _Releasing(tmp_path)
+    r.commit("2026.10.10")
+    # The first on the channel: a note pointing at the changelog, not every change ever made.
+    assert r.release("beta", github=True).returncode == 0
+    create = [line for line in r.log.read_text().splitlines() if line.startswith("release create")]
+    assert "--generate-notes" not in create[-1]
+    assert "someone/wmp/blob/v2026.10.10-beta/CHANGELOG.md" in create[-1]
+    r.commit("2026.10.10")
+    assert r.release("beta", github=True).returncode == 0
+    create = [line for line in r.log.read_text().splitlines() if line.startswith("release create")]
+    assert "--generate-notes --notes-start-tag v2026.10.10-beta" in create[-1]
+    # Notes of its own, from a file (the first stable release here).
+    notes = tmp_path / "notes.md"
+    notes.write_text("The first public beta.\n")
+    assert "no notes file" in r.release("stable", "--notes-file", str(tmp_path / "nope.md")).stderr
+    assert r.release("stable", "--notes-file", str(notes), github=True).returncode == 0
+    create = [line for line in r.log.read_text().splitlines() if line.startswith("release create")]
+    assert f"--notes-file {notes}" in create[-1] and "--latest" in create[-1]

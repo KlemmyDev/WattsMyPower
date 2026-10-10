@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Updates WattsMyPower when the dashboard asks (Settings → System → Updates → Update now).
+# Updates WattsMyPower when the dashboard asks (Manage → System → Updates → Update now).
 #
 # install.sh sets this up to run every minute (cron). Each time, it leaves a note that it's here and whether it can
 # update (data/update/updater.json). When the dashboard has asked for an update (data/update/request), it runs this

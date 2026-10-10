@@ -11,10 +11,8 @@ import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { cn } from "~/features/common/ui/utils";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { HouseSettings } from "~/features/settings/components/HouseSettings";
-import { OwnershipSettings } from "~/features/settings/components/OwnershipSettings";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
-import { UpdatesCard } from "~/features/updates/components/UpdatesCard";
+import { CardTitle, SettingsCard } from "~/features/settings/components/SettingsCard";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 function secondInverter(pv2: NonNullable<SystemInfo["pv2"]>): string {
   const model = pv2.model
@@ -30,33 +28,41 @@ const SECOND = "Second inverter";
 
 function systemRows(s: SystemInfo | undefined): [string, string][] {
   return [
-    ["Site name", "Home"],
     ["Inverter", s?.model ? `${inverterName(s)} hybrid${s.nominal_kw ? `, ${s.nominal_kw} kW` : ""}` : "—"],
     ["Serial number", s?.serial || "—"],
-    ["Battery", s?.inverter_battery_kwh ? `${s.inverter_battery_kwh} kWh` : "—"],
-    ["Backup reserve", s?.inverter_reserve != null ? pct(s.inverter_reserve) : "—"],
+    ["Solar array", s?.pv_kw ? `${s.pv_kw} kW` : "Not set"],
+    ["Battery", s?.battery_kwh ? `${s.battery_kwh} kWh` : "—"],
+    ["Backup reserve", s?.battery_reserve != null ? pct(s.battery_reserve) : "—"],
     ["Grid connection", s?.phases || "—"],
     ...(s?.pv2 ? [[SECOND, secondInverter(s.pv2)] satisfies [string, string]] : []),
   ];
 }
 
-/** Manage → System: what the inverters report about the installation, the details they can't, and the house. */
-export function SystemSettings() {
+/**
+ * Manage → System → Solar and battery: what the inverters report about the installation, and the details they can't.
+ */
+export function SolarBatterySettings() {
   const live = useLive();
   const last = live?.last_success;
   return (
     <>
+      <SubPageHeader
+        back={<BackLink to="/system">System</BackLink>}
+        id="h-solar-battery"
+        title="Solar and battery"
+        sub="What your inverters report about your system, and the details they can't."
+      />
       <SettingsCard aria-labelledby="h-sys">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line-subtle p-6">
-          <SettingsTitle
+        <div className="px-6 pt-5 pb-4 max-sm:px-5">
+          <CardTitle
             id="h-sys"
-            title="Solar and battery system"
-            sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter · ${last ? `last synced ${hhmm(last)}` : "not synced yet"}`}
+            title="Your system"
+            sub={`From your ${live?.system.brand ? `${live.system.brand} ` : ""}inverter over the local network · ${last ? `last read ${hhmm(last)}` : "not read yet"}`}
           />
         </div>
         {/* Tiles: 2, 3 or 6 across, which the six always fill; a second inverter, a longer line, gets a row of
             its own. Each draws its own lines on the right and below, and the edge ones are clipped. */}
-        <div className="overflow-hidden border-b border-line-subtle">
+        <div className="overflow-hidden border-y border-line-subtle">
           <dl className="m-0 -mr-px -mb-px grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             {systemRows(live?.system).map(([label, value]) => (
               <div
@@ -72,25 +78,17 @@ export function SystemSettings() {
             ))}
           </dl>
         </div>
-        <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-          These details come from your inverters over the local network. Inverters are connected in Manage →
-          Integrations → Sungrow.
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 max-sm:px-5">
           <span className="min-w-[200px] flex-1 text-[13px] leading-5 text-ink-muted">
-            The set-up guide walks through connecting your inverter, these system details, your electricity plan,
-            location and billing.
+            Inverters are added and connected in Integrations.
           </span>
-          <ButtonLink to="/welcome" variant="outline" size="sm">
-            Open the set-up guide
+          <ButtonLink to="/integrations/sungrow" variant="outline" size="sm">
+            Manage inverters
           </ButtonLink>
         </div>
       </SettingsCard>
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
       {live && <SystemForm system={live.system} />}
-      {live && <OwnershipSettings system={live.system} />}
-      {live && <HouseSettings system={live.system} />}
-      <UpdatesCard />
     </>
   );
 }
@@ -220,7 +218,7 @@ function SystemForm({ system: s }: { system: SystemInfo }) {
 
   return (
     <SettingsCard padded aria-labelledby="h-sys-details">
-      <SettingsTitle
+      <CardTitle
         id="h-sys-details"
         title="Your system's details"
         sub="What your inverter can't tell us. Changes apply straight away across the app."
