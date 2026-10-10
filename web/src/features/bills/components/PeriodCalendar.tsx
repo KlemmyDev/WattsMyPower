@@ -10,6 +10,7 @@ import { cn } from "~/features/common/ui/utils";
 import { billHeatColor, COLOR, heatColor, rampColor } from "~/features/common/theme/utils/colors";
 import { bandColor, bandHours, usedBands } from "~/features/common/tariffs/utils";
 import { kWh, kWhInt, money, plural } from "~/features/common/formatting/utils/number";
+import { addDays, dateKey, fromDateKey, mondayFirst, partsOf } from "~/features/common/time/utils";
 import { dayMonth, fullDate, monthShort, parseYmd } from "~/features/common/formatting/utils/date";
 
 type MetricKey = "cost" | "imp" | "exp" | "pv" | "peak";
@@ -28,7 +29,6 @@ type Metric = {
 /** The selected day: a canvas-coloured gap, then a full-contrast ring (as on History). */
 const RING = "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_3.5px_var(--color-fg)]";
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
-const ymdTs = (s: string) => parseYmd(s).getTime() / 1000;
 const shade = (m: Metric, v: number) => (m.from ? rampColor(m.from, m.color, v) : heatColor(m.color, v));
 
 /** The dearest rate that's used, on time of use: its use gets a colour of its own. */
@@ -66,9 +66,9 @@ function metricsFor(bills: Bills, peak: number | null): Metric[] {
 
 type Cell =
   | { kind: "pad" }
-  | { kind: "day"; key: string; date: Date; day: BillDay }
-  | { kind: "ahead"; key: string; date: Date; expected: number | null }
-  | { kind: "none"; key: string; date: Date };
+  | { kind: "day"; key: string; date: number; day: BillDay }
+  | { kind: "ahead"; key: string; date: number; expected: number | null }
+  | { kind: "none"; key: string; date: number };
 
 /**
  * This billing period as a calendar, a week to a row, each day coloured by what it cost (or its grid
@@ -89,13 +89,13 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
 
   const rows = useMemo(() => {
     const expected = new Map(ahead.map((a) => [a.date, a.net_cost]));
-    const start = parseYmd(period.start);
-    const lead = (start.getDay() + 6) % 7;
+    const start = fromDateKey(period.start);
+    const lead = mondayFirst(start);
     const cells: Cell[] = Array.from({ length: lead }, () => ({ kind: "pad" }));
     const last = days[days.length - 1]?.date ?? "";
     for (let k = 0; k < period.days; k++) {
-      const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + k);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const date = addDays(start, k);
+      const key = dateKey(date);
       const day = byDate.get(key);
       if (day) cells.push({ kind: "day", key, date, day });
       else if (key > last) cells.push({ kind: "ahead", key, date, expected: expected.get(key) ?? null });
@@ -187,11 +187,11 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
             ))}
             {rows.map((row, r) => {
               const first = row.find((c) => c.kind !== "pad") as Exclude<Cell, { kind: "pad" }> | undefined;
-              const newMonth = row.find((c) => c.kind !== "pad" && c.date.getDate() === 1) as
+              const newMonth = row.find((c) => c.kind !== "pad" && partsOf(c.date).day === 1) as
                 Exclude<Cell, { kind: "pad" }> | undefined;
               const month = r === 0 ? first : newMonth;
               return (
-                <Row key={r} month={month ? monthShort.format(month.date) : ""}>
+                <Row key={r} month={month ? monthShort.format(month.date * 1000) : ""}>
                   {row.map((c, i) => (
                     <DayCell
                       key={i}
@@ -236,7 +236,7 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
                 {s.title}
               </span>
               <span className="text-xl font-light tracking-[-0.5px] text-fg tabular-nums">{s.v(s.d)}</span>
-              <span className="text-xs text-ink-label">{dayMonth(ymdTs(s.d.date))}</span>
+              <span className="text-xs text-ink-label">{dayMonth(fromDateKey(s.d.date))}</span>
             </button>
           ))}
         </div>
@@ -270,20 +270,20 @@ function DayCell({
   const base =
     "relative flex h-11 items-start rounded-lg p-1.5 font-mono text-[11px] leading-none max-sm:h-10 max-sm:p-1";
   if (cell.kind === "pad") return <span />;
-  const label = dayMonth(cell.date.getTime() / 1000);
+  const label = dayMonth(cell.date);
   if (cell.kind === "ahead")
     return (
       <span
         className={cn(base, "border border-dashed border-fg/15 text-ink-faint")}
         title={`${label}: still to come${cell.expected != null ? `, expected about ${billCents(cell.expected)}` : ""}`}
       >
-        {cell.date.getDate()}
+        {partsOf(cell.date).day}
       </span>
     );
   if (cell.kind === "none")
     return (
       <span className={cn(base, "text-ink-faint inset-ring inset-ring-fg/6")} title={`${label}: no readings`}>
-        {cell.date.getDate()}
+        {partsOf(cell.date).day}
       </span>
     );
   const v = metric.value(cell.day);
@@ -304,7 +304,7 @@ function DayCell({
       )}
       style={fill ? { background: fill.color } : undefined}
     >
-      {cell.date.getDate()}
+      {partsOf(cell.date).day}
       {cell.day.partial && (
         <i
           className="absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-current"

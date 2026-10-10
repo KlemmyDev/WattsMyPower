@@ -22,6 +22,7 @@ class MockInverter:
         self.info: dict[str, Any] = {
             "brand": "Sungrow",
             "model": self.model,
+            "device_type": 0x0D0F,  # an SH5.0RS, whose battery controls have been tried
             "serial": "MOCK0000001",
             "nominal_kw": 5.0,
             "phases": "Single phase",

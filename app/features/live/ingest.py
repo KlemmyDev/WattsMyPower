@@ -17,6 +17,7 @@ from typing import Any
 from app.core.config import Config
 from app.core.database import Database
 from app.features.inverters import drivers
+from app.features.inverters.limits import bounds_for
 from app.features.live.client import Feed
 from app.features.live.service import LiveService
 from app.features.live.transform import Freeze, Pv2Carry, behind_meter, snapshots
@@ -89,7 +90,7 @@ class CollectorIngest:
         h = devices.get("hybrid")
         if h is None:  # none connected yet (or it was removed): nothing to show about one
             self.live.last_success, self.live.last_error, self.live.info = None, NO_INVERTER, {}
-            self.live.driver = None
+            self.live.driver, self.live.inverter = None, False
             self.freeze = Freeze()
             self.live.frozen_since = None
         else:
@@ -100,6 +101,7 @@ class CollectorIngest:
             self.live.last_success = h.get("last_success")
             self.live.last_error = h.get("error")
             self.live.driver = h.get("driver") or drivers.DEFAULT_HYBRID
+            self.live.inverter = True
             main = drivers.hybrid(h.get("driver"))
             decoded = main.decode_info(h.get("info") or {}) if main else {}
             if decoded:
@@ -131,6 +133,7 @@ class CollectorIngest:
             poll_interval=self.config.poll_interval,
             carry=self.carry,
             freeze=self.freeze,
+            bounds=bounds_for(self.live.info),
         )
         self.readings.insert_many(conn, snaps)
         self.live.frozen_since = self.freeze.since

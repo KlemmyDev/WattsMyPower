@@ -24,3 +24,28 @@ export function SettingsTitle({ id, title, sub }: { id: string; title: ReactNode
     </div>
   );
 }
+
+/** A card's heading on a page a level down, with a line of explanation and, on the right, a control. */
+export function CardTitle({
+  id,
+  title,
+  sub,
+  aside,
+}: {
+  id: string;
+  title: ReactNode;
+  sub?: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <h3 id={id} className="text-[15px] font-semibold">
+          {title}
+        </h3>
+        {sub && <span className="text-sm text-pretty text-ink-muted">{sub}</span>}
+      </div>
+      {aside}
+    </div>
+  );
+}

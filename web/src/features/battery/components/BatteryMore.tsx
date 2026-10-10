@@ -7,7 +7,7 @@ import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, midnight } from "~/features/common/time/utils";
+import { addDays, midnight, partsOf } from "~/features/common/time/utils";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { TimeLine } from "~/features/common/ui/components/TimeLine";
@@ -228,8 +228,9 @@ export function BatteryBackup({
     let left = usable;
     let t = now;
     for (let i = 0; i < 48 && left > 0; i++) {
-      const hourEnd = Math.floor(t / 3600) * 3600 + 3600;
-      const kw = Math.max(0.05, profile[new Date(t * 1000).getHours()]);
+      const p = partsOf(t);
+      const hourEnd = Math.floor(t) - p.minute * 60 - p.second + 3600;
+      const kw = Math.max(0.05, profile[p.hour]);
       const need = (kw * (hourEnd - t)) / 3600;
       if (need >= left) {
         until = t + (left / kw) * 3600;

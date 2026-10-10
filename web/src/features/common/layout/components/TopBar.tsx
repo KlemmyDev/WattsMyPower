@@ -46,19 +46,18 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
 /** Whether readings are coming in, with the date and time: a pill beside the account. */
 export function HeaderClock({ className }: { className?: string }) {
   const { state, status, now } = useLiveStatus();
-  const d = new Date(now * 1000);
   return (
     <span
       className={cn(
         "flex h-10 flex-none items-center gap-2 rounded-full border border-chip-line bg-chip px-3.5 font-mono text-[13px] whitespace-nowrap text-ink-soft tabular-nums",
         className,
       )}
-      title={`${fullDate.format(d)}, ${hhmm(now)} ${tzName}. ${status}.`}
+      title={`${fullDate.format(now * 1000)}, ${hhmm(now)} ${tzName()}. ${status}.`}
     >
       <span className="live-dot" data-state={state} aria-hidden />
       {/* The dot's colour, in words, for a screen reader (the title isn't read out everywhere). */}
       <span className="sr-only">{status}.</span>
-      <span className="text-ink-dim max-xs:hidden">{pillDate.format(d)}</span>
+      <span className="text-ink-dim max-xs:hidden">{pillDate.format(now * 1000)}</span>
       <span>{hhmm(now)}</span>
     </span>
   );

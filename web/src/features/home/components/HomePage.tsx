@@ -48,8 +48,8 @@ function ConnectPrompt() {
       <div className="flex min-w-[240px] flex-1 flex-col gap-1">
         <h2 id="h-connect">See what each appliance uses</h2>
         <span className="text-sm text-pretty text-ink-muted">
-          Connect smart appliances (a Hisense washer or dryer in the ConnectLife app) and each one's share of your
-          home's use shows here, with when it usually runs.
+          Connect smart plugs and appliances (Tapo, Shelly, Home Assistant, a Hisense washer or dryer, or a Bluetti or
+          EcoFlow battery) and each one's share of your home's use shows here, with when it usually runs.
         </span>
       </div>
       <ButtonLink to="/integrations" hash="smart-home" variant="primary">

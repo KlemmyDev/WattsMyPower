@@ -7,6 +7,10 @@ Environment variables provide the defaults; anything saved from the Settings pag
 stored in the database and wins over the environment. The system details were only
 set in the environment before they could be edited here: seed_system copies those
 values in once, and after that the database is the only source.
+
+The location has no default: until someone chooses one (or LATITUDE/LONGITUDE set it), nothing that
+depends on where the house is (the forecast, weather, outages, warnings, the AEMO region) is fetched.
+Installs from when it defaulted to Brisbane keep it: seed_location saves it for them, once.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from typing import Any
 
 from app.core.config import Config
 from app.core.database import Database
+from app.core.schema import SAMPLE_TABLES
 
 # Text settings: key -> max length. Stored in the kv table (the settings table holds REALs).
 TEXT: dict[str, int] = {
@@ -84,6 +89,10 @@ HOME: dict[str, tuple[str, str]] = {"home_standby_goal": ("The always-on target"
 NAMED = SYSTEM | OWNERSHIP | BILLS | HOME
 # kv marker: the system details have been copied from the environment (see seed_system).
 SYSTEM_SEEDED = "system_seeded"
+# kv marker: an install from before the location had to be chosen has had the one it ran on saved (see seed_location).
+LOCATION_SEEDED = "location_seeded"
+# Where the location used to default to (Brisbane CBD), for installs that ran on it without saving one.
+OLD_DEFAULT = (-27.47, 153.03)
 
 
 class SettingsStore:
@@ -91,8 +100,9 @@ class SettingsStore:
         self.db = db
         # key -> (min, max, default)
         self.editable: dict[str, tuple[float, float, float]] = {
-            "latitude": (-90, 90, config.latitude),
-            "longitude": (-180, 180, config.longitude),
+            # The location: LATITUDE/LONGITUDE, else none (NaN) until one is saved. See location().
+            "latitude": (-90, 90, math.nan if config.latitude is None else config.latitude),
+            "longitude": (-180, 180, math.nan if config.longitude is None else config.longitude),
             # The billing period: every 1, 2 or 3 months, starting on this day of the month, in step
             # with a month a bill starts in (1-12). The default is calendar quarters.
             "bill_months": (1, 3, 3),
@@ -180,17 +190,40 @@ class SettingsStore:
         with self._lock:
             return self._values.get(key, self.editable[key][2])
 
+    def seed_location(self) -> tuple[float, float] | None:
+        """Save the location an install from before it had to be chosen was running on, once ever: the one
+        LATITUDE/LONGITUDE set, else the old default (Brisbane). Only for an install with readings and no location
+        saved, so nothing changes for it; a new one starts with none. Returns what was saved. Call before load()."""
+        with self.db.writing() as conn:
+            if conn.execute("SELECT 1 FROM kv WHERE key = ?", (LOCATION_SEEDED,)).fetchone():
+                return None
+            conn.execute("INSERT INTO kv (key, value) VALUES (?, ?)", (LOCATION_SEEDED, str(int(time.time()))))
+            saved = dict(conn.execute("SELECT key, value FROM settings WHERE key IN ('latitude', 'longitude')"))
+            used = any(conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone() for t in SAMPLE_TABLES)
+            if len(saved) == 2 or not used:
+                return None
+
+            # Each as it was worked out then: saved, else the environment's, else the old default.
+            def used_for(key: str, old: float) -> float:
+                env = self.editable[key][2]
+                return saved.get(key, env if math.isfinite(env) else old)
+
+            where = (used_for("latitude", OLD_DEFAULT[0]), used_for("longitude", OLD_DEFAULT[1]))
+            conn.executemany(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                [("latitude", where[0]), ("longitude", where[1])],
+            )
+            return where
+
+    def location(self) -> tuple[float, float] | None:
+        """Where the house is (latitude, longitude): saved in Settings, or LATITUDE/LONGITUDE in the environment.
+        None until it's been chosen."""
+        lat, lon = self.get("latitude"), self.get("longitude")
+        return (lat, lon) if math.isfinite(lat) and math.isfinite(lon) else None
+
     def location_set(self) -> bool:
-        """Whether someone chose the location (saved in Settings, or LATITUDE/LONGITUDE in the environment),
-        rather than it being the default. Past weather is only fetched for a chosen one."""
-        with self._lock:
-            if "latitude" in self._values or "longitude" in self._values:
-                return True
-        default = Config.__dataclass_fields__
-        return (self.editable["latitude"][2], self.editable["longitude"][2]) != (
-            default["latitude"].default,
-            default["longitude"].default,
-        )
+        """Whether the location has been chosen. Nothing that depends on where the house is is fetched until it is."""
+        return self.location() is not None
 
     def get_text(self, key: str) -> str | None:
         with self._lock:
@@ -206,7 +239,9 @@ class SettingsStore:
         return [v for v in (self.get_text(key) or "").split(",") if v in allowed]
 
     def all_values(self) -> dict[str, Any]:
-        values = {k: self.get(k) for k in self.editable}
+        values: dict[str, Any] = {k: self.get(k) for k in self.editable}
+        if self.location() is None:  # not chosen yet: null, rather than NaN (not JSON)
+            values.update(latitude=None, longitude=None)
         whole = {k: int(v) for k, v in values.items() if k in WHOLE}
         choices = {k: self.get_choice(k) for k in CHOICES} | {k: self.get_list(k) for k in LISTS}
         return {**values, **whole, **{k: self.get_text(k) for k in TEXT}, **choices}

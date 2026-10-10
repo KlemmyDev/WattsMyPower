@@ -5,7 +5,7 @@ holding up, from three places.
 - AEMO (aemo.py): the region's wholesale price and demand every five minutes, its prices ahead (refreshed every half
   hour, as AEMO's pre-dispatch is), and its market notices: where AEMO warns of tight supply (Lack of Reserve),
   load shedding and power system events. The region is the nem_region setting, or worked out from where the house
-  is; "none" turns this off.
+  is (once that's been chosen); "none" turns this off.
 - The weather forecast: thunderstorms in the next day, the usual cause of a local blackout.
 - The inverter: whether it's running off-grid (the grid's down), and the grid's voltage and frequency as it measures
   them.
@@ -120,8 +120,10 @@ class GridService:
             return None, False
         if chosen != "auto":
             return chosen, False
-        lat, lon = self.settings.get("latitude"), self.settings.get("longitude")
-        return region_at(lat, lon, self.settings.get_text("location_name")), True
+        where = self.settings.location()
+        if where is None:
+            return None, True  # worked out from the location, once there is one
+        return region_at(*where, self.settings.get_text("location_name")), True
 
     # ------------------------------------------------------------------ fetching
     async def start(self) -> None:
@@ -208,6 +210,9 @@ class GridService:
             "region": region,
             "region_name": REGION_NAMES.get(region or ""),
             "region_auto": auto,
+            # Whether the house's location has been chosen: until it is, the region isn't worked out, and the outages
+            # and warnings around the house aren't followed.
+            "location_set": self.settings.location_set(),
             "market": market,
             "prices": [{"at": p["at"], "price": p["price"], "forecast": p["forecast"]} for p in prices],
             "notices": notices,

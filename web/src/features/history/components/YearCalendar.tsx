@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import { monthShort, monthYearLong } from "~/features/common/formatting/utils/date";
+import { dateKey, mondayFirst, partsOf, siteTime } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
@@ -62,7 +63,7 @@ export const YearHeatmap = memo(function YearHeatmap({ cells, lead, selected, on
   const months: { col: number; label: string }[] = [];
   for (const c of cells) {
     const dt = new Date(c.ts * 1000);
-    if (dt.getDate() !== 1 && c.i !== 0) continue;
+    if (partsOf(dt).day !== 1 && c.i !== 0) continue;
     const col = Math.floor((c.i + lead) / 7);
     // Skip a label that would crowd the one before it or run off the end.
     if (col <= nWeeks - 3 && (!months.length || col - months[months.length - 1].col > 2))
@@ -127,7 +128,7 @@ export function MonthCalendar({
     const out: { key: string; title: string; cells: Cell[] }[] = [];
     for (const c of cells) {
       const dt = new Date(c.ts * 1000);
-      const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+      const key = dateKey(c.ts).slice(0, 7);
       if (out[out.length - 1]?.key !== key) out.push({ key, title: monthYearLong.format(dt), cells: [] });
       out[out.length - 1].cells.push(c);
     }
@@ -145,10 +146,10 @@ export function MonthCalendar({
   const month = months[idx];
   const go = (k: number) => setStepped({ key: months[k].key, from: selected });
   // The whole month, even where the view starts partway through it or stops at today.
-  const first = new Date(month.cells[0].ts * 1000);
-  const lead = (new Date(first.getFullYear(), first.getMonth(), 1).getDay() + 6) % 7;
-  const byDate = new Map(month.cells.map((c) => [new Date(c.ts * 1000).getDate(), c]));
-  const length = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const first = partsOf(month.cells[0].ts);
+  const lead = mondayFirst(siteTime(first.year, first.month, 1));
+  const byDate = new Map(month.cells.map((c) => [partsOf(c.ts).day, c]));
+  const length = partsOf(siteTime(first.year, first.month + 1, 0)).day;
 
   return (
     <section aria-label="Month calendar" className="hidden flex-col gap-4 max-md:flex">

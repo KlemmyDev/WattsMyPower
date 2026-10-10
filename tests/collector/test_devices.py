@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import stat
 import time
 from collections.abc import Iterator
 from dataclasses import replace
@@ -327,3 +329,39 @@ def store_rows(config: Config) -> int:
     with sqlite3.connect(config.db_path) as conn:
         n: int = conn.execute("SELECT COUNT(*) FROM readings").fetchone()[0]
         return n
+
+
+@pytest.mark.parametrize("host", ["8.8.8.8", "2001:4860:4860::8888", "public.example"])
+def test_only_inverters_on_the_home_network_can_be_connected(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    looked_up = {"public.example": "93.184.216.34", "winet.lan": "192.168.0.244"}
+    monkeypatch.setattr("collector.main.socket.getaddrinfo", lambda h, port, **_: [(2, 1, 6, "", (looked_up[h], port))])
+    r = client.put("/v1/devices/hybrid", json={**SH, "host": host, "check": False}, headers=AUTH)
+    assert r.status_code == 422 and "isn't on your home network" in r.json()["detail"]
+    assert client.get("/v1/devices", headers=AUTH).json()["devices"] == []
+    # A name for an address at home is fine.
+    r = client.put("/v1/devices/hybrid", json={**SH, "host": "winet.lan", "check": False}, headers=AUTH)
+    assert r.status_code == 200, r.text
+
+
+def test_a_name_that_cant_be_found_is_refused(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def unknown(*_: Any, **__: Any) -> None:
+        raise OSError("not found")
+
+    monkeypatch.setattr("collector.main.socket.getaddrinfo", unknown)
+    r = client.put("/v1/devices/hybrid", json={**SH, "host": "nowhere.lan", "check": False}, headers=AUTH)
+    assert r.status_code == 422 and "Couldn't find nowhere.lan" in r.json()["detail"]
+
+
+def test_any_address_can_be_allowed(cfg: Config, probed: Probed) -> None:
+    probed.answering["8.8.8.8"] = {5000: 0x0D0F}
+    with TestClient(create_app(replace(cfg, allow_public_hosts=True), poll=False, build=fake, check=probed.check)) as c:
+        assert c.put("/v1/devices/hybrid", json={**SH, "host": "8.8.8.8"}, headers=AUTH).status_code == 200
+
+
+def test_the_collector_keeps_its_database_private(cfg: Config) -> None:
+    Store(cfg.db_path).migrate()
+    os.chmod(cfg.db_path, 0o644)
+    with TestClient(create_app(cfg, poll=False, build=fake)):
+        assert stat.S_IMODE(os.stat(cfg.db_path).st_mode) == 0o600

@@ -4,8 +4,9 @@ the dashboard has readings for but no weather (before it was set up, imported fr
 while it was off).
 
 A background loop runs every half hour:
-  1. refreshes the forecast (also re-fetched on demand when the forecast is asked for and it's stale,
-     or right away when the location, the weather model or the panels change);
+  1. refreshes the forecast, once the location has been chosen (also re-fetched on demand when the
+     forecast is asked for and it's stale, or right away when the location, the weather model or the
+     panels change);
   2. backfills older days with readings (any day back to 1940, once the location has been chosen), a few
      requests a run, each up to three months; or, when
      asked for (after an import, or from Settings), all of them at once, reporting its progress. It
@@ -129,12 +130,15 @@ class WeatherService:
         self._wake: asyncio.Event | None = None
 
     # ------------------------------------------------------------------ settings
-    def where(self) -> tuple[float, float]:
-        return self.settings.get("latitude"), self.settings.get("longitude")
+    def where(self) -> tuple[float, float] | None:
+        """Where the weather's for: the house's location, None until it's chosen (and nothing's fetched till then)."""
+        return self.settings.location()
 
-    def panels(self) -> Panels:
-        lat, lon = self.where()
-        return Panels(lat, lon, self.settings.get("panel_tilt"), self.settings.get("panel_bearing"))
+    def panels(self) -> Panels | None:
+        where = self.where()
+        if where is None:
+            return None
+        return Panels(*where, self.settings.get("panel_tilt"), self.settings.get("panel_bearing"))
 
     def model(self) -> str:
         return self.settings.get_choice("weather_model")
@@ -161,10 +165,11 @@ class WeatherService:
     def ensure_fresh(self) -> None:
         """Refresh the forecast if it's older than REFRESH, or for another place or model (not within
         RETRY of a failure). Blocking."""
-        if not self.config.forecast:
+        where = self.where()
+        if not self.config.forecast or where is None:
             return
         now = self.clock()
-        what = (*self.where(), self.model())
+        what = (*where, self.model())
         with self._lock:
             fresh = self._fetched and self._fetched[0] == what and now - self._fetched[1] < REFRESH
             if fresh or now - self._failed_at < RETRY:
@@ -249,7 +254,8 @@ class WeatherService:
         if not self.config.forecast:
             return 0
         state = self.backfill_state
-        if not self.settings.location_set():
+        where = self.where()
+        if where is None:
             # Not the default location's weather, stored as if it were this home's: wait until it's chosen.
             with self._fill_lock:
                 was_asked = state["requested"]
@@ -272,7 +278,7 @@ class WeatherService:
                     running=False, requested=False, refetch=False, cursor=None, error=None, last_run=int(self.clock())
                 )
             return 0
-        lat, lon = self.where()
+        lat, lon = where
         model = self.model()
         with self._fill_lock:
             if not state["running"] or state["total"] is None:  # a fill starting: count what it has to do

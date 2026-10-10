@@ -43,7 +43,8 @@ def open_app(config: Config, db: Database, collector: FakeCollector) -> Iterator
         client.__enter__()
         clients.append(client)
         account = {"username": "home", "password": "a-long-password"}
-        first = client.post("/api/auth/setup", json=account)  # the first visit; later ones (a restart) sign in
+        code = app.state.services.auth.prepare_setup_code() or ""  # None once there's an account
+        first = client.post("/api/auth/setup", json={**account, "code": code})  # later starts sign in instead
         assert first.is_success or client.post("/api/auth/login", json=account).is_success
         return client
 

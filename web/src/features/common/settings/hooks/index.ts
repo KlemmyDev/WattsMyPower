@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiSend } from "~/features/common/api/utils";
 import { liveQuery, patchSystem } from "~/features/common/live/api";
+import { useSystem } from "~/features/common/live/hooks/useSystem";
 import {
   BILL_SETTINGS,
   OWNERSHIP_SETTINGS,
@@ -19,6 +20,15 @@ const GRID_SETTINGS = [
   "latitude",
   "longitude",
 ] as const;
+
+/**
+ * Whether the house's location has been chosen: undefined while loading. Until it is, the forecast, weather, outages and
+ * warnings aren't fetched, and where they'd show says so (LocationPrompt).
+ */
+export function useLocationSet(): boolean | undefined {
+  const system = useSystem();
+  return system && system.latitude != null && system.longitude != null;
+}
 
 /** Save the forecast location, billing period, bill discounts and budget, or system details, and refresh what depends on it. */
 export function useSaveSettings() {

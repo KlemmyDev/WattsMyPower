@@ -1,4 +1,4 @@
-import { addDays, dateKey, fromDateKey, midnight, nowS } from "~/features/common/time/utils";
+import { addDays, dateKey, fromDateKey, midnight, nowS, partsOf, siteTime } from "~/features/common/time/utils";
 
 export const METRIC_KEYS = ["gen", "ss", "imp", "saved", "weather"] as const;
 export type Metric = (typeof METRIC_KEYS)[number];
@@ -15,10 +15,10 @@ export type HistorySearch = { year?: number; day?: string; metric?: Metric };
  */
 export type Range = { start: number; end: number; last: number };
 
-/** 1 January of `year`, local midnight in unix seconds. */
-export const yearStart = (year: number) => new Date(year, 0, 1).getTime() / 1000;
+/** 1 January of `year`, midnight on the site's clock in unix seconds. */
+export const yearStart = (year: number) => siteTime(year, 1, 1);
 
-export const yearOf = (ts: number) => new Date(ts * 1000).getFullYear();
+export const yearOf = (ts: number) => partsOf(ts).year;
 
 /** A calendar year: this one when `year` is left out. */
 export function rangeOf(year: number | undefined, today: number): Range {

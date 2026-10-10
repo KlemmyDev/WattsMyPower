@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from app.core.database import Database
-from app.core.schema import MAX_W, ROLLUP, ROLLUP_KEEPING_SQL, SAMPLE_COLUMNS
+from app.core.schema import MAX_W_THREE_PHASE, ROLLUP, ROLLUP_KEEPING_SQL, SAMPLE_COLUMNS
 
 Snapshot = dict[str, Any]
 
@@ -202,7 +202,8 @@ class ReadingsRepository:
             d = days.setdefault(date, [[0.0] * 4, [0.0] * 4])
             g = grid or 0.0
             by_power = (max(g, 0.0) * KWH_PER_W_ROLLUP, max(-g, 0.0) * KWH_PER_W_ROLLUP)
-            cap = MAX_W / 1000 * (ts - p[0]) / 3600 if p else 0.0  # the most the grid could carry since
+            # the most any home connection could carry since (counters are checked whatever the phases)
+            cap = MAX_W_THREE_PHASE / 1000 * (ts - p[0]) / 3600 if p else 0.0
             counters = (
                 (p[1], imp) if p else (None, None),
                 (p[2], exp) if p and p[3] is not None and pv_exp is not None else (None, None),
@@ -215,7 +216,7 @@ class ReadingsRepository:
                 if first and since >= SINCE_MIDNIGHT
                 else (None, None)
             )
-            most = MAX_W / 1000 * since / 3600
+            most = MAX_W_THREE_PHASE / 1000 * since / 3600
             for i, (before, after) in enumerate(counters):
                 step = after - before if before is not None and after is not None else None
                 if step is not None and 0 <= step <= cap:

@@ -8,8 +8,20 @@
 # LXC, where Bluetooth only works on the Proxmox host, and the host's D-Bus is mounted into the LXC (install.sh finds
 # it at /mnt/host-dbus by itself; see the README).
 #
-# Note: the dashboard's container runs as root, so it can use anything on the host's system bus, not only BlueZ.
+# Root, and the trade-off: everything else runs as an ordinary user (docker-entrypoint.sh), but with this file the
+# dashboard's container stays root. BlueZ only answers root, and whoever its D-Bus policy names (on Debian, Ubuntu
+# and Raspberry Pi OS, the bluetooth group; in a Proxmox LXC, the policy file in the README, which names the LXC's
+# root). So it keeps working everywhere it did, but the dashboard can use anything on the host's system bus, not only
+# BlueZ, and anything it gets wrong runs as root in its container.
+#
+# BLUETOOTH_GID in .env runs it as the ordinary user instead, in that group too: the host's bluetooth group's number
+# (getent group bluetooth | cut -d: -f3), then docker compose up -d. Try it on an ordinary Linux server or Raspberry
+# Pi; if Bluetooth stops working (the dashboard says this server's Bluetooth can't be used), take it out again. Not in
+# a Proxmox LXC: the policy file there lets in the LXC's root, and no one else.
 services:
   wattsmypower:
     volumes:
       - ${BLUETOOTH_DBUS:-/run/dbus}:/run/dbus:ro
+    environment:
+      RUN_AS_ROOT: "true"
+      BLUETOOTH_GID: ${BLUETOOTH_GID:-}
