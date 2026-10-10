@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 
 from app.container import build_services
 from app.core.config import Config, ConfigError
+from app.core.errors import install_error_handlers
 from app.core.security import DOCS_POLICY, SecurityHeadersMiddleware
 from app.core.spa import mount_spa
 from app.core.version import VERSION
@@ -144,6 +145,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(AuthMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)  # outermost, so even refusals carry the headers
+    install_error_handlers(app)
     for router in ROUTERS:
         app.include_router(router)
     if config.api_docs:
