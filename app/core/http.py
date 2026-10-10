@@ -3,12 +3,26 @@ alert channels, smart-home clouds)."""
 
 from __future__ import annotations
 
+import gzip
 import json
 import urllib.request
+import zlib
 from collections.abc import Mapping
+from http.client import HTTPResponse
 from typing import Any
 
 USER_AGENT = "WattsMyPower/1.0 (self-hosted solar dashboard)"
+
+
+def _body(resp: HTTPResponse) -> bytes:
+    """A response's body, unpacked when it came compressed (for callers that send Accept-Encoding)."""
+    body = resp.read()
+    encoding = (resp.headers.get("Content-Encoding") or "").strip().lower()
+    if encoding == "gzip":
+        return gzip.decompress(body)
+    if encoding == "deflate":
+        return zlib.decompress(body)
+    return body
 
 
 def fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float = 15) -> tuple[Any, Mapping[str, str]]:
@@ -18,7 +32,7 @@ def fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float =
         url, headers={"User-Agent": USER_AGENT, "Accept": "application/json", **(headers or {})}
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp), resp.headers
+        return json.loads(_body(resp)), resp.headers
 
 
 def get_json(url: str, headers: dict[str, str] | None = None, timeout: float = 15) -> Any:

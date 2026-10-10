@@ -15,6 +15,10 @@ the dashboard.
 Each outage's properties: EVENT_ID, TYPE (PLANNED/UNPLANNED), CUSTOMERS_AFFECTED, REASON, STATUS, START and
 EST_FIX_TIME ("9:34AM 08 Oct 2026", Queensland time, or words: "Under Investigation"), STREETS and SUBURBS (comma
 separated, in capitals).
+
+Both sites sit behind Cloudflare, whose browser check turns away clients that don't look like a browser (error 1010),
+and the networks can't let the dashboard through themselves (their sites are run by a contractor). Energex agreed
+(October 2026) to the dashboard asking for these files the way their own outage map does in Chrome: browser_headers.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import urllib.error
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -29,6 +34,38 @@ from typing import Any
 from app.core.http import get_json
 
 QLD_TIME = dt.timezone(dt.timedelta(hours=10))  # Queensland has no daylight saving
+
+# A recent stable Chrome on Windows, the most common browser there is. Keep the three in step when it's moved on: an
+# old version stands out too.
+CHROME = "151"
+CHROME_UA = (
+    f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME}.0.0.0 "
+    "Safari/537.36"
+)
+CHROME_CH_UA = f'"Chromium";v="{CHROME}", "Google Chrome";v="{CHROME}", "Not.A/Brand";v="99"'
+
+
+def browser_headers(url: str) -> dict[str, str]:
+    """What Chrome sends when a network's outage map, open on its own site, fetches one of these files."""
+    u = urllib.parse.urlsplit(url)
+    return {
+        "User-Agent": CHROME_UA,
+        "Accept": "*/*",
+        "Accept-Language": "en-AU,en-GB;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate",
+        "Referer": f"{u.scheme}://{u.netloc}/",
+        "sec-ch-ua": CHROME_CH_UA,
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+    }
+
+
+def get_feed(url: str, timeout: float = 30) -> Any:
+    """One of the networks' map files, asked for as their outage map does."""
+    return get_json(url, headers=browser_headers(url), timeout=timeout)
 
 
 class OutageFeedError(Exception):
@@ -145,13 +182,13 @@ class EnergyQueensland:
         except (ValueError, json.JSONDecodeError) as e:
             raise OutageFeedError(f"{self.name}'s outage map couldn't be read.") from e
 
-    def outages(self, which: str, get: Get = get_json) -> list[dict[str, Any]]:
+    def outages(self, which: str, get: Get = get_feed) -> list[dict[str, Any]]:
         """`which`: current_unplanned, current_planned or future_planned."""
         data = self._get(get, which)
         out = [outage(self.id, f) for f in (data.get("features") or [])] if isinstance(data, dict) else []
         return [o for o in out if o]
 
-    def area(self, get: Get = get_json) -> list[Ring]:
+    def area(self, get: Get = get_feed) -> list[Ring]:
         data = self._get(get, "servicearea")
         rings: list[Ring] = []
         for f in (data.get("features") or []) if isinstance(data, dict) else []:
