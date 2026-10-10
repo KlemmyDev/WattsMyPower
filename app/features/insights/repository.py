@@ -1,4 +1,4 @@
-"""Aggregates over the 5-minute rollups for the Health page."""
+"""Aggregates over the 5-minute rollups for the Solar and Battery pages (the insights feature)."""
 
 from __future__ import annotations
 

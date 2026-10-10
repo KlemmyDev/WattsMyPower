@@ -15,14 +15,17 @@ safe across threads, and readers use read-only ones so they can't take the write
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import time
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from typing import NamedTuple
 
 from collector.devices import DeviceConfig, Values, Words
+
+log = logging.getLogger(__name__)
 
 
 def _baseline(conn: sqlite3.Connection) -> None:
@@ -98,14 +101,49 @@ class Store:
             yield conn
             conn.commit()
 
+    def keep_private(self) -> None:
+        """The database's files readable by this user only, where they're more open (from before the collector's
+        umask). Best effort: a file it can't change is left as it is."""
+        for path in (self.path, self.path + "-wal", self.path + "-shm"):
+            with suppress(OSError):
+                if os.stat(path).st_mode & 0o077:
+                    os.chmod(path, 0o600)
+
     def migrate(self) -> int:
-        """Create the database if needed and bring its schema up to date. Returns the schema version."""
+        """Create the database if needed and bring its schema up to date. Returns the schema version.
+
+        Each step runs in a transaction of its own, with the version it brings the database to, so a step that
+        fails part-way leaves the database as it was before it, to be tried again from the beginning."""
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        with self.writing() as conn:
+        with closing(self.connect()) as conn:
+            conn.isolation_level = None  # transactions as below: sqlite3 doesn't open one for CREATE or ALTER
             version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if version > len(MIGRATIONS):
+                log.warning(
+                    "The collector's database (%s) was last used by a newer version of WattsMyPower (schema version "
+                    "%d; this version knows up to %d). Carrying on, but some things may not work: go back to the "
+                    "newer version, or restore a backup taken before it.",
+                    self.path,
+                    version,
+                    len(MIGRATIONS),
+                )
             for n, step in enumerate(MIGRATIONS[version:], start=version + 1):
-                step(conn)
-                conn.execute(f"PRAGMA user_version = {n}")
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    step(conn)
+                    conn.execute(f"PRAGMA user_version = {n}")
+                except BaseException:
+                    if conn.in_transaction:  # SQLite rolls some errors (a full disk) back itself
+                        conn.execute("ROLLBACK")
+                    log.exception(
+                        "Collector database migration %d of %d (%s) failed and was undone: the database is as it "
+                        "was before it",
+                        n,
+                        len(MIGRATIONS),
+                        step.__name__.strip("_"),
+                    )
+                    raise
+                conn.execute("COMMIT")
             return len(MIGRATIONS)
 
     # -- writing --------------------------------------------------------------

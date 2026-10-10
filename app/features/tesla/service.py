@@ -40,7 +40,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
 
-from app.core.config import Config
+from app.core.config import DEMO_LOCATION, Config
 from app.core.database import Database
 from app.features.car import service as car_service
 from app.features.car.service import CarService, NoSuchCar
@@ -185,7 +185,7 @@ class TeslaService:
 
     def _demo_car(self) -> DemoTesla:
         if self._demo is None:
-            self._demo = DemoTesla(self.home, self.clock)
+            self._demo = DemoTesla(lambda: self.home() or DEMO_LOCATION, self.clock)
         return self._demo
 
     def _default_tessie(self, token: str) -> Client:
@@ -297,8 +297,9 @@ class TeslaService:
                 self._states[vin] = self._parse(vin, v)
         return self._bluetooth
 
-    def home(self) -> tuple[float, float]:
-        return (self.settings.get("latitude"), self.settings.get("longitude"))
+    def home(self) -> tuple[float, float] | None:
+        """The house's location, None until it's been chosen."""
+        return self.settings.location()
 
     # -- connecting ------------------------------------------------------------------------
     def _switch(self, c: dict[str, Any], provider: str, vins: list[str]) -> dict[str, Any]:
@@ -579,7 +580,7 @@ class TeslaService:
         return self.status()
 
     # -- what's known of each car ---------------------------------------------------------------
-    def _home_of(self, v: dict[str, Any]) -> tuple[float, float]:
+    def _home_of(self, v: dict[str, Any]) -> tuple[float, float] | None:
         h = v.get("home")
         return (float(h[0]), float(h[1])) if h else self.home()
 
@@ -646,8 +647,13 @@ class TeslaService:
             self._states[vin] = self._parse(vin, v)
 
     def _night(self) -> bool:
-        """Whether the sun's down at home: over Bluetooth, no car's woken or read in the background (POLL_NIGHT)."""
-        return sun.position(self.clock(), *self.home())[0] < NIGHT_ELEVATION
+        """Whether the sun's down at home: over Bluetooth, no car's woken or read in the background (POLL_NIGHT).
+        Without the house's location, the hours the sun's down most of the year (7 pm to 6 am)."""
+        home = self.home()
+        if home is None:
+            hour = time.localtime(self.clock()).tm_hour
+            return hour >= 19 or hour < 6
+        return sun.position(self.clock(), *home)[0] < NIGHT_ELEVATION
 
     def _want(self, vin: str, v: dict[str, Any], c: dict[str, Any]) -> str:
         """How closely to follow a car now (control.readiness), as the client's read takes it: at night over
@@ -1418,7 +1424,7 @@ class TeslaService:
             "tick": TICK,
             # Each timing a car's solar charging can be given (control.TIMING): its default, lowest and highest.
             "timing": {k: {"default": d, "min": lo, "max": hi} for k, (d, lo, hi, _) in control.TIMING.items()},
-            "home": list(self.home()),
+            "home": list(home) if (home := self.home()) else None,
             "vehicles": [self.vehicle(vin, v) for vin, v in c["vehicles"].items()] if connected else [],
         }
 

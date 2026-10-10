@@ -26,12 +26,23 @@ export function energyParts(v: number, whole = false): [value: string, unit: "Wh
 export const kWh = (v: number | null | undefined) => (missing(v) ? DASH : energyParts(v).join(" "));
 /** kWh as "395 Wh" or "1,013 kWh". */
 export const kWhInt = (v: number) => energyParts(v, true).join(" ");
+/**
+ * A true minus sign for a negative `v`, but only when `shown` (its magnitude as displayed) isn't zero: so
+ * −0.001 shows as "$0.00", never "−$0.00".
+ */
+export const minus = (v: number, shown: string) => (v < 0 && /[1-9]/.test(shown) ? "−" : "");
 /** "$1.23", or "−$1.23" for negatives. */
-export const money = (v: number | null | undefined) =>
-  missing(v) ? DASH : `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`;
+export function money(v: number | null | undefined) {
+  if (missing(v)) return DASH;
+  const shown = Math.abs(v).toFixed(2);
+  return `${minus(v, shown)}$${shown}`;
+}
 /** Whole dollars with thousands separators: "$18,400". */
-export const dollars = (v: number | null | undefined) =>
-  missing(v) ? DASH : `${v < 0 ? "−" : ""}$${Math.round(Math.abs(v)).toLocaleString("en-AU")}`;
+export function dollars(v: number | null | undefined) {
+  if (missing(v)) return DASH;
+  const shown = Math.round(Math.abs(v)).toLocaleString("en-AU");
+  return `${minus(v, shown)}$${shown}`;
+}
 export const pct = (v: number | null | undefined) => (missing(v) ? DASH : `${Math.round(v)}%`);
 /** A $/kWh rate in cents, trimmed: 0.325 → "32.5c", 0.3 → "30c". */
 export const centsShort = (v: number) => `${+(v * 100).toFixed(1)}c`;

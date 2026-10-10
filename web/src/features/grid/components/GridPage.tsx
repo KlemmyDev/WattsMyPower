@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
 import { gridVerb, ON, reserveOf } from "~/features/common/energy/utils";
-import { duration, hhmm } from "~/features/common/formatting/utils/date";
+import { duration, hhmm, weekdayShort } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
@@ -116,7 +116,9 @@ function GridSummary({
   const steady = grid
     ? grid.enabled
       ? "No warnings from AEMO, no storms forecast, and the grid's steady at your house."
-      : "The grid's steady at your house. Choose your region below for AEMO's warnings too."
+      : grid.location_set
+        ? "The grid's steady at your house. Choose your region below for AEMO's warnings too."
+        : "The grid's steady at your house. Set your location, or choose your region below, for AEMO's warnings too."
     : undefined;
   return (
     <SummaryCard
@@ -158,7 +160,9 @@ function GridSummary({
           market
             ? `${perMWh(market.price)} · ${grid?.region_name}`
             : grid && !grid.enabled
-              ? "Not following AEMO"
+              ? grid.region_auto && !grid.location_set
+                ? "Needs your location"
+                : "Not following AEMO"
               : "Waiting for AEMO"
         }
       />
@@ -272,6 +276,7 @@ function TodayCard({
       </div>
       {series ? (
         <TimeLine
+          label="Power from and to the grid through the day"
           points={pts}
           start={start}
           end={addDays(start, 1)}
@@ -333,8 +338,15 @@ function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
       setBusy(false);
     }
   };
-  const chosen = grid.enabled ? (grid.region_auto ? "auto" : grid.region!) : "none";
-  const autoName = grid.region_auto && grid.region_name ? `Automatic (${grid.region_name})` : "Automatic";
+  // Automatic, without a location yet, works out no region: it's still what's chosen.
+  const waiting = grid.region_auto && !grid.location_set;
+  const chosen = grid.enabled ? (grid.region_auto ? "auto" : grid.region!) : waiting ? "auto" : "none";
+  const autoName =
+    grid.region_auto && grid.region_name
+      ? `Automatic (${grid.region_name})`
+      : waiting
+        ? "Automatic (needs your location)"
+        : "Automatic";
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -386,6 +398,7 @@ function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
             {today.length > 0 && <span className="tabular-nums">Today up to {wholesaleCents(top * 10)}</span>}
           </div>
           <TimeLine
+            label="Wholesale price through the day, with AEMO's forecast"
             points={pts}
             start={start}
             end={end}
@@ -481,6 +494,7 @@ function QualityCard({
         <div className="text-[13px] text-ink-faint">Your inverter doesn't report the grid's voltage.</div>
       ) : series ? (
         <TimeLine
+          label="Grid voltage through the day"
           points={volts}
           start={start}
           end={addDays(start, 1)}
@@ -545,7 +559,7 @@ function NoticeRow({ n }: { n: MarketNotice }) {
   const [open, setOpen] = useState(false);
   const color =
     !n.active || n.level === "info" ? alpha(COLOR.fg, 0.25) : n.level === "critical" ? COLOR.danger : COLOR.warn;
-  const when = new Date(n.at * 1000).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  const when = `${weekdayShort.format(n.at * 1000)} ${hhmm(n.at)}`;
   return (
     <li className="border-b border-line-subtle py-1 last:border-0">
       <button

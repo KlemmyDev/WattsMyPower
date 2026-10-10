@@ -2,11 +2,11 @@ import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
-import { TitleBlock } from "~/features/common/ui/components/Card";
 import { MeterComparison } from "~/features/meter/components/MeterComparison";
 import { MeterDataSettings } from "~/features/meter/components/MeterDataSettings";
 import { BillAdjustments } from "~/features/settings/components/BillAdjustments";
 import { BillingSettings } from "~/features/settings/components/BillingSettings";
+import { RatesSummary } from "~/features/settings/components/RatesSummary";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
 import { TariffSettings } from "~/features/settings/components/TariffSettings";
 
@@ -39,6 +39,7 @@ function BillsSettingsPage() {
         <BackLink to="/bills">Bills</BackLink>
       </div>
       <PageHeader title="Rates & settings" sub="Everything your bills are worked out from" />
+      <RatesSummary />
       <nav aria-label="On this page" className="flex flex-wrap gap-2">
         {SECTIONS.map((x) => (
           <Link
@@ -104,10 +105,19 @@ function useHoldAnchor(hash: string) {
   }, [hash]);
 }
 
+/** A part of the page: a quiet heading over its cards, as the navigation's groups have. */
 function Section({ id, title, sub, children }: { id: BillsSection; title: string; sub: string; children: ReactNode }) {
   return (
-    <section aria-labelledby={`h-sec-${id}`} id={id} className="flex scroll-mt-6 flex-col gap-5 pt-3">
-      <TitleBlock id={`h-sec-${id}`} title={title} sub={sub} />
+    <section aria-labelledby={`h-sec-${id}`} id={id} className="flex scroll-mt-6 flex-col gap-4 pt-4">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
+        <h2
+          id={`h-sec-${id}`}
+          className="text-[13px] leading-5 font-semibold tracking-[0.08em] text-ink-muted uppercase"
+        >
+          {title}
+        </h2>
+        <span className="text-[13px] text-ink-faint">{sub}</span>
+      </div>
       {children}
     </section>
   );

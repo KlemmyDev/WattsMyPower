@@ -8,7 +8,7 @@ import { useLiveStatus } from "~/features/common/layout/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import type { SystemInfo } from "~/features/common/live/types";
 import { inverterName } from "~/features/common/live/utils";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { cn } from "~/features/common/ui/utils";
 import { HouseScene } from "~/features/overview/components/HouseScene";
@@ -69,6 +69,7 @@ function SystemSummary() {
   return (
     <section
       aria-labelledby="h-system-summary"
+      style={{ backgroundImage: `linear-gradient(110deg, ${alpha(COLOR.solar, 0.1)}, transparent 55%)` }}
       className="glass flex items-center gap-5 overflow-hidden rounded-3xl border border-line-subtle p-4 pr-6 max-sm:gap-3.5 max-sm:rounded-[20px] max-sm:p-3"
     >
       <Link

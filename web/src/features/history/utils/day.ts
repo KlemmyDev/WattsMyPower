@@ -48,9 +48,6 @@ export function slotsOf(series: HistorySeries | undefined, dayTs: number, second
   return acc.map((a) => ({ pv: kwh(a.pv), load: kwh(a.load), grid: kwh(a.grid), bat: kwh(a.bat), soc: a.soc }));
 }
 
-/** A day's 5-minute readings as 24 hours. Each hour's energy is its average power over the hour. */
-export const hoursOf = (series: HistorySeries | undefined, dayTs: number): Hour[] => slotsOf(series, dayTs);
-
 /** The day's highest solar reading (W) and when, and its lowest battery level (%). */
 export function extremesOf(series: HistorySeries | undefined) {
   let peak: { w: number; t: number } | null = null;

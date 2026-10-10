@@ -87,6 +87,8 @@ Two services, run together by Docker Compose:
 - **The collector** (`wattsmypower-collector`) is the only thing that talks to the inverters. Every poll it stores the raw register values it read, uninterpreted, in `data/collector.db`, and serves them over a token-protected feed ([collector/PROTOCOL.md](collector/PROTOCOL.md)). It rarely changes, so updates to the dashboard leave it recording without a break.
 - **The dashboard** (`wattsmypower`) follows that feed and does everything else: decoding the registers, merging a second inverter, readings and rollups (`data/wattsmypower.db`), costs, forecast, insights, savings, sign-in, and the web app. If the way a register is read ever turns out to be wrong, `python -m app reprocess` rebuilds the readings from the collector's raw history.
 
+Both run as an ordinary user, not root: whoever owns the `data` folder on the machine, or uid 10001 when that's root ([docker-entrypoint.sh](docker-entrypoint.sh) hands them the folder at each start, so an install from before just carries on). Their logs are kept to 30 MB each.
+
 ## Install
 
 Follow the steps for your computer, then [open the dashboard](#open-the-dashboard). On Linux and a Mac you run the install script; on Windows a PowerShell script sets up WSL and runs it there for you.
@@ -180,7 +182,7 @@ curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install
 
 ### Open the dashboard
 
-**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password); after that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
+**Open that address** in a browser on any device on your network. (On the computer it runs on, use that address too rather than `localhost`: the inverter scan starts from the network the dashboard was opened on.) The first visit asks you to create the dashboard's account (a username and password), with the one-time set-up code: `install.sh` shows it when it finishes, and it's also in `docker compose logs wattsmypower` and `data/setup-code`. After that, every browser signs in with it. A short set-up guide then walks you through the rest, and any step can be skipped:
 
 - **Connect your inverter:** scan your network and connect your hybrid (and a second inverter if you have one). Readings start within a minute.
 - **Your system:** the solar array's size (the forecast starts from it, and it's 6.6 kW until it's entered), and the battery details your inverter can't report.
@@ -228,7 +230,7 @@ An update installs the channel's version, so moving to a channel behind the one 
 
 **Going back.** Each update that changes the version keeps the one it replaced (its images, tagged `:previous`, and in `data/update/previous` its commit and the backup made before it). `bash install.sh --rollback` goes back to it and puts that backup back, after backing up the databases as they are; updating again brings the newer version back.
 
-**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year. `install.sh` keeps `data/` and `.env` readable by you alone.
+**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year. The collector's keeps a year of the inverters' raw registers (`COLLECTOR_RETENTION_DAYS`, so readings can be rebuilt from them): with a second inverter that's about 550 MB once it's full, a little less with one, and it stays about that size after. `install.sh` keeps `data/` and `.env` readable by you alone.
 
 ### Backups and restoring
 
@@ -253,7 +255,7 @@ docker compose start
 
 On Windows, also remove the scheduled task and firewall rule (`Unregister-ScheduledTask WattsMyPower` and `Remove-NetFirewallHyperVRule -Name WattsMyPower`, in PowerShell as administrator); `wsl --unregister WattsMyPower` then deletes the whole distribution, data included. See [Windows](#windows).
 
-> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
+> **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account and prints a new set-up code, and the next visit asks for a new account. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
 
@@ -316,18 +318,22 @@ Almost everything is set up in the dashboard (**Manage**, and **Bills → Rates 
 | `PORT` | `8080` | Port the dashboard is served on |
 | `COLLECTOR_TOKEN` | *(generated)* | Secret the dashboard uses to read the collector's feed. `install.sh` creates one in `.env`. |
 | `COLLECTOR_WRITES` | `true` | Whether the dashboard may change what the collector reads (connect, remove or scan for inverters). Set `false` on a dashboard following another server's collector, such as one you're developing on, so it can't disturb that system. |
-| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
+| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, on this machine only (the dashboard reaches it inside Docker). |
+| `COLLECTOR_BIND` | `127.0.0.1` | Where that port is published. `0.0.0.0` publishes it to your network too, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
 | `COLLECTOR_RETENTION_DAYS` | `365` | Keep the collector's raw registers this many days (what `reprocess` can rebuild from). `0` = keep everything. |
 | `INVERTER_HOST`, `INVERTER_DRIVER`, `INVERTER_PORT`, `INVERTER_UNIT` | *(empty)*, `sungrow.sh_rs`, `502`, `1` | **Only read once:** inverters are connected in **Manage → Integrations** and stored in `data/collector.db`. The first time the collector starts with a database from before that, it moves the hybrid set here into it; after that these are ignored. |
 | `PV2_HOST`, `PV2_DRIVER`, `PV2_PORT`, `PV2_UNIT` | *(empty)*, `sungrow.sg_d`, `502`, `1` | The same, for a second, AC-coupled solar inverter. |
 | `PV2_BEHIND_METER` | `true` | Where a second system connects, unless it's set in **Manage → Integrations**. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
-| `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
+| `TZ` | `Australia/Brisbane` | Your time zone: where "today" and the daily totals roll over, and the zone the dashboard shows its days and times in, whatever zone the browser viewing it is in. `install.sh` asks for it; left out, the log says it's using Brisbane. |
 | `PV_KW`, `BATTERY_KWH` | `6.6`, `0` | **Only read once:** the solar array's size and the battery's capacity (`0` = read it from the inverter) are set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts, it moves the values here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets the array's size); after that they're ignored, and the log says so. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |
-| `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Manage → Integrations → Weather.** |
-| `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. |
+| `LATITUDE` / `LONGITUDE` | none | The house's location, for the forecast, weather, outages and warnings. Usually chosen in the set-up guide or Manage → Integrations → Weather instead; nothing that needs it is fetched until it's set. |
+| `AUTH` | `true` | Require signing in. Set to `false` only if a reverse proxy in front of it already handles sign-in. Only `false`, `0`, `no` or `off` turns it off: an empty or mistyped value keeps it on. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Behind a reverse proxy, set this to the proxy's address so sign-in sees each browser's own address (from `X-Forwarded-For`), not the proxy's. Otherwise every browser shares the proxy's address, and too many wrong passwords from one person pause sign-in for everyone using that username. The proxy also needs to pass on the `Host` header (or set `X-Forwarded-Host`): changes whose origin doesn't match it are refused. |
+| `API_DOCS` | `false` | Serve the API's documentation at `/api/docs` (behind sign-in). |
+| `COLLECTOR_ALLOW_PUBLIC_HOSTS` | `false` | Inverters connected in the dashboard must be on your home network (a private address, or a name that resolves to one). Set `true` on the collector to allow any address, for example an inverter reached over a VPN. |
 | `BLUETOOTH` | `auto` | Whether `install.sh` connects the server's Bluetooth through to the dashboard (`auto`: when it finds an adapter with BlueZ running; `on`; `off`). See [Bluetooth](#bluetooth). |
 | `BLUETOOTH_DBUS` | `/run/dbus` | The folder with the D-Bus socket BlueZ is on. `install.sh` sets it to `/mnt/host-dbus` in a Proxmox LXC set up as in [Bluetooth](#bluetooth). |
 | `LOG_DEBUG` | *(empty)* | Loggers to turn up to DEBUG, comma-separated (`tesla_fleet_api`, `bleak`), to see what a device says message by message when the log doesn't say why something failed. |
@@ -410,6 +416,8 @@ Portable batteries (Bluetti) and Teslas can be reached over the server's Bluetoo
 4. Restart the LXC: `pct reboot 101`.
 
 Then, in the LXC, run `bash install.sh` in the WattsMyPower folder: it finds the host's D-Bus at `/mnt/host-dbus` (`BLUETOOTH_DBUS` in `.env`) and connects it through. In a user namespace like this, the dashboard lets the kernel tell D-Bus who it is, rather than claim to be root.
+
+**With Bluetooth, the dashboard runs as root** in its container (the collector doesn't), as BlueZ answers root wherever it's set up. On an ordinary Linux server or Raspberry Pi you can run it as an ordinary user instead: set `BLUETOOTH_GID` in `.env` to the number of the host's `bluetooth` group (`getent group bluetooth | cut -d: -f3`), then `docker compose up -d`. If the dashboard then says Bluetooth can't be used, take it out again. Not in a Proxmox LXC. [docker-compose.bluetooth.yml](docker-compose.bluetooth.yml) has more.
 
 ### How plan comparison works
 
@@ -499,9 +507,11 @@ Backend (`uv sync --extra collector` gets Python 3.13 and everything both servic
 COLLECTOR_URL=http://<server IP>:8081 COLLECTOR_TOKEN=<token> DB_PATH=./data/local.db uv run uvicorn app.main:app --port 8080
 ```
 
+The server only publishes the collector to itself, so first set `COLLECTOR_BIND=0.0.0.0` in its `.env` and run `docker compose up -d` there.
+
 It builds its own database from the collector's raw history (whatever the collector holds), then follows it live. Its settings, rates and account are its own, so changes there never touch the server. `python -m app reprocess` with the same variables rebuilds it after changing how registers are decoded.
 
-**Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
+**Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. The demo is in Brisbane, so the forecast and the Grid page have something to show; add `LATITUDE= LONGITUDE=` to start without a location, as a new install does. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
 
 Checks (`uv run …`): `pytest` (tests), `ruff check` and `ruff format` (lint and format), `mypy` (types). [CONTRIBUTING.md](CONTRIBUTING.md) lists every check CI runs on a pull request.
 
@@ -568,6 +578,7 @@ app/
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
+docker-entrypoint.sh    starts each container's service as an ordinary user, after handing it the data folder
 updater.sh              run every minute by cron: updates when the dashboard asks (Manage → System → Updates)
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed

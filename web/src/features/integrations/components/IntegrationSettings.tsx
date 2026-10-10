@@ -7,6 +7,7 @@ import { errorMessage } from "~/features/common/api/utils";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
+import { useLocationSet } from "~/features/common/settings/hooks";
 import { useForecast } from "~/features/common/weather/hooks";
 import { homeQuery } from "~/features/home/api";
 import type { HomeIntegration } from "~/features/home/types";
@@ -70,15 +71,28 @@ function SungrowLink() {
 function WeatherLink() {
   const live = useLive();
   const forecast = useForecast();
+  const located = useLocationSet();
   return (
     <IntegrationLink
       card
       to="/integrations/weather"
       icon="cloudSun"
       name="Weather"
-      status={forecast ? "Connected" : forecast === undefined ? "Checking" : "Unavailable"}
+      status={
+        located === false
+          ? "Needs your location"
+          : forecast
+            ? "Connected"
+            : forecast === undefined
+              ? "Checking"
+              : "Unavailable"
+      }
       on={!!forecast}
-      detail={`Forecast for ${locationLabel(live?.system)}, from Open-Meteo`}
+      detail={
+        located === false
+          ? "Choose where your panels are for the solar forecast, from Open-Meteo"
+          : `Forecast for ${locationLabel(live?.system)}, from Open-Meteo`
+      }
     />
   );
 }
@@ -154,17 +168,27 @@ function GridLink() {
     ? ["Checking", "Checking…"]
     : error || !grid
       ? ["Unavailable", errorMessage(error)]
-      : [
-          out?.network ? (out.error ? "Not updating" : "Following") : grid.enabled ? "Prices only" : "Not following",
-          [
-            out?.network
-              ? `${out.network.name} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
-              : "No network's outages",
-            grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
+      : !grid.location_set
+        ? [
+            grid.enabled ? "Prices only" : "Needs your location",
+            [
+              grid.enabled && `AEMO prices for ${grid.region_name}`,
+              "Set your location for outages and warnings near you",
+            ]
+              .filter(Boolean)
+              .join(" · "),
           ]
-            .filter(Boolean)
-            .join(" · "),
-        ];
+        : [
+            out?.network ? (out.error ? "Not updating" : "Following") : grid.enabled ? "Prices only" : "Not following",
+            [
+              out?.network
+                ? `${out.network.name} outages within ${out.radius_km} km${out.street ? "" : " (no street set)"}`
+                : "No network's outages",
+              grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          ];
   return (
     <IntegrationLink
       card

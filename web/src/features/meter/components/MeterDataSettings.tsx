@@ -50,7 +50,7 @@ function Preview({ file, preview, onDone }: { file: File; preview: MeterPreview;
       </div>
       <div className="grid grid-cols-2 gap-3 max-sm:gap-2">
         {(["import", "export"] as const).map((dir) => (
-          <div key={dir} className="flex flex-col gap-0.5 rounded-xl bg-surface px-4 py-3">
+          <div key={dir} className="flex flex-col gap-0.5 rounded-2xl bg-surface-raised px-4 py-3">
             <span className="text-xs text-ink-muted">{dir === "import" ? "From the grid" : "To the grid"}</span>
             <span className="text-lg font-semibold tabular-nums">
               {preview.channels.some((c) => c.included && c.direction === dir)
@@ -111,7 +111,7 @@ function ImportRow({ item }: { item: MeterImport }) {
       meterChanged(qc);
     },
   });
-  const span = dateSpan(new Date(item.start * 1000), new Date((item.end - 1) * 1000));
+  const span = dateSpan(item.start, item.end - 1);
 
   return (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-3 ${ROW}`}>

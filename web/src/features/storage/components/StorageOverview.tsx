@@ -2,9 +2,10 @@ import { useState } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Swatch } from "~/features/common/ui/components/Swatch";
 import { cn } from "~/features/common/ui/utils";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import type { MeasuredDatabase, StorageReport } from "~/features/storage/types";
 import { bytes, compact, share } from "~/features/storage/utils";
 
@@ -14,7 +15,7 @@ const KINDS = [
   { id: "readings", name: "Readings", color: COLOR.battery },
   { id: "weather", name: "Weather and forecast", color: COLOR.solar },
   { id: "prices", name: "Electricity prices", color: COLOR.lilac },
-  { id: "other", name: "Settings, alerts and the rest", color: COLOR.bar },
+  { id: "other", name: "Settings and the rest", color: COLOR.bar },
   { id: "overhead", name: "Logs and empty pages", color: COLOR.barFaint },
 ] as const;
 
@@ -38,7 +39,7 @@ function split(dbs: MeasuredDatabase[]): Record<Kind, number> {
   return out;
 }
 
-/** Manage → Data, the top: how much is stored in all, what kinds of data take the room, and how fast it grows. */
+/** Manage → Data, the top: how much is stored in all and how fast it grows, then what kinds of data take the room. */
 export function StorageOverview({
   report,
   measuring,
@@ -57,53 +58,54 @@ export function StorageOverview({
   const of = (id: "dashboard" | "collector") => report.databases.find((d) => d.id === id);
   const size = (id: "dashboard" | "collector") => {
     const d = of(id);
-    return d?.available ? bytes(d.total_bytes) : "Not available";
+    return d?.available ? bytes(d.total_bytes) : "not available";
   };
-  const tiles: [string, string][] = [
-    ["Dashboard database", size("dashboard")],
-    ["Collector database", size("collector")],
-    ["Rows stored", compact(rows)],
-    ["Growing by", growth > 0 ? `About ${bytes(growth * 30)} a month` : "Not growing"],
-    ["Empty pages", bytes(empty)],
-    ["Free on this drive", `${bytes(report.disk.free)} of ${bytes(report.disk.total)}`],
-  ];
 
   return (
-    <SettingsCard aria-labelledby="h-storage">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line-subtle p-6 max-sm:p-5">
-        <SettingsTitle
-          id="h-storage"
-          title="What's stored"
-          sub="WattsMyPower keeps everything on this server, in two SQLite databases. Here's what's in them, and how much room each part takes."
+    <>
+      <SummaryCard
+        icon="database"
+        color={COLOR.teal}
+        label="Storage"
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+            <span className="min-w-0 flex-1 truncate">
+              Measured {hhmm(report.measured_at)} ·{" "}
+              <span title={report.folder} className="font-mono text-xs">
+                {report.folder}
+              </span>
+            </span>
+            <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
+              {measuring ? "Measuring…" : "Measure again"}
+            </Button>
+          </div>
+        }
+      >
+        <SummaryStat
+          label="On disk"
+          value={bytes(total)}
+          sub={`Dashboard ${size("dashboard")} · collector ${size("collector")}`}
         />
-        <div className="flex items-center gap-3">
-          <span className="text-[13px] text-ink-muted">Measured {hhmm(report.measured_at)}</span>
-          <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
-            {measuring ? "Measuring…" : "Measure again"}
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-col gap-5 border-b border-line-subtle p-6 max-sm:p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="font-display text-[34px] leading-none font-bold tabular-nums">{bytes(total)}</span>
-          <span className="text-sm text-ink-muted">on disk, in {report.folder}</span>
-        </div>
+        <SummaryStat label="Rows stored" value={compact(rows)} sub="In both databases" />
+        <SummaryStat
+          label="Growing by"
+          value={growth > 0 ? `${bytes(growth * 30)}` : "Not growing"}
+          sub={growth > 0 ? "A month, at this week's rate" : "Old rows go as new ones come"}
+        />
+        <SummaryStat
+          label="Free on this drive"
+          value={bytes(report.disk.free)}
+          sub={`Of ${bytes(report.disk.total)} · ${bytes(empty)} empty pages`}
+        />
+      </SummaryCard>
+      <SettingsSection
+        id="h-storage"
+        title="What's stored"
+        sub="Everything stays on this server, in two SQLite databases. Here's what takes the room."
+      >
         <Breakdown parts={parts} total={total} />
-      </div>
-      <div className="overflow-hidden">
-        <dl className="m-0 -mr-px -mb-px grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-          {tiles.map(([label, value]) => (
-            <div
-              key={label}
-              className="flex min-w-0 flex-col gap-1 border-r border-b border-line-subtle px-6 py-4 max-sm:px-5"
-            >
-              <dt className="text-xs text-ink-muted">{label}</dt>
-              <dd className="m-0 text-[15px] font-medium break-words tabular-nums">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </SettingsCard>
+      </SettingsSection>
+    </>
   );
 }
 
@@ -123,7 +125,7 @@ function Breakdown({ parts, total }: { parts: Record<Kind, number>; total: numbe
     <div className="flex flex-col gap-4">
       <div className="relative">
         {/* A 2px gap between parts; slivers keep a visible minimum so nothing that's there disappears. */}
-        <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-[4px]" onMouseLeave={() => setHot(null)}>
+        <div className="flex h-4 w-full gap-[3px] overflow-hidden rounded-full" onMouseLeave={() => setHot(null)}>
           {placed.map((k) => (
             <div
               key={k.id}
@@ -146,12 +148,12 @@ function Breakdown({ parts, total }: { parts: Record<Kind, number>; total: numbe
           </div>
         )}
       </div>
-      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-x-6 gap-y-2 p-0">
+      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-2 p-0">
         {placed.map((k) => (
           <li
             key={k.id}
             className={cn(
-              "flex cursor-pointer items-center gap-2 text-[13px] transition-opacity duration-200",
+              "flex cursor-pointer items-center gap-2.5 rounded-xl bg-canvas/60 px-3 py-2.5 text-[13px] transition-opacity duration-200 light:bg-canvas",
               hot && hot !== k.id && "opacity-50",
             )}
             onMouseEnter={() => setHot(k.id)}

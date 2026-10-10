@@ -78,6 +78,16 @@ def test_the_current_bill_is_what_has_happened_plus_the_recent_average(
     assert out["bands"] == [{"name": "All times", "import_kwh": so_far["import_kwh"], "cost": so_far["import_cost"]}]
 
 
+def test_the_days_add_up_to_the_bill_so_far(db: Database, config: Config, readings: ReadingsRepository) -> None:
+    # 137 W all day: 3.288 kWh, $1.9864 a day with supply. To the cent each day is $1.99, and 14 of those
+    # would come to 6 cents more than the bill; at full precision they add up to it.
+    _import(readings, dt.date(2026, 10, 1), dt.datetime.fromtimestamp(NOW), 137)
+    out = _bills(db, config, readings).build(NOW)
+    so_far = out["current"]["so_far"]
+    assert round(sum(d["net_cost"] for d in out["days"]), 2) == so_far["net_cost"]
+    assert round(sum(d["import_kwh"] for d in out["days"]), 2) == so_far["import_kwh"]
+
+
 def test_discounts_and_credits_come_off_each_bill(db: Database, config: Config, readings: ReadingsRepository) -> None:
     # $3.60 of usage and $1 supply a day, as above; 10% off usage, and $365 of credits a year ($1 a day).
     _import(readings, dt.date(2026, 9, 10), dt.datetime.fromtimestamp(NOW), 500)

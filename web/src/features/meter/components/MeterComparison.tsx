@@ -112,7 +112,7 @@ export function MeterComparison() {
                   ["To the grid", s.meter_export, s.dashboard_export],
                 ] as const
               ).map(([label, meter, dash]) => (
-                <div key={label} className="flex flex-col gap-0.5 rounded-xl bg-canvas px-4 py-3">
+                <div key={label} className="flex flex-col gap-0.5 rounded-2xl bg-canvas/60 px-4 py-3 light:bg-canvas">
                   <span className="text-xs text-ink-muted">{label}</span>
                   <span className="text-lg font-semibold tabular-nums">{kWhInt(meter)} on your meter</span>
                   <span className="text-[13px] text-ink-muted tabular-nums">

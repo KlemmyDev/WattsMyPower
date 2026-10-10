@@ -158,7 +158,8 @@ def test_past_weather_is_filled_in_for_days_with_readings(
 def test_no_past_weather_is_fetched_until_the_location_is_chosen(
     db: Database, config: Config, settings: SettingsStore
 ) -> None:
-    unset = SettingsStore(db, config)  # the default location, and nothing saved in Settings
+    config = replace(config, latitude=None, longitude=None)
+    unset = SettingsStore(db, config)  # none in the environment, and nothing saved in Settings
     with db.writing() as conn:
         conn.execute("DELETE FROM settings WHERE key IN ('latitude', 'longitude')")
         conn.execute("INSERT INTO samples_5m (ts, pv_power) VALUES (?, 1000)", (days_ago(30) + 43200,))
@@ -166,6 +167,7 @@ def test_no_past_weather_is_fetched_until_the_location_is_chosen(
     assert not unset.location_set()
     asked: list[str] = []
     weather = WeatherService(config, db, unset, get=lambda u: asked.append(u) or history_answer(u), clock=lambda: NOW)
+    weather.ensure_fresh()  # nor the forecast
     weather.request_backfill()
     assert weather.backfill() == 0 and asked == []
     assert "Choose your location first" in weather.status()["backfill"]["error"]

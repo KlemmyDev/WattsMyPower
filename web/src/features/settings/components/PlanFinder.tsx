@@ -90,7 +90,7 @@ function PlanResults({
           </label>
         )}
       </div>
-      <div className="flex max-h-[520px] flex-col overflow-y-auto rounded-xl border border-line-subtle">
+      <div className="flex max-h-[520px] flex-col overflow-y-auto rounded-2xl bg-canvas/60 light:bg-canvas">
         {plans.map((p) => (
           <PlanRow key={p.id} plan={p} loading={loadingId === p.id} onUse={() => onUse(p.id)} />
         ))}

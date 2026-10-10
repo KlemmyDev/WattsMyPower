@@ -4,6 +4,8 @@ import { ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
+import { useLocationSet } from "~/features/common/settings/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
@@ -208,6 +210,7 @@ function TodayCard({
       </div>
       {series ? (
         <TimeLine
+          label="Solar through the day, against what was expected"
           points={actual}
           compare={{ points: expected, color: EXPECTED }}
           start={start}
@@ -374,6 +377,14 @@ function DaysAhead({
   now: number;
 }) {
   const fahrenheit = useFahrenheit();
+  const located = useLocationSet();
+  if (located === false)
+    return (
+      <Card>
+        <TitleBlock title="Days ahead" sub="Solar the forecast expects, and the range it usually lands in" />
+        <LocationPrompt>The forecast needs to know where your panels are.</LocationPrompt>
+      </Card>
+    );
   if (!f) return null;
   const range = acc?.range;
   const top = Math.max(0.1, ...f.days.map((d) => d.pv_kwh * (range?.high ?? 1)));
