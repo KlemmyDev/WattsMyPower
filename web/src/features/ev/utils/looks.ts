@@ -17,11 +17,7 @@ type MakeLooks = {
   models: Record<string, CarLook>;
   /** Any other model of the make. */
   other: CarLook;
-  /** Where one of its cars links to from the house: its integration's page, or (given) its dashboard car's own. */
-  page: (car: number | null) => string;
 };
-
-const tesla = (car: number | null) => (car != null ? `/integrations/ev/tesla/car/${car}` : "/integrations/ev/tesla");
 
 export const LOOKS: Record<string, MakeLooks> = {
   tesla: {
@@ -33,7 +29,6 @@ export const LOOKS: Record<string, MakeLooks> = {
       cybertruck: { body: "cybertruck", paint: "#a9adb1" }, // bare stainless steel
     },
     other: { body: "modelY" },
-    page: tesla,
   },
   byd: {
     models: {
@@ -45,27 +40,26 @@ export const LOOKS: Record<string, MakeLooks> = {
       sealion7: { body: "sealion7" },
     },
     other: { body: "suv" },
-    page: () => "/integrations/ev",
   },
 };
 
-/** A make the table doesn't know: an SUV, linking to the EV integrations. */
-const OTHER: MakeLooks = { models: {}, other: { body: "suv" }, page: () => "/integrations/ev" };
+/** A make the table doesn't know: an SUV. */
+const OTHER: MakeLooks = { models: {}, other: { body: "suv" } };
 
 const key = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
- * How a car of this make and model is drawn, where it links to, and whether the shape is the model's own (`known`) or
- * only its make's usual one (a dashboard car's chosen shape is drawn instead, then).
+ * How a car of this make and model is drawn, and whether the shape is the model's own (`known`) or only its make's
+ * usual one (a dashboard car's chosen shape is drawn instead, then).
  */
 export function lookOf(
   make: string | null | undefined,
   model: string | null | undefined,
-): CarLook & { known: boolean; page: MakeLooks["page"] } {
+): CarLook & { known: boolean } {
   const brand = LOOKS[key(make)] ?? OTHER;
   const name = key(model);
   const match = Object.keys(brand.models)
     .filter((m) => name.startsWith(m))
     .sort((a, b) => b.length - a.length)[0];
-  return { ...(match ? brand.models[match] : brand.other), known: !!match, page: brand.page };
+  return { ...(match ? brand.models[match] : brand.other), known: !!match };
 }
