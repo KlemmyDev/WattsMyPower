@@ -24,7 +24,7 @@ from collector.devices import ROLES, Device, DeviceConfig, Settable, Words, Writ
 from collector.devices.drivers import READERS, build_device, env_devices
 from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_probe
 from collector.poller import DeviceStatus, Poller
-from collector.scan import Scanner
+from collector.scan import Scanner, opener
 from collector.storage import SPECS, measure
 from collector.store import Row, Store
 
@@ -312,7 +312,9 @@ def _probes(
     """(what a scan asks each address: the first reader that recognises it; whether a device to
     connect answers its driver). In mock mode, the fake inverters answer at MOCK_HOSTS."""
     if site is not None:
-        drivers = {r.role: k for k, r in READERS.items()}
+        drivers: dict[str, str] = {}
+        for k, r in READERS.items():  # the mocks are Sungrows: the first reader for each role
+            drivers.setdefault(r.role, k)
 
         def mock_scan(host: str, port: int) -> tuple[str, Words] | None:
             hit = mock_probe(site, host)
@@ -328,7 +330,7 @@ def _probes(
 
     def scan(host: str, port: int) -> tuple[str, Words] | None:
         for driver, r in READERS.items():
-            if (words := r.probe(host, port, 1)) is not None:
+            if r.port == port and (words := r.probe(host, port, r.unit)) is not None:
                 return driver, words
         return None
 
@@ -355,7 +357,12 @@ def create_app(
     build = build or (lambda d: build_device(d, site))
     scan_probe, device_check = _probes(site)
     if scanner is None:
-        scanner = Scanner(scan_probe, _mock_open) if site else Scanner(scan_probe)
+        ports = sorted({r.port for r in READERS.values()})
+        hellos: dict[int, list[bytes]] = {}
+        for r in READERS.values():
+            if r.udp and r.hello:
+                hellos.setdefault(r.port, []).append(r.hello)
+        scanner = Scanner(scan_probe, _mock_open if site else opener(hellos), ports)
 
     def reload() -> None:
         """Read the devices connected in the database from the next poll on."""

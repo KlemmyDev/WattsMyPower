@@ -11,6 +11,10 @@ export type InverterKind = {
   /** How the collector reaches it, e.g. "WiNet-S or WiNet-S2 dongle". */
   via: string;
   example: string;
+  /** Where it listens unless told otherwise (Modbus TCP 502, GoodWe's UDP 8899). */
+  port: number;
+  /** Tried on a real one. False: read from what its maker documents, not yet tried. */
+  verified: boolean;
 };
 
 export type ConnectedInverter = {
@@ -50,6 +54,8 @@ export type FoundDevice = {
   supported: boolean;
   /** Read, but not a model the driver knows by name: a newer model of a family that shares its registers. */
   untested?: boolean;
+  /** Its driver hasn't been tried on a real inverter yet. */
+  verified?: boolean;
   connected_as: InverterRole | null;
   /** It was connected when scanned (so not asked what it is) and has been removed since: scan again. */
   rescan: boolean;

@@ -25,7 +25,7 @@ The other SH hybrids in [Supported inverters](#supported-inverters) share the SH
 
 **Known limitations:**
 
-- Only Sungrow inverters: one SH hybrid, plus an optional SG-D string inverter. Other brands need a driver (see [Supported inverters](#supported-inverters)).
+- Sungrow inverters (one SH hybrid, plus an optional SG-D string inverter) are the ones used every day. GoodWe's ET hybrids and DT string inverters are read from their documented registers but are untested. Other brands need a driver (see [Supported inverters](#supported-inverters)).
 - It's served over plain HTTP with one household account. Keep it on your home network; don't port-forward it.
 - Only one app should talk to the inverter over Modbus at a time (not Home Assistant or SunGather as well).
 - The WiNet-S2 sometimes repeats the same readings for a few minutes; those are left out, so charts show a short gap.
@@ -357,8 +357,12 @@ Each inverter is handled by a driver: one for the hybrid (with the battery and g
 |---|---|---|---|
 | `sungrow.sh_rs` | hybrid | Sungrow's SH hybrids, which share one register map (tested on an SH5.0RS): SH3.0RS to SH10RS (including the SH3.6RS and SH4.6RS), SH5.0RT to SH10RT (and their -20, -V112 and -V122 versions), SH5T to SH25T, SH5K-20, SH5K-30, SH3K6, SH4K6, SH5K-V13, MG5RL and MG6RL | Modbus TCP through the WiNet-S / WiNet-S2 dongle, or the inverter's own network port |
 | `sungrow.sg_d` | second inverter | Sungrow SG-D string inverters (tested on an SG5K-D) | Sungrow's encrypted Modbus through the Wi-Fi dongle |
+| `goodwe.et` | hybrid | GoodWe's ET family of hybrids: ET, EH, BT and BH, and their Plus and G2 versions (e.g. GW5K-EH, GW10K-ET). **Untested** | Modbus over UDP port 8899 through the Wi-Fi or LAN dongle (newer LAN dongles also take Modbus TCP on 502) |
+| `goodwe.dt` | second inverter | GoodWe's DT family of string inverters: D-NS, XS, DT, MS and SDT (e.g. GW5000D-NS, GW3000-XS). **Untested** | Modbus over UDP port 8899 through the Wi-Fi or LAN dongle |
 
 A Sungrow hybrid that isn't in that list but reports a hybrid's device type (a newer model) can still be connected: it's shown as an untested SH hybrid with its type code, read with the same registers. If yours works (or doesn't), an issue saying its model and type code gets it named. Batteries aren't read on their own, so any battery behind a supported inverter works.
+
+The GoodWe drivers follow the register maps of the [`goodwe`](https://github.com/marcelblijleven/goodwe) library (MIT), which Home Assistant's GoodWe integration uses, but haven't been tried on a real GoodWe here. If you have one, an issue saying how it reads (and what's off) gets it checked: the raw registers are kept, so a fix applies to everything already recorded. GoodWe's older ES/EM hybrids speak a different protocol and aren't supported yet.
 
 Since firmware from late 2024, Sungrow hybrids report battery power as a signed value; earlier firmware reports it unsigned. Both are read correctly: the size comes from the register, the direction from the inverter's power-flow flags.
 
@@ -366,7 +370,7 @@ A driver has two halves with the same id. The collector's reader (`collector/dev
 
 ### Connecting inverters
 
-**Manage → Integrations → Sungrow → Add an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle. Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
+**Manage → Integrations → Sungrow → Add an inverter** scans your home network (a /24 by default, up to a /22) for anything answering on Modbus TCP port 502 or replying to a GoodWe hello on UDP port 8899, then asks each address what it is: plain Modbus for a WiNet-S hybrid, then Sungrow's encrypted handshake for an older Wi-Fi dongle, and GoodWe's ET and DT addresses on 8899. Each find shows its model and serial number, and connects with one click. You can also enter an address yourself, and connect an inverter that isn't answering (a string inverter asleep after dark) anyway.
 
 The collector does the scanning and stores the connected inverters in `data/collector.db`, since it's the only part that talks to them and keeps recording while the dashboard updates. Changes apply from its next poll, without a restart. Inverters already connected aren't probed during a scan, because the WiNet-S2 copes badly with a second Modbus client. Installs from before this kept their inverters in `.env` (`INVERTER_HOST`, `PV2_HOST`): the first time the updated collector starts, it moves them into its database, once, and they're managed in the dashboard from then on.
 

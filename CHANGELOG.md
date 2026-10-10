@@ -16,6 +16,10 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   the raw registers. An optional second, older Sungrow SG-D string inverter (an AC-coupled system) is read through its
   Wi-Fi dongle's encrypted Modbus, and both count. Inverters are found by scanning the network in **Manage →
   Integrations**. A newer SH hybrid that isn't known by name is read with the same registers and shown as untested.
+- **GoodWe inverters (untested):** GoodWe's ET-family hybrids (ET, EH, BT, BH) with their battery and meter, and its
+  DT-family string inverters (D-NS, XS, DT) as a second system, read on your network over Modbus on UDP port 8899
+  (or Modbus TCP on a newer LAN dongle) and found by the same network scan. Their registers follow the `goodwe`
+  library that Home Assistant uses; they haven't been tried on a real GoodWe yet.
 - **Overview:** the live power flow as an animated house that follows the weather (and can be made to look like
   yours), today's cost and savings at your rates, the battery's last six hours and the next 24 hours.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,

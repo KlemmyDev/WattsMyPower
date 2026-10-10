@@ -9,15 +9,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.features.inverters.goodwe import dt as goodwe_dt
+from app.features.inverters.goodwe import et as goodwe_et
 from app.features.inverters.sungrow import sg_d, sh_control, sh_rs
 from app.features.inverters.types import ControlDriver, HybridDriver, SolarDriver
 
 HYBRIDS: dict[str, HybridDriver] = {
     "sungrow.sh_rs": sh_rs,
+    "goodwe.et": goodwe_et,
 }
 
 SOLAR: dict[str, SolarDriver] = {
     "sungrow.sg_d": sg_d,
+    "goodwe.dt": goodwe_dt,
 }
 
 # Hybrids whose battery can be controlled from the dashboard (app.features.battery), by driver id.
@@ -39,11 +43,28 @@ class Kind:
     label: str  # the model family
     via: str  # how the collector reaches it
     example: str  # a model, for the manual form
+    port: int = 502  # where it listens, unless told otherwise
+    unit: int = 1  # its Modbus unit
+    # Tried on a real one. False: read from what its maker (or a well-used library) documents, not yet tried here.
+    verified: bool = True
 
 
 KINDS: dict[str, Kind] = {
     "sungrow.sh_rs": Kind("hybrid", "Sungrow", "SH-series hybrid", "WiNet-S or WiNet-S2 dongle", "SH5.0RS"),
     "sungrow.sg_d": Kind("pv2", "Sungrow", "SG-D string inverter", "Wi-Fi dongle (encrypted Modbus)", "SG5K-D"),
+    "goodwe.et": Kind(
+        "hybrid", "GoodWe", "ET/EH/BT/BH hybrid", "Wi-Fi or LAN dongle (UDP port 8899)", "GW5K-EH", 8899, 0xF7, False
+    ),
+    "goodwe.dt": Kind(
+        "pv2",
+        "GoodWe",
+        "DNS/XS/DT string inverter",
+        "Wi-Fi or LAN dongle (UDP port 8899)",
+        "GW5000D-NS",
+        8899,
+        0x7F,
+        False,
+    ),
 }
 
 
