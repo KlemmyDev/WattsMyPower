@@ -16,22 +16,29 @@ import { useToast } from "~/features/common/ui/components/Toast";
 import { SettingsCard } from "~/features/settings/components/SettingsCard";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
+import { ChannelDot } from "~/features/updates/components/ChannelBadge";
+import { CHANNEL } from "~/features/updates/utils";
 import type { Channel, UpdateStatus } from "~/features/updates/types";
 
 const short = (commit: string) => commit.slice(0, 7);
 const titled = (release: string | null) => (release ? release.charAt(0).toUpperCase() + release.slice(1) : null);
 const UNDER_WAY = new Set(["requested", "running"]);
 
-const CHANNELS: { value: Channel; label: string; about: string }[] = [
-  {
-    value: "nightly",
-    label: "Nightly",
-    about: "Every change as soon as it's merged. The newest, and the least tried.",
-  },
-  { value: "beta", label: "Beta", about: "Pre-releases to try before they're stable, and every stable release." },
-  { value: "stable", label: "Stable", about: "Releases only, once they've been tried. Updates less often." },
-];
-const channelName = (c: Channel) => CHANNELS.find((o) => o.value === c)!.label;
+const ABOUT: Record<Channel, string> = {
+  nightly: "Every change as soon as it's merged. The newest, and the least tried.",
+  beta: "Pre-releases to try before they're stable, and every stable release.",
+  stable: "Releases only, once they've been tried. Updates less often.",
+};
+const CHANNELS = (Object.keys(CHANNEL) as Channel[]).map((value) => ({
+  value,
+  label: (
+    <span className="flex items-center gap-1.5">
+      <ChannelDot channel={value} />
+      {CHANNEL[value].label}
+    </span>
+  ),
+}));
+const channelName = (c: Channel) => CHANNEL[c].label;
 
 /** "10:42" today, else "Mon 6 Oct, 10:42". */
 const when = (ts: number) => (sameDay(ts, nowS()) ? hhmm(ts) : `${shortDay.format(new Date(ts * 1000))}, ${hhmm(ts)}`);
@@ -173,9 +180,7 @@ function UpdatesCard() {
             onChange={(c) => c !== following && channel.mutate(c)}
             className="w-fit max-w-full"
           />
-          <span className="text-[13px] text-pretty text-ink-muted">
-            {CHANNELS.find((o) => o.value === following)!.about}
-          </span>
+          <span className="text-[13px] text-pretty text-ink-muted">{ABOUT[following]}</span>
         </div>
       )}
 
