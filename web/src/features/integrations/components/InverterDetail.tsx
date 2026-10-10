@@ -1,64 +1,31 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
-import { longDate } from "~/features/common/formatting/utils/date";
-import { Button, ButtonLink } from "~/features/common/ui/components/Button";
-import { SettingRow } from "~/features/common/ui/components/DataRow";
-import { HelpText } from "~/features/common/ui/components/Field";
-import { Pill } from "~/features/common/ui/components/Pill";
+import { hhmm, longDate } from "~/features/common/formatting/utils/date";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { ButtonLink } from "~/features/common/ui/components/Button";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
+import { ConfirmAction } from "~/features/integrations/components/ConfirmAction";
 import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInverters";
 import { InverterWiring } from "~/features/integrations/components/InverterWiring";
+import { ReachTag, UntestedTag } from "~/features/integrations/components/ReachTag";
 import { useInverters, useRemoveInverter } from "~/features/integrations/hooks";
-import {
-  asRole,
-  deviceAddress,
-  REMOVE_NOTE,
-  ROLE_DETAIL,
-  ROLE_NAME,
-  type InverterState,
-} from "~/features/integrations/utils";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { asRole, deviceAddress, REMOVE_NOTE, ROLE_DETAIL, ROLE_NAME } from "~/features/integrations/utils";
+import { OptionList, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-const back = <BackLink to="/integrations/inverters">Sungrow</BackLink>;
+const back = <BackLink to="/integrations/inverters">Inverters</BackLink>;
 
-/** Stop reading it, once confirmed; then back to the list. */
-function RemoveInverter({ inverter: { device, name } }: { inverter: InverterState }) {
-  const navigate = useNavigate();
-  const [confirming, setConfirming] = useState(false);
-  const remove = useRemoveInverter(device.role, () => navigate({ to: "/integrations/inverters" }));
-
-  return (
-    <SettingsCard aria-label="Remove" className="flex-row flex-wrap items-center gap-x-4 gap-y-3 px-6 py-5">
-      <div className="flex min-w-[200px] flex-1 flex-col gap-0.5">
-        <span className="text-[15px] font-semibold">Stop reading this inverter</span>
-        <span className="text-[13px] text-ink-muted">{REMOVE_NOTE[device.role]}</span>
-        {remove.isError && <HelpText tone="bad">{errorMessage(remove.error)}</HelpText>}
-      </div>
-      {confirming ? (
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => remove.mutate(name)} disabled={remove.isPending}>
-            {remove.isPending ? "Removing…" : "Stop reading it"}
-          </Button>
-          <Button variant="muted-link" size="sm" onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-          Remove
-        </Button>
-      )}
-    </SettingsCard>
-  );
-}
-
-/** Manage → Integrations → Inverters → one inverter: what it is, how it's doing, where it's wired, and removing it. */
+/**
+ * Manage → Integrations → Inverters → one inverter: how it's doing and what it reported about itself at the top, the
+ * rest of what's known about it, where it's wired (a second inverter), and removing it.
+ */
 export function InverterDetail({ role }: { role: string }) {
+  const navigate = useNavigate();
   const { data, isPending, isFetching, error, inverters } = useInverters();
   const known = asRole(role);
   const inverter = inverters.find((i) => i.device.role === known);
   const readOnly = data?.read_only ?? true;
+  const remove = useRemoveInverter(known ?? "hybrid", () => navigate({ to: "/integrations/inverters" }));
 
   if (!inverter) {
     // Just connected, and the list is still catching up: wait for it rather than say it isn't there.
@@ -88,7 +55,7 @@ export function InverterDetail({ role }: { role: string }) {
     );
   }
 
-  const { device, name, ok, error: problem, status, on, reading, hybrid } = inverter;
+  const { device, name, ok, error: problem, status, on, reading, hybrid, last } = inverter;
   const rows: [string, string | null][] = [
     ["Type", [device.brand, device.label].filter(Boolean).join(" ") || null],
     ["Address", deviceAddress(device)],
@@ -101,32 +68,71 @@ export function InverterDetail({ role }: { role: string }) {
   return (
     <>
       <SubPageHeader back={back} id="h-inverter" title={name} sub={ROLE_DETAIL[device.role]} />
-      <SettingsCard aria-labelledby="h-inverter">
-        <div className="flex flex-col gap-1.5 border-b border-line-subtle px-6 py-5">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
-            <Pill tone={on ? "ok" : "neutral"}>{status}</Pill>
-            <span className="text-ink-muted">{reading.charAt(0).toUpperCase() + reading.slice(1)}</span>
+      <SummaryCard
+        icon={hybrid ? "battery" : "sun"}
+        color={on ? COLOR.solar : COLOR.warn}
+        label={name}
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              <span>{reading.charAt(0).toUpperCase() + reading.slice(1)}.</span>
+              {!ok && problem && <span className="text-xs text-bad">{problem}</span>}
+              <span className="flex flex-wrap gap-3">
+                <ReachTag reach="local" />
+                {device.verified === false && <UntestedTag />}
+              </span>
+            </span>
+            {!readOnly && (
+              <ConfirmAction
+                label="Stop reading it"
+                doing="Removing…"
+                note={REMOVE_NOTE[device.role]}
+                pending={remove.isPending}
+                error={remove.error}
+                run={() => remove.mutate(name)}
+              />
+            )}
           </div>
-          {!ok && problem && <span className="text-xs text-ink-faint">{problem}</span>}
-        </div>
-        <div className={readOnly ? undefined : "[&>:last-child]:border-b-0"}>
-          {rows.map(
-            ([label, value]) =>
-              value && (
-                <SettingRow key={label} label={label}>
-                  <span className="break-words">{value}</span>
-                </SettingRow>
-              ),
-          )}
-        </div>
-        {readOnly && <ReadOnlyNote />}
-      </SettingsCard>
-      {!hybrid && (
-        <SettingsCard padded aria-label="Where it's wired" className="max-sm:p-5">
-          <InverterWiring device={device} readOnly={readOnly} />
-        </SettingsCard>
-      )}
-      {!readOnly && <RemoveInverter inverter={inverter} />}
+        }
+      >
+        <SummaryStat label="Status" value={status} color={on ? undefined : COLOR.warn} sub={ROLE_NAME[device.role]} />
+        <SummaryStat label="Last read" value={last ? hhmm(last) : "—"} sub={device.via ?? undefined} />
+        <SummaryStat label="Model" value={device.model ?? device.label ?? "—"} sub={device.brand ?? undefined} />
+        <SummaryStat
+          label="Size"
+          value={device.nominal_kw ? `${device.nominal_kw} kW` : "—"}
+          sub={device.serial ? `Serial ${device.serial}` : undefined}
+        />
+      </SummaryCard>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <SettingsSection
+          id="h-inverter-about"
+          title="About it"
+          sub="What it reported about itself, and how it's reached."
+        >
+          <OptionList>
+            {rows.map(
+              ([label, value]) =>
+                value && (
+                  <div key={label} className="flex items-baseline justify-between gap-4 px-4 py-3 text-sm">
+                    <span className="flex-none text-ink-muted">{label}</span>
+                    <span className="min-w-0 text-right break-words text-ink tabular-nums">{value}</span>
+                  </div>
+                ),
+            )}
+          </OptionList>
+          {readOnly && <ReadOnlyNote />}
+        </SettingsSection>
+        {!hybrid && (
+          <SettingsSection
+            id="h-inverter-wiring"
+            title="Where it's wired"
+            sub="Which side of the main inverter's meter it connects on decides how its output is counted."
+          >
+            <InverterWiring device={device} readOnly={readOnly} bare />
+          </SettingsSection>
+        )}
+      </div>
     </>
   );
 }

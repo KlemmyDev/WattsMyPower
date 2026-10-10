@@ -26,7 +26,7 @@ import {
 } from "~/features/home/utils";
 import { REACH } from "~/features/integrations/components/ReachTag";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /** The integration's own form: whatever it asks for (an email and password, an address…). */
@@ -382,12 +382,16 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
         sub={integration?.about ?? ""}
       />
       {integration && <Summary integration={integration} devices={devices} />}
-      <SettingsCard aria-labelledby="h-home-integration">
-        {isPending && <div className="px-6 py-5 text-sm text-ink-muted">Checking the connection…</div>}
-        {error && <div className="px-6 py-5 text-sm text-bad">{errorMessage(error)}</div>}
-        {data && !integration && <div className="px-6 py-5 text-sm text-bad">There's no such integration.</div>}
-        {integration && !integration.account && (
-          <div className="flex flex-col gap-4 px-6 py-5">
+      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
+      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {data && !integration && <p className="m-0 text-sm text-bad">There's no such integration.</p>}
+      {integration && !integration.account && (
+        <SettingsSection
+          id="h-home-connect"
+          title={`Connect ${integration.name}`}
+          sub={`Read through ${integration.via}.`}
+        >
+          <div className="flex flex-col gap-4">
             {integration.id === "connectlife" && (
               <Notice tone="info">
                 ConnectLife has no public API: this reads it the way its app does, so a change on Hisense's side can
@@ -404,26 +408,33 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
             )}
             <SignInForm integration={integration} />
           </div>
-        )}
-        {integration?.account && <Account integration={integration} />}
-      </SettingsCard>
-      {integration?.account && data && (
-        <SettingsCard aria-labelledby="h-home-devices">
-          <div className="px-6 pt-6 pb-2">
-            <SettingsTitle
-              id="h-home-devices"
-              title="Devices"
-              sub={
-                devices.length
-                  ? "Name each one, and say what it is: a smart plug can be set as the appliance it powers, so its runs are recorded. Put plugs in the same room in a group, and the Home page shows them as one. Turn one out of the breakdown to leave it off the Home page."
-                  : "Its devices appear here after the first reading, within a minute or so."
-              }
-            />
+        </SettingsSection>
+      )}
+      {integration?.account && (
+        <SettingsSection id="h-home-account" title="Account" sub="How it's signed in, and how it's going.">
+          <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
+            <Account integration={integration} />
           </div>
-          {devices.map((d) => (
-            <DeviceRow key={d.id} device={d} kinds={data.kinds} groups={groups} />
-          ))}
-        </SettingsCard>
+        </SettingsSection>
+      )}
+      {integration?.account && data && (
+        <SettingsSection
+          id="h-home-devices"
+          title="Devices"
+          sub={
+            devices.length
+              ? "Name each one, and say what it is: a smart plug can be set as the appliance it powers, so its runs are recorded. Put plugs in the same room in a group, and the Home page shows them as one. Turn one out of the breakdown to leave it off the Home page."
+              : "Its devices appear here after the first reading, within a minute or so."
+          }
+        >
+          {devices.length > 0 && (
+            <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
+              {devices.map((d) => (
+                <DeviceRow key={d.id} device={d} kinds={data.kinds} groups={groups} />
+              ))}
+            </div>
+          )}
+        </SettingsSection>
       )}
     </>
   );

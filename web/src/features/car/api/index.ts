@@ -16,8 +16,6 @@ export const carModelsQuery = queryOptions({
   staleTime: Infinity,
 });
 
-export const createCar = (body: CarChanges) => apiSend<CarView>("POST", "cars", body);
-
 export const updateCar = ({ id, ...body }: CarChanges & { id: number }) => apiSend<CarView>("PUT", `cars/${id}`, body);
 
 export const deleteCar = (id: number) => apiSend<{ ok: true }>("DELETE", `cars/${id}`);

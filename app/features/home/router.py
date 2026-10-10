@@ -134,7 +134,7 @@ def _car(svc: Services, start: int, end: int) -> dict[int, float] | None:
     """What the cars drew in each rollup of [start, end): as a connected Tesla measured it while charging at home
     (app.features.tesla.history), and elsewhere as found in what no device measured (app.features.home.car, from the
     details of the dashboard's cars); None without a car connected, through an EV integration (Tesla) or as one of the
-    dashboard's cars (Manage → Integrations → Electric vehicle)."""
+    dashboard's cars (Manage → Integrations → Tesla → Details)."""
     if not (svc.tesla.connected or svc.car.ids()):
         return None
     measured = svc.tesla.history.charged_w(start, end)

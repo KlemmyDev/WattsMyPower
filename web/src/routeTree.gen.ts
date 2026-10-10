@@ -38,7 +38,6 @@ import { Route as AppHomeDeviceRouteImport } from './routes/_app/home_.$device'
 import { Route as AppIntegrationsIndexRouteImport } from './routes/_app/integrations/index'
 import { Route as AppIntegrationsAmberRouteImport } from './routes/_app/integrations/amber'
 import { Route as AppIntegrationsGridRouteImport } from './routes/_app/integrations/grid'
-import { Route as AppIntegrationsTeslaRouteImport } from './routes/_app/integrations/tesla'
 import { Route as AppIntegrationsWeatherRouteImport } from './routes/_app/integrations/weather'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsSplatRouteImport } from './routes/_app/settings/$'
@@ -62,6 +61,8 @@ import { Route as AppIntegrationsInvertersRoleRouteImport } from './routes/_app/
 import { Route as AppIntegrationsInvertersConnectRouteImport } from './routes/_app/integrations/inverters/connect'
 import { Route as AppIntegrationsInvertersImportRouteImport } from './routes/_app/integrations/inverters/import'
 import { Route as AppIntegrationsSungrowSplatRouteImport } from './routes/_app/integrations/sungrow/$'
+import { Route as AppIntegrationsTeslaIndexRouteImport } from './routes/_app/integrations/tesla/index'
+import { Route as AppIntegrationsTeslaCarCarIdRouteImport } from './routes/_app/integrations/tesla/car/$carId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -207,11 +208,6 @@ const AppIntegrationsGridRoute = AppIntegrationsGridRouteImport.update({
   path: '/grid',
   getParentRoute: () => AppIntegrationsRouteRoute,
 } as any)
-const AppIntegrationsTeslaRoute = AppIntegrationsTeslaRouteImport.update({
-  id: '/tesla',
-  path: '/tesla',
-  getParentRoute: () => AppIntegrationsRouteRoute,
-} as any)
 const AppIntegrationsWeatherRoute = AppIntegrationsWeatherRouteImport.update({
   id: '/weather',
   path: '/weather',
@@ -333,6 +329,18 @@ const AppIntegrationsSungrowSplatRoute =
     path: '/sungrow/$',
     getParentRoute: () => AppIntegrationsRouteRoute,
   } as any)
+const AppIntegrationsTeslaIndexRoute =
+  AppIntegrationsTeslaIndexRouteImport.update({
+    id: '/tesla/',
+    path: '/tesla/',
+    getParentRoute: () => AppIntegrationsRouteRoute,
+  } as any)
+const AppIntegrationsTeslaCarCarIdRoute =
+  AppIntegrationsTeslaCarCarIdRouteImport.update({
+    id: '/tesla/car/$carId',
+    path: '/tesla/car/$carId',
+    getParentRoute: () => AppIntegrationsRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -361,7 +369,6 @@ export interface FileRoutesByFullPath {
   '/home/$device': typeof AppHomeDeviceRoute
   '/integrations/amber': typeof AppIntegrationsAmberRoute
   '/integrations/grid': typeof AppIntegrationsGridRoute
-  '/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/settings/$': typeof AppSettingsSplatRoute
   '/settings/account': typeof AppSettingsAccountRoute
@@ -387,6 +394,8 @@ export interface FileRoutesByFullPath {
   '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/integrations/car/': typeof AppIntegrationsCarIndexRoute
   '/integrations/inverters/': typeof AppIntegrationsInvertersIndexRoute
+  '/integrations/tesla/': typeof AppIntegrationsTeslaIndexRoute
+  '/integrations/tesla/car/$carId': typeof AppIntegrationsTeslaCarCarIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -413,7 +422,6 @@ export interface FileRoutesByTo {
   '/home/$device': typeof AppHomeDeviceRoute
   '/integrations/amber': typeof AppIntegrationsAmberRoute
   '/integrations/grid': typeof AppIntegrationsGridRoute
-  '/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/settings/$': typeof AppSettingsSplatRoute
   '/settings/account': typeof AppSettingsAccountRoute
@@ -439,6 +447,8 @@ export interface FileRoutesByTo {
   '/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/integrations/car': typeof AppIntegrationsCarIndexRoute
   '/integrations/inverters': typeof AppIntegrationsInvertersIndexRoute
+  '/integrations/tesla': typeof AppIntegrationsTeslaIndexRoute
+  '/integrations/tesla/car/$carId': typeof AppIntegrationsTeslaCarCarIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -469,7 +479,6 @@ export interface FileRoutesById {
   '/_app/home_/$device': typeof AppHomeDeviceRoute
   '/_app/integrations/amber': typeof AppIntegrationsAmberRoute
   '/_app/integrations/grid': typeof AppIntegrationsGridRoute
-  '/_app/integrations/tesla': typeof AppIntegrationsTeslaRoute
   '/_app/integrations/weather': typeof AppIntegrationsWeatherRoute
   '/_app/settings/$': typeof AppSettingsSplatRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
@@ -495,6 +504,8 @@ export interface FileRoutesById {
   '/_app/integrations/sungrow/$': typeof AppIntegrationsSungrowSplatRoute
   '/_app/integrations/car/': typeof AppIntegrationsCarIndexRoute
   '/_app/integrations/inverters/': typeof AppIntegrationsInvertersIndexRoute
+  '/_app/integrations/tesla/': typeof AppIntegrationsTeslaIndexRoute
+  '/_app/integrations/tesla/car/$carId': typeof AppIntegrationsTeslaCarCarIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -525,7 +536,6 @@ export interface FileRouteTypes {
     | '/home/$device'
     | '/integrations/amber'
     | '/integrations/grid'
-    | '/integrations/tesla'
     | '/integrations/weather'
     | '/settings/$'
     | '/settings/account'
@@ -551,6 +561,8 @@ export interface FileRouteTypes {
     | '/integrations/sungrow/$'
     | '/integrations/car/'
     | '/integrations/inverters/'
+    | '/integrations/tesla/'
+    | '/integrations/tesla/car/$carId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -577,7 +589,6 @@ export interface FileRouteTypes {
     | '/home/$device'
     | '/integrations/amber'
     | '/integrations/grid'
-    | '/integrations/tesla'
     | '/integrations/weather'
     | '/settings/$'
     | '/settings/account'
@@ -603,6 +614,8 @@ export interface FileRouteTypes {
     | '/integrations/sungrow/$'
     | '/integrations/car'
     | '/integrations/inverters'
+    | '/integrations/tesla'
+    | '/integrations/tesla/car/$carId'
   id:
     | '__root__'
     | '/_app'
@@ -632,7 +645,6 @@ export interface FileRouteTypes {
     | '/_app/home_/$device'
     | '/_app/integrations/amber'
     | '/_app/integrations/grid'
-    | '/_app/integrations/tesla'
     | '/_app/integrations/weather'
     | '/_app/settings/$'
     | '/_app/settings/account'
@@ -658,6 +670,8 @@ export interface FileRouteTypes {
     | '/_app/integrations/sungrow/$'
     | '/_app/integrations/car/'
     | '/_app/integrations/inverters/'
+    | '/_app/integrations/tesla/'
+    | '/_app/integrations/tesla/car/$carId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -871,13 +885,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsGridRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
-    '/_app/integrations/tesla': {
-      id: '/_app/integrations/tesla'
-      path: '/tesla'
-      fullPath: '/integrations/tesla'
-      preLoaderRoute: typeof AppIntegrationsTeslaRouteImport
-      parentRoute: typeof AppIntegrationsRouteRoute
-    }
     '/_app/integrations/weather': {
       id: '/_app/integrations/weather'
       path: '/weather'
@@ -1039,13 +1046,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIntegrationsSungrowSplatRouteImport
       parentRoute: typeof AppIntegrationsRouteRoute
     }
+    '/_app/integrations/tesla/': {
+      id: '/_app/integrations/tesla/'
+      path: '/tesla'
+      fullPath: '/integrations/tesla/'
+      preLoaderRoute: typeof AppIntegrationsTeslaIndexRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
+    '/_app/integrations/tesla/car/$carId': {
+      id: '/_app/integrations/tesla/car/$carId'
+      path: '/tesla/car/$carId'
+      fullPath: '/integrations/tesla/car/$carId'
+      preLoaderRoute: typeof AppIntegrationsTeslaCarCarIdRouteImport
+      parentRoute: typeof AppIntegrationsRouteRoute
+    }
   }
 }
 
 interface AppIntegrationsRouteRouteChildren {
   AppIntegrationsAmberRoute: typeof AppIntegrationsAmberRoute
   AppIntegrationsGridRoute: typeof AppIntegrationsGridRoute
-  AppIntegrationsTeslaRoute: typeof AppIntegrationsTeslaRoute
   AppIntegrationsWeatherRoute: typeof AppIntegrationsWeatherRoute
   AppIntegrationsIndexRoute: typeof AppIntegrationsIndexRoute
   AppIntegrationsCarCarIdRoute: typeof AppIntegrationsCarCarIdRoute
@@ -1056,12 +1076,13 @@ interface AppIntegrationsRouteRouteChildren {
   AppIntegrationsSungrowSplatRoute: typeof AppIntegrationsSungrowSplatRoute
   AppIntegrationsCarIndexRoute: typeof AppIntegrationsCarIndexRoute
   AppIntegrationsInvertersIndexRoute: typeof AppIntegrationsInvertersIndexRoute
+  AppIntegrationsTeslaIndexRoute: typeof AppIntegrationsTeslaIndexRoute
+  AppIntegrationsTeslaCarCarIdRoute: typeof AppIntegrationsTeslaCarCarIdRoute
 }
 
 const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
   AppIntegrationsAmberRoute: AppIntegrationsAmberRoute,
   AppIntegrationsGridRoute: AppIntegrationsGridRoute,
-  AppIntegrationsTeslaRoute: AppIntegrationsTeslaRoute,
   AppIntegrationsWeatherRoute: AppIntegrationsWeatherRoute,
   AppIntegrationsIndexRoute: AppIntegrationsIndexRoute,
   AppIntegrationsCarCarIdRoute: AppIntegrationsCarCarIdRoute,
@@ -1072,6 +1093,8 @@ const AppIntegrationsRouteRouteChildren: AppIntegrationsRouteRouteChildren = {
   AppIntegrationsSungrowSplatRoute: AppIntegrationsSungrowSplatRoute,
   AppIntegrationsCarIndexRoute: AppIntegrationsCarIndexRoute,
   AppIntegrationsInvertersIndexRoute: AppIntegrationsInvertersIndexRoute,
+  AppIntegrationsTeslaIndexRoute: AppIntegrationsTeslaIndexRoute,
+  AppIntegrationsTeslaCarCarIdRoute: AppIntegrationsTeslaCarCarIdRoute,
 }
 
 const AppIntegrationsRouteRouteWithChildren =

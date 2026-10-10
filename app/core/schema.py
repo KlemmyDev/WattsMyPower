@@ -456,7 +456,7 @@ def _drop_car_charges(conn: sqlite3.Connection) -> None:
 
 def _ev_levels(conn: sqlite3.Connection) -> None:
     """A Tesla's battery level (%) as read from it, by VIN, while it isn't tied to one of the dashboard's cars (whose
-    levels are car_levels): a car needn't be told about in Manage → Integrations → Electric vehicle to keep its day.
+    levels are car_levels): a car needn't have details of its own (Manage → Integrations → Tesla → Details) to keep its day.
     `source` as car_levels' ("tessie", "bluetooth", ending ":asleep" for a level held while it slept)."""
     conn.execute(
         "CREATE TABLE IF NOT EXISTS ev_levels (vin TEXT NOT NULL, ts INTEGER NOT NULL, soc REAL NOT NULL,"

@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useCarChange } from "~/features/car/hooks";
-import type { CarBody, CarChanges, CarColour, CarDetails, CarView } from "~/features/car/types";
+import type { CarBody, CarColour, CarDetails, CarView } from "~/features/car/types";
 import { BODY, BODIES, PAINT, paintOf, PAINTS } from "~/features/car/utils";
 import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
@@ -51,8 +51,8 @@ function Group({ title, sub, children }: { title: string; sub: string; children:
 }
 
 /**
- * A car's details: the car itself, how it's charged at home, and how the Overview draws it. Given its name and model (`identity`), saving sends them and every detail: it connects a new car, or
- * changes which car a connected one (`id`) is. Otherwise, for a connected car, saving sends what changed.
+ * A car's details: the car itself, how it's charged at home, and how the Overview draws it. Saving sends what changed;
+ * given its name and model (`identity`), it sends them and every detail, changing which car it is.
  */
 export function CarDetailsForm({
   car,
@@ -63,15 +63,14 @@ export function CarDetailsForm({
   footer,
 }: {
   car: CarDetails;
-  id?: number;
+  id: number;
   identity?: { name: string | null; model: string | null };
   submitLabel?: string;
   onSaved?: (car: CarView) => void;
   footer?: ReactNode;
 }) {
-  const { create, update } = useCarChange();
-  const connect = id == null;
-  const save = connect ? create : update;
+  const { update } = useCarChange();
+  const save = update;
   const toast = useToast();
   const [v, setV] = useState<Values>(() => valuesOf(car));
   const [error, setError] = useState("");
@@ -93,8 +92,7 @@ export function CarDetailsForm({
       },
       onError: (err: unknown) => setError(errorMessage(err)),
     };
-    if (id == null) create.mutate({ ...all, ...identity } as CarChanges, done);
-    else if (identity) update.mutate({ id, ...all, ...identity }, done);
+    if (identity) update.mutate({ id, ...all, ...identity }, done);
     else update.mutate({ id, ...Object.fromEntries(changed.map((k) => [k, all[k]])) }, done);
   };
   const set = (k: keyof Values) => (e: { target: { value: string } }) => setV((o) => ({ ...o, [k]: e.target.value }));

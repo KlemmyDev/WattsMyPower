@@ -8,7 +8,7 @@ import { HelpText } from "~/features/common/ui/components/Field";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { importsQuery, removeImport } from "~/features/imports/api";
 import type { ImportRecord } from "~/features/imports/types";
-import { SettingsCard, SettingsTitle } from "~/features/settings/components/SettingsCard";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 
 const day = (ts: number) => longDate.format(new Date(ts * 1000));
 
@@ -38,50 +38,45 @@ export function PastImports() {
   });
   if (!data?.length) return null;
   return (
-    <SettingsCard aria-labelledby="h-imports">
-      <div className="border-b border-line-subtle p-6">
-        <SettingsTitle
-          id="h-imports"
-          title="Imported history"
-          sub="Removing an import deletes only what it added. Readings WattsMyPower recorded itself stay."
-        />
-      </div>
-      {data.map((i) => (
-        <div
-          key={i.id}
-          className="flex flex-wrap items-center gap-4 border-b border-line-subtle px-6 py-4 last:border-b-0"
-        >
-          <div className="flex min-w-[220px] flex-1 flex-col gap-0.5">
-            <span className="text-[15px] font-semibold break-all">{i.label}</span>
-            <span className="text-[13px] text-ink-muted">
-              {covers(i)} · imported {day(i.created_at)}
-              {i.files > 1 && ` from ${i.files} files`}
-            </span>
-          </div>
-          {confirming === i.id ? (
-            <div className="flex flex-wrap items-center gap-3">
-              {i.replaced_days > 0 && (
-                <HelpText className="basis-full">What WattsMyPower recorded on those days comes back.</HelpText>
-              )}
-              <Button variant="outline" size="sm" onClick={() => remove.mutate(i.id)} disabled={remove.isPending}>
-                {remove.isPending ? "Removing…" : `Remove ${i.days} ${plural(i.days, "day")}`}
-              </Button>
-              <Button variant="muted-link" size="sm" onClick={() => setConfirming(null)}>
-                Cancel
-              </Button>
+    <SettingsSection
+      id="h-imports"
+      title="Imported history"
+      sub="Removing an import deletes only what it added. Readings WattsMyPower recorded itself stay."
+    >
+      <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
+        {data.map((i) => (
+          <div
+            key={i.id}
+            className="flex flex-wrap items-center gap-4 border-b border-line-subtle px-5 py-4 last:border-b-0"
+          >
+            <div className="flex min-w-[220px] flex-1 flex-col gap-0.5">
+              <span className="text-[15px] font-semibold break-all">{i.label}</span>
+              <span className="text-[13px] text-ink-muted">
+                {covers(i)} · imported {day(i.created_at)}
+                {i.files > 1 && ` from ${i.files} files`}
+              </span>
             </div>
-          ) : (
-            <Button variant="outline" size="sm" onClick={() => setConfirming(i.id)}>
-              Remove
-            </Button>
-          )}
-        </div>
-      ))}
-      {remove.isError && (
-        <div className="px-6 pb-4">
-          <HelpText tone="bad">{errorMessage(remove.error)}</HelpText>
-        </div>
-      )}
-    </SettingsCard>
+            {confirming === i.id ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {i.replaced_days > 0 && (
+                  <HelpText className="basis-full">What WattsMyPower recorded on those days comes back.</HelpText>
+                )}
+                <Button variant="outline" size="sm" onClick={() => remove.mutate(i.id)} disabled={remove.isPending}>
+                  {remove.isPending ? "Removing…" : `Remove ${i.days} ${plural(i.days, "day")}`}
+                </Button>
+                <Button variant="muted-link" size="sm" onClick={() => setConfirming(null)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setConfirming(i.id)}>
+                Remove
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      {remove.isError && <HelpText tone="bad">{errorMessage(remove.error)}</HelpText>}
+    </SettingsSection>
   );
 }

@@ -1,4 +1,9 @@
-"""The cars (Manage → Integrations → Electric vehicle, and the Overview's drawing): their details and levels."""
+"""
+The cars (Manage → Integrations → Tesla → a car's details, and the Overview's drawing): their details and levels.
+
+Cars aren't added by hand any more: each connected Tesla brings its own (app.features.tesla). Cars added by hand
+before stay until they're removed.
+"""
 
 from __future__ import annotations
 
@@ -33,12 +38,6 @@ async def get_cars(svc: ServicesDep):
 async def get_models():
     """Cars to choose from when connecting one, with their usual details."""
     return MODELS
-
-
-@router.post("")
-async def add_car(svc: ServicesDep, body: JsonBody):
-    """Connect a car: its name, the model chosen (or none) and its details."""
-    return await _run(svc.car.create, body)
 
 
 @router.put("/{car_id}")

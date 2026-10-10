@@ -19,9 +19,11 @@ def client(config: Config) -> Iterator[TestClient]:
         yield c
 
 
-def test_cars_are_connected_changed_and_disconnected(client: TestClient) -> None:
-    y = client.post("/api/cars", json={"model": "tesla-model-y-rwd", "car_colour": "red"}).json()
-    atto = client.post("/api/cars", json={"model": "byd-atto-3-extended", "car_park": "outside"}).json()
+def test_cars_are_changed_and_disconnected(client: TestClient, db: Database) -> None:
+    cars = CarService(db)  # as a connected Tesla makes them; there's no adding one by hand
+    y = cars.create({"model": "tesla-model-y-rwd", "car_colour": "red"})
+    atto = cars.create({"model": "byd-atto-3-extended", "car_park": "outside"})
+    assert client.post("/api/cars", json={"model": "tesla-model-3-rwd"}).status_code == 405
     assert [c["id"] for c in client.get("/api/cars").json()] == [y["id"], atto["id"]]
     assert atto["car"]["car_body"] == "atto3" and atto["car"]["car_park"] == "outside"
     # A model's figures fill in what isn't given.

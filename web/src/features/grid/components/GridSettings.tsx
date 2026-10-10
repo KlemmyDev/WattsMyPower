@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
@@ -15,8 +15,10 @@ import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { gridQuery } from "~/features/grid/api";
 import { RADII } from "~/features/grid/components/OutagesCard";
-import { REGIONS, listed } from "~/features/grid/utils";
-import { SettingsCard } from "~/features/settings/components/SettingsCard";
+import { LEVEL, REGIONS, listed, wholesaleCents } from "~/features/grid/utils";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { useGeocode } from "~/features/settings/hooks/useGeocode";
 
@@ -59,20 +61,6 @@ const NETWORKS = [
   },
 ] as const;
 
-function CardTitle({ id, title, sub, aside }: { id: string; title: string; sub: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h3 id={id} className="text-[15px] font-semibold">
-          {title}
-        </h3>
-        <span className="text-sm text-pretty text-ink-muted">{sub}</span>
-      </div>
-      {aside}
-    </div>
-  );
-}
-
 /** Save a setting straight away, with a toast to say so. */
 function useSaveNow() {
   const save = useSaveSettings();
@@ -100,43 +88,42 @@ function Network() {
         ? "Automatic (needs your location)"
         : "Automatic";
   return (
-    <SettingsCard padded aria-labelledby="h-network" className="gap-4">
-      <CardTitle
-        id="h-network"
-        title="Electricity network"
-        sub={
-          <>
-            The company that owns the poles and wires to your house (not your retailer). Its outage map says where the
-            power's off now and where it's planned to be, every 15 minutes.
-            {out?.fetched_at && ` Updated ${hhmm(out.fetched_at)}.`}
-          </>
-        }
-        aside={
-          <Select
-            aria-label="Electricity network"
-            value={value}
-            onChange={(e) =>
-              save.now(
-                { power_network: e.target.value as Settings["power_network"] },
-                e.target.value === "none" ? "Outages won't be followed." : "Saved. Fetching its outages.",
-              )
-            }
-            className="h-9 text-sm"
-          >
-            <option value="auto">{found}</option>
-            {NETWORKS.map((g) => (
-              <optgroup key={g.state} label={g.state}>
-                {g.networks.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.name} ({n.area})
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-            <option value="none">Don't follow outages</option>
-          </Select>
-        }
-      />
+    <SettingsSection
+      id="h-network"
+      title="Electricity network"
+      sub={
+        <>
+          The company that owns the poles and wires to your house (not your retailer). Its outage map says where the
+          power's off now and where it's planned to be, every 15 minutes.
+          {out?.fetched_at && ` Updated ${hhmm(out.fetched_at)}.`}
+        </>
+      }
+      aside={
+        <Select
+          aria-label="Electricity network"
+          value={value}
+          onChange={(e) =>
+            save.now(
+              { power_network: e.target.value as Settings["power_network"] },
+              e.target.value === "none" ? "Outages won't be followed." : "Saved. Fetching its outages.",
+            )
+          }
+          className="h-9 text-sm"
+        >
+          <option value="auto">{found}</option>
+          {NETWORKS.map((g) => (
+            <optgroup key={g.state} label={g.state}>
+              {g.networks.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name} ({n.area})
+                </option>
+              ))}
+            </optgroup>
+          ))}
+          <option value="none">Don't follow outages</option>
+        </Select>
+      }
+    >
       {out?.error && (
         <HelpText>
           {out.error} It tries again every 15 minutes
@@ -159,7 +146,7 @@ function Network() {
         From each network's public outage map (there's no official feed, so it may change). The whole network's outages
         are downloaded and matched here: your street is never sent anywhere.
       </HelpText>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -199,34 +186,33 @@ function Street() {
   };
   const places = geocode.data?.filter((p) => p.road);
   return (
-    <SettingsCard padded aria-labelledby="h-street" className="gap-4">
-      <CardTitle
-        id="h-street"
-        title="Your street"
-        sub={
-          saved ? (
-            <>
-              Outages listing <b className="font-semibold text-ink">{title(saved)}</b>
-              {system?.home_suburb && (
-                <>
-                  {" "}
-                  in <b className="font-semibold text-ink">{title(system.home_suburb)}</b>
-                </>
-              )}{" "}
-              are marked as reaching you.
-            </>
-          ) : (
-            "Planned work lists the streets it turns off. Add yours to know which reach you."
-          )
-        }
-        aside={
-          saved && (
-            <Button variant="outline" size="sm" onClick={() => keep("", "")} disabled={save.isPending}>
-              Remove
-            </Button>
-          )
-        }
-      />
+    <SettingsSection
+      id="h-street"
+      title="Your street"
+      sub={
+        saved ? (
+          <>
+            Outages listing <b className="font-semibold text-ink">{title(saved)}</b>
+            {system?.home_suburb && (
+              <>
+                {" "}
+                in <b className="font-semibold text-ink">{title(system.home_suburb)}</b>
+              </>
+            )}{" "}
+            are marked as reaching you.
+          </>
+        ) : (
+          "Planned work lists the streets it turns off. Add yours to know which reach you."
+        )
+      }
+      aside={
+        saved && (
+          <Button variant="outline" size="sm" onClick={() => keep("", "")} disabled={save.isPending}>
+            Remove
+          </Button>
+        )
+      }
+    >
       <form className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 max-[520px]:grid-cols-1" onSubmit={search}>
         <Field label="Your address">
           <Input
@@ -281,7 +267,7 @@ function Street() {
           </Button>
         </div>
       )}
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -291,21 +277,21 @@ function Radius() {
   const save = useSaveNow();
   const value = (save.isPending ? save.variables?.outage_radius_km : system?.outage_radius_km) ?? 15;
   return (
-    <SettingsCard padded aria-labelledby="h-radius" className="gap-4">
-      <CardTitle
-        id="h-radius"
-        title="How far around"
-        sub={`Outages within this distance of ${locationLabel(system)} are shown on the Grid page and the Overview. Ones that reach your street always are.`}
-        aside={
-          <Segmented
-            label="Outage radius"
-            options={RADII.map((r) => ({ value: String(r), label: `${r} km` }))}
-            value={String(RADII.includes(value) ? value : 15)}
-            onChange={(v) => save.now({ outage_radius_km: +v }, `Outages within ${v} km are shown.`)}
-          />
-        }
-      />
-    </SettingsCard>
+    <SettingsSection
+      id="h-radius"
+      title="How far around"
+      sub={`Outages within this distance of ${locationLabel(system)} are shown on the Grid page and the Overview. Ones that reach your street always are.`}
+      aside={
+        <Segmented
+          label="Outage radius"
+          options={RADII.map((r) => ({ value: String(r), label: `${r} km` }))}
+          value={String(RADII.includes(value) ? value : 15)}
+          onChange={(v) => save.now({ outage_radius_km: +v }, `Outages within ${v} km are shown.`)}
+        />
+      }
+    >
+      {null}
+    </SettingsSection>
   );
 }
 
@@ -317,35 +303,34 @@ function Hazards() {
   const on = save.isPending ? !!save.variables?.hazard_warnings : (system?.hazard_warnings ?? 1) === 1;
   const town = grid?.hazards?.town;
   return (
-    <SettingsCard padded aria-labelledby="h-hazards" className="gap-4">
-      <CardTitle
-        id="h-hazards"
-        title="Weather and fire warnings"
-        sub={
-          <>
-            The Bureau of Meteorology's severe weather, flood and fire weather warnings
-            {town ? ` for the ${town} area` : " for your area"}, and in Queensland the Fire Department's bushfire
-            warnings within your radius. They feed the Grid page's outlook.
-          </>
-        }
-        aside={
-          <Switch
-            on={on}
-            label="Weather and fire warnings"
-            onChange={(v) =>
-              save.now(
-                { hazard_warnings: v ? 1 : 0 },
-                v ? "Following weather and fire warnings." : "Warnings turned off.",
-              )
-            }
-          />
-        }
-      />
+    <SettingsSection
+      id="h-hazards"
+      title="Weather and fire warnings"
+      sub={
+        <>
+          The Bureau of Meteorology's severe weather, flood and fire weather warnings
+          {town ? ` for the ${town} area` : " for your area"}, and in Queensland the Fire Department's bushfire warnings
+          within your radius. They feed the Grid page's outlook.
+        </>
+      }
+      aside={
+        <Switch
+          on={on}
+          label="Weather and fire warnings"
+          onChange={(v) =>
+            save.now(
+              { hazard_warnings: v ? 1 : 0 },
+              v ? "Following weather and fire warnings." : "Warnings turned off.",
+            )
+          }
+        />
+      }
+    >
       <HelpText>
         From the Bureau's public data service and QFD's public warnings feed, both meant for this. Matched to your
         location here.
       </HelpText>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -362,40 +347,100 @@ function Market() {
         ? "Automatic (needs your location)"
         : "Automatic";
   return (
-    <SettingsCard padded aria-labelledby="h-market" className="gap-4">
-      <CardTitle
-        id="h-market"
-        title="Wholesale market"
+    <SettingsSection
+      id="h-market"
+      title="Wholesale market"
+      sub={
+        <>
+          AEMO's wholesale prices for your region every five minutes, and its warnings of tight supply and load
+          shedding. Public data, no account.{grid?.fetched_at && ` Updated ${hhmm(grid.fetched_at)}.`}
+        </>
+      }
+      aside={
+        <Select
+          aria-label="Region"
+          value={value}
+          onChange={(e) =>
+            save.now(
+              { nem_region: e.target.value as Settings["nem_region"] },
+              e.target.value === "none" ? "AEMO won't be followed." : "Saved. Fetching its prices.",
+            )
+          }
+          className="h-9 text-sm"
+        >
+          <option value="auto">{found}</option>
+          {REGIONS.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.label}
+            </option>
+          ))}
+          <option value="none">Don't follow AEMO</option>
+        </Select>
+      }
+    >
+      {grid?.error && <Notice tone="warn">{grid.error}</Notice>}
+    </SettingsSection>
+  );
+}
+
+/** What the Grid page follows, at a glance: the network (or networks), outages around the house now and planned,
+ * the radius, AEMO's region and its price now, and the grid's outlook. */
+function GridSummary() {
+  const { data: grid } = useQuery(gridQuery);
+  if (!grid) return null;
+  const out = grid.outages;
+  const networks = out?.networks?.length ? out.networks : out?.network ? [out.network] : [];
+  const level = LEVEL[grid.outlook.level];
+  const updated = out?.fetched_at ? `Outages fetched ${hhmm(out.fetched_at)}` : null;
+  return (
+    <SummaryCard
+      icon="grid"
+      color={grid.outlook.level === "normal" ? COLOR.grid : level.color}
+      label="What the Grid page follows"
+      footer={
+        <div className="border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
+          {out?.error ? (
+            <span className="text-bad">{out.error}</span>
+          ) : (
+            [updated, "Every network's public outage map, matched on this server: your street is never sent anywhere."]
+              .filter(Boolean)
+              .join(". ")
+          )}
+        </div>
+      }
+    >
+      <SummaryStat
+        label={networks.length > 1 ? "Networks" : "Network"}
+        value={networks.length ? networks.map((n) => n.name).join(" + ") : "None"}
+        sub={out?.network_auto ? "From where your house is" : networks.length ? "Chosen" : "No outages followed"}
+      />
+      <SummaryStat
+        label="Outages near you"
+        value={out ? out.summary.outages : "—"}
+        color={out?.summary.outages ? COLOR.warn : undefined}
         sub={
-          <>
-            AEMO's wholesale prices for your region every five minutes, and its warnings of tight supply and load
-            shedding. Public data, no account.{grid?.fetched_at && ` Updated ${hhmm(grid.fetched_at)}.`}
-          </>
-        }
-        aside={
-          <Select
-            aria-label="Region"
-            value={value}
-            onChange={(e) =>
-              save.now(
-                { nem_region: e.target.value as Settings["nem_region"] },
-                e.target.value === "none" ? "AEMO won't be followed." : "Saved. Fetching its prices.",
-              )
-            }
-            className="h-9 text-sm"
-          >
-            <option value="auto">{found}</option>
-            {REGIONS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-            <option value="none">Don't follow AEMO</option>
-          </Select>
+          out?.summary.customers
+            ? `${out.summary.customers.toLocaleString()} homes off`
+            : `Within ${out?.radius_km ?? "—"} km`
         }
       />
-      {grid?.error && <Notice tone="warn">{grid.error}</Notice>}
-    </SettingsCard>
+      <SummaryStat
+        label="Planned work"
+        value={out ? out.planned.length : "—"}
+        sub={out?.street ? `Matched to ${out.street}` : "No street set"}
+      />
+      <SummaryStat
+        label="Wholesale now"
+        value={grid.enabled && grid.market?.price != null ? wholesaleCents(grid.market.price) : "—"}
+        sub={grid.enabled ? `AEMO, ${grid.region_name}` : "Not following AEMO"}
+      />
+      <SummaryStat
+        label="Outlook"
+        value={level.word}
+        color={grid.outlook.level === "normal" ? undefined : level.color}
+        sub={level.sub}
+      />
+    </SummaryCard>
   );
 }
 
@@ -416,6 +461,7 @@ export function GridSettings() {
           Outages, warnings and your region are worked out from where your house is, so they need your location.
         </LocationPrompt>
       )}
+      <GridSummary />
       {/* Started afresh once the saved street is known, and after it's saved. */}
       <Network />
       <Street key={`${system?.home_street},${system?.home_suburb}`} />
