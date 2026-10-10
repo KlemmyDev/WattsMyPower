@@ -43,7 +43,9 @@ class IntegrationError(ValueError):
 
 def _kind(driver: str | None) -> dict[str, Any]:
     k = KINDS.get(driver or "")
-    return {"label": k.label, "via": k.via, "brand": k.brand} if k else {"label": driver, "via": None, "brand": None}
+    if k is None:
+        return {"label": driver, "via": None, "brand": None, "verified": True}
+    return {"label": k.label, "via": k.via, "brand": k.brand, "verified": k.verified}
 
 
 HOME_NETWORKS = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
@@ -117,7 +119,8 @@ class IntegrationsService:
 
     def overview(self, client_host: str | None = None, server_host: str | None = None) -> dict[str, Any]:
         """The connected inverters, the kinds that can be connected, the last scan, and a network to scan."""
-        kinds = [{"driver": k, "role": v.role, "brand": v.brand, "label": v.label, "via": v.via, "example": v.example}
+        kinds = [{"driver": k, "role": v.role, "brand": v.brand, "label": v.label, "via": v.via, "example": v.example,
+                  "port": v.port, "verified": v.verified}
                  for k, v in KINDS.items()]  # fmt: skip
         if self.collector is None:
             return {"available": False, "error": DEMO, "read_only": True, "devices": [], "kinds": kinds,
@@ -243,8 +246,8 @@ class IntegrationsService:
         request = {
             "driver": driver,
             "host": str(body.get("host") or "").strip(),
-            "port": body.get("port", 502),
-            "unit": body.get("unit", 1),
+            "port": body.get("port") or kind.port,
+            "unit": body.get("unit", kind.unit),
             "settings": settings,
             "check": body.get("check", True) is not False,
         }
@@ -252,7 +255,7 @@ class IntegrationsService:
             result = collector.put_device(role, request)
         except CollectorError as e:
             if e.status == 422 and "answered like" in e.detail:  # say which inverter in words, not its driver id
-                where = request["host"] + (f":{request['port']}" if request["port"] != 502 else "")
+                where = request["host"] + (f":{request['port']}" if request["port"] != kind.port else "")
                 raise IntegrationError(f"Nothing at {where} answered like a {kind.brand} {kind.label}.") from e
             raise IntegrationError(e.detail, e.status if e.status in (404, 409, 422) else 502) from e
         device = self._device(result["device"])

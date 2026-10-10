@@ -16,6 +16,10 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   the raw registers. An optional second, older Sungrow SG-D string inverter (an AC-coupled system) is read through its
   Wi-Fi dongle's encrypted Modbus, and both count. Inverters are found by scanning the network in **Manage →
   Integrations**. A newer SH hybrid that isn't known by name is read with the same registers and shown as untested.
+- **GoodWe inverters (untested):** GoodWe's ET-family hybrids (ET, EH, BT, BH) with their battery and meter, and its
+  DT-family string inverters (D-NS, XS, DT) as a second system, read on your network over Modbus on UDP port 8899
+  (or Modbus TCP on a newer LAN dongle) and found by the same network scan. Their registers follow the `goodwe`
+  library that Home Assistant uses; they haven't been tried on a real GoodWe yet.
 - **Overview:** the live power flow as an animated house that follows the weather (and can be made to look like
   yours), today's cost and savings at your rates, the battery's last six hours and the next 24 hours.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
@@ -38,6 +42,11 @@ Everything below is new. When it's released, this heading becomes the beta's ver
 - **Home devices:** TP-Link Tapo plugs (KLAP and TPAP) and Shelly plugs and meters read on your network; Home
   Assistant's measured devices; Hisense (ConnectLife) washers and dryers; Bluetti (Bluetooth) and EcoFlow (cloud)
   portable batteries. Each shows when it runs, what it uses, and its usual days and times.
+- **Electrolux, AEG and +home (Westinghouse) appliances** through Electrolux Group's official developer API (cloud:
+  there's no local way). Fridges and freezers show their temperatures, doors and alerts; washers, dryers,
+  dishwashers and ovens when they run and how long they've left; air conditioners whether they're on and the room's
+  temperature. Connect with an API key and refresh token from developer.electrolux.one (see the README's Home
+  section). None of them report their power, so no energy is recorded for them.
 - **Electric vehicles:** your cars drawn in the garage; a Tesla over the server's Bluetooth or through Tessie, charged
   from spare solar a step at a time (Standard, Quick, Steady or Custom timing), with each charge and trip logged and
   the car's day charted.
@@ -55,6 +64,8 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   model they're off until turned on for that inverter, as they haven't been tried there.
 - Hisense ConnectLife has no public API: it's read the way its app reads it, and can stop working if Hisense changes
   it.
+- Electrolux appliances are read from Electrolux's cloud, within its free tier's 5,000 requests a day: each
+  appliance every 5 minutes, so about 15 appliances at most on one account.
 - The WiNet-S2 sometimes repeats the same readings for a few minutes. Those are left out, so charts show a short gap.
 - Only one app should talk to the inverter over Modbus at a time.
 - Outages and bushfire warnings cover Queensland only. Plan comparison leaves out controlled load and demand charges.

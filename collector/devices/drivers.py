@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING
 
 from collector.config import Config
 from collector.devices import Device, DeviceConfig, Words
+from collector.devices.goodwe.dt import DtDevice
+from collector.devices.goodwe.et import EtDevice
+from collector.devices.goodwe.protocol import UDP_PORT, rtu_request
 from collector.devices.sungrow.sg_d import SgDDevice
 from collector.devices.sungrow.sh_rs import ShRsDevice
 
@@ -25,6 +28,10 @@ class Reader:
     build: Callable[[str, int, int], Device]  # (host, port, unit) -> the device
     # (host, port, unit) -> the words that identify it, or None if what's there isn't this kind of device
     probe: Callable[[str, int, int], Words | None]
+    port: int = 502  # where it usually listens: what a scan checks, and the port when none is given
+    unit: int = 1  # its usual Modbus unit
+    udp: bool = False  # the port is a UDP one: there's no connection to try, so a scan sends `hello` to each address
+    hello: bytes = b""  # a datagram any device of this kind replies to
 
 
 # In the order a network scan tries them on each address that answers: plain Modbus first (quick to
@@ -32,7 +39,16 @@ class Reader:
 READERS: dict[str, Reader] = {
     "sungrow.sh_rs": Reader("hybrid", ShRsDevice, lambda h, p, u: ShRsDevice(h, p, u).probe()),
     "sungrow.sg_d": Reader("pv2", SgDDevice, lambda h, p, u: SgDDevice(h, p, u, timeout=3).probe()),
-}
+    # GoodWe's dongles answer Modbus over UDP 8899 (newer LAN ones Modbus TCP on 502 too: connect with that port).
+    "goodwe.et": Reader(
+        "hybrid", EtDevice, lambda h, p, u: EtDevice(h, p, u).probe(), UDP_PORT, EtDevice.default_unit,
+        udp=True, hello=rtu_request(EtDevice.default_unit, *EtDevice.identity),
+    ),
+    "goodwe.dt": Reader(
+        "pv2", DtDevice, lambda h, p, u: DtDevice(h, p, u).probe(), UDP_PORT, DtDevice.default_unit,
+        udp=True, hello=rtu_request(DtDevice.default_unit, *DtDevice.identity),
+    ),
+}  # fmt: skip
 
 
 def reader(driver: str) -> Reader:

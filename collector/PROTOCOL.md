@@ -22,6 +22,12 @@ longer read. Changes take effect from the next poll, without a restart.
 |-----------------|----------|---------------------------------------------|--------------------------------------------------|------------------------------------------------------------|
 | `sungrow.sh_rs` | `hybrid` | Sungrow SH hybrids (RS, RT, T, K, MG-RL), Modbus TCP | (5008, 29), (13000, 41), (13041, 2), (13045, 3) | input (4990, 10), (5000, 3), (5639, 1); holding (13059, 1) |
 | `sungrow.sg_d`  | `pv2`    | Sungrow SG-D via its encrypted Wi-Fi dongle | (5000, 9), (5011, 8), (5031, 2)                  | — (5000-5008 already carry type, nominal, hours)           |
+| `goodwe.et`     | `hybrid` | GoodWe ET/EH/BT/BH hybrids, Modbus over UDP 8899 (unit 0xF7) | (35100, 125), (36000, 45), (37000, 24) | (35000, 33)                                     |
+| `goodwe.dt`     | `pv2`    | GoodWe D-NS/XS/DT string inverters, Modbus over UDP 8899 (unit 0x7F) | (30001, 40), (30100, 73) | — (30001-30040 carry model, serial)                     |
+
+GoodWe only has holding registers (function 0x03); as they hold its readings, they're stored under `input`. Its
+dongles answer Modbus RTU frames over UDP port 8899, or Modbus TCP when connected on port 502 (newer LAN dongles); a
+unit of 0 or 1 means the family's own address (0xF7 or 0x7F). See `collector/devices/goodwe/protocol.py`.
 
 If a range is rejected by the device, the collector falls back to reading its registers one at a time;
 words it still can't read are left out. A poll writes the rows for all devices that answered in one
@@ -84,9 +90,10 @@ transaction, with the same `ts`, so readers never see half a poll.
 - `POST /v1/scan` with `{"network": "192.168.1.0/24"}` (private, /22 or smaller): start looking for inverters.
   422 for a network that can't be scanned, 409 while a scan runs. `GET /v1/scan` reports progress:
   `{"running", "network", "started_at", "finished_at", "checked", "total", "error", "found": [{"host", "port",
-  "driver", "input", "connected"?}]}`. `found` lists every address with Modbus TCP port 502 open: `driver`
-  is the first reader whose probe recognised it (null if none did), with the words its probe read; addresses
-  of connected devices are marked `connected` and not probed.
+  "driver", "input", "connected"?}]}`. `found` lists every address and port that answered: Modbus TCP port 502
+  open, or a reply on UDP 8899 to the GoodWe readers' hellos. `driver` is the first reader for that port whose probe
+  recognised it (null if none did), with the words its probe read; addresses of connected devices are marked
+  `connected` and not probed.
 - `GET /v1/storage`: the database measured, for the dashboard's Manage → Data. Reads every page, so it
   can take a few seconds on a large database. `{"path", "files": {"database", "wal", "shm"}, "page_size",
   "pages", "free_pages", "schema_version", "sqlite_version", "journal_mode", "measured", "retention_days",
@@ -95,4 +102,8 @@ transaction, with the same `ts`, so readers never see half a poll.
   "indexes": [{"name", "bytes"}]}]}`. Sizes are bytes; `measured` is false (and the per-table sizes null) when
   SQLite was built without `dbstat`. `oldest` / `newest` / `recent_rows` (rows in the last 7 days) are for
   dated tables; `parts` breaks `readings` down by device.
+- `GET /v1/backup`: a copy of the database (`application/vnd.sqlite3`, with its `Content-Length`), for the
+  dashboard's backups (Manage → Data). It's made with SQLite's online backup, so it's consistent while polls
+  keep writing, and it's one file (no `-wal` to go with it). The copy is made before the first byte is sent, which
+  takes a while on a large database, and deleted once it's sent. 409 while another is being made or sent.
 - `GET /healthz` (no token): `{"ok": true, "fresh": <hybrid read within max(120, poll_interval * 6) s>}`.

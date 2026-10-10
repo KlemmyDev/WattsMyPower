@@ -10,11 +10,12 @@ from app.features.home.integrations.bluetti import Bluetti
 from app.features.home.integrations.connectlife import ConnectLife
 from app.features.home.integrations.demo import Demo
 from app.features.home.integrations.ecoflow import EcoFlow
+from app.features.home.integrations.electrolux import Electrolux
 from app.features.home.integrations.homeassistant import HomeAssistant
 from app.features.home.integrations.shelly import Shelly
 from app.features.home.integrations.tapo import Tapo
 from app.features.home.types import Integration
 
 INTEGRATIONS: dict[str, type[Integration]] = {
-    i.id: i for i in (Tapo, Shelly, ConnectLife, HomeAssistant, Bluetti, EcoFlow, Demo)
+    i.id: i for i in (Tapo, Shelly, ConnectLife, Electrolux, HomeAssistant, Bluetti, EcoFlow, Demo)
 }
