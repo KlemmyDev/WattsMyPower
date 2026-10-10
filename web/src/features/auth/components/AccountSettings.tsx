@@ -16,6 +16,7 @@ import { COLOR } from "~/features/common/theme/utils/colors";
 import type { ThemeChoice } from "~/features/common/theme/utils";
 import { THEME_OPTIONS } from "~/features/common/theme/utils";
 import { useDisplay } from "~/features/common/display/hooks";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import type { Clock, Density, Size } from "~/features/common/display/utils";
 import { CLOCK_OPTIONS, DENSITY_OPTIONS, SIZE_OPTIONS } from "~/features/common/display/utils";
 import {
@@ -30,7 +31,7 @@ const label = <T extends string>(options: { value: T; label: string }[], v: T) =
   options.find((o) => o.value === v)?.label ?? v;
 
 /**
- * Manage → Account: who's signed in (and signing out) and how the dashboard looks in this browser at the top, then the
+ * Settings → Account: who's signed in (and signing out) and how the dashboard looks in this browser at the top, then the
  * look chosen in pictures, the accessibility switches, and changing the password.
  */
 export function AccountSettings() {
@@ -43,6 +44,12 @@ export function AccountSettings() {
 
   return (
     <>
+      <SubPageHeader
+        back={<BackLink to="/settings">Settings</BackLink>}
+        id="h-account-page"
+        title="Account"
+        sub="Signing in, and how the dashboard looks in this browser."
+      />
       <SummaryCard
         icon="user"
         color={COLOR.lilac}

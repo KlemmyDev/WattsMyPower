@@ -37,7 +37,7 @@ export const COLOR = {
   bad: v("bad"),
   danger: v("danger"),
   lilac: v("lilac"),
-  /** The collector's raw registers, in Manage → Data. */
+  /** The collector's raw registers, in Settings → Data. */
   teal: v("teal"),
   link: v("link"),
   /** The app's own colour: Overview's, in the navigation. */

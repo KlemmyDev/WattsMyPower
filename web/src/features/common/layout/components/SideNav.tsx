@@ -365,7 +365,7 @@ function VersionTag({ full }: { full: boolean }) {
     <>
       {newer && (
         <Link
-          to="/system/updates"
+          to="/settings/updates"
           className="flex items-center gap-2 rounded-xl border border-brand/25 bg-brand-subtle px-3 py-2 text-[12.5px] font-medium text-brand no-underline transition-colors hover:border-brand/45 hover:text-brand"
         >
           <span aria-hidden className="size-1.5 flex-none rounded-full bg-brand" />
@@ -387,7 +387,7 @@ function VersionTag({ full }: { full: boolean }) {
     </>
   ) : (
     <Link
-      to={newer ? "/system/updates" : "/system"}
+      to={newer ? "/settings/updates" : "/settings"}
       title={title}
       aria-label={title}
       className="relative flex no-underline"

@@ -1,13 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AccountSettings } from "~/features/auth/components/AccountSettings";
-import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Account is one of Settings' pages now: old links land on it there. */
 export const Route = createFileRoute("/_app/account")({
-  head: () => ({ meta: [{ title: "Account · WattsMyPower" }] }),
-  component: () => (
-    <>
-      <PageHeader title="Account" sub="Signing in, and how the dashboard looks" />
-      <AccountSettings />
-    </>
-  ),
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/account", replace: true });
+  },
 });

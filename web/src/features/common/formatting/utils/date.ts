@@ -2,7 +2,7 @@ import { savedDisplay } from "~/features/common/display/utils";
 import { partsOf, siteTime, siteZone } from "~/features/common/time/utils";
 
 /**
- * Date, time and duration formatting (en-AU; times on the clock chosen in Manage → Account, 24-hour unless set to 12),
+ * Date, time and duration formatting (en-AU; times on the clock chosen in Settings → Account, 24-hour unless set to 12),
  * in the site's time zone (common/time/utils) whatever zone the browser is in.
  */
 
@@ -24,7 +24,7 @@ const tidy = (opts: Intl.DateTimeFormatOptions) => zoned(opts, true);
 
 const time24 = zoned({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const time12 = zoned({ hour: "numeric", minute: "2-digit", hour12: true });
-/** Times on a 12-hour clock: this browser's choice (Manage → Account → Appearance). */
+/** Times on a 12-hour clock: this browser's choice (Settings → Account → Appearance). */
 const twelve = () => savedDisplay().clock === "12";
 /** "7 am", "12 pm": an hour on a 12-hour clock, midnight at either end of the day "12 am". */
 const ampm = (h: number, m?: number) => {

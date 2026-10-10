@@ -73,7 +73,7 @@ function SystemSummary() {
       className="glass flex items-center gap-5 overflow-hidden rounded-3xl border border-line-subtle p-4 pr-6 max-sm:gap-3.5 max-sm:rounded-[20px] max-sm:p-3"
     >
       <Link
-        to="/system/house"
+        to="/settings/house"
         aria-label="Your house"
         className="relative aspect-[2/1] w-[220px] flex-none overflow-hidden rounded-2xl bg-[#dcebff] max-sm:aspect-square max-sm:w-[92px] max-sm:rounded-xl"
       >
@@ -117,7 +117,7 @@ function UpdatesRow() {
   );
   return (
     <SettingsRow
-      to="/system/updates"
+      to="/settings/updates"
       icon="download"
       color={COLOR.export}
       label="Updates"
@@ -150,7 +150,7 @@ function AccountRow() {
   const { data: session } = useQuery(sessionQuery);
   return (
     <SettingsRow
-      to="/account"
+      to="/settings/account"
       icon="user"
       color={COLOR.lilac}
       label="Account and appearance"
@@ -160,11 +160,11 @@ function AccountRow() {
 }
 
 /**
- * Manage → System: a list of what can be set, grouped, each opening its own page. Your system (the solar and
+ * Settings: a list of what can be set, grouped, each opening its own page. Your system (the solar and
  * battery, where it is, what it cost, the house the Overview draws), the dashboard (account, integrations, data), and
  * WattsMyPower itself (updates, and the set-up guide again).
  */
-export function SystemHub() {
+export function SettingsHub() {
   const s = useLive()?.system;
   return (
     <>
@@ -173,27 +173,27 @@ export function SystemHub() {
         <div className="grid grid-cols-1 items-start gap-6 @3xl:grid-cols-2">
           <SettingsGroup id="h-group-system" title="Your system">
             <SettingsRow
-              to="/system/solar-battery"
+              to="/settings/solar-battery"
               icon="sun"
               color={COLOR.solarDeep}
               label="Solar and battery"
               detail={solarBattery(s)}
             />
             <SettingsRow
-              to="/system/location"
+              to="/settings/location"
               icon="pin"
               color={COLOR.teal}
               label="Location"
               detail={locationLabel(s) === "your location" ? "Not set" : locationLabel(s)}
             />
             <SettingsRow
-              to="/system/cost"
+              to="/settings/cost"
               icon="dollar"
               color={COLOR.good}
               label="Cost and warranty"
               detail={costWarranty(s)}
             />
-            <SettingsRow to="/system/house" icon="home" color={COLOR.brand} label="Your house" detail={house(s)} />
+            <SettingsRow to="/settings/house" icon="home" color={COLOR.brand} label="Your house" detail={house(s)} />
           </SettingsGroup>
           <div className="flex min-w-0 flex-col gap-6">
             <SettingsGroup id="h-group-dashboard" title="Dashboard">
@@ -206,7 +206,7 @@ export function SystemHub() {
                 detail="Inverters, smart home, cars, prices and weather"
               />
               <SettingsRow
-                to="/data"
+                to="/settings/data"
                 icon="database"
                 color={COLOR.import}
                 label="Data"

@@ -3,7 +3,7 @@
 
 /* For the odd place the light theme needs more than a token swap, e.g. light:bg-canvas. */
 @custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
-/* For the compact layout (Manage → Account → Display), e.g. a shorter chart: compact:h-[150px]. */
+/* For the compact layout (Settings → Account → Display), e.g. a shorter chart: compact:h-[150px]. */
 @custom-variant compact (&:where([data-density="compact"], [data-density="compact"] *));
 
 /*
@@ -101,7 +101,7 @@
   --color-bad: #ff8a80;
   --color-danger: #ff6b5e;
   --color-lilac: #c4a7ff;
-  /* the collector's raw registers, in Manage → Data */
+  /* the collector's raw registers, in Settings → Data */
   --color-teal: #4fd1c5;
   /* Devices on the Home page, in this order (each keeps its slot: colour follows the device, not its rank).
      Checked for colour-vision separation as a set, on the dark surface and the light one. */
@@ -157,6 +157,8 @@
 
   --animate-pulse-soft: wmpPulse 2s ease-in-out infinite;
   --animate-ring-drain: ringDrain 2.4s ease-in-out infinite;
+  /* A dashed line's dashes creeping along it: the way power runs, in Settings' system diagram. */
+  --animate-dash: wmpDash 1.4s linear infinite;
 
   /* Entrances: a section rising into place, a quiet fade, a tooltip popping in, bars growing up from
      their baseline, a fill sweeping across its track, and a chart drawing in from the left. Each fills
@@ -171,7 +173,7 @@
 }
 
 /*
- * The light theme: the same tokens with light values, picked in Manage → Account and applied
+ * The light theme: the same tokens with light values, picked in Settings → Account and applied
  * before the page first paints (features/common/theme). Text keeps WCAG AA contrast on the canvas
  * and on cards, down to ink-faint; energy and status colours are deeper so they read on white.
  */
@@ -744,7 +746,7 @@
 }
 
 /*
- * Display choices (Manage → Account → Display, features/common/display), set on <html> before the
+ * Display choices (Settings → Account → Display, features/common/display), set on <html> before the
  * first paint. Outside any layer, so they win over the utilities they adjust.
  */
 
@@ -960,6 +962,11 @@
 @keyframes wmpDrain {
   to {
     stroke-dashoffset: -1;
+  }
+}
+@keyframes wmpDash {
+  to {
+    stroke-dashoffset: -12;
   }
 }
 @keyframes wmpSpin {

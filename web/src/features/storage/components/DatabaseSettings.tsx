@@ -5,10 +5,26 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { measureAgain, storageQuery } from "~/features/storage/api";
 import { BackupCard } from "~/features/storage/components/BackupCard";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
-import { StorageOverview } from "~/features/storage/components/StorageOverview";
+import { StorageFacts, StorageVisual } from "~/features/storage/components/StorageOverview";
+import { SettingsSplit } from "~/features/settings/components/SettingsSection";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-/** Manage → Data: everything stored, in both databases, how much room each part takes, and a backup to download. */
+/** Settings → Data: everything stored, in both databases, how much room each part takes, and a backup to download. */
 export function DatabaseSettings() {
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/settings">Settings</BackLink>}
+        id="h-data-page"
+        title="Data"
+        sub="What's stored, how much room it takes, and a backup to download."
+      />
+      <Storage />
+    </>
+  );
+}
+
+function Storage() {
   const qc = useQueryClient();
   const report = useQuery(storageQuery);
   const measure = useMutation({
@@ -28,11 +44,18 @@ export function DatabaseSettings() {
 
   return (
     <>
-      <StorageOverview report={report.data} measuring={measure.isPending} onMeasure={() => measure.mutate()} />
       {measure.isError && (
         <Notice>{errorMessage(measure.error, "The databases couldn't be measured. Try again.")}</Notice>
       )}
-      <BackupCard report={report.data} />
+      <SettingsSplit
+        visual={<StorageVisual report={report.data} measuring={measure.isPending} onMeasure={() => measure.mutate()} />}
+      >
+        <StorageFacts report={report.data} />
+        <BackupCard report={report.data} />
+      </SettingsSplit>
+      <h2 className="px-1 pt-3 text-[13px] leading-5 font-semibold tracking-[0.08em] text-ink-muted uppercase">
+        Table by table
+      </h2>
       {report.data.databases.map((db) => (
         <DatabaseCard key={db.id} db={db} />
       ))}

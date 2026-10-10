@@ -1,7 +1,7 @@
 import { I, type P3 } from "~/features/overview/utils/house/iso";
 
 /*
- * Where everything goes in the isometric house, from the household's choices (Manage → System → Your
+ * Where everything goes in the isometric house, from the household's choices (Settings → Your
  * house): its style, one or two storeys, no garage or a single or double one, and for each inverter and
  * battery (as many as are connected) whether it's on an outside wall or in the garage.
  *

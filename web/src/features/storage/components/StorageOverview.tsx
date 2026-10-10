@@ -1,46 +1,70 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Swatch } from "~/features/common/ui/components/Swatch";
-import { cn } from "~/features/common/ui/utils";
-import { SettingsSection } from "~/features/settings/components/SettingsSection";
+import { OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
+import { StorageTreemap, type TreemapItem } from "~/features/storage/components/StorageTreemap";
 import type { MeasuredDatabase, StorageReport } from "~/features/storage/types";
 import { bytes, compact, share } from "~/features/storage/utils";
 
-/** The overview's kinds of data, in a fixed order and colour. Groups not named here count as "everything else". */
+/** The kinds of data, in a fixed order and colour. Groups not named here count as "everything else". */
 const KINDS = [
   { id: "registers", name: "Raw inverter registers", color: COLOR.teal },
   { id: "readings", name: "Readings", color: COLOR.battery },
   { id: "weather", name: "Weather and forecast", color: COLOR.solar },
   { id: "prices", name: "Electricity prices", color: COLOR.lilac },
-  { id: "other", name: "Settings and the rest", color: COLOR.bar },
-  { id: "overhead", name: "Logs and empty pages", color: COLOR.barFaint },
+  { id: "other", name: "Settings and the rest", color: COLOR.gridSoft },
+  { id: "overhead", name: "Logs and empty pages", color: COLOR.bar },
 ] as const;
 
 type Kind = (typeof KINDS)[number]["id"];
 const NAMED = new Set<string>(KINDS.map((k) => k.id));
+const kindOf = (group: string): Kind => (NAMED.has(group) && group !== "overhead" ? (group as Kind) : "other");
+const colorOf = (k: Kind) => KINDS.find((x) => x.id === k)!.color;
 
-/** How the files' bytes split between the kinds, across both databases. What no table holds (the write-ahead log, its
- * index, empty pages) is the overhead, so the parts add up to the files' size. */
-function split(dbs: MeasuredDatabase[]): Record<Kind, number> {
-  const out = Object.fromEntries(KINDS.map((k) => [k.id, 0])) as Record<Kind, number>;
+const measured = (r: StorageReport) => r.databases.filter((d): d is MeasuredDatabase => d.available);
+
+/**
+ * Every table with something in it, across both databases, and what no table holds (the write-ahead log, its index,
+ * empty pages) as one box a database, so the boxes add up to the files' size.
+ */
+function treemapItems(dbs: MeasuredDatabase[]): TreemapItem[] {
+  const out: TreemapItem[] = [];
   for (const db of dbs) {
     let inTables = 0;
-    for (const g of db.groups) {
-      const b = g.bytes ?? 0;
-      out[(NAMED.has(g.id) && g.id !== "other" ? g.id : "other") as Kind] += b;
-      inTables += b;
-    }
-    if (!db.measured) out.other += db.total_bytes;
-    else out.overhead += Math.max(0, db.total_bytes - inTables);
+    for (const g of db.groups)
+      for (const t of g.tables) {
+        const b = t.bytes ?? 0;
+        inTables += b;
+        if (b > 0)
+          out.push({
+            key: `${db.id}.${t.name}`,
+            label: t.label,
+            where: `${db.name} · ${g.name}`,
+            bytes: b,
+            rows: t.rows,
+            color: colorOf(kindOf(g.id)),
+            quiet: kindOf(g.id) === "other",
+          });
+      }
+    const rest = db.measured ? db.total_bytes - inTables : db.total_bytes;
+    if (rest > 0)
+      out.push({
+        key: `${db.id}.overhead`,
+        label: db.measured ? "Logs and empty pages" : db.name,
+        where: db.name,
+        bytes: rest,
+        rows: null,
+        color: colorOf(db.measured ? "overhead" : "other"),
+        quiet: true,
+      });
   }
   return out;
 }
 
-/** Manage → Data, the top: how much is stored in all and how fast it grows, then what kinds of data take the room. */
-export function StorageOverview({
+/** Settings → Data, the picture: what takes the room, table by table, as a treemap coloured by kind, with a legend. */
+export function StorageVisual({
   report,
   measuring,
   onMeasure,
@@ -49,123 +73,120 @@ export function StorageOverview({
   measuring: boolean;
   onMeasure: () => void;
 }) {
-  const dbs = report.databases.filter((d): d is MeasuredDatabase => d.available);
-  const total = dbs.reduce((s, d) => s + d.total_bytes, 0);
-  const parts = split(dbs);
-  const growth = dbs.reduce((s, d) => s + d.growth_per_day, 0);
-  const rows = dbs.reduce((s, d) => s + d.rows, 0);
-  const empty = dbs.reduce((s, d) => s + d.free_bytes, 0);
-  const of = (id: "dashboard" | "collector") => report.databases.find((d) => d.id === id);
-  const size = (id: "dashboard" | "collector") => {
-    const d = of(id);
-    return d?.available ? bytes(d.total_bytes) : "not available";
-  };
-
+  const dbs = measured(report);
+  const items = treemapItems(dbs);
+  const total = items.reduce((s, i) => s + i.bytes, 0);
+  const byKind = KINDS.map((k) => ({
+    ...k,
+    bytes: items.filter((i) => i.color === k.color).reduce((s, i) => s + i.bytes, 0),
+  })).filter((k) => k.bytes > 0);
   return (
-    <>
-      <SummaryCard
-        icon="database"
-        color={COLOR.teal}
-        label="Storage"
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4 text-[13px] text-ink-muted">
-            <span className="min-w-0 flex-1 truncate">
-              Measured {hhmm(report.measured_at)} ·{" "}
-              <span title={report.folder} className="font-mono text-xs">
-                {report.folder}
-              </span>
-            </span>
-            <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
-              {measuring ? "Measuring…" : "Measure again"}
-            </Button>
-          </div>
-        }
-      >
-        <SummaryStat
-          label="On disk"
-          value={bytes(total)}
-          sub={`Dashboard ${size("dashboard")} · collector ${size("collector")}`}
-        />
-        <SummaryStat label="Rows stored" value={compact(rows)} sub="In both databases" />
-        <SummaryStat
-          label="Growing by"
-          value={growth > 0 ? `${bytes(growth * 30)}` : "Not growing"}
-          sub={growth > 0 ? "A month, at this week's rate" : "Old rows go as new ones come"}
-        />
-        <SummaryStat
-          label="Free on this drive"
-          value={bytes(report.disk.free)}
-          sub={`Of ${bytes(report.disk.total)} · ${bytes(empty)} empty pages`}
-        />
-      </SummaryCard>
-      <SettingsSection
-        id="h-storage"
-        title="What's stored"
-        sub="Everything stays on this server, in two SQLite databases. Here's what takes the room."
-      >
-        <Breakdown parts={parts} total={total} />
-      </SettingsSection>
-    </>
-  );
-}
-
-/** One bar split by kind, with a legend naming each part, its size and share. Hovering either lights both. */
-function Breakdown({ parts, total }: { parts: Record<Kind, number>; total: number }) {
-  const [hot, setHot] = useState<Kind | null>(null);
-  const shown = KINDS.filter((k) => parts[k.id] > 0);
-  const widths = shown.map((k) => (total ? (parts[k.id] / total) * 100 : 0));
-  // Each part's middle (% from the left), where its tooltip points.
-  const placed = shown.map((k, i) => {
-    const left = widths.slice(0, i).reduce((s, w) => s + w, 0);
-    return { ...k, width: widths[i], middle: left + widths[i] / 2 };
-  });
-  const tip = placed.find((k) => k.id === hot);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="relative">
-        {/* A 2px gap between parts; slivers keep a visible minimum so nothing that's there disappears. */}
-        <div className="flex h-4 w-full gap-[3px] overflow-hidden rounded-full" onMouseLeave={() => setHot(null)}>
-          {placed.map((k) => (
-            <div
-              key={k.id}
-              className="h-full min-w-[3px] cursor-pointer transition-opacity duration-200"
-              style={{ flexGrow: k.width, flexBasis: 0, background: k.color, opacity: hot && hot !== k.id ? 0.35 : 1 }}
-              onMouseEnter={() => setHot(k.id)}
-            />
-          ))}
-        </div>
-        {tip && (
-          <div
-            role="tooltip"
-            className="pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 rounded-lg bg-popover px-3 py-2 text-xs whitespace-nowrap shadow-[0_8px_24px_var(--color-shadow-pop)]"
-            style={{ left: `clamp(80px, ${tip.middle}%, calc(100% - 80px))` }}
-          >
-            <div className="font-semibold">{tip.name}</div>
-            <div className="text-ink-muted tabular-nums">
-              {bytes(parts[tip.id])} · {share(parts[tip.id], total)}
-            </div>
-          </div>
-        )}
-      </div>
-      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-2 p-0">
-        {placed.map((k) => (
-          <li
-            key={k.id}
-            className={cn(
-              "flex cursor-pointer items-center gap-2.5 rounded-xl bg-canvas/60 px-3 py-2.5 text-[13px] transition-opacity duration-200 light:bg-canvas",
-              hot && hot !== k.id && "opacity-50",
-            )}
-            onMouseEnter={() => setHot(k.id)}
-            onMouseLeave={() => setHot(null)}
-          >
+    <SettingsSection
+      id="h-storage"
+      title="What takes the room"
+      sub={`${bytes(total)} on disk. Each box is a table, as big as its share; hover one for its details.`}
+      aside={
+        <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
+          {measuring ? "Measuring…" : "Measure again"}
+        </Button>
+      }
+    >
+      <StorageTreemap items={items} />
+      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-5 gap-y-1.5 p-0">
+        {byKind.map((k) => (
+          <li key={k.id} className="flex items-center gap-2 text-[13px]">
             <Swatch color={k.color} size={10} />
             <span className="min-w-0 flex-1 truncate">{k.name}</span>
-            <span className="font-medium tabular-nums">{bytes(parts[k.id])}</span>
-            <span className="w-9 text-right text-ink-muted tabular-nums">{share(parts[k.id], total)}</span>
+            <span className="text-ink-muted tabular-nums">{share(k.bytes, total)}</span>
           </li>
         ))}
       </ul>
+      <span className="text-xs text-ink-faint">Measured {hhmm(report.measured_at)}</span>
+    </SettingsSection>
+  );
+}
+
+/** A fact in the storage list: its name and a line under it, the figure on the right. */
+function Fact({ label, help, children }: { label: string; help?: ReactNode; children: ReactNode }) {
+  return (
+    <OptionRow label={label} help={help}>
+      <span className="text-right text-[15px] text-ink-muted tabular-nums">{children}</span>
+    </OptionRow>
+  );
+}
+
+/**
+ * Where it's heading: the databases' size from now to a year on at this week's rate, as a line (tables that keep a
+ * fixed window stop growing, so it's the most it could be).
+ */
+function Projection({ now, perDay }: { now: number; perDay: number }) {
+  const months = Array.from({ length: 13 }, (_, m) => now + perDay * 30.4 * m);
+  const max = months[12] || 1;
+  const W = 240;
+  const H = 56;
+  const pts = months.map((v, m) => [(m / 12) * W, H - (v / max) * (H - 6)] as const);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  return (
+    <div className="flex flex-col gap-1.5 px-4 pb-4">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-14 w-full" aria-hidden>
+        <path d={`${line} L${W},${H} L0,${H} Z`} fill={alpha(COLOR.teal, 0.16)} />
+        <path d={line} fill="none" stroke={COLOR.teal} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="flex justify-between text-[11px] text-ink-faint tabular-nums">
+        <span>Now · {bytes(now)}</span>
+        <span>In 6 months · {bytes(months[6])}</span>
+        <span>In a year · {bytes(months[12])}</span>
+      </div>
     </div>
+  );
+}
+
+/** Settings → Data, beside the picture: both databases' size, rows, growth and where it's heading, and the drive. */
+export function StorageFacts({ report }: { report: StorageReport }) {
+  const dbs = measured(report);
+  const total = dbs.reduce((s, d) => s + d.total_bytes, 0);
+  const growth = dbs.reduce((s, d) => s + d.growth_per_day, 0);
+  const rows = dbs.reduce((s, d) => s + d.rows, 0);
+  const empty = dbs.reduce((s, d) => s + d.free_bytes, 0);
+  const size = (id: "dashboard" | "collector") => {
+    const d = report.databases.find((x) => x.id === id);
+    return d?.available ? bytes(d.total_bytes) : "not available";
+  };
+  const used = report.disk.total - report.disk.free;
+  return (
+    <SettingsSection
+      id="h-storage-facts"
+      title="Storage"
+      sub="Everything stays on this server, in two SQLite databases."
+    >
+      <OptionList>
+        <Fact label="On disk" help={`Dashboard ${size("dashboard")} · collector ${size("collector")}`}>
+          {bytes(total)}
+        </Fact>
+        <Fact label="Rows stored">{compact(rows)}</Fact>
+        <Fact label="Empty pages" help="Left by deleted rows, and used again as rows are added.">
+          {bytes(empty)}
+        </Fact>
+        <div>
+          <Fact label="Growing by" help="A month, at this week's rate.">
+            {growth > 0 ? bytes(growth * 30) : "Not growing"}
+          </Fact>
+          {growth > 0 && <Projection now={total} perDay={growth} />}
+        </div>
+        <div>
+          <Fact label="Free on this drive" help={`Of ${bytes(report.disk.total)}`}>
+            {bytes(report.disk.free)}
+          </Fact>
+          <div className="px-4 pb-4">
+            <div className="flex h-2 gap-[2px] overflow-hidden rounded-full bg-track" title={`${bytes(used)} used`}>
+              <span
+                className="h-full"
+                style={{ width: `${(used / report.disk.total) * 100}%`, background: COLOR.bar }}
+              />
+            </div>
+          </div>
+        </div>
+      </OptionList>
+    </SettingsSection>
   );
 }

@@ -5,7 +5,7 @@ import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { addDays, partsOf, sameDay, siteTime } from "~/features/common/time/utils";
 
 /**
- * Whether it's known there's no home battery (a solar-only system): no size from the inverter or Manage → System, once
+ * Whether it's known there's no home battery (a solar-only system): no size from the inverter or Settings, once
  * the inverter's details have been read, or with no inverter connected. False until that's known, so the battery
  * isn't hidden while the page loads only to come back a moment later.
  */
