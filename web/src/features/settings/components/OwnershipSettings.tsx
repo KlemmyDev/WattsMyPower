@@ -39,7 +39,7 @@ const SYSTEM_KEYS: OwnershipKey[] = ["system_cost", "system_installed"];
 const BATTERY_KEYS: OwnershipKey[] = ["battery_installed", "battery_warranty_years", "battery_warranty_mwh"];
 
 /**
- * Manage → System → Cost and warranty: what the system cost and when it went in (for payback on Bills), and the
+ * Settings → Cost and warranty: what the system cost and when it went in (for payback on Bills), and the
  * battery's warranty (for Battery). What's set at the top, then the system's and the battery's, each saved on its own.
  */
 export function OwnershipSettings() {
@@ -48,7 +48,7 @@ export function OwnershipSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/system">System</BackLink>}
+        back={<BackLink to="/settings">Settings</BackLink>}
         id="h-sys-own"
         title="Cost and warranty"
         sub="Optional. With these, Bills shows when the system pays for itself, and Battery how much of its warranty is used."

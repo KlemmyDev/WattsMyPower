@@ -5,9 +5,24 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { measureAgain, storageQuery } from "~/features/storage/api";
 import { DatabaseCard } from "~/features/storage/components/DatabaseCard";
 import { StorageOverview } from "~/features/storage/components/StorageOverview";
+import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
-/** Manage → Data: everything stored, in both databases, and how much room each part takes. */
+/** Settings → Data: everything stored, in both databases, and how much room each part takes. */
 export function DatabaseSettings() {
+  return (
+    <>
+      <SubPageHeader
+        back={<BackLink to="/settings">Settings</BackLink>}
+        id="h-data-page"
+        title="Data"
+        sub="What's stored, and how much room it takes."
+      />
+      <Storage />
+    </>
+  );
+}
+
+function Storage() {
   const qc = useQueryClient();
   const report = useQuery(storageQuery);
   const measure = useMutation({

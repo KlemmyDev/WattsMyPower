@@ -112,8 +112,8 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
     return (
       <Muted>
         Add the battery's warranty in{" "}
-        <Link to="/system/cost" className="text-link">
-          Manage → System → Cost and warranty
+        <Link to="/settings/cost" className="text-link">
+          Settings → Cost and warranty
         </Link>{" "}
         to track how much of it is used.
       </Muted>
@@ -127,8 +127,7 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
     ]);
   if (w.energy_pct != null && w.mwh)
     bars.push(["Warranty energy", w.energy_pct, `${w.used_mwh} of ${w.mwh} MWh delivered`]);
-  if (!bars.length)
-    return <Muted>Add when the battery was installed in Manage → System to track its warranty years.</Muted>;
+  if (!bars.length) return <Muted>Add when the battery was installed in Settings to track its warranty years.</Muted>;
   return (
     <div className="flex flex-col gap-3">
       <Eyebrow>Warranty used</Eyebrow>

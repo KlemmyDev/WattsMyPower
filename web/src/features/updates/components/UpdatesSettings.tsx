@@ -63,12 +63,12 @@ function changesUrl(s: UpdateStatus) {
   return `https://github.com/${repo}/commits/${s.branch}`;
 }
 
-/** Manage → System → Updates. */
+/** Settings → Updates. */
 export function UpdatesSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/system">System</BackLink>}
+        back={<BackLink to="/settings">Settings</BackLink>}
         id="h-updates-page"
         title="Updates"
         sub="The version you're running, the release channel it follows, and installing newer ones."
@@ -79,7 +79,7 @@ export function UpdatesSettings() {
 }
 
 /**
- * Updates (Manage → System → Updates): the version running and the channel's on GitHub at the top, then whether it's
+ * Updates (Settings → Updates): the version running and the channel's on GitHub at the top, then whether it's
  * newer (or older, after moving to a channel behind this version) and checking now, the release channel followed, and
  * turning the checks every few hours off. With the updater set up on the machine it's installed on, Update now (or going back); else how to update
  * by hand.

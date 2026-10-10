@@ -60,7 +60,7 @@ function previewFlows(p: ReturnType<typeof useSnapshot>, s: SystemInfo): HouseFl
 }
 
 /**
- * Manage → System → Your house: how the Overview draws the house. Side by side from a wide screen: the house and its
+ * Settings → Your house: how the Overview draws the house. Side by side from a wide screen: the house and its
  * style on the left, kept in view; storeys, a garage, and where each inverter and battery is on the right.
  */
 export function HouseSettings() {
@@ -68,7 +68,7 @@ export function HouseSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/system">System</BackLink>}
+        back={<BackLink to="/settings">Settings</BackLink>}
         id="h-house"
         title="Your house"
         sub="How the Overview draws your home. Choose what's closest: it's only the picture, nothing's worked out from it."

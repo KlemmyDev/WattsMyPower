@@ -4,7 +4,7 @@ import { reducedMotion } from "~/features/common/display/utils";
 /**
  * A number that glides to each new value instead of jumping (ease-out over `ms`), for live figures
  * that change every minute. The first value shows at once; with motion turned down (on the device or
- * in Manage → Account), so does each.
+ * in Settings → Account), so does each.
  */
 export function useTween(target: number | null | undefined, ms = 650): number | null {
   const [shown, setShown] = useState(target ?? null);

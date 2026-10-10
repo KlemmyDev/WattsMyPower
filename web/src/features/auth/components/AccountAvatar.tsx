@@ -13,7 +13,7 @@ export function AccountAvatar({ className }: { className?: string }) {
   const label = name ? `Account, signed in as ${name}` : "Account";
   return (
     <Link
-      to="/account"
+      to="/settings/account"
       aria-label={label}
       title={label}
       className={cn(

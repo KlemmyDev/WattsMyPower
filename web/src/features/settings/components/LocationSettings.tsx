@@ -10,7 +10,7 @@ import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageH
 
 const coord = (v: number | null | undefined) => (v == null ? "—" : Number(v).toFixed(3));
 
-/** Manage → System → Location: where the system is, for the solar forecast, sunrise and sunset, and the grid's region. */
+/** Settings → Location: where the system is, for the solar forecast, sunrise and sunset, and the grid's region. */
 export function LocationSettings() {
   const s = useLive()?.system;
   const region = useQuery(gridQuery).data?.region_name;
@@ -18,7 +18,7 @@ export function LocationSettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/system">System</BackLink>}
+        back={<BackLink to="/settings">Settings</BackLink>}
         id="h-location-page"
         title="Location"
         sub="Where your system is. The solar forecast, sunrise and sunset, and the grid's region all follow it."

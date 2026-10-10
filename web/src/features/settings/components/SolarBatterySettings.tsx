@@ -15,7 +15,7 @@ import { SaveBar, SettingsSection } from "~/features/settings/components/Setting
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
- * Manage → System → Solar and battery: what the inverters report about the installation at the top, then the details
+ * Settings → Solar and battery: what the inverters report about the installation at the top, then the details
  * they can't.
  */
 export function SolarBatterySettings() {
@@ -26,7 +26,7 @@ export function SolarBatterySettings() {
   return (
     <>
       <SubPageHeader
-        back={<BackLink to="/system">System</BackLink>}
+        back={<BackLink to="/settings">Settings</BackLink>}
         id="h-solar-battery"
         title="Solar and battery"
         sub="What your inverters report about your system, and the details they can't."

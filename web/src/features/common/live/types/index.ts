@@ -54,7 +54,7 @@ export type SystemInfo = {
   battery_kwh: number | null;
   battery_reserve: number | null; // %
   battery_max_kw: number | null;
-  /** What the inverter itself reports (battery_kwh and battery_reserve fall back to Manage → System). */
+  /** What the inverter itself reports (battery_kwh and battery_reserve fall back to Settings). */
   inverter_battery_kwh: number | null;
   inverter_reserve: number | null; // %
   forecast: boolean;
