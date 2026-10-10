@@ -87,6 +87,8 @@ Two services, run together by Docker Compose:
 - **The collector** (`wattsmypower-collector`) is the only thing that talks to the inverters. Every poll it stores the raw register values it read, uninterpreted, in `data/collector.db`, and serves them over a token-protected feed ([collector/PROTOCOL.md](collector/PROTOCOL.md)). It rarely changes, so updates to the dashboard leave it recording without a break.
 - **The dashboard** (`wattsmypower`) follows that feed and does everything else: decoding the registers, merging a second inverter, readings and rollups (`data/wattsmypower.db`), costs, forecast, insights, savings, sign-in, and the web app. If the way a register is read ever turns out to be wrong, `python -m app reprocess` rebuilds the readings from the collector's raw history.
 
+Both run as an ordinary user, not root: whoever owns the `data` folder on the machine, or uid 10001 when that's root ([docker-entrypoint.sh](docker-entrypoint.sh) hands them the folder at each start, so an install from before just carries on). Their logs are kept to 30 MB each.
+
 ## Install
 
 Follow the steps for your computer, then [open the dashboard](#open-the-dashboard). On Linux and a Mac you run the install script; on Windows a PowerShell script sets up WSL and runs it there for you.
@@ -145,6 +147,12 @@ Windows 11 (22H2 or later). WattsMyPower runs in its own WSL (Windows Subsystem 
 
    It finishes by printing the dashboard's address, for example `http://192.168.1.50:8080`.
 
+It follows the beta [release channel](#everyday-use). To choose another, pass `-Channel` (`nightly`, `beta` or `stable`):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.ps1))) -Channel stable
+```
+
 To update, run the same command again. For everything in [Everyday use](#everyday-use), open the distribution with `wsl -d WattsMyPower`, then `cd ~/wattsmypower`. Its files are at `\\wsl$\WattsMyPower\root\wattsmypower` in File Explorer, for example to copy a backup.
 
 If creating the distribution fails because virtualization is off, turn it on in the PC's BIOS or UEFI settings (often called Intel VT-x, AMD-V or SVM). Windows 10 isn't supported: it doesn't have mirrored networking, which lets other devices reach the dashboard.
@@ -165,6 +173,12 @@ bash install.sh
 ```
 
 It asks for your time zone and the port for the dashboard (8080 unless you change it), saves your answers to `.env`, builds and starts the app, waits until it's responding, and prints its address, for example `http://192.168.1.50:8080`.
+
+It installs the beta [release channel](#everyday-use)'s version. To choose another (`nightly`, `beta` or `stable`), pass `--channel` after `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KlemmyDev/WattsMyPower/main/install.sh | bash -s -- --channel stable
+```
 
 ### Open the dashboard
 
@@ -192,38 +206,44 @@ Run these from the `wattsmypower` folder (in Terminal on a Mac; on Windows, in `
 | `docker compose logs -f --tail=50` | watch the logs (add `collector` or `wattsmypower` for one service) |
 | `docker compose exec wattsmypower python -m app reprocess [YYYY-MM-DD]` | rebuild readings from the collector's raw registers (from a date, or everything it holds), after a fix to how they're decoded |
 | `bash install.sh --no-dashboard-updates` | update, and stop updating from the dashboard (removes the cron job below) |
+| `bash install.sh --rollback` | go back to the version before the last update, with the databases as they were before it (see below) |
+| `bash install.sh --uninstall` | stop it and remove its containers, images and cron job, leaving your data and settings in the folder (see below) |
 | `bash install.sh --yes` | install or update without questions; settings can be passed in, e.g. `TZ=Australia/Perth bash install.sh --yes`. On a first install, `PV_KW=10` sets the array size and `INVERTER_HOST=192.168.1.20` connects the inverter, without the dashboard. |
 
 **Release channels.** An install follows one of three, chosen in **Manage → System → Updates** or with `--channel`:
 
 | Channel | What it gets |
 |---|---|
-| Nightly (the default) | every change as soon as it's merged to `main` |
-| Beta | pre-releases (tags like `v2026.10.10-beta`, `-alpha`, `-rc.2`) and every stable release, whichever is newer |
+| Nightly | every change as soon as it's merged to `main` |
+| Beta (the default) | pre-releases (tags like `v2026.10.10-beta`, then `-beta.2`) and every stable release, whichever is newer |
 | Stable | stable releases only (tags like `v2026.10.10`) |
+
+A new install follows Beta. An install from before Beta was the default, with no channel chosen, carries on following Nightly (`install.sh` saves that on its next update); `--channel beta` moves it. Until something is released on a channel, an install on it stays on the version it has.
 
 An update installs the channel's version, so moving to a channel behind the one you're on (Nightly to Stable) goes back to its older version: the dashboard offers **Go back** rather than **Update now**, and `install.sh` lists the changes it leaves out. The databases are backed up first, as on any update; tables and columns a newer version added are left as they are and used again when it's updated. The channel is kept in `data/update/channel`, where the dashboard and `install.sh` both read it.
 
-**Updating** pulls the latest version on the channel, backs up both databases to `data/backups/` without stopping the app (the newest 5 are kept), rebuilds, waits until the app responds, and removes the old image. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
+**Updating** pulls the latest version on the channel, backs up both databases to `data/backups/` without stopping the app, rebuilds, waits until the app responds, and removes the image from the update before last. If the dashboard isn't running (or keeps restarting), the backup is made with its image, or with `sqlite3`, or by stopping it and copying the files; if none of those works, the update stops before rebuilding (`--no-backup` carries on without one). Backups are named for the version they were taken from (`wattsmypower-20261010-091500-2026.10.9-beta.db`): the newest 5 of each database are kept, plus the newest from each of the last 5 versions and from each channel, so the last one from before you tried beta stays. They're on the same disk as the app, so copy one somewhere else now and then. Your data (`data/`) and settings (`.env`) are never overwritten. If a setting the app is using isn't in `.env` yet (because it came from an older version's default), it's written into `.env` with the value in use, so updates never change your setup. If you've edited any of the app's files, it stops rather than overwrite them.
 
-**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version on its channel (**Manage → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Settings says why and shows the command to run instead.
+**Updating from the dashboard.** The dashboard checks GitHub every few hours for a newer version on its channel (**Manage → System → Updates**, where the check can be turned off) and says so at the foot of the navigation. `install.sh` also adds a cron job that runs `updater.sh` every minute, so **Update now** there can do the update: the dashboard leaves a request in `data/update/`, and `updater.sh` runs `bash install.sh --yes` on this machine, as you would, writing its progress to `data/update/update.log`. The dashboard only asks: it can't run anything itself, and the container gets no access to Docker. It needs Docker usable without a password (your user in the `docker` group, or Docker Desktop) and no local changes to the app's files; otherwise Manage → System → Updates says why and shows the command to run instead.
 
 **Moving an existing install to a git checkout** (for example one copied over as a zip): run the install command above from another folder. It finds the running copy, offers to move its `data/` and `.env` across, and stops it. The old folder is left as it was, so it doubles as a backup.
 
-**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year.
+**Going back.** Each update that changes the version keeps the one it replaced (its images, tagged `:previous`, and in `data/update/previous` its commit and the backup made before it). `bash install.sh --rollback` goes back to it and puts that backup back, after backing up the databases as they are; updating again brings the newer version back.
+
+**Your data** lives in two databases in `data/`: the dashboard's (`wattsmypower.db`: readings, rollups, settings, rates and the account) and the collector's (`collector.db`: the inverters connected and their raw registers). With the default settings the dashboard's grows to about 20 MB over the first 90 days, then by about 18 MB a year. `install.sh` keeps `data/` and `.env` readable by you alone.
 
 ### Backups and restoring
 
-Every update backs up both databases to `data/backups/` first, named by when they were made (`wattsmypower-20261010-093000.db` and `collector-20261010-093000.db`). They live on the same machine, so for a copy that survives losing it, copy `data/` and `.env` somewhere else now and then (stop it first with `docker compose stop` for a consistent copy, then `docker compose start`).
+Every update backs up both databases to `data/backups/` first, named by when they were made and the version (and channel) that made them: `wattsmypower-20261010-093000-2026.10.9-beta.db` and `collector-20261010-093000-2026.10.9-beta.db`. If the dashboard can't make them (it isn't running, or keeps restarting), `install.sh` makes them on this machine instead, and if it can't make them at all it stops before updating (`--no-backup` goes ahead anyway). The newest 5 of each are kept, plus the newest from each of the last 5 versions and from each channel, so the last backup from before you tried a beta stays. They live on the same machine, so for a copy that survives losing it, copy `data/` and `.env` somewhere else now and then (stop it first with `docker compose stop` for a consistent copy, then `docker compose start`).
 
-To restore, from the `wattsmypower` folder, using the pair of backups from the same time:
+`bash install.sh --rollback` puts back the backup from before the last update (see **Going back**). To restore another by hand, from the `wattsmypower` folder, using the pair of backups from the same time:
 
 ```bash
 docker compose stop
 # Remove the databases' journals first: left beside a restored database, SQLite would replay them into it.
 rm -f data/wattsmypower.db-wal data/wattsmypower.db-shm data/collector.db-wal data/collector.db-shm
-cp data/backups/wattsmypower-20261010-093000.db data/wattsmypower.db
-cp data/backups/collector-20261010-093000.db data/collector.db
+cp data/backups/wattsmypower-20261010-093000-2026.10.9-beta.db data/wattsmypower.db
+cp data/backups/collector-20261010-093000-2026.10.9-beta.db data/collector.db
 docker compose start
 ```
 
@@ -231,15 +251,9 @@ docker compose start
 
 ### Removing it
 
-On Linux or a Mac, from the `wattsmypower` folder (copy `data/` and `.env` somewhere else first if you want to keep your history; this deletes them):
+`bash install.sh --uninstall` stops it, removes its containers and images, and removes the cron job. Your data, backups and `.env` stay in the folder: copy anything you want to keep, then delete the folder yourself (`cd .. && rm -rf wattsmypower`, with `sudo` if it says permission denied). Docker itself is left installed.
 
-```bash
-docker compose down --rmi local     # stop it, and remove its containers and the images it built
-crontab -l | grep -v 'WattsMyPower: updates from the dashboard' | crontab -   # stop updating from the dashboard
-cd .. && rm -rf wattsmypower        # its folder, with the databases and settings (sudo if it says permission denied)
-```
-
-Docker itself is left installed. On Windows, see [Windows](#windows).
+On Windows, also remove the scheduled task and firewall rule (`Unregister-ScheduledTask WattsMyPower` and `Remove-NetFirewallHyperVRule -Name WattsMyPower`, in PowerShell as administrator); `wsl --unregister WattsMyPower` then deletes the whole distribution, data included. See [Windows](#windows).
 
 > **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
@@ -304,14 +318,15 @@ Almost everything is set up in the dashboard (**Manage**, and **Bills → Rates 
 | `PORT` | `8080` | Port the dashboard is served on |
 | `COLLECTOR_TOKEN` | *(generated)* | Secret the dashboard uses to read the collector's feed. `install.sh` creates one in `.env`. |
 | `COLLECTOR_WRITES` | `true` | Whether the dashboard may change what the collector reads (connect, remove or scan for inverters). Set `false` on a dashboard following another server's collector, such as one you're developing on, so it can't disturb that system. |
-| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
+| `COLLECTOR_PORT` | `8081` | Port the collector's feed is published on, on this machine only (the dashboard reaches it inside Docker). |
+| `COLLECTOR_BIND` | `127.0.0.1` | Where that port is published. `0.0.0.0` publishes it to your network too, so a dashboard running elsewhere (for example while developing) can follow it. Needs the token. |
 | `COLLECTOR_RETENTION_DAYS` | `365` | Keep the collector's raw registers this many days (what `reprocess` can rebuild from). `0` = keep everything. |
 | `INVERTER_HOST`, `INVERTER_DRIVER`, `INVERTER_PORT`, `INVERTER_UNIT` | *(empty)*, `sungrow.sh_rs`, `502`, `1` | **Only read once:** inverters are connected in **Manage → Integrations** and stored in `data/collector.db`. The first time the collector starts with a database from before that, it moves the hybrid set here into it; after that these are ignored. |
 | `PV2_HOST`, `PV2_DRIVER`, `PV2_PORT`, `PV2_UNIT` | *(empty)*, `sungrow.sg_d`, `502`, `1` | The same, for a second, AC-coupled solar inverter. |
 | `PV2_BEHIND_METER` | `true` | Where a second system connects, unless it's set in **Manage → Integrations**. `true`: on the house side of the hybrid's meter (the usual setup), so its output is added to home use. `false`: outside the hybrid's meter, so its output is added to export. |
 | `POLL_INTERVAL` | `60` | Seconds between reads. 60 is also the minimum: the WiNet-S2 dislikes aggressive polling and only refreshes most registers every ~30–60s anyway. |
 | `RAW_RETENTION_DAYS` | `90` | Keep minute-by-minute readings for N days, then delete them. 5-minute averages are kept forever, so older periods still chart at 5-minute resolution. `0` = keep everything. |
-| `TZ` | `Australia/Brisbane` | Sets where "today" and the daily totals roll over |
+| `TZ` | `Australia/Brisbane` | Your time zone: where "today" and the daily totals roll over. `install.sh` asks for it; left out, the log says it's using Brisbane. |
 | `PV_KW`, `BATTERY_KWH` | `6.6`, `0` | **Only read once:** the solar array's size and the battery's capacity (`0` = read it from the inverter) are set in **Manage → System** and stored in `data/wattsmypower.db`. The first time the dashboard starts, it moves the values here into it (on a new install, `PV_KW=10 bash install.sh --yes` sets the array's size); after that they're ignored, and the log says so. |
 | `IMPORT_RATE` / `FEED_IN_RATE` / `SUPPLY_CHARGE` | `0.32` / `0.05` / `1.05` | Starting single-rate tariff in AUD, used until you save rates in **Bills → Rates & settings**. |
 | `LATITUDE` / `LONGITUDE` | Brisbane CBD | Starting forecast location. **Set your own in Manage → Integrations → Weather.** |
@@ -390,6 +405,8 @@ Portable batteries (Bluetti) and Teslas can be reached over the server's Bluetoo
 4. Restart the LXC: `pct reboot 101`.
 
 Then, in the LXC, run `bash install.sh` in the WattsMyPower folder: it finds the host's D-Bus at `/mnt/host-dbus` (`BLUETOOTH_DBUS` in `.env`) and connects it through. In a user namespace like this, the dashboard lets the kernel tell D-Bus who it is, rather than claim to be root.
+
+**With Bluetooth, the dashboard runs as root** in its container (the collector doesn't), as BlueZ answers root wherever it's set up. On an ordinary Linux server or Raspberry Pi you can run it as an ordinary user instead: set `BLUETOOTH_GID` in `.env` to the number of the host's `bluetooth` group (`getent group bluetooth | cut -d: -f3`), then `docker compose up -d`. If the dashboard then says Bluetooth can't be used, take it out again. Not in a Proxmox LXC. [docker-compose.bluetooth.yml](docker-compose.bluetooth.yml) has more.
 
 ### How plan comparison works
 
@@ -479,6 +496,8 @@ Backend (`uv sync --extra collector` gets Python 3.13 and everything both servic
 COLLECTOR_URL=http://<server IP>:8081 COLLECTOR_TOKEN=<token> DB_PATH=./data/local.db uv run uvicorn app.main:app --port 8080
 ```
 
+The server only publishes the collector to itself, so first set `COLLECTOR_BIND=0.0.0.0` in its `.env` and run `docker compose up -d` there.
+
 It builds its own database from the collector's raw history (whatever the collector holds), then follows it live. Its settings, rates and account are its own, so changes there never touch the server. `python -m app reprocess` with the same variables rebuilds it after changing how registers are decoded.
 
 **Without the server:** `MOCK=1 DB_PATH=./data/mock.db uv run uvicorn app.main:app --port 8080` generates 14 days of readings and keeps simulating, with no collector. Or run a simulated collector and follow it, to exercise the whole pipeline: `COLLECTOR_MOCK=1 COLLECTOR_TOKEN=dev COLLECTOR_DB_PATH=./data/collector.db uv run python -m collector`, then the API with `COLLECTOR_URL=http://127.0.0.1:8081 COLLECTOR_TOKEN=dev`. Keep mock data in its own files so it never mixes with real data.
@@ -507,7 +526,7 @@ scripts/release.sh stable v2026.10.10-beta  # promote a beta that's been tried
 scripts/release.sh stable                   # or the latest on main, straight to stable
 ```
 
-The version is the commit's own, from `pyproject.toml`, so bump it (and merge that) before a stable release of new changes: each stable tag is used once. It shows what's changed since the channel's last release and asks before pushing the tag. Installs on the channel find it at their next check. Releases are only made from commits on `main`. Deleting a tag on GitHub takes a release back: installs on its channel move to the one before at their next update.
+The version is the commit's own, from `pyproject.toml`, so bump it (and merge that) before a stable release of new changes: each stable tag is used once. It shows what's changed since the channel's last release and asks before pushing the tag. Installs on the channel find it at their next check. Releases are only made from commits on `main` whose CI (the GitHub Actions workflow named `CI`) has passed; if `gh` can't say, it asks, and `--skip-ci` releases anyway. The GitHub release's notes are the changes since the channel's last release, or `--notes-file <file>`'s; the first release on a channel, with no last release, gets a short note pointing at `CHANGELOG.md` unless `--notes-file` is given. Deleting a tag on GitHub takes a release back: installs on its channel move to the one before at their next update.
 
 ## Layout
 
@@ -548,6 +567,7 @@ app/
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)
+docker-entrypoint.sh    starts each container's service as an ordinary user, after handing it the data folder
 updater.sh              run every minute by cron: updates when the dashboard asks (Manage → System → Updates)
 install.ps1             the same on Windows: sets up WSL, then runs install.sh in it
 start.sh                start it, and Docker if needed
