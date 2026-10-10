@@ -7,7 +7,13 @@ import type { TeslaStatus } from "~/features/ev/types";
  * When the cars are next read, counting down: "Next check in 2:34", "Checking now…", or after a failed read "Trying
  * again in 0:45". Ticks on its own, so only it re-renders each second.
  */
-export function NextRead({ status, className }: { status: TeslaStatus; className?: string }) {
+export function NextRead({
+  status,
+  className,
+}: {
+  status: Pick<TeslaStatus, "next_read" | "reading" | "error">;
+  className?: string;
+}) {
   const now = useNow(1000);
   const next = status.next_read;
   if (next == null) return null;

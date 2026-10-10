@@ -3,7 +3,10 @@ import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import type { TeslaProvider } from "~/features/ev/types";
 
-const WAYS: Record<TeslaProvider, { icon: IconName; name: string; where: string; color: string; title: string }> = {
+/** How a car's reached: a Tesla's two ways, or BYD's cloud (the only way to a BYD). */
+export type Reached = TeslaProvider | "byd";
+
+const WAYS: Record<Reached, { icon: IconName; name: string; where: string; color: string; title: string }> = {
   bluetooth: {
     icon: "bluetooth",
     name: "Bluetooth",
@@ -18,10 +21,18 @@ const WAYS: Record<TeslaProvider, { icon: IconName; name: string; where: string;
     color: COLOR.lilac,
     title: "Read through Tessie, from anywhere",
   },
+  byd: {
+    icon: "cloud",
+    name: "BYD",
+    where: "Cloud",
+    color: COLOR.lilac,
+    title: "Read through BYD's cloud, as the BYD app reads it",
+  },
 };
 
-/** How the cars are reached, as a chip: the Bluetooth mark and "Bluetooth · Local", or "Tessie · Cloud". */
-export function ProviderChip({ provider, className }: { provider: TeslaProvider; className?: string }) {
+/** How the cars are reached, as a chip: the Bluetooth mark and "Bluetooth · Local", or "Tessie · Cloud" (a BYD's
+ * "BYD · Cloud"). */
+export function ProviderChip({ provider, className }: { provider: Reached; className?: string }) {
   const w = WAYS[provider];
   return (
     <span

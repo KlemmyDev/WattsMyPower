@@ -3,13 +3,16 @@ import { useLive } from "~/features/common/live/hooks/useLive";
 import {
   commandEv,
   configureEv,
+  connectByd,
   connectTessie,
+  disconnectByd,
   disconnectTesla,
+  refreshByd,
   pairBluetooth,
   refreshDetails,
   removeEv,
 } from "~/features/ev/api";
-import type { EvControl, EvDetails, EvTimingKey, TeslaStatus } from "~/features/ev/types";
+import type { BydStatus, EvControl, EvDetails, EvTimingKey, TeslaStatus } from "~/features/ev/types";
 
 const CONFIGURE = ["tesla", "configure"];
 const TIMING_KEYS: EvTimingKey[] = [
@@ -70,6 +73,17 @@ export function useEvChange() {
       },
     }),
     command: useMutation({ mutationFn: commandEv, onSuccess: done }),
+  };
+}
+
+/** Sign in to BYD, read its cars now, or disconnect: the answer is the new status, shown at once. */
+export function useBydChange() {
+  const qc = useQueryClient();
+  const done = (status: BydStatus) => qc.setQueryData(["byd"], status);
+  return {
+    connect: useMutation({ mutationFn: connectByd, onSuccess: done }),
+    refresh: useMutation({ mutationFn: refreshByd, onSuccess: done }),
+    disconnect: useMutation({ mutationFn: disconnectByd, onSuccess: done }),
   };
 }
 

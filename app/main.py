@@ -24,6 +24,7 @@ from app.features.auth.middleware import AuthMiddleware
 from app.features.auth.router import router as auth_router
 from app.features.battery.router import router as battery_router
 from app.features.bills.router import router as bills_router
+from app.features.byd.router import router as byd_router
 from app.features.car.router import router as car_router
 from app.features.forecast.router import router as forecast_router
 from app.features.grid.router import router as grid_router
@@ -65,6 +66,7 @@ ROUTERS = [
     car_router,
     battery_router,
     tesla_router,
+    byd_router,
     home_router,
     health_router,
     updates_router,
@@ -120,6 +122,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.outages.start()
             await services.hazards.start()  # the Bureau's and the Fire Department's warnings for the house  # the electricity network's outages around the house
             await services.tesla.start()  # reads and steers the Teslas, once they're connected (Tessie or Bluetooth)
+            await services.byd.start()  # reads the BYDs from BYD's cloud, once an account's connected
             # In the background: a network lookup for the forecast location's place name.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
         yield
@@ -129,6 +132,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.outages.stop()
             await services.grid.stop()
             await services.updates.stop()
+            await services.byd.stop()
             await services.tesla.stop()
             await services.battery.stop_loop()
             await services.home.stop()

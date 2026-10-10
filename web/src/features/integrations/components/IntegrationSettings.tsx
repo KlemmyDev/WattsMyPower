@@ -8,8 +8,8 @@ import { useLive } from "~/features/common/live/hooks/useLive";
 import { useLocationSet } from "~/features/common/settings/hooks";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { useForecast } from "~/features/common/weather/hooks";
-import { teslaQuery } from "~/features/ev/api";
-import { teslaSummary } from "~/features/ev/utils";
+import { bydQuery, teslaQuery } from "~/features/ev/api";
+import { bydSummary, teslaSummary } from "~/features/ev/utils";
 import { gridQuery } from "~/features/grid/api";
 import { homeQuery } from "~/features/home/api";
 import type { HomeIntegration, HomeOverview } from "~/features/home/types";
@@ -304,28 +304,35 @@ function useGridEntry(): Entry {
   };
 }
 
-/** Electric vehicles as one integration, opening to its brands (just Tesla for now): a card once a Tesla's connected,
- * else a tile to connect one. */
+/** Electric vehicles as one integration, opening to its brands (Tesla, BYD): a card once a car's connected (saying
+ * which brand needs a look, if one does), else a tile to connect one. */
 function useEvEntry(): Entry {
   const { data: status } = useQuery(teslaQuery);
+  const { data: bydStatus } = useQuery(bydQuery);
   const tesla = teslaSummary(status);
+  const byd = bydSummary(bydStatus);
+  const brands = [
+    { name: "Tesla", ...tesla, reach: tesla.reach as Reach[] },
+    { name: "BYD", reach: ["cloud"] as Reach[], ...byd },
+  ].filter((b) => b.connected);
+  const off = brands.find((b) => !b.on);
   return {
     id: "ev",
     group: "vehicles",
     name: "Electric vehicles",
-    connected: tesla.connected,
-    attention: tesla.connected && !tesla.on,
-    view: tesla.connected ? (
+    connected: brands.length > 0,
+    attention: !!off,
+    view: brands.length ? (
       <IntegrationLink
         card
         to="/integrations/ev"
         icon="car"
         name="Electric vehicles"
-        status={tesla.on ? "Connected" : `Tesla: ${tesla.status.toLowerCase()}`}
-        on={tesla.on}
-        attention={!tesla.on}
-        detail={<span className="line-clamp-2">{tesla.detail}</span>}
-        tags={tags(tesla.reach)}
+        status={off ? `${off.name}: ${off.status.toLowerCase()}` : "Connected"}
+        on={!off}
+        attention={!!off}
+        detail={<span className="line-clamp-2">{brands.map((b) => b.detail).join(", ")}</span>}
+        tags={tags([...new Set(brands.flatMap((b) => b.reach))], byd.connected)}
       />
     ) : (
       <IntegrationLink
@@ -333,7 +340,7 @@ function useEvEntry(): Entry {
         to="/integrations/ev"
         icon="car"
         name="Electric vehicles"
-        detail="Your Tesla, over Bluetooth or through Tessie: its level, its charging at home, and charging it from spare solar"
+        detail="Your Tesla, over Bluetooth or through Tessie, charged from spare solar; or your BYD's charge, through BYD's cloud"
         tags={tags(tesla.reach)}
       />
     ),

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
 import type {
+  BydStatus,
   EvCommand,
   EvControlChange,
   EvDetails,
@@ -71,6 +72,23 @@ export const historyQuery = (vin: string, days: number) =>
     staleTime: 60_000,
     refetchInterval: 120_000,
   });
+
+/** The BYD account and its cars. Refreshed every 30 seconds while shown (they're read every few minutes), every 3
+ * while a read's under way. */
+export const bydQuery = queryOptions({
+  queryKey: ["byd"],
+  queryFn: ({ signal }) => apiGet<BydStatus>("byd", undefined, { signal }),
+  staleTime: 15_000,
+  refetchInterval: (q) => (q.state.data?.reading ? 3_000 : 30_000),
+});
+
+/** Sign in to BYD, checked by reading the account's cars. */
+export const connectByd = (body: { username: string; password: string; region: string }) =>
+  apiSend<BydStatus>("PUT", "byd", body);
+
+export const refreshByd = () => apiSend<BydStatus>("POST", "byd/refresh");
+
+export const disconnectByd = () => apiSend<BydStatus>("DELETE", "byd");
 
 /** A car's level through [start, end), with when it was away and when it charged. */
 export const levelsQuery = (vin: string, start: number, end: number) =>
