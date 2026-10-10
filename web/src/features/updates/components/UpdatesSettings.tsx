@@ -6,15 +6,21 @@ import { plural } from "~/features/common/formatting/utils/number";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { saveSettingsError } from "~/features/common/settings/utils";
 import { nowS, sameDay } from "~/features/common/time/utils";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button, buttonClass } from "~/features/common/ui/components/Button";
-import type { IconName } from "~/features/common/ui/components/Icon";
+import { Icon, type IconName } from "~/features/common/ui/components/Icon";
+import { cn } from "~/features/common/ui/utils";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Spinner } from "~/features/common/ui/components/Progress";
-import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
-import { ChoiceTiles, OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
+import {
+  ChoiceTiles,
+  OptionList,
+  OptionRow,
+  SettingsSection,
+  SettingsSplit,
+} from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 import { checkForUpdates, installUpdate, setChannel, updatesQuery } from "~/features/updates/api";
 import { CHANNEL } from "~/features/updates/utils";
@@ -155,128 +161,99 @@ function UpdatesBody() {
               : "Not checked yet";
 
   return (
-    <>
-      {s && following && (
-        <SummaryCard icon="download" color={color} label="Your version">
-          <SummaryStat
-            label="This version"
-            value={s.current.version}
-            sub={s.current.commit ? short(s.current.commit) : undefined}
-          />
-          <SummaryStat label="Channel" value={channelName(following)} dot={color} sub="Following" />
-          <SummaryStat
-            label={`Latest on ${channelName(s.channel)}`}
-            value={s.latest ? s.latest.version : "—"}
-            sub={
-              s.available
-                ? s.latest?.changes
-                  ? `${s.latest.changes} ${plural(s.latest.changes, "change")} newer`
-                  : "Newer"
-                : older
-                  ? "Older than this"
-                  : s.latest
-                    ? "Up to date"
-                    : s.unreleased
-                      ? "Nothing released yet"
-                      : "Not checked yet"
-            }
-          />
-          <SummaryStat
-            label="Last checked"
-            value={s.checked_at ? when(s.checked_at) : "Not yet"}
-            sub={s.enabled ? "Every few hours" : "Checking is off"}
-          />
-        </SummaryCard>
-      )}
+    <SettingsSplit
+      visual={
+        <SettingsSection
+          id="h-update"
+          title={headline}
+          sub={[
+            s?.available ? "A newer version is on your channel." : "WattsMyPower is published on GitHub.",
+            s?.checked_at ? `Checked ${when(s.checked_at)}.` : s?.enabled === false ? "Checking is off." : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          aside={
+            <div className="flex flex-wrap items-center gap-2">
+              {s?.latest && (
+                <a href={changesUrl(s)} target="_blank" rel="noreferrer" className={buttonClass("muted-link", "sm")}>
+                  See what's changed
+                </a>
+              )}
+              <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending || underWay}>
+                {check.isPending ? "Checking…" : "Check now"}
+              </Button>
+            </div>
+          }
+        >
+          {s && <VersionTrack s={s} color={color} />}
+          {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
+          {s?.unreleased && !channel.isPending && (
+            <Notice tone="info">
+              Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly
+              has every change as it's merged.
+            </Notice>
+          )}
 
-      <SettingsSection
-        id="h-update"
-        title={headline}
-        sub={
-          s?.available
-            ? "A newer version is on your channel."
-            : "WattsMyPower is published on GitHub. Checking sends nothing about your home."
-        }
-        aside={
-          <div className="flex flex-wrap items-center gap-2">
-            {s?.latest && (
-              <a href={changesUrl(s)} target="_blank" rel="noreferrer" className={buttonClass("muted-link", "sm")}>
-                See what's changed
-              </a>
-            )}
-            <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending || underWay}>
-              {check.isPending ? "Checking…" : "Check now"}
-            </Button>
-          </div>
-        }
-      >
-        {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
-        {s?.unreleased && !channel.isPending && (
-          <Notice tone="info">
-            Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly has
-            every change as it's merged.
-          </Notice>
-        )}
+          {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
+          {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
+            <Progress s={s} restarting={status.isError || updated} />
+          )}
+          {!underWay && s?.install.state === "failed" && (
+            <Notice className="flex flex-col gap-2">
+              <span>The update didn't finish. {s.install.error}</span>
+              <Log lines={s.install.log} />
+            </Notice>
+          )}
+          {!underWay && s?.install.state === "expired" && (
+            <Notice tone="warn">
+              The update was asked for while the updater wasn't running, so it was dropped. Try again.
+            </Notice>
+          )}
 
-        {/* An update under way, or the dashboard restarting at its end (when it can't answer for a minute). */}
-        {(underWay || (status.isError && s && UNDER_WAY.has(s.install.state)) || updated) && s && (
-          <Progress s={s} restarting={status.isError || updated} />
-        )}
-        {!underWay && s?.install.state === "failed" && (
-          <Notice className="flex flex-col gap-2">
-            <span>The update didn't finish. {s.install.error}</span>
-            <Log lines={s.install.log} />
-          </Notice>
-        )}
-        {!underWay && s?.install.state === "expired" && (
-          <Notice tone="warn">
-            The update was asked for while the updater wasn't running, so it was dropped. Try again.
-          </Notice>
-        )}
-
-        {s?.move && !underWay && !updated && (
-          <>
-            {s.install.ready ? (
-              confirming ? (
-                <div className="flex animate-pop flex-col gap-3 rounded-2xl bg-canvas/60 p-5 text-sm light:bg-canvas">
-                  <span className="font-semibold">
-                    {older
-                      ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
-                      : `Update to ${newerWords(s)} now?`}
-                  </span>
-                  {older && (
-                    <span className="text-pretty text-ink-muted">
-                      It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in the
-                      database, for when it's updated again.
+          {s?.move && !underWay && !updated && (
+            <>
+              {s.install.ready ? (
+                confirming ? (
+                  <div className="flex animate-pop flex-col gap-3 rounded-2xl bg-canvas/60 p-5 text-sm light:bg-canvas">
+                    <span className="font-semibold">
+                      {older
+                        ? `Go back to v${s.latest!.version} on ${channelName(s.channel)}?`
+                        : `Update to ${newerWords(s)} now?`}
                     </span>
-                  )}
-                  <span className="text-pretty text-ink-muted">
-                    It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away
-                    for a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
-                      {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
-                      Cancel
+                    {older && (
+                      <span className="text-pretty text-ink-muted">
+                        It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in
+                        the database, for when it's updated again.
+                      </span>
+                    )}
+                    <span className="text-pretty text-ink-muted">
+                      It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away
+                      for a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
+                        {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
+                      {older ? `Go back to v${s.latest!.version}` : "Update now"}
                     </Button>
                   </div>
-                </div>
+                )
               ) : (
-                <div>
-                  <Button size="sm" variant={older ? "outline" : undefined} onClick={() => setConfirming(true)}>
-                    {older ? `Go back to v${s.latest!.version}` : "Update now"}
-                  </Button>
-                </div>
-              )
-            ) : (
-              <HowToUpdate s={s} />
-            )}
-          </>
-        )}
-      </SettingsSection>
-
+                <HowToUpdate s={s} />
+              )}
+            </>
+          )}
+        </SettingsSection>
+      }
+    >
       {s && following && (
         <SettingsSection
           id="h-channel"
@@ -285,8 +262,7 @@ function UpdatesBody() {
         >
           <ChoiceTiles
             label="Release channel"
-            min="11rem"
-            phone={1}
+            rows
             value={following}
             onChange={(c) => channel.mutate(c)}
             disabled={channel.isPending}
@@ -323,7 +299,7 @@ function UpdatesBody() {
           </OptionRow>
         </OptionList>
       </SettingsSection>
-    </>
+    </SettingsSplit>
   );
 }
 
@@ -405,5 +381,90 @@ function Command({ children }: { children: string }) {
     <code className="w-fit max-w-full rounded-lg bg-canvas px-3 py-1.5 font-mono text-[13px] break-all text-ink select-all">
       {children}
     </code>
+  );
+}
+
+/**
+ * This version and the channel's latest on a line, a dot for each change between them (the newest few, past 24), in
+ * the channel's colour: how far behind (or ahead, after moving to a channel behind it) this dashboard is.
+ */
+function VersionTrack({ s, color }: { s: UpdateStatus; color: string }) {
+  const latest = s.latest;
+  const older = s.move === "older";
+  const gap = latest ? ((older ? latest.behind : latest.changes) ?? 0) : 0;
+  const shown = Math.min(gap, 24);
+  const end = (label: string, version: string, commit: string | null, c: string, align: "start" | "end") => (
+    <div className={cn("flex min-w-0 flex-col", align === "end" ? "items-end text-right" : "items-start")}>
+      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-[20px] leading-7 font-light tracking-[-0.3px] tabular-nums" style={{ color: c }}>
+        {version}
+      </span>
+      {commit && (
+        <a
+          href={`https://github.com/${s.repo}/commit/${commit}`}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-[11px] text-ink-faint no-underline hover:text-link"
+        >
+          {short(commit)}
+        </a>
+      )}
+    </div>
+  );
+  const here = end("This version", s.current.version, s.current.commit, "var(--color-ink)", older ? "end" : "start");
+  if (!latest || (!s.move && !gap))
+    return (
+      <div className="flex items-center gap-4 rounded-2xl bg-canvas/60 p-4 light:bg-canvas">
+        <span
+          className="flex size-10 flex-none items-center justify-center rounded-full"
+          style={{ background: alpha(color, 0.18), color }}
+        >
+          <Icon name={latest ? "check" : "clock"} size={18} />
+        </span>
+        {here}
+      </div>
+    );
+  const there = end(
+    `Latest on ${channelName(s.channel)}`,
+    latest.version,
+    latest.commit,
+    color,
+    older ? "start" : "end",
+  );
+  const dots = Array.from({ length: shown }, (_, i) => i);
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl bg-canvas/60 p-4 light:bg-canvas">
+      <div className="flex items-start justify-between gap-4">
+        {older ? there : here}
+        {older ? here : there}
+      </div>
+      <div className="relative flex h-4 items-center">
+        <div className="absolute inset-x-0 h-0.5 rounded-full" style={{ background: alpha(color, 0.3) }} />
+        <span
+          className="relative size-3.5 flex-none rounded-full ring-2 ring-surface"
+          style={{ background: older ? color : COLOR.ink }}
+        />
+        <div className="relative flex flex-1 items-center justify-evenly px-1">
+          {dots.map((i) => (
+            <span
+              key={i}
+              className="size-1.5 animate-pop rounded-full"
+              style={{ background: older ? COLOR.inkMuted : color, animationDelay: `${i * 25}ms` }}
+            />
+          ))}
+        </div>
+        <span
+          className="relative size-3.5 flex-none rounded-full ring-2 ring-surface"
+          style={{ background: older ? COLOR.ink : color }}
+        />
+      </div>
+      <span className="text-center text-[13px] text-ink-muted">
+        {older
+          ? `${gap} ${plural(gap, "change")} here aren't in ${channelName(s.channel)}'s version`
+          : gap
+            ? `${gap} ${plural(gap, "change")} since this version${gap > shown ? ` (the newest ${shown} shown)` : ""}`
+            : "A newer version"}
+      </span>
+    </div>
   );
 }
