@@ -301,6 +301,7 @@ export function SaveBanner({
   onDiscard,
   saveLabel = "Save",
   what = "Unsaved changes",
+  inline,
 }: {
   dirty: boolean;
   pending: boolean;
@@ -309,13 +310,18 @@ export function SaveBanner({
   onDiscard: () => void;
   saveLabel?: string;
   what?: ReactNode;
+  /** In its place under the options, rather than held at the bottom of the screen while they scroll. */
+  inline?: boolean;
 }) {
   if (!dirty && !error) return null;
   return (
     <div
       role="region"
       aria-label="Unsaved changes"
-      className="sticky bottom-4 z-10 flex animate-pop flex-wrap items-center gap-3 rounded-2xl border border-line-subtle bg-popover px-4 py-3 shadow-[0_12px_32px_var(--color-shadow-pop)]"
+      className={cn(
+        "flex animate-pop flex-wrap items-center gap-3 rounded-2xl border border-line-subtle bg-popover px-4 py-3",
+        !inline && "sticky bottom-4 z-10 shadow-[0_12px_32px_var(--color-shadow-pop)]",
+      )}
     >
       <span className={cn("min-w-0 flex-1 text-[13px]", error ? "text-bad" : "text-ink-muted")} role="status">
         {error || what}

@@ -113,6 +113,7 @@ export function BillAdjustments({ system: s }: { system: SystemInfo }) {
           setError("");
         }}
         onSave={submit}
+        inline
       />
     </SettingsSection>
   );

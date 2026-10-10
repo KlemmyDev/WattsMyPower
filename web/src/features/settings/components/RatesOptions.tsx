@@ -70,7 +70,8 @@ export function RatesOptions({
       {draft.source && !state.imported && <SourceLine source={draft.source} />}
       <ChoiceTiles
         label="Rate type"
-        rows
+        min="13rem"
+        phone={1}
         color={COLOR.good}
         options={types.map((r) => ({ value: r.value, title: r.label, sub: RATE_HELP[r.value], icon: r.icon }))}
         value={draft.type}
@@ -108,6 +109,7 @@ export function RatesOptions({
         pending={save.isPending}
         error={state.status?.bad ? state.status.text : undefined}
         saveLabel="Save rates"
+        inline
         onDiscard={onDiscard}
         onSave={() => save.save(draft, () => toast("Rates saved. Savings on every page now use them."))}
       />

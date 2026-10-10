@@ -5,6 +5,7 @@ import { saveSettingsError } from "~/features/common/settings/utils";
 import { Field, HelpText, Select } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { COLOR } from "~/features/common/theme/utils/colors";
+import { BillPeriodVisual } from "~/features/settings/components/BillPeriodVisual";
 import { ChoiceTiles, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { dayMonth } from "~/features/common/formatting/utils/date";
 import { addDays, nowS, partsOf, siteTime } from "~/features/common/time/utils";
@@ -24,16 +25,19 @@ export function BillingSettings() {
       title="Billing period"
       sub="Match these to your bill so estimates line up with what your retailer charges. Saved as you choose."
     >
-      <BillingFields rows />
+      <BillPeriodVisual />
+      <div className="flex flex-col gap-5 border-t border-line-subtle pt-5">
+        <BillingFields rows summary={false} />
+      </div>
     </SettingsSection>
   );
 }
 
 /**
  * The billing period's fields, saved as they change, without a card (the set-up guide shows them too). `rows`: how
- * often as rows, for a narrow column.
+ * often as rows, for a narrow column; `summary`: the line saying when this period runs (not where a picture says it).
  */
-export function BillingFields({ rows }: { rows?: boolean }) {
+export function BillingFields({ rows, summary = true }: { rows?: boolean; summary?: boolean }) {
   const s = useSystem();
   const save = useSaveSettings();
   const pending = save.isPending ? save.variables : undefined;
@@ -99,10 +103,12 @@ export function BillingFields({ rows }: { rows?: boolean }) {
           </div>
         )}
       </div>
-      <div className="rounded-2xl bg-canvas/60 px-5 py-4 text-sm leading-[22px] text-pretty text-ink-muted light:bg-canvas">
-        Your current billing period is {dayMonth(start)} to {dayMonth(last)} ({length} days). The next one starts on{" "}
-        {dayMonth(next)}. Bill estimates across the app use these dates.
-      </div>
+      {summary && (
+        <div className="rounded-2xl bg-canvas/60 px-5 py-4 text-sm leading-[22px] text-pretty text-ink-muted light:bg-canvas">
+          Your current billing period is {dayMonth(start)} to {dayMonth(last)} ({length} days). The next one starts on{" "}
+          {dayMonth(next)}. Bill estimates across the app use these dates.
+        </div>
+      )}
       {save.isError && <HelpText tone="bad">{saveSettingsError(save.error)}</HelpText>}
     </>
   );
