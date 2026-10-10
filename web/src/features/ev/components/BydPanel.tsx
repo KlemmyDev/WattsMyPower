@@ -1,9 +1,12 @@
-import { hhmm } from "~/features/common/formatting/utils/date";
+import { duration, hhmm } from "~/features/common/formatting/utils/date";
+import { DASH } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { Card } from "~/features/common/ui/components/Card";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useTween } from "~/features/common/ui/hooks/useTween";
+import { cn } from "~/features/common/ui/utils";
+import { CarSteps } from "~/features/ev/components/CarSteps";
 import type { BydCar } from "~/features/ev/types";
-import { STATUS_LABEL, statusColor } from "~/features/ev/utils";
+import { carMood, STATUS_LABEL } from "~/features/ev/utils";
 
 /** How fresh what's shown is: when the car last sent its state to BYD, and whether it's reachable now. */
 function freshness(v: BydCar): string {
@@ -15,50 +18,60 @@ function freshness(v: BydCar): string {
 }
 
 /**
- * A BYD at a glance, as BYD's cloud last had it: its charge, big, over a bar; its range and odometer; and what it's
- * doing in a sentence. Only read: the dashboard can't charge a BYD from spare solar (BYD's cloud can't stop a charge
- * or set its current), so there's nothing to set here.
+ * A BYD at the top of the page, as BYD's cloud last had it, on the same card as the other cars: where it is between
+ * asleep (offline), awake and charging, its charge, range and odometer, then its charge as a bar and what it's doing
+ * in a sentence. Only read: the dashboard can't charge a BYD from spare solar (BYD's cloud can't stop a charge or set
+ * its current), so there's nothing to set here.
  */
 export function BydPanel({ v }: { v: BydCar }) {
   const s = v.state;
   const soc = useTween(s?.soc ?? undefined) ?? s?.soc ?? null;
-  const tone = statusColor(v.status, "off");
+  // Offline to BYD's cloud is as near as it says to asleep.
+  const mood = carMood({ status: v.status, asleep: s ? !s.online : false, charging: s?.charging });
+  const charging = mood.step === "charging";
   return (
-    <Card aria-labelledby={`h-byd-${v.vin}`} className="gap-6 overflow-hidden">
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 id={`h-byd-${v.vin}`} className="text-sm font-medium" style={{ color: tone }}>
-            {v.name ?? v.model ?? "Your BYD"} · {STATUS_LABEL[v.status]}
-          </h2>
-          <div className="flex items-baseline gap-1 leading-none">
-            <span className="text-[88px] font-light tracking-[-4px] tabular-nums max-sm:text-[64px] max-sm:tracking-[-3px]">
-              {soc == null ? "—" : Math.round(soc)}
-            </span>
-            <span className="text-3xl font-light text-ink-muted">%</span>
+    <SummaryCard
+      icon={mood.icon}
+      color={mood.color}
+      wash={mood.wash}
+      live={charging}
+      label={`${v.name ?? v.model ?? "Your BYD"}: ${STATUS_LABEL[v.status]}`}
+      footer={
+        <div className="flex flex-col gap-4 border-t border-line-subtle pt-5">
+          <CarSteps step={mood.step} color={mood.color} />
+          <div className="relative h-3 overflow-hidden rounded-full bg-track">
+            <div
+              className={cn(
+                "absolute inset-y-0 left-0 overflow-hidden rounded-full transition-[width,opacity] duration-700 ease-out",
+                mood.step === "asleep" && "opacity-45",
+              )}
+              style={{ width: `${Math.min(100, soc ?? 0)}%`, background: charging ? mood.color : COLOR.battery }}
+            >
+              {charging && <span aria-hidden className="charge-flow absolute inset-0" />}
+            </div>
           </div>
-          <span className="text-sm text-ink-muted tabular-nums">
-            {[
-              s?.range_km != null && `${s.range_km} km${v.hybrid ? " on the battery" : ""}`,
-              s?.odometer_km != null && `${s.odometer_km.toLocaleString()} km on the odometer`,
-            ]
-              .filter(Boolean)
-              .join(" · ") || " "}
-          </span>
-          <span className="text-xs text-ink-faint tabular-nums">{freshness(v)}</span>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-pretty text-ink">{v.doing}</span>
+            <span className="text-[13px] text-pretty text-ink-muted">
+              Read through BYD's cloud every 10 minutes (every 5 while it charges). The dashboard only reads it.
+            </span>
+            <span className="text-xs text-ink-faint tabular-nums">{freshness(v)}</span>
+          </div>
         </div>
-        <div className="flex max-w-[420px] min-w-0 flex-col items-start gap-2 max-sm:max-w-none">
-          <span className="text-sm text-pretty">{v.doing}</span>
-          <span className="-mt-1 text-[13px] text-pretty text-ink-muted">
-            Read through BYD's cloud every 10 minutes (every 5 while it charges). The dashboard only reads it.
-          </span>
-        </div>
-      </div>
-      <div className="relative h-3 overflow-hidden rounded-full bg-track">
-        <div
-          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
-          style={{ width: `${Math.min(100, soc ?? 0)}%`, background: s?.charging ? tone : COLOR.battery }}
-        />
-      </div>
-    </Card>
+      }
+    >
+      <SummaryStat
+        label={v.name ?? v.model ?? "Charge"}
+        value={soc == null ? DASH : `${Math.round(soc)}%`}
+        sub={s?.range_km != null ? `${s.range_km} km${v.hybrid ? " on the battery" : ""}` : undefined}
+      />
+      <SummaryStat
+        label="Charging"
+        value={charging ? "On" : "Off"}
+        color={charging ? mood.color : undefined}
+        sub={charging && s?.minutes_to_full ? `Full in ${duration(s.minutes_to_full * 60)}` : undefined}
+      />
+      {s?.odometer_km != null && <SummaryStat label="Odometer" value={`${s.odometer_km.toLocaleString()} km`} />}
+    </SummaryCard>
   );
 }

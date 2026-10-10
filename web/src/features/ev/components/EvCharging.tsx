@@ -127,77 +127,132 @@ function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
 }
 
 /**
- * The car's share of the sun: how much is spare for it now, on a scale up to the most it can draw, with the mark it
- * has to reach to start (and, striped, how far short it may run once it's going), and what it's drawing.
+ * The car's share of the sun, a chunk for each amp: a first, longer block up to the lowest current it charges at (what
+ * has to be spare before it starts at all, striped where it may run short through a cloud), then one chunk for each
+ * amp above that, up to the most it can draw. The spare sun fills them from the left, so how near it is to the next
+ * amp shows as the chunk filling; a small mark over the chunks, and a line under those it's using, say the current
+ * it's charging at.
  */
-function CarMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
+function AmpMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   const s = v.state;
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
   if (!perAmp || v.min_amps == null || v.max_amps == null || v.min_w == null)
     return <Muted>Link this Tesla to one of your cars (Integrations → Tesla) to see this.</Muted>;
-  const top = v.max_amps * perAmp;
-  const at = (w: number) => `${Math.max(0, Math.min(100, (w / top) * 100))}%`;
+  const lo = v.min_amps;
+  const n = Math.max(0, v.max_amps - lo);
+  const start = v.min_w;
   const spare = v.spare_w != null ? Math.max(0, v.spare_w) : null;
   const draw = s?.charging ? (s.power_kw ?? 0) * 1000 : null;
-  const floor = Math.max(0, v.min_w - shortBy);
+  const amps = s?.charging && s.amps != null ? Math.max(lo, Math.min(v.max_amps, s.amps)) : null;
+  // How full each is, from the spare sun: the start block to the lowest current, then each amp's worth past it.
+  const filled = (from: number, to: number) =>
+    spare == null ? 0 : Math.max(0, Math.min(1, (spare - from) / (to - from)));
+  const cells = [
+    { amps: lo, fill: filled(0, start) },
+    ...Array.from({ length: n }, (_, k) => ({
+      amps: lo + k + 1,
+      fill: filled(start + k * perAmp, start + (k + 1) * perAmp),
+    })),
+  ];
+  const columns = `minmax(0, ${Math.max(3, Math.round(n / 3))}fr) repeat(${n}, minmax(0, 1fr))`;
+  const floor = Math.max(0, start - shortBy);
   const caption =
     draw != null
-      ? `Charging at ${kW(draw)}${s?.amps != null ? ` · ${s.amps} A` : ""}`
+      ? `Charging at ${kW(draw)}`
       : spare == null
         ? "Working out how much is spare…"
         : v.solar_amps
           ? `Enough to charge at ${v.solar_amps} A (${kW(v.solar_amps * perAmp)})`
           : !s?.charging && v.solar_from
             ? `Spare sun expected from ${hhmm(v.solar_from)}`
-            : `Needs ${kW(v.min_w - spare)} more to start`;
+            : `Needs ${kW(start - spare)} more to start`;
+  const label = (a: number, i: number) =>
+    i === 0
+      ? `Starts at ${a} A`
+      : i === cells.length - 1
+        ? `${a} A · ${kW(a * perAmp)}`
+        : a % 5 === 0 && cells.length - 1 - i > 2 // clear of the last one's longer label
+          ? String(a)
+          : "";
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px]">
         <span className="flex items-center gap-1.5">
-          <Dot color={draw != null ? CAR : COLOR.solar} />
-          <span className="text-ink-muted">{draw != null ? "Charging at" : "Spare for the car"}</span>
-          <span className="font-medium tabular-nums">{draw != null ? kW(draw) : spare != null ? kW(spare) : "—"}</span>
+          <Dot color={COLOR.solar} />
+          <span className="text-ink-muted">Spare for the car</span>
+          <span className="font-medium tabular-nums">{spare != null ? kW(spare) : "—"}</span>
         </span>
         <span className="text-ink-muted tabular-nums">{caption}</span>
       </div>
-      <div className="relative h-3 rounded-full bg-track">
-        {shortBy > 0 && (
-          <span
-            className="absolute inset-y-0 transition-[left,width] duration-300"
-            style={{
-              left: at(floor),
-              width: `calc(${at(v.min_w)} - ${at(floor)})`,
-              background: `repeating-linear-gradient(135deg, ${alpha(COLOR.solar, 0.5)} 0 3px, transparent 3px 6px)`,
-            }}
-          />
-        )}
-        {spare != null && (
-          <span
-            className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out"
-            style={{ width: at(spare), background: COLOR.solar }}
-          />
-        )}
-        <span
-          className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-full bg-ink"
-          style={{ left: at(v.min_w) }}
-        />
-        {draw != null && (
-          <span
-            className="absolute -inset-y-1 w-1.5 -translate-x-1/2 rounded-full ring-2 ring-surface transition-[left] duration-700 ease-out"
-            style={{ left: at(draw), background: CAR }}
-          />
-        )}
-      </div>
-      <div className="relative h-4 text-[11px] text-ink-faint tabular-nums">
-        <span
-          className="absolute -translate-x-1/2 whitespace-nowrap"
-          style={{ left: `clamp(3rem, ${at(v.min_w)}, calc(100% - 4.5rem))` }}
+      <div
+        role="img"
+        aria-label={`Spare solar ${spare != null ? kW(spare) : "not known yet"}: ${
+          v.solar_amps ? `enough for ${v.solar_amps} A` : `${kW(start)} needed to start at ${lo} A`
+        }, up to ${v.max_amps} A${amps != null ? `. Charging at ${amps} A` : ""}.`}
+        className="flex flex-col gap-1"
+      >
+        {/* The current it's charging at: a small mark over its chunk. */}
+        <div className="grid h-4 gap-[3px]" style={{ gridTemplateColumns: columns }} aria-hidden>
+          {cells.map((c, i) => (
+            <span key={c.amps} className="relative">
+              {c.amps === amps && (
+                <span
+                  className={cn(
+                    "absolute right-0 bottom-0 flex flex-col items-center text-[11px] leading-none font-medium whitespace-nowrap tabular-nums",
+                    i > 0 && "translate-x-1/2",
+                  )}
+                  style={{ color: CAR }}
+                >
+                  {amps} A
+                  <span className="mt-0.5 size-0 border-x-[4px] border-t-[4px] border-x-transparent border-t-current" />
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+        <div className="grid gap-[3px]" style={{ gridTemplateColumns: columns }} aria-hidden>
+          {cells.map((c, i) => (
+            <span
+              key={c.amps}
+              className="relative h-3.5 overflow-hidden rounded-[4px] bg-track transition-shadow duration-500"
+              style={amps != null && c.amps <= amps ? { boxShadow: `inset 0 -2px 0 ${CAR}` } : undefined}
+            >
+              {i === 0 && shortBy > 0 && (
+                <span
+                  className="absolute inset-y-0 right-0 transition-[left] duration-300"
+                  style={{
+                    left: `${(floor / start) * 100}%`,
+                    background: `repeating-linear-gradient(135deg, ${alpha(COLOR.solar, 0.5)} 0 3px, transparent 3px 6px)`,
+                  }}
+                />
+              )}
+              <span
+                className="absolute inset-y-0 left-0 transition-[width] duration-700 ease-out"
+                style={{ width: `${c.fill * 100}%`, background: alpha(COLOR.solar, c.fill >= 1 ? 1 : 0.7) }}
+              />
+            </span>
+          ))}
+        </div>
+        <div
+          className="grid h-4 gap-[3px] text-[11px] text-ink-faint tabular-nums"
+          style={{ gridTemplateColumns: columns }}
         >
-          Starts at {kW(v.min_w)} · {v.min_amps} A
-        </span>
-        <span className="absolute right-0">
-          {v.max_amps} A · {kW(top)}
-        </span>
+          {cells.map((c, i) => (
+            <span
+              key={c.amps}
+              className={cn("relative whitespace-nowrap", i === 0 ? "text-left" : "text-right")}
+              aria-hidden
+            >
+              {i === 0 ? (
+                label(c.amps, i)
+              ) : label(c.amps, i) ? (
+                <span className={cn("absolute right-0", i < cells.length - 1 && "translate-x-1/2")}>
+                  {label(c.amps, i)}
+                </span>
+              ) : null}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -500,7 +555,7 @@ export function EvCharging({
             }
           >
             <SunShare carW={carW} first={c.first} />
-            {fixed ? <FixedMeter v={v} shortBy={shortBy.value} /> : <CarMeter v={v} shortBy={shortBy.value} />}
+            {fixed ? <FixedMeter v={v} shortBy={shortBy.value} /> : <AmpMeter v={v} shortBy={shortBy.value} />}
           </Row>
           {fixed && <ChargePower v={fixed} onSave={(w) => set({ vin: v.vin, charge_w: w })} />}
           <Row

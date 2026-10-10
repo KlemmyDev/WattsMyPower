@@ -376,6 +376,17 @@
   .live-dot[data-state="error"] {
     --dot: var(--color-danger);
   }
+  /* A charging car's bar: a light sweeping along the fill, the way the power's going in. */
+  .charge-flow {
+    background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+    background-size: 35% 100%;
+    background-repeat: no-repeat;
+    animation: wmpChargeFlow 2.4s ease-in-out infinite;
+  }
+  /* A charging car's icon: a ring breathing out around its tile. */
+  .charge-ring {
+    animation: wmpChargeRing 2.4s ease-out infinite;
+  }
   /* Reconnecting to the server: amber, fading in and out until it's back. */
   .live-dot[data-state="reconnecting"] {
     --dot: var(--color-solar);
@@ -983,6 +994,24 @@
   }
 }
 
+@keyframes wmpChargeFlow {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+@keyframes wmpChargeRing {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
 @keyframes wmpPulse {
   0%,
   100% {

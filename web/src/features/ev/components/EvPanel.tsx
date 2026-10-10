@@ -1,21 +1,18 @@
 import { errorMessage } from "~/features/common/api/utils";
-import { kW } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
+import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summary";
 import { useTween } from "~/features/common/ui/hooks/useTween";
+import { CarSteps } from "~/features/ev/components/CarSteps";
 import { EvChargeBar } from "~/features/ev/components/EvChargeBar";
 import { useEvChange, useRefreshDetails } from "~/features/ev/hooks";
-import { hhmm } from "~/features/common/formatting/utils/date";
+import { duration, hhmm } from "~/features/common/formatting/utils/date";
 import type { EvBrand, EvVehicle } from "~/features/ev/types";
 import type { Reached } from "~/features/ev/components/ProviderChip";
-import { STATUS_LABEL, statusColor } from "~/features/ev/utils";
+import { carMood, STATUS_LABEL } from "~/features/ev/utils";
 
-/**
- * An EV at a glance: its charge, big, with the bar up to its limit; what it's doing in a sentence; and while it's
- * following the sun, how much is spare against what it needs to charge at all.
- */
 /** While it waits for spare solar: how closely it's followed, so it's clear why it's (not) being kept awake. */
 function readiness(v: EvVehicle, provider: Reached | null): string | null {
   if (v.night && v.status !== "charging")
@@ -93,6 +90,12 @@ function WakeButton({ v }: { v: EvVehicle }) {
   );
 }
 
+/**
+ * An EV at the top of its page, as the other pages' summaries are: its icon and colour say where it is between asleep,
+ * awake and charging (the card brightest while it charges, its icon breathing), then its charge, what it's charging
+ * at, what this charge has added, its limit, and while it follows the sun what's spare for it. Under them the three
+ * steps with the one it's at lit, the charge bar with its limit handle, and what it's doing in a sentence.
+ */
 export function EvPanel({
   v,
   provider = null,
@@ -105,54 +108,76 @@ export function EvPanel({
   const { command } = useEvChange(brand);
   const s = v.state;
   const soc = useTween(s?.soc ?? undefined) ?? s?.soc ?? null;
-  const tone = statusColor(v.status, v.control.mode);
+  const mood = carMood({ status: v.status, mode: v.control.mode, asleep: s?.asleep, charging: s?.charging });
+  const charging = mood.step === "charging";
+  const power = charging ? (s?.power_kw ?? 0) * 1000 : null;
+  const ready = readiness(v, provider);
   return (
-    <Card aria-labelledby={`h-tp-${v.vin}`} className="gap-6 overflow-hidden">
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 id={`h-tp-${v.vin}`} className="text-sm font-medium" style={{ color: tone }}>
-            {v.name ?? "Your EV"} · {STATUS_LABEL[v.status]}
-          </h2>
-          <div className="flex items-baseline gap-1 leading-none">
-            <span className="text-[88px] font-light tracking-[-4px] tabular-nums max-sm:text-[64px] max-sm:tracking-[-3px]">
-              {soc == null ? "—" : Math.round(soc)}
-            </span>
-            <span className="text-3xl font-light text-ink-muted">%</span>
+    <SummaryCard
+      icon={mood.icon}
+      color={mood.color}
+      wash={mood.wash}
+      live={charging}
+      label={`${v.name ?? "Your EV"}: ${STATUS_LABEL[v.status]}`}
+      footer={
+        <div className="flex flex-col gap-4 border-t border-line-subtle pt-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <CarSteps step={mood.step} color={mood.color} detail={power != null ? kW(power) : null} />
+            <div className="flex flex-wrap items-start gap-3">
+              {s?.asleep && s.in_range !== false && <WakeButton v={v} />}
+              {v.hold && v.control.mode !== "off" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={command.isPending}
+                  onClick={() => command.mutate({ vin: v.vin, action: "resume" })}
+                >
+                  Let the dashboard take over
+                </Button>
+              )}
+            </div>
           </div>
-          <span className="text-sm text-ink-muted tabular-nums">
-            {[s?.range_km != null && `${s.range_km} km`, s?.limit != null && `limit ${Math.round(s.limit)}%`]
-              .filter(Boolean)
-              .join(" · ") || " "}
-          </span>
-          <span className="text-xs text-ink-faint tabular-nums">{freshness(v, provider)}</span>
-        </div>
-        <div className="flex max-w-[420px] min-w-0 flex-col items-start gap-2 max-sm:max-w-none">
-          {s?.charging && (
-            <span className="text-[28px] leading-8 font-light tracking-[-0.5px] tabular-nums">
-              {kW((s.power_kw ?? 0) * 1000)}
-              <span className="ml-2 text-sm text-ink-muted">{s.amps != null ? `${s.amps} A` : ""}</span>
-            </span>
-          )}
-          <span className="text-sm text-pretty">{v.doing}</span>
-          {readiness(v, provider) && (
-            <span className="-mt-1 text-[13px] text-pretty text-ink-muted">{readiness(v, provider)}</span>
-          )}
-          {s?.asleep && s.in_range !== false && <WakeButton v={v} />}
-          {v.hold && v.control.mode !== "off" && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={command.isPending}
-              onClick={() => command.mutate({ vin: v.vin, action: "resume" })}
-            >
-              Let the dashboard take over
-            </Button>
-          )}
+          <EvChargeBar
+            v={v}
+            soc={soc}
+            fill={charging ? mood.color : COLOR.battery}
+            brand={brand}
+            charging={charging}
+            asleep={mood.step === "asleep"}
+          />
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-pretty text-ink">{v.doing}</span>
+            {ready && <span className="text-[13px] text-pretty text-ink-muted">{ready}</span>}
+            <span className="text-xs text-ink-faint tabular-nums">{freshness(v, provider)}</span>
+          </div>
           {command.isError && <HelpText tone="bad">{errorMessage(command.error)}</HelpText>}
         </div>
-      </div>
-
-      <EvChargeBar v={v} soc={soc} fill={s?.charging ? tone : COLOR.battery} brand={brand} />
-    </Card>
+      }
+    >
+      <SummaryStat
+        label={v.name ?? "Charge"}
+        value={soc == null ? DASH : `${Math.round(soc)}%`}
+        sub={s?.range_km != null ? `${s.range_km} km` : undefined}
+      />
+      <SummaryStat
+        label="Charging"
+        value={power != null ? kW(power) : "Off"}
+        color={power != null ? mood.color : undefined}
+        sub={power != null ? (s?.amps != null ? `at ${s.amps} A` : undefined) : s?.plugged ? "Plugged in" : "Unplugged"}
+      />
+      {s?.energy_added != null && <SummaryStat label="Added" value={kWh(s.energy_added)} sub="This charge" />}
+      <SummaryStat
+        label="Limit"
+        value={s?.limit != null ? `${Math.round(s.limit)}%` : DASH}
+        sub={charging && s?.minutes_to_full ? `Full in ${duration(s.minutes_to_full * 60)}` : undefined}
+      />
+      {v.control.mode === "solar" && v.spare_w != null && (
+        <SummaryStat
+          label="Spare solar"
+          value={kW(Math.max(0, v.spare_w))}
+          sub={v.min_w != null ? `Starts at ${kW(v.min_w)}` : undefined}
+        />
+      )}
+    </SummaryCard>
   );
 }

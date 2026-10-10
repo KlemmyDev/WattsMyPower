@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage } from "~/features/common/api/utils";
-import { hhmm } from "~/features/common/formatting/utils/date";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useNow } from "~/features/common/time/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
@@ -10,14 +9,14 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
 import { BluelinkReads } from "~/features/ev/components/BluelinkReads";
 import { BydPanel } from "~/features/ev/components/BydPanel";
+import { Connection } from "~/features/ev/components/Connection";
 import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvDetails } from "~/features/ev/components/EvDetails";
 import { EvInOut } from "~/features/ev/components/EvInOut";
 import { EvDayChart } from "~/features/ev/components/EvDayChart";
 import { EvPanel } from "~/features/ev/components/EvPanel";
 import { NextRead } from "~/features/ev/components/NextRead";
-import type { BluelinkCar, EvVehicle, TeslaProvider, TeslaStatus } from "~/features/ev/types";
-import { ProviderChip, type Reached } from "~/features/ev/components/ProviderChip";
+import type { BluelinkCar, EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { carTitle, evTitle } from "~/features/ev/utils";
 
 /** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), its day (its charge,
@@ -51,21 +50,6 @@ function BluelinkCarView({ v, choices }: { v: BluelinkCar; choices: number[] }) 
     </div>
   );
 }
-
-/** How the cars shown are reached, for under the page's title: the Teslas' way (Bluetooth or Tessie), else BYD's
- * cloud; when they were read, and when they're next read. */
-function Reach({ status, provider, year }: { status: Freshness; provider: Reached | null; year: number | null }) {
-  return (
-    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-      {year && <span className="text-sm font-normal text-ink-muted tabular-nums">{year}</span>}
-      {provider && <ProviderChip provider={provider} />}
-      {status.read_at && <span className="text-sm font-normal text-ink-muted">Read {hhmm(status.read_at)}</span>}
-      {!status.error && <NextRead status={status} />}
-    </span>
-  );
-}
-
-type Freshness = Pick<TeslaStatus, "read_at" | "next_read" | "reading" | "error">;
 
 /**
  * The EV page: each car connected (Teslas, through Tessie or over Bluetooth; Hyundais and Kias, through their cloud;
@@ -116,11 +100,11 @@ export function EvPage({ vin }: { vin?: string } = {}) {
   // The Teslas' reach leads while any are shown, then a Hyundai or Kia's (a BYD panel says how fresh it is itself).
   const sub =
     data?.connected && (teslas.length || (!byds.length && !hks.length)) ? (
-      <Reach status={data} provider={data.provider} year={one?.year ?? null} />
+      <Connection status={data} provider={data.provider} year={one?.year ?? null} />
     ) : bluelink?.connected && (hks.length || !byds.length) ? (
-      <Reach status={bluelink} provider={bluelink.brand === "kia" ? "kia" : "hyundai"} year={one?.year ?? null} />
+      <Connection status={bluelink} provider={bluelink.brand === "kia" ? "kia" : "hyundai"} year={one?.year ?? null} />
     ) : byd?.connected ? (
-      <Reach status={byd} provider="byd" year={one?.year ?? null} />
+      <Connection status={byd} provider="byd" year={one?.year ?? null} />
     ) : null;
   if (vin && cars.length === 0)
     return (

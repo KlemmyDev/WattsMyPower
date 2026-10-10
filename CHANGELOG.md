@@ -61,7 +61,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   section). None of them report their power, so no energy is recorded for them.
 - **Electric vehicles:** a Tesla over the server's Bluetooth or through Tessie, charged from spare solar a step at a
   time (Standard, Quick, Steady or Custom timing), with each charge and trip logged and the car's day charted, and
-  drawn in the garage. Each Tesla brings its own car details; cars aren't added by hand.
+  drawn in the garage. Each Tesla brings its own car details; cars aren't added by hand. The EV page opens on a
+  summary like the other pages that shows plainly whether the car's asleep, awake or charging, how it's connected
+  with a countdown to its next check, and the spare sun filling a chunk for each amp it could charge at.
 - **Hyundai and Kia (untested):** each car's charge, range, plug and charging, read through Bluelink or Kia Connect
   as their apps do (with hyundai_kia_connect_api), on the EV page and in the garage, and charged from spare solar with
   the same modes and timing as a Tesla, by starting and stopping it (their cloud can't set the current). Newer cars

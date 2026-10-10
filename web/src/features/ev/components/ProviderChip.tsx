@@ -6,7 +6,8 @@ import type { TeslaProvider } from "~/features/ev/types";
 /** How a car's reached: a Tesla's two ways, BYD's cloud (the only way to a BYD), or Hyundai's or Kia's. */
 export type Reached = TeslaProvider | "byd" | "hyundai" | "kia";
 
-const WAYS: Record<Reached, { icon: IconName; name: string; where: string; color: string; title: string }> = {
+/** Each way a car's reached: its mark, name, whether it stays home, its colour, and a line on what it means. */
+export const WAYS: Record<Reached, { icon: IconName; name: string; where: string; color: string; title: string }> = {
   bluetooth: {
     icon: "bluetooth",
     name: "Bluetooth",

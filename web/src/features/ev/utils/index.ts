@@ -1,4 +1,5 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
+import type { IconName } from "~/features/common/ui/components/Icon";
 import type {
   BluelinkStatus,
   BydStatus,
@@ -136,6 +137,31 @@ export function statusColor(status: EvStatus, mode: EvMode): string {
   if (status === "complete") return COLOR.good;
   if (status === "hold") return COLOR.warn;
   return COLOR.inkMuted;
+}
+
+/** Where a car is between asleep, awake and charging: the three steps the EV page shows it on. */
+export type CarStep = "asleep" | "awake" | "charging";
+
+/**
+ * How a car looks at the top of its page, from what it's doing: the step it's at (asleep, awake, charging), its colour
+ * and icon, and how strongly its card's washed in that colour. Asleep is the moon's blue and quiet; awake is the car's
+ * own lilac; charging is the charge's colour (the sun's on solar) and strongest. Away, unplugged, charged and on hold
+ * keep the step the car's at but take their own colour and icon.
+ */
+export function carMood(v: { status: EvStatus; mode?: EvMode; asleep?: boolean | null; charging?: boolean | null }): {
+  step: CarStep;
+  color: string;
+  icon: IconName;
+  wash: number;
+} {
+  const step: CarStep = v.charging || v.status === "charging" ? "charging" : v.asleep ? "asleep" : "awake";
+  if (step === "charging") return { step, color: statusColor("charging", v.mode ?? "off"), icon: "bolt", wash: 0.18 };
+  if (v.status === "away") return { step, color: COLOR.inkMuted, icon: "pin", wash: 0.05 };
+  if (v.status === "hold") return { step, color: COLOR.warn, icon: "pause", wash: 0.1 };
+  if (v.status === "complete") return { step, color: COLOR.good, icon: "check", wash: 0.1 };
+  if (step === "asleep") return { step, color: COLOR.moon, icon: "moon", wash: 0.07 };
+  if (v.status === "unplugged") return { step, color: COLOR.lilac, icon: "plug", wash: 0.08 };
+  return { step, color: COLOR.lilac, icon: "car", wash: 0.1 };
 }
 
 export const EVENT_COLOR: Record<NonNullable<EvEvent["kind"]>, string> = {
