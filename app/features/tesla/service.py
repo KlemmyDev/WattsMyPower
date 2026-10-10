@@ -97,6 +97,9 @@ BACKOFF = (60, 120, 300, 600)  # seconds before retrying after 1, 2, 3, 4+ faile
 # Seconds before reading again after 1, 2, 3+ reads the car wouldn't take a Bluetooth connection for (busy: all its
 # few connections taken by phones with its key): every try holds the radio for a while, and it clears on its own.
 BUSY_BACKOFF = (120, 300, 600)
+# Seconds before reading again after 1, 2, 3+ failed reads of any other kind (the car didn't answer in time, say):
+# each failed read holds the radio for up to half a minute, so they're spaced out while it lasts. Commands still go.
+READ_BACKOFF = (60, 120, 300)
 MAX_CARS = 6
 
 
@@ -161,6 +164,8 @@ class TeslaService:
         self._samples: dict[str, deque[tuple[int, float]]] = {}
         self._error: str | None = None
         self._busy = 0  # reads in a row the car wouldn't take a Bluetooth connection for (TeslaError.busy)
+        self._failed = 0  # failed reads in a row, of any kind (READ_BACKOFF)
+        self._retry_at = 0.0  # after a failed read: not read again before this, however closely a car's followed
         self._read_at: float | None = None
         self._next_read = 0.0
         self._reading = False  # a read is under way (over Bluetooth, seconds)
@@ -562,7 +567,9 @@ class TeslaService:
             self._samples.pop(vin, None)
             self._remember(vin, mem)
             self._note(vin, text, "manual")
-            self._next_read = min(self._next_read, self.clock() + AFTER_COMMAND)
+            # Read soon, to see it take (but not sooner than a failed read said: a car that takes commands but
+            # doesn't answer its charge would otherwise be read, slowly, after each).
+            self._next_read = min(self._next_read, max(self._retry_at, self.clock() + AFTER_COMMAND))
         self.wake()
         return self.status()
 
@@ -657,6 +664,7 @@ class TeslaService:
                 self._busy = 0
                 for vin in c["vehicles"]:
                     self._note(vin, "Reached over Bluetooth again")
+            self._failed, self._retry_at = 0, 0.0
             self._error = None
             self._read_at = self.clock()
             for row in found:
@@ -665,17 +673,21 @@ class TeslaService:
             self._next_read = self.clock() + self._poll_after(c)
 
     def _read_failed(self, e: TeslaError) -> None:
+        """A read failed: tried again later, later each time it keeps failing (BUSY_BACKOFF, READ_BACKOFF), and not
+        sooner for a car being followed closely (tick keeps to _retry_at)."""
         self._error = str(e)
+        self._failed += 1
         if e.busy:  # the car's taking no more connections: eased off, it clears once a phone's out of range
             self._busy += 1
-            self._next_read = self.clock() + BUSY_BACKOFF[min(self._busy, len(BUSY_BACKOFF)) - 1]
+            after = BUSY_BACKOFF[min(self._busy, len(BUSY_BACKOFF)) - 1]
             if self._busy == 1:
                 for vin in self._conn()["vehicles"]:
                     self._note(vin, "Couldn't connect over Bluetooth: the car's taking no more connections (phones "
                                     "or watches with its key are near it)", "error")  # fmt: skip
         else:
             self._busy = 0
-            self._next_read = self.clock() + (POLL_IDLE if e.refused else POLL_ACTIVE)
+            after = POLL_IDLE if e.refused else READ_BACKOFF[min(self._failed, len(READ_BACKOFF)) - 1]
+        self._retry_at = self._next_read = self.clock() + after
         log.warning("Tesla: %s", e)
 
     def _take(self, row: dict[str, Any], c: dict[str, Any]) -> None:
@@ -985,7 +997,7 @@ class TeslaService:
             "amps": f"{d.amps} A: {d.why}",
         }[d.action]
         self._note(vin, text, "solar")
-        self._next_read = min(self._next_read, self.clock() + AFTER_COMMAND)
+        self._next_read = min(self._next_read, max(self._retry_at, self.clock() + AFTER_COMMAND))
 
     def _steer(self, vin: str, v: dict[str, Any], client: Client) -> None:
         """Tell one car what to do, if anything (see control)."""
@@ -1053,8 +1065,9 @@ class TeslaService:
                     self._track(vin, v)
                 except Exception:
                     log.exception("Keeping Tesla %s's history failed", vin[-6:])
-            # Spare solar sooner than forecast makes a car ready now, rather than at its next quiet read.
-            self._next_read = min(self._next_read, self.clock() + self._poll_after(c))
+            # Spare solar sooner than forecast makes a car ready now, rather than at its next quiet read (but a
+            # failed read isn't tried again sooner than _read_failed said).
+            self._next_read = min(self._next_read, max(self._retry_at, self.clock() + self._poll_after(c)))
 
     # -- in and out (app.features.tesla.history) -------------------------------------------------
     def _all_tracks(self) -> dict[str, dict[str, Any]]:
