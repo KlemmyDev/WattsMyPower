@@ -9,7 +9,7 @@ import { BatteryModes } from "~/features/battery/components/BatteryModes";
 import { BatteryBackup, BatteryDays, BatteryReadings, BatteryToday } from "~/features/battery/components/BatteryMore";
 import { BatteryPanel } from "~/features/battery/components/BatteryPanel";
 import { BatterySize } from "~/features/battery/components/BatterySize";
-import { useBatteryMode, useHasBattery } from "~/features/battery/hooks";
+import { useBatteryMode, useHasBattery, useNoBattery } from "~/features/battery/hooks";
 import type { BatteryPlan, ControlRequest } from "~/features/battery/types";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
@@ -37,6 +37,7 @@ export function BatteryPage() {
   const s = useSystem();
   const mode = useBatteryMode();
   const has = useHasBattery();
+  const none = useNoBattery();
   const { data: view } = useQuery({ ...batteryQuery, enabled: has });
   const { data, isError } = useQuery({ ...insightsQuery, enabled: has });
   const [preview, setPreview] = useState<BatteryPlan | null>(null);
@@ -52,15 +53,23 @@ export function BatteryPage() {
   const { data: home } = useQuery(homeQuery);
   const rooms = roomBatteries(home?.devices);
   const header = <PageHeader title="Battery" sub="See what your battery is doing, and tell it what to do" />;
-  if (s && !has)
+  // Still reachable by its address on a solar-only system (it's left out of the navigation): say why it's empty.
+  if (s && none)
     return (
       <>
         {header}
         <div className="flex flex-col gap-5">
           {rooms.length > 0 && <AllBatteries p={p} s={s} devices={rooms} />}
-          <EmptyState icon="battery" title="No home battery found" id="h-nobat">
-            Your inverter doesn't report a battery. If it has one, set its size in Manage → System.
-          </EmptyState>
+          {s.inverter_connected === false ? (
+            <EmptyState icon="battery" title="No battery connected" id="h-nobat">
+              Connect your inverter in Manage → Integrations → Sungrow, and its battery shows here.
+            </EmptyState>
+          ) : (
+            <EmptyState icon="battery" title="No battery connected" id="h-nobat">
+              Your inverter doesn't report a battery, so this looks like a solar-only system. If it does have one, set
+              its size in Manage → System.
+            </EmptyState>
+          )}
         </div>
       </>
     );

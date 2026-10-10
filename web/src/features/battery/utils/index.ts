@@ -1,7 +1,17 @@
 import type { ControlKind, ControlRecord, OutsideKind } from "~/features/battery/types";
-import type { BatteryMode } from "~/features/common/live/types";
+import type { BatteryMode, SystemInfo } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+
+/**
+ * Whether it's known there's no home battery (a solar-only system): no size from the inverter or Manage → System, once
+ * the inverter's details have been read, or with no inverter connected. False until that's known, so the battery
+ * isn't hidden while the page loads only to come back a moment later.
+ */
+export function noBattery(s: SystemInfo | undefined): boolean {
+  if (!s || (s.battery_kwh ?? 0) > 0) return false;
+  return s.inverter_connected === false || (s.inverter_connected === true && !!s.model);
+}
 
 /** Unix seconds of the next `hh:mm` (local) after `now`: today, or tomorrow if that's already passed. */
 export function nextAt(hm: string, now: number): number | null {

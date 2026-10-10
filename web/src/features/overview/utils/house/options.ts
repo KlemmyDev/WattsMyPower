@@ -1,3 +1,4 @@
+import { noBattery } from "~/features/battery/utils";
 import type { SystemInfo } from "~/features/common/live/types";
 import {
   DEFAULT_HOUSE,
@@ -13,8 +14,8 @@ const STYLES: HouseStyle[] = ["estate", "modern", "queenslander", "federation", 
 /** Inverters connected: the hybrid, and a second one if there is. */
 export const connectedInverters = (s: SystemInfo | undefined) => Math.min(1 + (s?.pv2 ? 1 : 0), MAX_INVERTERS);
 
-/** Batteries: the hybrid's (a second, solar-only inverter has none). */
-export const connectedBatteries = (_s: SystemInfo | undefined) => 1;
+/** Batteries: the hybrid's (a second, solar-only inverter has none), unless it's known to have none. */
+export const connectedBatteries = (s: SystemInfo | undefined) => (noBattery(s) ? 0 : 1);
 
 /** Where each of `n` units is: as chosen, else on an outside wall. */
 const places = (chosen: string[] | undefined, n: number): Place[] =>

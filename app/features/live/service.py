@@ -31,6 +31,8 @@ class LiveService:
         self.next_poll: float | None = None  # when the collector next reads the inverters (unix seconds)
         self.info: dict[str, Any] = {}  # the hybrid's details: model, serial, battery capacity, reserve
         self.driver: str | None = None  # the hybrid's driver id (e.g. "sungrow.sh_rs"), None until one is connected
+        # Whether a main inverter is connected, as the collector last said; None until it's been asked.
+        self.inverter: bool | None = None
         # What the battery is set to do, from app.features.battery (BatteryService.summary); None if it can't be told.
         self.battery_mode: dict[str, Any] | None = None
         # Each EV in brief, from app.features.tesla (TeslaService.summary); None when none is connected.
@@ -89,6 +91,8 @@ class LiveService:
             "tariff": self.tariffs.get(),
             "pv2": None if self.pv2 is None else {"behind_meter": cfg.pv2_behind_meter, **self.pv2},
             "ev_connected": self.ev is not None,
+            # So pages can tell no inverter (and so no battery) from one not heard from yet.
+            "inverter_connected": self.inverter,
             **self.settings.all_values(),
         }
 

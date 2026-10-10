@@ -178,9 +178,11 @@ export function HouseSettings({ system }: { system: SystemInfo }) {
       </div>
       <div className="flex flex-col gap-4 border-t border-line-subtle pt-5">
         <div className="flex flex-col gap-1">
-          <span className="text-[13px] font-semibold">Where your inverters and battery are</span>
+          <span className="text-[13px] font-semibold">
+            Where your inverters {house.batteries.length ? "and battery are" : "are"}
+          </span>
           <HelpText>
-            One for each inverter connected in Integrations, and the hybrid's battery.
+            One for each inverter connected in Integrations{house.batteries.length ? ", and the hybrid's battery" : ""}.
             {garage
               ? " Each can be on an outside wall or in the garage."
               : " They're on the house's outside wall: add a garage to put any of them inside it."}

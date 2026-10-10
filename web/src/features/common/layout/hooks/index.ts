@@ -1,6 +1,6 @@
 import { useRouterState } from "@tanstack/react-router";
 import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
-import { useHasBattery } from "~/features/battery/hooks";
+import { useNoBattery } from "~/features/battery/hooks";
 import { isFresh } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
@@ -58,18 +58,20 @@ export function usePillIndicator(
 }
 
 /** The sections to offer: EV once a car's connected (until then it's reached from Overview and Integrations), named
- * after the cars' make, and Battery when there is one. */
+ * after the cars' make, and Battery unless it's known there isn't one (so it doesn't blink out as the page loads; the
+ * page itself says when there's none). */
 export function useNavItems() {
   const live = useLive();
   const evConnected = !!live?.system.ev_connected;
-  const hasBattery = useHasBattery();
+  const none = useNoBattery();
   const ev = evTitle(live?.ev);
-  return NAV.filter((i) => (i.to !== "/ev" || evConnected) && (i.to !== "/battery" || hasBattery)).map((i) =>
+  return NAV.filter((i) => (i.to !== "/ev" || evConnected) && (i.to !== "/battery" || !none)).map((i) =>
     i.to === "/ev" ? { ...i, label: ev } : i,
   );
 }
 
-export type LiveState = "live" | "stale" | "error";
+/** `none`: no inverter connected yet, so nothing to wait for. */
+export type LiveState = "live" | "stale" | "error" | "none";
 
 /** Whether readings are coming in from the inverter, in a word and a sentence, and the time now (to the minute). */
 export function useLiveStatus(): { state: LiveState; status: string; now: number } {
@@ -78,8 +80,13 @@ export function useLiveStatus(): { state: LiveState; status: string; now: number
   const last = st?.last_success;
   let state: LiveState = "live";
   let status = last ? `Live from your inverter, last reading ${hhmm(last)}` : "Connecting to your inverter";
-  if (!last) state = st?.error ? "error" : "stale";
-  else if (!isFresh(st, now)) {
+  if (!last && st?.system.inverter_connected === false) {
+    state = "none";
+    status = "No inverter connected";
+  } else if (!last) {
+    state = st?.error ? "error" : "stale";
+    if (st?.error) status = "Your inverter isn't responding";
+  } else if (!isFresh(st, now)) {
     state = st?.error ? "error" : "stale";
     status = `No new readings since ${hhmm(last)}`;
   } else if (st?.frozen_since) {
