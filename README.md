@@ -159,6 +159,8 @@ An update installs the channel's version, so moving to a channel behind the one 
 
 **Your data** lives in `data/wattsmypower.db`. With the default settings it grows to about 20 MB over the first 90 days, then by about 18 MB a year. To restore a backup: `docker compose stop`, copy the backup over `data/wattsmypower.db`, then `docker compose start`.
 
+**Downloading a backup:** **Manage → Data → Download a backup** saves a zip of the dashboard's database, or of both databases with **Everything**, copied safely while the app keeps running. It holds the passwords and tokens you've saved for connected services, so keep it private. To restore it, follow the `README.txt` inside: stop the app, copy the files into `data/`, delete any `-wal` or `-shm` files there, and start it again.
+
 > **Sign-in.** The dashboard and its API need you to sign in, with the account created on the first visit. Sessions last 30 days in each browser; **Manage → Account** changes the password (which signs out every other browser) or signs out. Forgot it? `docker compose exec wattsmypower python -m app reset-account` removes the account, and the next visit asks for a new one. If something in front of the dashboard already handles sign-in (a reverse proxy with authentication), you can set `AUTH=false`. Either way, keep it on your home network rather than port-forwarding it: it's served over plain HTTP.
 
 > **Only one app should talk to the inverter.** The WiNet-S handles several Modbus clients at once badly. Don't point Home Assistant, SunGather or a second copy of WattsMyPower at it at the same time.
@@ -425,6 +427,7 @@ collector/              the collector service: reads the inverters, stores raw r
   devices/              the device interface, the reader registry (drivers.py), Modbus helpers, and a
                         package per brand with a reader per model family (sungrow/sh_rs.py, sungrow/sg_d.py)
   storage.py            measures its database for Manage → Data (a copy of app's storage/measure.py)
+  backup.py             copies its database for the dashboard's backups (GET /v1/backup)
 app/
   main.py               the FastAPI app (create_app), its middleware and routers
   container.py          builds every service once from the config; routers get them via app/dependencies.py
@@ -452,7 +455,7 @@ app/
     auth/               sign-in: the household account, sessions, and the /api guard
     onboarding/         the first-run set-up guide's progress, and spotting installs already set up
     storage/            Manage → Data: both databases measured table by table (measure.py) and
-                        described in plain words (catalog.py)
+                        described in plain words (catalog.py), and a backup to download (backup.py)
 tests/                  pytest suite
 web/                    dashboard: React + TanStack Start (SPA mode) + TanStack Query + Tailwind; see web/README.md
 install.sh              install or update with Docker (see above)

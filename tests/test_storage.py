@@ -1,20 +1,36 @@
-"""Manage → Data: both databases measured table by table, described, and how fast they grow."""
+"""Manage → Data: both databases measured table by table, described, and how fast they grow; and a backup to download."""
 
 from __future__ import annotations
 
+import errno
+import http.client
+import io
+import re
+import socket
+import sqlite3
+import tempfile
+import threading
 import time
+import urllib.parse
+import zipfile
 from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from dataclasses import replace
-from typing import Any
+from pathlib import Path
+from typing import IO, Any
 
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.live.client import CollectorError
+from app.features.live.client import CollectorClient, CollectorError
 from app.features.storage.service import StorageService
 from app.main import create_app
+from collector.config import Config as CollectorConfig
+from collector.main import create_app as create_collector
+from collector.store import Store
 
 DAY = 86400
 
@@ -161,3 +177,187 @@ def test_the_storage_api(client: TestClient) -> None:
 def test_the_storage_api_needs_signing_in(config: Config) -> None:
     with TestClient(create_app(replace(config, auth=True), poll=False, serve_dashboard=False)) as c:
         assert c.get("/api/storage").status_code == 401
+
+
+# -- backups ------------------------------------------------------------------------------------------
+
+
+class CopyingCollector:
+    """A collector that sends a copy of its database: `data`, or an error before it starts, or one part way."""
+
+    def __init__(self, data: bytes = b"", refuse: CollectorError | None = None, cut_after: int | None = None):
+        self.data, self.refuse, self.cut_after = data, refuse, cut_after
+
+    def storage(self) -> dict[str, Any]:
+        raise CollectorError(502, "Not measured here.")
+
+    @contextmanager
+    def backup(self) -> Iterator[IO[bytes]]:
+        if self.refuse:
+            raise self.refuse
+        source = io.BytesIO(self.data)
+        if self.cut_after is not None:
+            cut, read = self.cut_after, source.read
+
+            def cut_off(n: int | None = -1) -> bytes:
+                if source.tell() >= cut:
+                    raise http.client.IncompleteRead(b"")
+                return read(n)
+
+            source.read = cut_off  # type: ignore[method-assign]
+        yield source
+
+
+def collector_db(path: Path, polls: int) -> bytes:
+    """A collector database with `polls` rows of readings, as its file."""
+    store = Store(str(path))
+    store.migrate()
+    store.write_polls([(ts, [("hybrid", "sungrow.sh_rs", {5008: ts}, {})]) for ts in range(polls)])
+    with store.writing() as conn:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    return path.read_bytes()
+
+
+def unzip(body: bytes, into: Path) -> dict[str, Path]:
+    into.mkdir()
+    with zipfile.ZipFile(io.BytesIO(body)) as zf:
+        assert zf.testzip() is None
+        zf.extractall(into)
+        return {n: into / n for n in zf.namelist()}
+
+
+def rows(path: Path, table: str) -> int:
+    with closing(sqlite3.connect(path)) as conn:
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        n: int = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        return n
+
+
+@pytest.fixture
+def temp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Where backups are made, to see they're cleaned up."""
+    where = tmp_path / "tmp"
+    where.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(where))
+    return where
+
+
+def test_a_backup_is_a_zip_of_the_dashboard_database(
+    client: TestClient, db: Database, temp: Path, tmp_path: Path
+) -> None:
+    now = int(time.time())
+    add_samples(db, now - DAY, now)  # still in the write-ahead log: the copy has them all the same
+    r = client.get("/api/storage/backup")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    assert r.headers["cache-control"] == "no-store" and "x-backup-skipped" not in r.headers
+    assert re.fullmatch(
+        r'attachment; filename="wattsmypower-backup-[\d.]+-\d{4}-\d{2}-\d{2}\.zip"', r.headers["content-disposition"]
+    )
+    files = unzip(r.content, tmp_path / "out")
+    assert set(files) == {"wattsmypower.db", "README.txt"}
+    assert rows(files["wattsmypower.db"], "samples") == 1440 and rows(files["wattsmypower.db"], "samples_5m") == 288
+    with closing(sqlite3.connect(files["wattsmypower.db"])) as conn:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"  # one file, no -wal to go with it
+    readme = files["README.txt"].read_text()
+    assert "KEEP IT PRIVATE" in readme and "docker compose stop" in readme and "-wal or -shm" in readme
+    assert "You chose the dashboard's only" in readme
+    assert list(temp.iterdir()) == []  # deleted once it's sent
+
+
+def test_everything_includes_the_collectors_database(client: TestClient, temp: Path, tmp_path: Path) -> None:
+    collector = CopyingCollector(collector_db(tmp_path / "c.db", 50))
+    client.app.state.services.storage.backups.collector = collector  # type: ignore[attr-defined]
+    r = client.get("/api/storage/backup?everything=true")
+    assert r.status_code == 200 and "x-backup-skipped" not in r.headers
+    files = unzip(r.content, tmp_path / "out")
+    assert set(files) == {"wattsmypower.db", "collector.db", "README.txt"}
+    assert rows(files["collector.db"], "readings") == 50
+    assert "collector.db" in files["README.txt"].read_text()
+    assert list(temp.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("collector", "why"),
+    [
+        (CopyingCollector(refuse=CollectorError(502, "The collector couldn't be reached (URLError).")), "reached"),
+        (CopyingCollector(b"SQLite format 3\x00" + bytes(3 << 20), cut_after=1 << 20), "cut off part way"),
+        (CopyingCollector(b"<html>Not a database</html>"), "isn't a database"),
+    ],
+)
+def test_without_the_collectors_database_the_backup_says_why(
+    client: TestClient, temp: Path, tmp_path: Path, collector: CopyingCollector, why: str
+) -> None:
+    client.app.state.services.storage.backups.collector = collector  # type: ignore[attr-defined]
+    r = client.get("/api/storage/backup?everything=true")
+    assert r.status_code == 200 and why in urllib.parse.unquote(r.headers["x-backup-skipped"])
+    files = unzip(r.content, tmp_path / "out")
+    assert set(files) == {"wattsmypower.db", "README.txt"}
+    assert why in files["README.txt"].read_text() and rows(files["wattsmypower.db"], "samples") == 0
+    assert list(temp.iterdir()) == []
+
+
+def test_the_demo_has_no_collector_to_back_up(client: TestClient, temp: Path) -> None:
+    r = client.get("/api/storage/backup?everything=true")
+    assert r.status_code == 200 and "demo" in urllib.parse.unquote(r.headers["x-backup-skipped"])
+
+
+def test_one_backup_at_a_time(client: TestClient, temp: Path) -> None:
+    backups = client.app.state.services.storage.backups  # type: ignore[attr-defined]
+    made = backups.make(False)
+    r = client.get("/api/storage/backup")
+    assert r.status_code == 409 and "already being made" in r.json()["detail"]
+    made.done()
+    assert list(temp.iterdir()) == [] and client.get("/api/storage/backup").status_code == 200
+
+
+def test_a_backup_that_cant_be_written_cleans_up(
+    client: TestClient, temp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def full(*_: Any) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    with monkeypatch.context() as m:
+        m.setattr("app.features.storage.backup._write", full)
+        r = client.get("/api/storage/backup")
+        assert r.status_code == 507 and "No space left" in r.json()["detail"]
+    assert list(temp.iterdir()) == []
+    assert client.get("/api/storage/backup").status_code == 200  # and the next one can be made
+
+
+def test_a_backup_needs_signing_in(config: Config) -> None:
+    with TestClient(create_app(replace(config, auth=True), poll=False, serve_dashboard=False)) as c:
+        r = c.get("/api/storage/backup?everything=true")
+        assert r.status_code == 401 and "content-disposition" not in r.headers
+
+
+def test_a_backup_from_the_real_collector(config: Config, db: Database, tmp_path: Path, temp: Path) -> None:
+    """End to end: the collector's GET /v1/backup over HTTP, read by the dashboard's CollectorClient."""
+    collector_cfg = CollectorConfig(db_path=str(tmp_path / "collector.db"), token="secret")
+    store = Store(collector_cfg.db_path)
+    store.migrate()
+    store.write_polls([(ts, [("hybrid", "sungrow.sh_rs", {5008: ts}, {})]) for ts in range(0, 600_000, 60)])
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    url = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    server = uvicorn.Server(uvicorn.Config(create_collector(collector_cfg, poll=False), ws="none", log_level="warning"))
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+    thread.start()
+    try:
+        while not server.started:
+            time.sleep(0.01)
+        made = StorageService(config, db, CollectorClient(url, "secret")).backups.make(True)
+        assert made.skipped is None
+        files = unzip(Path(made.path).read_bytes(), tmp_path / "out")
+        made.done()
+        assert rows(files["collector.db"], "readings") == 10_000 and rows(files["wattsmypower.db"], "samples") == 0
+
+        wrong = StorageService(config, db, CollectorClient(url, "wrong")).backups.make(True)
+        assert wrong.skipped is not None and "COLLECTOR_TOKEN" in wrong.skipped
+        wrong.done()
+    finally:
+        server.should_exit = True
+        thread.join(5)
+    gone = StorageService(config, db, CollectorClient(url, "secret")).backups.make(True)
+    assert gone.skipped is not None and "couldn't be reached" in gone.skipped
+    gone.done()
+    assert list(temp.iterdir()) == []
