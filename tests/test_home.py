@@ -493,9 +493,11 @@ def test_by_the_hour_the_days_hours_add_up_to_what_the_inverters_counted_and_dev
 
 
 def test_patterns_say_which_days_an_appliance_usually_runs(home: HomeService, clock: Clock) -> None:
-    clock.t = time.time()
+    # A Tuesday evening, so the four weeks looked back start on a Wednesday, a wash day: a device's days count from
+    # the first it used anything, and from a Monday they'd start two days late (the washer's first run is Wednesday).
+    clock.t = time.mktime((2026, 9, 15, 21, 0, 0, 0, 0, -1))
     view = home.connect("demo", {})
-    found = {p["id"]: p for p in usage.patterns(home.repo, int(time.time()))}
+    found = {p["id"]: p for p in usage.patterns(home.repo, int(clock.t))}
     wash = found[view["devices"][0]["id"]]
     assert [n > 0 for n in wash["run_days"]] == [False, False, True, False, False, True, True]
     # Four weeks back from the first midnight, counted from its first wash (Wed, Sat or Sun): 26 days at the fewest

@@ -2,6 +2,7 @@ import { COLOR } from "~/features/common/theme/utils/colors";
 import type { IconName } from "~/features/common/ui/components/Icon";
 import type {
   BluelinkStatus,
+  EvVehicle,
   BydStatus,
   EvEvent,
   EvMode,
@@ -135,6 +136,30 @@ export function statusColor(status: EvStatus, mode: EvMode): string {
   if (status === "complete") return COLOR.good;
   if (status === "hold") return COLOR.warn;
   return COLOR.inkMuted;
+}
+
+/**
+ * The power there is for a car now (W, including what it's drawing), from the latest inverter reading, as the server
+ * works it out (app.features.tesla.control.spare_w) but without waiting for it: what the car draws, plus what's going
+ * to the grid, less what the home battery gives; with the home battery first, less what it could still take until
+ * it's full; shared, less its share of what it could take. The server goes by its average over a few minutes.
+ */
+export function spareNow(
+  p: { grid_power: number | null; battery_power: number | null; battery_soc: number | null } | null,
+  v: EvVehicle,
+  batteryMaxW: number,
+): number | null {
+  if (p?.grid_power == null) return null;
+  const s = v.state;
+  const volts = s?.charging && v.volts ? v.volts : null;
+  const carW = s?.charging && volts && v.phases ? (s.actual_amps ?? s.amps ?? 0) * volts * v.phases : 0;
+  let out = carW - p.grid_power - (p.battery_power ?? 0);
+  const first = v.control.first;
+  if (batteryMaxW > 0 && first === "battery" && p.battery_soc != null && p.battery_soc < v.control.battery_full)
+    out -= batteryMaxW;
+  else if (batteryMaxW > 0 && first === "shared")
+    out -= (v.share?.battery ?? 0) * Math.min(Math.max(out, 0), batteryMaxW);
+  return out;
 }
 
 /** Where a car is between asleep, awake and charging: the three steps the EV page shows it on. */

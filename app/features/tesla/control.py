@@ -457,6 +457,60 @@ def decide(
     return None
 
 
+def outlook(
+    car: CarState,
+    charger: Charger,
+    spare: float | None,
+    grid_w: float,
+    mem: Memory,
+    now: int,
+    timing: Timing | None = None,
+) -> dict[str, Any] | None:
+    """What's next for a car following the sun, as `decide` sees it, for the EV page to show: what it's waiting on, since
+    when, and when it'll act if nothing changes. None when it isn't the dashboard's to start or stop (full).
+
+    `next` is "start" (not charging) or "stop" or "amps" (charging). `state`: "measuring" (no spare power known yet),
+    "short" (not enough to start: `need_w` more), "counting" (enough since `since`: it starts at `at`, the later of the
+    steady-sun wait and the least time since it last stopped, `wait` saying which), "stopping" (short since `since`:
+    it stops at `at`) or "following" (charging, kept going while spare stays over `floor_w`; at `target` amps, changed
+    at `at` when that's not what it's at). `start_w` is what must be spare to start."""
+    t = timing or Timing()
+    if car.full:
+        return None
+    lo = min(charger.min_amps, charger.max_amps)
+    hi = charger.max_amps
+    start_w = round(charger.watts(lo))
+    out: dict[str, Any] = {"start_w": start_w, "floor_w": round(max(0.0, charger.watts(lo) - grid_w))}
+    switch_at = mem.command_at + t.min_switch if mem.command else 0
+    if not car.charging:
+        out["next"] = "start"
+        if spare is None:
+            return out | {"state": "measuring"}
+        if charger.amps_for(spare) < lo:
+            return out | {"state": "short", "need_w": round(charger.watts(lo) - spare)}
+        since = mem.enough_since or now
+        steady_at = since + t.start_after
+        return out | {
+            "state": "counting",
+            "since": since,
+            "at": max(steady_at, switch_at, now),
+            "wait": "switch" if switch_at > steady_at else "steady",
+            "amps": min(charger.amps_for(spare), hi),
+        }
+    if spare is not None and charger.amps_for(spare + grid_w) < lo:
+        since = mem.short_since or now
+        return out | {
+            "next": "stop",
+            "state": "stopping",
+            "since": since,
+            "at": max(since + t.stop_after, switch_at, now),
+        }
+    target = max(lo, min(charger.amps_for(spare), hi)) if spare is not None else None
+    current = mem.amps if mem.amps is not None else car.request_amps
+    at = max(mem.amps_at + t.amps_every, now) if target is not None and target != current else None
+    return out | {"next": "amps", "state": "following", "target": target, "at": at}
+
+
 def spare_ahead(
     steps: list[dict[str, Any]],
     *,

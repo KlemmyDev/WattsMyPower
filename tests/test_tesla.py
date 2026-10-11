@@ -185,6 +185,33 @@ def test_timings_are_checked_and_go_back_to_their_defaults() -> None:
             control.clean({key: bad})
 
 
+def test_the_outlook_says_what_is_next_and_when() -> None:
+    now = 1_000_000
+    t = control.Timing()  # 3 min of steady sun to start, 5 short to stop, 5 between the two, a minute between speeds
+    # Not charging: nothing known yet; then short of the 3.45 kW it takes to start at 5 A on three phases.
+    assert control.outlook(car(), THREE, None, 300, Memory(), now)["state"] == "measuring"
+    o = control.outlook(car(), THREE, 2000, 300, Memory(), now)
+    assert (o["next"], o["state"], o["need_w"], o["start_w"]) == ("start", "short", 1450, 3450)
+    # Enough for a minute: it starts in two more, at 7 A.
+    o = control.outlook(car(), THREE, 5000, 300, Memory(enough_since=now - 60), now, t)
+    assert (o["state"], o["since"], o["at"], o["wait"], o["amps"]) == ("counting", now - 60, now + 120, "steady", 7)
+    # Stopped 100 s ago: the least time between stopping and starting again is what it waits on.
+    mem = Memory(command="stop", command_at=now - 100, enough_since=now - 200)
+    o = control.outlook(car(), THREE, 5000, 300, mem, now, t)
+    assert (o["at"], o["wait"]) == (now + 200, "switch")
+    # Charging and short (even borrowing 300 W) for a minute: it stops in four more, unless the sun picks up.
+    charging = car(charging_state="Charging", charge_current_request=7)
+    mem = Memory(command="start", command_at=now - 3600, amps=7, short_since=now - 60)
+    o = control.outlook(charging, THREE, 2000, 300, mem, now, t)
+    assert (o["next"], o["state"], o["at"], o["floor_w"]) == ("stop", "stopping", now + 240, 3150)
+    # Charging with more sun: up to 11 A, the change due a minute after the last.
+    mem = Memory(command="start", command_at=now - 3600, amps=7, amps_at=now - 10)
+    o = control.outlook(charging, THREE, 8000, 300, mem, now, t)
+    assert (o["next"], o["state"], o["target"], o["at"]) == ("amps", "following", 11, now + 50)
+    assert control.outlook(charging, THREE, 4830, 300, mem, now, t)["at"] is None  # already at 7 A
+    assert control.outlook(car(battery_level=80), THREE, 5000, 300, Memory(), now) is None  # full
+
+
 def test_the_current_follows_whatever_is_spare() -> None:
     # On one phase at 240 V each amp is 240 W: 1.5 kW charges at 6 A, 2.6 kW at 10 A, 4.1 kW at 17 A, and so on.
     one = Charger(phases=1, volts=240, min_amps=5, max_amps=32)
@@ -727,8 +754,13 @@ def test_solar_mode_starts_follows_and_stops(svc: TeslaService, provider: str, t
     connect(svc, provider)
     svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 3, "car_min_amps": 5, "car_amps": 16})
     svc.configure(VIN, {"mode": "solar"})
-    minutes(svc, live, clock, 5, spare=5000)
+    minutes(svc, live, clock, 1, spare=5000)
+    # The page is told it's counting down to starting, and when.
+    o = svc.status()["vehicles"][0]["outlook"]
+    assert (o["next"], o["state"], o["amps"]) == ("start", "counting", 7) and o["at"] > clock.t
+    minutes(svc, live, clock, 4, spare=5000)
     assert tessie.commands[:2] == [("set_charging_amps", {"amps": 7}), ("start_charging", {})]  # 5 kW / 690 W
+    assert svc.status()["vehicles"][0]["outlook"]["state"] == "following"
     # More sun: taken up to 11 A (8 kW), an amp change a minute at most, settling there.
     minutes(svc, live, clock, 6, spare=8000)
     assert tessie.commands[-1] == ("set_charging_amps", {"amps": 11})
