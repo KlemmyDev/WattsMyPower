@@ -3,9 +3,11 @@ Official warnings for where the house is, as early signs the power may go: the B
 severe thunderstorms, severe weather, cyclones, floods and fire weather, and in Queensland the Fire Department's
 bushfire warnings and incidents (qfd.py). They feed the Grid page's outlook.
 
-Matched here, on the dashboard: the Bureau's by the house's districts (from its nearest forecast town, looked up once
-a day) and any polygon around it; fires by their warning area around the house, or how far away they are. Fetched
-every 10 minutes, kept in memory. Turned off with the hazard_warnings setting.
+Matched here, on the dashboard: the Bureau's by the house's districts (from its nearest forecast town) and council area
+(from the Bureau's outlines), both looked up once a day, and any polygon around it; fires by their warning area around
+the house, or how far away they are. A Bureau warning for part of the house's district that names only places far from
+it is kept apart, as nearby: on the page, not the outlook. Fetched every 10 minutes (5 while a Bureau warning is in
+force around the house), kept in memory. Turned off with the hazard_warnings setting.
 """
 
 from __future__ import annotations
@@ -25,8 +27,13 @@ from app.features.settings.store import SettingsStore
 log = logging.getLogger(__name__)
 
 EVERY = 600
+EVERY_ACTIVE = 300  # while a Bureau warning is in force around the house: storms move, and their warnings with them
 PLACES_EVERY = 24 * 3600
 FIRE_INFO_KM = 10  # a fire with no warning (Information) counts only this close; warnings count within the radius
+# A warning for part of the district counts when a place it names (or the line between two) is this close: storms
+# are small and quick, other weather spreads wider.
+NEAR_KM = {"thunderstorm": 30}
+NEAR_KM_OTHER = 50
 
 # The kinds of Bureau warning that mean the most for the power: how serious they are for the outlook.
 SEVERE = ("thunderstorm", "severe weather", "cyclone", "damaging wind", "destructive")
@@ -75,8 +82,12 @@ class HazardService:
         self.fires = fires
         self.clock = clock
         self._lock = threading.Lock()
-        self._places: tuple[float, list[dict[str, str]], list[dict[str, str]]] | None = None  # fetched, towns, gauges
+        # When fetched, the towns, the gauges, and the council areas' outlines and rows (None when not to hand).
+        self._places: (
+            tuple[float, list[dict[str, str]], list[dict[str, str]], tuple[bytes, list[dict[str, str]]] | None] | None
+        ) = None
         self._place: dict[str, Any] | None = None
+        self._named: dict[str, tuple[float, float]] = {}  # the state's towns, by name: the places warnings name
         self._place_for: tuple[float, float] | None = None
         self._weather: list[dict[str, Any]] = []
         self._fire: list[dict[str, Any]] = []
@@ -120,13 +131,15 @@ class HazardService:
                 except Exception:  # a failed fetch must never end the loop
                     log.exception("Fetching weather and fire warnings failed")
             assert self._wake is not None
+            around = self.around()
+            every = EVERY_ACTIVE if around["weather"] or around["nearby"] else EVERY
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._wake.wait(), timeout=EVERY)
+                await asyncio.wait_for(self._wake.wait(), timeout=every)
             self._wake.clear()
 
     def place(self) -> dict[str, Any] | None:
-        """Where the house is in the Bureau's areas (its nearest forecast town, districts and catchments). None
-        until its location has been chosen."""
+        """Where the house is in the Bureau's areas (its nearest forecast town, districts, council area and
+        catchments). None until its location has been chosen."""
         where = self.settings.location()
         if where is None:
             return None
@@ -135,15 +148,19 @@ class HazardService:
         with self._lock:
             places = self._places
         if places is None or now - places[0] >= PLACES_EVERY:
-            files = self.ftp.files(bom.SPATIAL, lambda n: n in (bom.TOWNS, bom.GAUGES))
+            files = self.ftp.files(bom.SPATIAL, lambda n: n in (bom.TOWNS, bom.GAUGES, *bom.METRO))
             towns = bom.read_dbf(files[bom.TOWNS])
             gauges = bom.read_dbf(files[bom.GAUGES]) if bom.GAUGES in files else []
-            places = (now, towns, gauges)
+            shp, dbf = (files.get(n) for n in bom.METRO)
+            metro = (shp, bom.read_dbf(dbf)) if shp and dbf else None
+            places = (now, towns, gauges, metro)
             with self._lock:
                 self._places, self._place_for = places, None
         with self._lock:
             if self._place_for != (lat, lon):
-                self._place, self._place_for = bom.districts_at(lat, lon, places[1], places[2]), (lat, lon)
+                place = bom.districts_at(lat, lon, places[1], places[2], places[3])
+                self._place, self._place_for = place, (lat, lon)
+                self._named = bom.gazetteer(places[1], place["state"])
             return self._place
 
     def refresh(self) -> None:
@@ -185,30 +202,47 @@ class HazardService:
 
     # ------------------------------------------------------------------ around the house
     def around(self, now: float | None = None) -> dict[str, Any]:
-        """The Bureau's warnings for the house's districts (or drawn around it), and fires with a warning within the
-        radius (or whose warning area covers the house), or without one, close by. Most serious first."""
+        """The Bureau's warnings for the house's districts and council area (or drawn around it), and fires with a
+        warning within the radius (or whose warning area covers the house), or without one, close by. Most serious
+        first. A Bureau warning for part of the house's district whose named places are all far from it is kept
+        apart, in nearby."""
         now = self.clock() if now is None else now
         where = self.settings.location()
         if not self.enabled() or where is None:
-            return {"weather": [], "fires": []}
+            return {"weather": [], "nearby": [], "fires": []}
         lat, lon = where
         radius = self.settings.get("outage_radius_km")
         with self._lock:
-            place, weather, fires = self._place, list(self._weather), list(self._fire)
+            place, named = self._place, self._named
+            weather, fires = list(self._weather), list(self._fire)
         codes = set((place or {}).get("codes") or [])
-        mine = []
+        rivers = {c for c in codes if "_RC" in c or "_RS" in c}  # flood warnings, for rivers gauged nearby
+        mine, nearby = [], []
         for w in weather:
             if w.get("expires") and w["expires"] < now:
                 continue
             here = any(bom.inside(lat, lon, r) for r in w["polygons"])
-            if here or codes & set(w["codes"]):
-                mine.append(
+            matched = codes & set(w["codes"])
+            if not here and not matched:
+                continue
+            row = {
+                **{k: v for k, v in w.items() if k not in ("polygons", "codes")},
+                "level": weather_level(w),
+                "here": here,
+            }
+            reach = None if here or matched & rivers else bom.reach(lat, lon, w["description"], named)
+            limit = next((km for k, km in NEAR_KM.items() if k in w["event"].lower()), NEAR_KM_OTHER)
+            if reach and reach["distance_km"] > limit:
+                nearby.append(
                     {
-                        **{k: v for k, v in w.items() if k not in ("polygons", "codes")},
-                        "level": weather_level(w),
-                        "here": here,
+                        **row,
+                        "near": reach["near"],
+                        "distance_km": reach["distance_km"],
+                        "direction": _direction(lat, lon, *reach["toward"]),
                     }
                 )
+            else:
+                mine.append(row)
         near = []
         for f in fires:
             here = any(bom.inside(lat, lon, r) for r in f["polygons"])
@@ -224,8 +258,9 @@ class HazardService:
                     }
                 )
         mine.sort(key=lambda w: (w["level"] != "warning", -(w.get("effective") or 0)))
+        nearby.sort(key=lambda w: w["distance_km"])
         near.sort(key=lambda f: (-qfd.LEVELS.index(f["level"]), f["distance_km"]))
-        return {"weather": mine, "fires": near}
+        return {"weather": mine, "nearby": nearby, "fires": near}
 
     def view(self) -> dict[str, Any]:
         around = self.around()
@@ -240,6 +275,7 @@ class HazardService:
             # Whether the house's location has been chosen: none are fetched until it is.
             "location_set": self.settings.location_set(),
             "town": (place or {}).get("town"),
+            "area": (place or {}).get("area"),
             "fires_followed": fires,
             "radius_km": self.settings.get("outage_radius_km"),
             **around,
