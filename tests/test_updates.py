@@ -51,9 +51,11 @@ def _answer(
 ) -> None:
     def get_json(url: str, *_: Any, **__: Any) -> Any:
         if "/compare/" in url:
-            if isinstance(gh["compare"], Exception):
-                raise gh["compare"]
-            return gh["compare"]
+            # Going back, the other way round: from the channel's commit to this one.
+            answer = gh["back"] if commit and url.endswith(f"...{commit}") and "back" in gh else gh["compare"]
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
         if "/tags" in url:
             return gh.get("tags", [])
         return gh["commits"]
@@ -96,6 +98,50 @@ def test_commits_since_this_one_are_an_update(svc: UpdateService, monkeypatch: p
         "behind": 0,
     }
     assert status["channel"] == "nightly" and status["move"] == "update"
+
+
+def _commit(sha: str, message: str, *parents: str) -> dict[str, Any]:
+    return {"sha": sha, "commit": {"message": message}, "parents": [{"sha": p} for p in parents]}
+
+
+def _history() -> list[dict[str, Any]]:
+    """Main since HERE, as GitHub's compare lists it: two pull requests merged (one with main merged into it along the
+    way), and the Version workflow's commit after the first."""
+    return [
+        _commit("c1", "EV page: a summary", HERE),
+        _commit("m1", "Merge pull request #183 from KlemmyDev/ev", HERE, "c1"),
+        _commit("v1", "Version 2026.10.11", "m1"),
+        _commit("c2", "Copy pass", HERE),
+        _commit("c3", "Merge remote-tracking branch 'origin/main' into copy", "c2", "v1"),
+        _commit("c4", "Copy pass: a test on a fixed day", "c3"),
+        _commit("m2", "Merge pull request #187 from KlemmyDev/copy", "v1", "c4"),
+        _commit(NEWER, "Merge pull request #188 from KlemmyDev/ev-clarity", "m2", "c1"),
+    ]
+
+
+def test_merged_pull_requests_are_the_changes(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Eight commits, but three pull requests: the merges into them and the version's commit aren't changes.
+    _answer(monkeypatch, _github(NEWER, "2026.10.11", {"ahead_by": 8, "behind_by": 0, "commits": _history()}), HERE)
+    status = svc.check()
+    assert status["latest"]["changes"] == 3 and status["available"] is True
+
+
+def test_a_commit_straight_to_main_is_a_change() -> None:
+    history = [_commit("c1", "Fix a typo", HERE), _commit(NEWER, "Version 2026.10.12", "c1")]
+    assert updates.count_changes({"ahead_by": 2, "commits": history}, NEWER) == 1
+
+
+def test_only_a_new_version_is_still_newer() -> None:
+    # Nothing but the Version workflow's commit: it's newer all the same, so one change rather than none.
+    history = [_commit(NEWER, "Version 2026.10.12", HERE)]
+    assert updates.count_changes({"ahead_by": 1, "commits": history}, NEWER) == 1
+
+
+def test_too_many_commits_to_list_are_counted_as_github_does() -> None:
+    # GitHub lists 250 commits at most: with some left out, the history can't be followed, so its count stands.
+    assert updates.count_changes({"ahead_by": 300, "commits": _history()}, NEWER) == 300
+    assert updates.count_changes({"ahead_by": 4}, NEWER) == 4
+    assert updates.count_changes({"ahead_by": 0, "commits": []}, NEWER) == 0
 
 
 def test_a_local_build_compares_versions(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,6 +213,24 @@ def test_stable_behind_this_one_is_older(svc: UpdateService, monkeypatch: pytest
     assert status["channel"] == "stable" and status["latest"]["tag"] == "v2026.10.7"
     assert status["move"] == "older" and status["available"] is False
     assert status["latest"]["behind"] == 5
+
+
+def test_going_back_counts_what_it_leaves_out_as_changes(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
+    # This build is the stable release plus main's eight commits since: three changes left out by going back.
+    back = {
+        "ahead_by": 8,
+        "behind_by": 0,
+        "commits": [c | {"sha": HERE} if c["sha"] == NEWER else c for c in _history()],
+    }
+    for c in back["commits"]:
+        c["parents"] = [{"sha": NEWER if p["sha"] == HERE else p["sha"]} for p in c["parents"]]
+    gh = _github(NEWER, "2026.10.7", {"ahead_by": 0, "behind_by": 8}) | {"tags": _tags("v2026.10.7"), "back": back}
+    _answer(monkeypatch, gh, HERE)
+    status = svc.set_channel("stable")
+    assert status["move"] == "older" and status["latest"]["behind"] == 3
+    # Without GitHub's answer the other way round, its count of commits stands.
+    _answer(monkeypatch, gh | {"back": _not_found()}, HERE)
+    assert svc.check()["latest"]["behind"] == 8
 
 
 def test_a_channel_with_nothing_released(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
