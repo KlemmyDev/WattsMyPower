@@ -24,7 +24,8 @@ import {
   useHomeDays,
 } from "~/features/home/components/HomeWhole";
 import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
-import { ChangesCard, GoalsCard, RoomsCard } from "~/features/home/components/SummaryCards";
+import { NowCard } from "~/features/home/components/NowCard";
+import { ChangesCard, GoalsCard } from "~/features/home/components/SummaryCards";
 import { UsageCard, type Range } from "~/features/home/components/UsageCard";
 import {
   BEFORE_WORDS,
@@ -63,8 +64,9 @@ function ConnectPrompt() {
 const WHOLE_FIELDS = ["load_power", "pv_power", "battery_power"];
 
 /**
- * Home: where the home's power goes. Everything the home used, split between the devices connected (smart
- * appliances, plugs) and everything else; then each device with what it's doing, what it used, and its habits.
+ * Home, live: what the house is drawing now and where from, then today against a usual day beside what each room is
+ * drawing this minute; where the power went over a day or the last 7 or 30 days, split between the devices connected
+ * (smart appliances, plugs), the car and everything else; each room and device; and what's been learned from them.
  */
 export function HomePage({ range, day }: { range: Range; day?: number }) {
   const navigate = useNavigate();
@@ -111,9 +113,6 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
   const previousUsed = compare && previous.data ? groupUsage(previous.data, items) : undefined;
   const earlier = before.data && range !== "today" ? groupUsage(before.data, items) : undefined;
   const beforeOf = (id: number) => (earlier ? (earlier.devices.find((u) => u.id === id)?.total ?? 0) : undefined);
-  const rooms = homeItems(devices);
-  const roomUse = usage.data && groupUsage(usage.data, rooms);
-  const roomsBefore = before.data && range !== "today" ? groupUsage(before.data, rooms) : undefined;
   const running = visible.filter((d) => d.now?.running && !d.now.stale);
   const problems = (overview.data?.integrations ?? []).filter((i) => i.account?.error);
 
@@ -138,52 +137,49 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
           </ButtonLink>
         </Notice>
       ))}
-      <div className="grid grid-cols-12 gap-5">
+      <div className="flex flex-col gap-5">
         <HomeNow p={p} f={f} series={whole?.series} now={now} />
-        <UsageCard
-          usage={used}
-          colors={colors}
-          range={range}
-          rangeWords={rangeWords}
-          onRange={(r) => {
-            store.set(STORE_HOME_RANGE, r); // opened again (or refreshed) later, it shows this period
-            void navigate({ to: "/home", search: { range: r }, replace: true });
-          }}
-          day={start}
-          today={midnight(now)}
-          onDay={(d) =>
-            void navigate({
-              to: "/home",
-              search: { range: "today", day: d >= midnight(now) ? undefined : dateKey(d) },
-              replace: true,
-            })
-          }
-          compare={compare}
-          onCompare={(on) => {
-            setCompare(on);
-            store.set(STORE_HOME_COMPARE, on ? "1" : "");
-          }}
-          previous={previousUsed}
-          loading={usage.isPlaceholderData}
-          previousWords={beforeWords(range, start, now)}
-        />
-        <HomeTodayCard series={whole?.series} f={f} start={today} now={now} />
-        <HomeSourcesCard series={whole?.series} p={p} days={homeDays} />
-        <HomeDaysCard days={homeDays} />
-        {overview.data && !devices.length && <ConnectPrompt />}
-        {devices.length > 0 && (
-          <>
-            <ChangesCard changes={found.data?.changes} />
-            <RoomsCard
-              items={rooms}
-              usage={roomUse}
-              before={(id) => (roomsBefore ? (roomsBefore.devices.find((u) => u.id === id)?.total ?? 0) : undefined)}
-              colors={colors}
-              rangeLabel={rangeWords}
-            />
-            <GoalsCard standbyW={found.data?.standby.home_w} />
-            <StandbyCard standby={found.data?.standby} devices={devices} colors={colors} />
-            <HabitsCard unexplained={found.data?.unexplained} />
+        <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+          <div className="flex min-w-0 flex-col gap-5">
+            <HomeTodayCard series={whole?.series} f={f} start={today} now={now} />
+            <HomeDaysCard days={homeDays} />
+          </div>
+          {/* One column, what's happening now comes first. */}
+          <div className="flex min-w-0 flex-col gap-5 max-3xl:order-first">
+            {devices.length > 0 && <NowCard devices={devices} colors={colors} load={p?.load_power} />}
+            <HomeSourcesCard series={whole?.series} p={p} days={homeDays} />
+          </div>
+        </div>
+        <div className="grid grid-cols-12 gap-5">
+          <UsageCard
+            usage={used}
+            colors={colors}
+            range={range}
+            rangeWords={rangeWords}
+            onRange={(r) => {
+              store.set(STORE_HOME_RANGE, r); // opened again (or refreshed) later, it shows this period
+              void navigate({ to: "/home", search: { range: r }, replace: true });
+            }}
+            day={start}
+            today={midnight(now)}
+            onDay={(d) =>
+              void navigate({
+                to: "/home",
+                search: { range: "today", day: d >= midnight(now) ? undefined : dateKey(d) },
+                replace: true,
+              })
+            }
+            compare={compare}
+            onCompare={(on) => {
+              setCompare(on);
+              store.set(STORE_HOME_COMPARE, on ? "1" : "");
+            }}
+            previous={previousUsed}
+            loading={usage.isPlaceholderData}
+            previousWords={beforeWords(range, start, now)}
+          />
+          {overview.data && !devices.length && <ConnectPrompt />}
+          {devices.length > 0 && (
             <div className="col-span-12 flex flex-wrap items-center justify-between gap-3 pt-2">
               <h2>{view === "rooms" && hasRooms ? "Rooms and devices" : "Devices"}</h2>
               {hasRooms && (
@@ -201,42 +197,50 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
                 />
               )}
             </div>
-          </>
-        )}
-        {items.map((item) =>
-          item.group ? (
-            <GroupCard
-              key={`group:${item.group}`}
-              name={item.group}
-              members={item.members}
-              used={used?.devices.find((u) => u.id === item.id)}
-              before={beforeOf(item.id)}
-              pattern={patterns.data && groupPattern(patterns.data, item)}
-              cycles={item.members.every((d) => kinds.get(d.kind)?.cycles)}
-              kindLabels={kindLabels}
-              color={colors.get(item.id)!}
-              home={usage.data?.total.home ?? null}
-              rangeLabel={rangeWords}
-              beforeLabel={BEFORE_WORDS[range]}
-            />
-          ) : (
-            <DeviceCard
-              key={item.id}
-              device={item.members[0]}
-              used={used?.devices.find((u) => u.id === item.id)}
-              before={beforeOf(item.id)}
-              pattern={patterns.data?.find((p) => p.id === item.id)}
-              cycles={!!kinds.get(item.members[0].kind)?.cycles}
-              kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
-              color={colors.get(item.id)!}
-              home={usage.data?.total.home ?? null}
-              rangeLabel={rangeWords}
-              beforeLabel={BEFORE_WORDS[range]}
-              best={found.data?.best_times.find((b) => b.id === item.id)}
-              saving={found.data?.savings.find((x) => x.id === item.id)}
-            />
-          ),
-        )}
+          )}
+          {items.map((item) =>
+            item.group ? (
+              <GroupCard
+                key={`group:${item.group}`}
+                name={item.group}
+                members={item.members}
+                used={used?.devices.find((u) => u.id === item.id)}
+                before={beforeOf(item.id)}
+                pattern={patterns.data && groupPattern(patterns.data, item)}
+                cycles={item.members.every((d) => kinds.get(d.kind)?.cycles)}
+                kindLabels={kindLabels}
+                color={colors.get(item.id)!}
+                home={usage.data?.total.home ?? null}
+                rangeLabel={rangeWords}
+                beforeLabel={BEFORE_WORDS[range]}
+              />
+            ) : (
+              <DeviceCard
+                key={item.id}
+                device={item.members[0]}
+                used={used?.devices.find((u) => u.id === item.id)}
+                before={beforeOf(item.id)}
+                pattern={patterns.data?.find((p) => p.id === item.id)}
+                cycles={!!kinds.get(item.members[0].kind)?.cycles}
+                kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
+                color={colors.get(item.id)!}
+                home={usage.data?.total.home ?? null}
+                rangeLabel={rangeWords}
+                beforeLabel={BEFORE_WORDS[range]}
+                best={found.data?.best_times.find((b) => b.id === item.id)}
+                saving={found.data?.savings.find((x) => x.id === item.id)}
+              />
+            ),
+          )}
+          {devices.length > 0 && (
+            <>
+              <ChangesCard changes={found.data?.changes} />
+              <GoalsCard standbyW={found.data?.standby.home_w} />
+              <StandbyCard standby={found.data?.standby} devices={devices} colors={colors} />
+              <HabitsCard unexplained={found.data?.unexplained} />
+            </>
+          )}
+        </div>
       </div>
     </>
   );

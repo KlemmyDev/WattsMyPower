@@ -31,7 +31,9 @@ const HOME_RANGES: { value: Range; label: string }[] = [
 /** What's being compared with, drawn dashed: the day or period before's line. */
 const THEN = alpha(COLOR.fg, 0.5);
 
-const share = (part: number, whole: number | null) => (whole ? `${Math.round((part / whole) * 100)}%` : null);
+/** A part's share of the whole, as a percentage: "<1%" for a little, rather than "0%". */
+const share = (part: number, whole: number | null) =>
+  whole ? (part > 0 && part / whole < 0.005 ? "<1%" : `${Math.round((part / whole) * 100)}%`) : null;
 
 /** A round top for the chart. */
 function niceMax(v: number) {
@@ -74,14 +76,19 @@ function costLine(usage: HomeUsage, devices: HomeUsage["devices"], rangeWords: s
 }
 
 /** One part of the home's use, hour by hour or day by day: a device, the car, or everything else. */
-type Part = { id: number; label: string; color: string; kwh: number[] };
+type Part = { id: number; label: string; color: string; kwh: (number | null)[] };
+
+/** A part's lane: its use through the period, its total, what it cost, and its share of the home's. */
+type LanePart = Part & { total: number; cost: number };
+
+/** The label column beside the charts (hidden on phones, where each lane's label sits over it). */
+const LABEL = "w-56 flex-none max-sm:hidden";
 
 /**
- * Where the home's power went: everything the home used, each device's part of it, and what no device measures
- * ("everything else"), with what it cost. Each part is a chip with its total, then the home's use over the period as a
- * line (the period before dashed over it, when compared), and below it, sharing its hours or days, what each device
- * (and the car) used as stacked bars. A device's chip hides or shows it in the bars (double-click: only it), so one
- * room's use can be seen on its own.
+ * Where the home's power went: everything the home used and what it cost, then the home's use over the period as a
+ * line (the period before dashed over it, when compared), and under it, on the same hours or days, a lane each for
+ * what each device, the car and everything else used. Each lane is scaled to its own busiest hour or day, so a lamp's
+ * evening shows as plainly as the car's charge; its top is in the gutter, and its total and share beside it.
  */
 export function UsageCard({
   usage,
@@ -119,30 +126,9 @@ export function UsageCard({
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [width, setWidth] = useState(0); // the plots' width in layout px, as the tooltip is placed in
-  const [off, setOff] = useState<Set<number>>(new Set()); // devices (or the car) hidden from the bars
   const devices = (usage?.devices ?? []).filter((d) => colors.has(d.id));
   const total = usage?.total;
-  const parts = [
-    ...devices.map((d) => ({ id: d.id, label: d.name, kwh: d.total, cost: d.cost, color: colors.get(d.id)! })),
-    ...(usage?.car && usage.car.total > 0
-      ? [{ id: CAR_ID, label: "Car charging", kwh: usage.car.total, cost: usage.car.cost, color: CAR_COLOR }]
-      : []),
-    ...(total?.other != null
-      ? [{ id: 0, label: "Everything else", kwh: total.other, cost: total.cost.other, color: OTHER_COLOR }]
-      : []),
-  ];
   const whole = total?.home ?? null;
-  const sum = parts.reduce((a, p) => a + p.kwh, 0);
-  // Everything else is the line less the bars, so only what was measured is in them, to be shown or hidden.
-  const measured = parts.filter((p) => p.id !== 0);
-  const toggle = (id: number) =>
-    setOff((o) => {
-      const next = new Set(o);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next.size === measured.length ? new Set() : next; // hiding the last one shows them all again
-    });
-  const only = (id: number) => setOff(new Set(measured.map((p) => p.id).filter((p) => p !== id)));
   // The comparison's line has its place kept whether it's shown or not, so turning it on doesn't move the card; it
   // fades in, and out with the words it had.
   const compared = compare && previous && usage ? comparedText(usage, previous, previousWords) : null;
@@ -156,6 +142,32 @@ export function UsageCard({
         ...(usage.car ? [{ id: CAR_ID, label: "Car charging", color: CAR_COLOR, kwh: usage.car.kwh }] : []),
       ]
     : [];
+  // The lanes: what used anything, the most first, then everything else (what's left of the home's line).
+  const lanes: LanePart[] = usage
+    ? [
+        ...[
+          ...devices.map((d) => ({ ...stack.find((p) => p.id === d.id)!, total: d.total, cost: d.cost })),
+          ...(usage.car && usage.car.total > 0
+            ? [{ ...stack.find((p) => p.id === CAR_ID)!, total: usage.car.total, cost: usage.car.cost }]
+            : []),
+        ]
+          .filter((p) => p.total >= 0.0005)
+          .sort((a, b) => b.total - a.total),
+        ...(total?.other != null && total.other >= 0.0005
+          ? [
+              {
+                id: 0,
+                label: "Everything else",
+                color: OTHER_COLOR,
+                kwh: usage.other,
+                total: total.other,
+                cost: total.cost.other,
+              },
+            ]
+          : []),
+      ]
+    : [];
+  const unused = devices.filter((d) => d.total < 0.0005).map((d) => d.name);
   const n = usage?.t.length ?? 0;
   // The last hour with readings (or with a device's, before the inverter's arrive); a period of days, its last day.
   const last = !usage
@@ -164,7 +176,7 @@ export function UsageCard({
       ? n - 1
       : Math.max(
           usage.home.findLastIndex((v) => v != null),
-          ...stack.map((p) => p.kwh.findLastIndex((v) => v > 0)),
+          ...stack.map((p) => p.kwh.findLastIndex((v) => (v ?? 0) > 0)),
         );
   const shownBefore = compare ? previous : undefined;
   // Either chart, pointed at, picks the hour or day under the pointer for both (past the last hour, the last, unless
@@ -253,76 +265,6 @@ export function UsageCard({
             <p className="m-0 -mt-2 text-sm text-pretty text-ink-muted">{costLine(usage, devices, rangeWords)}</p>
           )}
 
-          {sum > 0 && (
-            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-              {parts.map((p) => {
-                // Everything else isn't in the bars (it's the line less them), so its chip only says what it was.
-                const fixed = p.id === 0;
-                const shown = fixed || !off.has(p.id);
-                const of = share(p.kwh, whole);
-                const said = [p.cost >= 0.005 ? money(p.cost) : null, of ? `${of} of your home's use` : null]
-                  .filter(Boolean)
-                  .join(", ");
-                const chip = cn(
-                  "flex h-8 items-center gap-1.5 rounded-full border px-3 font-sans text-[13px] text-ink tabular-nums transition-[background,border-color,opacity] select-none",
-                  shown ? "border-transparent" : "border-dashed border-line bg-transparent opacity-55 hover:opacity-80",
-                );
-                const body = (
-                  <>
-                    <span
-                      className="size-2 flex-none rounded-full border-[1.5px]"
-                      style={{ borderColor: p.color, background: shown ? p.color : "transparent" }}
-                    />
-                    <span className="max-w-[18ch] truncate text-ink-muted">{p.label}</span>
-                    <span className="font-semibold">
-                      <Tweened value={p.kwh} format={kWh} />
-                    </span>
-                    {of && <span className="text-xs text-ink-faint">{of}</span>}
-                  </>
-                );
-                const style = shown ? { background: alpha(p.color, 0.12) } : undefined;
-                return (
-                  <li key={p.id}>
-                    {fixed ? (
-                      <span
-                        title={[said, "Use no device measured (the line minus the bars)"].filter(Boolean).join(". ")}
-                        style={style}
-                        className={chip}
-                      >
-                        {body}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        aria-pressed={shown}
-                        title={[said, "Show or hide it in the bars. Double-click to see it alone"]
-                          .filter(Boolean)
-                          .join(". ")}
-                        onClick={() => toggle(p.id)}
-                        onDoubleClick={() => only(p.id)}
-                        style={style}
-                        className={cn(chip, "cursor-pointer", shown && "hover:brightness-110")}
-                      >
-                        {body}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-              {off.size > 0 && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setOff(new Set())}
-                    className="h-8 animate-pop cursor-pointer border-0 bg-transparent px-2 font-sans text-[13px] whitespace-nowrap text-brand hover:underline"
-                  >
-                    Show all
-                  </button>
-                </li>
-              )}
-            </ul>
-          )}
-
           <div className="-mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-ink-faint">
               {usage.bucket === "hour" ? "Hour by hour" : "Day by day"}
@@ -351,27 +293,54 @@ export function UsageCard({
             key={`${usage.start}:${usage.end}`}
             className={cn("flex flex-col gap-2 transition-opacity duration-300", loading && "opacity-50")}
           >
-            <Trend
-              usage={usage}
-              stack={stack}
-              off={off}
-              last={last}
-              previous={shownBefore}
-              previousWords={previousWords}
-              hover={hover}
-              width={width}
-              plot={plot}
-            />
-            {measured.some((p) => p.kwh > 0) && (
-              <Breakdown usage={usage} stack={stack} off={off} hover={hover} setHover={setHover} plot={plot} />
-            )}
-            <div className="flex pr-12 font-mono text-[10px] text-ink-faint max-sm:pr-10">
-              {usage.t.map((t, i) => (
-                <span key={t} className="min-w-0 flex-1 overflow-visible text-center whitespace-nowrap">
-                  {axisLabel(t, i, n, usage.bucket) ?? ""}
+            <div className="flex gap-4">
+              <div className={cn(LABEL, "flex flex-col gap-1.5 pt-0.5 text-xs text-ink-muted")}>
+                <span className="flex items-center gap-2">
+                  <i aria-hidden className="h-0.5 w-3.5 flex-none rounded-full" style={{ background: COLOR.ink }} />
+                  Your home
                 </span>
-              ))}
+                {shownBefore && (
+                  <span className="flex animate-fade items-center gap-2 first-letter:uppercase">
+                    <i aria-hidden className="w-3.5 flex-none border-t-2 border-dashed" style={{ borderColor: THEN }} />
+                    {previousWords.charAt(0).toUpperCase() + previousWords.slice(1)}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <Trend
+                  usage={usage}
+                  stack={stack}
+                  last={last}
+                  previous={shownBefore}
+                  previousWords={previousWords}
+                  hover={hover}
+                  width={width}
+                  plot={plot}
+                />
+              </div>
             </div>
+            {lanes.length > 0 && (
+              <div className="mt-2 flex flex-col gap-2.5 max-sm:gap-3">
+                {lanes.map((p, k) => (
+                  <Lane key={p.id} part={p} usage={usage} last={last} whole={whole} hover={hover} plot={plot} i={k} />
+                ))}
+              </div>
+            )}
+            <div className="flex gap-4">
+              <div className={LABEL} />
+              <div className="flex min-w-0 flex-1 pr-12 font-mono text-[10px] text-ink-faint max-sm:pr-10">
+                {usage.t.map((t, i) => (
+                  <span key={t} className="min-w-0 flex-1 overflow-visible text-center whitespace-nowrap">
+                    {axisLabel(t, i, n, usage.bucket) ?? ""}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {unused.length > 0 && (
+              <p className="m-0 text-xs text-pretty text-ink-faint">
+                {listed(unused)} didn't use anything {rangeWords}.
+              </p>
+            )}
           </div>
         </>
       )}
@@ -404,69 +373,92 @@ function Grid({ top }: { top: number }) {
   );
 }
 
-/**
- * Each hour or day split into its parts, as stacked bars under the line, scaled to what's shown. A part hidden eases
- * down to nothing, and back.
- */
-function Breakdown({
-  usage,
-  stack,
-  off,
-  hover,
-  setHover,
-  plot,
-}: {
-  usage: HomeUsage;
-  stack: Part[];
-  off: Set<number>;
-  hover: number | null;
-  setHover: (i: number | null) => void;
-  plot: Plot;
-}) {
-  const kwh = (p: Part, i: number) => (off.has(p.id) ? 0 : (p.kwh[i] ?? 0));
-  const shown = (i: number) => stack.reduce((a, p) => a + kwh(p, i), 0);
-  const top = niceMax(Math.max(0, ...usage.t.map((_, i) => shown(i))));
-  const pc = (v: number) => `${Math.max(0, (v / top) * 100)}%`;
+/** A lane's top: its busiest hour or day, but never under 10 Wh, so a device that barely draws anything doesn't fill
+ * its lane with noise. */
+const laneTop = (v: number) => Math.max(v, 0.01);
 
+/**
+ * One part's lane: its name, total and share of the home's beside it, and its use each hour or day as bars scaled to
+ * its own busiest (what that was in the gutter, at the top). Pointing at it picks that hour or day across the card, as the line does.
+ */
+function Lane({
+  part: p,
+  usage,
+  last,
+  whole,
+  hover,
+  plot,
+  i,
+}: {
+  part: LanePart;
+  usage: HomeUsage;
+  last: number;
+  whole: number | null;
+  hover: number | null;
+  plot: Plot;
+  /** Its place in the list, for the bars' stagger as they grow in. */
+  i: number;
+}) {
+  const v = (k: number) => (k <= last ? Math.max(0, p.kwh[k] ?? 0) : 0);
+  const top = laneTop(Math.max(0, ...usage.t.map((_, k) => v(k))));
+  const busiest = usage.t.reduce((a, _, k) => (v(k) > v(a) ? k : a), 0);
+  const of = share(p.total, whole);
+  const said = [
+    `${p.label}: ${kWh(p.total)}`,
+    of ? `${of} of your home's use` : null,
+    p.cost >= 0.005 ? money(p.cost) : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const label = (
+    <>
+      <span className="size-2 flex-none rounded-full" style={{ background: p.color }} />
+      <span className="min-w-0 truncate text-ink-muted">{p.label}</span>
+      <span className="ml-auto font-semibold whitespace-nowrap text-ink">
+        <Tweened value={p.total} format={kWh} />
+      </span>
+      <span className="w-8 flex-none text-right text-xs text-ink-faint">{of ?? ""}</span>
+    </>
+  );
   return (
-    <div className="relative mt-3 h-[120px] pr-12 max-sm:h-[96px] max-sm:pr-10">
-      <Grid top={top} />
-      <div className="relative flex h-full items-end" {...plot}>
-        {usage.t.map((t, i) => {
-          const parts = stack.filter((p) => kwh(p, i) > 0);
-          const summary = parts.map((p) => `${p.label} ${kWh(kwh(p, i))}`).join(", ");
-          // A 2px line in the card's colour over each part but the top one keeps them apart, as a gap would, without
-          // a gap left behind by a part at nothing.
-          const topPart = stack.findLastIndex((p) => kwh(p, i) > 0);
-          return (
-            <button
+    <div className="flex items-center gap-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
+      <div
+        className="flex w-56 flex-none items-center gap-2 text-[13px] tabular-nums max-sm:w-auto"
+        title={p.cost >= 0.005 ? `${money(p.cost)} ${p.id === 0 ? "for everything else" : "of the cost"}` : undefined}
+      >
+        {label}
+      </div>
+      <div className="relative h-7 min-w-0 flex-1 pr-12 max-sm:flex-none max-sm:pr-10">
+        <span className="pointer-events-none absolute -top-[3px] right-0 font-mono text-[10px] leading-[14px] text-ink-faint">
+          {kWh(top)}
+        </span>
+        <div
+          role="img"
+          aria-label={`${said}. Most ${kWh(v(busiest))}, ${bucketLabel(usage.t[busiest], usage.bucket)}`}
+          className="relative flex h-full cursor-crosshair touch-pan-y items-end border-b border-fg/8"
+          {...plot}
+        >
+          {usage.t.map((t, k) => (
+            <span
               key={t}
-              type="button"
-              aria-label={`${bucketLabel(t, usage.bucket)}: ${summary || "nothing measured"}`}
-              onFocus={() => setHover(i)}
-              onBlur={() => setHover(null)}
-              style={{ "--i": i } as CSSProperties}
               className={cn(
-                "bar-grow flex h-full min-w-0 flex-1 cursor-pointer flex-col-reverse border-0 bg-transparent px-[1.5px] py-0 transition-opacity duration-150 max-sm:px-px",
-                hover != null && hover !== i && "opacity-50",
+                "bar-grow flex h-full min-w-0 flex-1 items-end transition-opacity duration-150",
+                // a week's seven wide bars kept apart, a day's or a month's narrow ones close
+                usage.t.length <= 10 ? "px-1.5 max-sm:px-1" : "px-[1.5px] max-sm:px-px",
+                hover != null && hover !== k && "opacity-40",
               )}
+              style={{ "--i": k + i * 2 } as CSSProperties}
             >
-              {stack.map((p, k) => (
-                <span
-                  key={p.id}
-                  className="w-full flex-none border-surface transition-[height,border-width] duration-500 ease-out-soft"
-                  style={{
-                    height: pc(kwh(p, i)),
-                    background: p.color,
-                    borderTopWidth: kwh(p, i) > 0 && k !== topPart ? 2 : 0,
-                    borderTopLeftRadius: k === topPart ? 3 : 0,
-                    borderTopRightRadius: k === topPart ? 3 : 0,
-                  }}
-                />
-              ))}
-            </button>
-          );
-        })}
+              <span
+                className="w-full rounded-t-[2px] transition-[height] duration-500 ease-out-soft"
+                style={{
+                  height: v(k) > 0 ? `max(1.5px, ${(v(k) / top) * 100}%)` : 0,
+                  background: p.color,
+                }}
+              />
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -554,7 +546,6 @@ const LINE = {
 function Trend({
   usage,
   stack,
-  off,
   last,
   previous,
   previousWords,
@@ -564,7 +555,6 @@ function Trend({
 }: {
   usage: HomeUsage;
   stack: Part[];
-  off: Set<number>;
   /** The last hour or day with readings. */
   last: number;
   previous?: HomeUsage;
@@ -592,8 +582,7 @@ function Trend({
   const area =
     main.length > 1 ? `${mainD} L${main[main.length - 1][0].toFixed(1)} ${LH} L${main[0][0].toFixed(1)} ${LH} Z` : "";
   const pc = (v: number) => (Y(v) / LH) * 100;
-  const parts = h != null && h <= last ? stack.filter((p) => !off.has(p.id) && (p.kwh[h] ?? 0) > 0) : [];
-  const filtered = off.size > 0;
+  const parts = h != null && h <= last ? stack.filter((p) => (p.kwh[h] ?? 0) > 0) : [];
   const other = h != null && h <= last ? (usage.other[h] ?? null) : null;
   const capital = previousWords.charAt(0).toUpperCase() + previousWords.slice(1);
 
@@ -672,13 +661,12 @@ function Trend({
               {then(h) != null && <TooltipRow label={capital} value={kWh(then(h))} color={THEN} />}
               {(parts.length > 0 || other != null) && (
                 <div className="mt-0.5 flex flex-col gap-1.5 border-t border-line pt-2">
-                  {parts.map((p) => (
-                    <TooltipRow key={p.id} label={p.label} value={kWh(p.kwh[h])} color={p.color} />
-                  ))}
+                  {[...parts]
+                    .sort((a, b) => (b.kwh[h] ?? 0) - (a.kwh[h] ?? 0))
+                    .map((p) => (
+                      <TooltipRow key={p.id} label={p.label} value={kWh(p.kwh[h])} color={p.color} />
+                    ))}
                   {other != null && <TooltipRow label="Everything else" value={kWh(other)} color={OTHER_COLOR} />}
-                  {filtered && parts.length > 0 && (
-                    <TooltipRow label="In the bars" value={kWh(parts.reduce((a, p) => a + p.kwh[h], 0))} />
-                  )}
                 </div>
               )}
             </ChartTooltip>
