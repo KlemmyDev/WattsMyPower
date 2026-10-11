@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
@@ -7,13 +7,15 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
+import { Collapse } from "~/features/common/ui/components/Collapse";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
+import { SolarOutlook } from "~/features/ev/components/EvOutlook";
 import { EvTiming } from "~/features/ev/components/EvTiming";
-import { useEvChange } from "~/features/ev/hooks";
+import { useEvChange, useSpareNow } from "~/features/ev/hooks";
 import type { BluelinkCar, EvBrand, EvFirst, EvMode, EvVehicle } from "~/features/ev/types";
 import { appName } from "~/features/ev/utils";
 
@@ -36,6 +38,7 @@ const FIRST: { value: EvFirst; icon: IconName; label: string }[] = [
   { value: "shared", icon: "sun", label: "Share" },
   { value: "car", icon: "car", label: "Car" },
 ];
+const FIRST_WORDS: Record<EvFirst, string> = { battery: "Battery first", shared: "Shared", car: "Car first" };
 const MAX_SHORT_BY = 3000;
 // The home's flows, in the colours the rest of the dashboard gives them.
 const HOME = COLOR.teal;
@@ -129,11 +132,12 @@ function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
 /**
  * The car's share of the sun, a chunk for each amp: a first, longer block up to the lowest current it charges at (what
  * has to be spare before it starts at all, striped where it may run short through a cloud), then one chunk for each
- * amp above that, up to the most it can draw. The spare sun fills them from the left, so how near it is to the next
- * amp shows as the chunk filling; a small mark over the chunks, and a line under those it's using, say the current
- * it's charging at.
+ * amp above that, up to the most it can draw. The spare sun now (`live`, from the latest reading) fills them from the
+ * left, so how near it is to the next amp shows as the chunk filling; beside it, the average over the last few
+ * minutes that the dashboard goes by. A small mark over the chunks, and a line under those it's using, say the
+ * current it's charging at.
  */
-function AmpMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
+function AmpMeter({ v, shortBy, live }: { v: EvVehicle; shortBy: number; live: number | null }) {
   const s = v.state;
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
   if (!perAmp || v.min_amps == null || v.max_amps == null || v.min_w == null)
@@ -141,8 +145,8 @@ function AmpMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   const lo = v.min_amps;
   const n = Math.max(0, v.max_amps - lo);
   const start = v.min_w;
-  const spare = v.spare_w != null ? Math.max(0, v.spare_w) : null;
-  const draw = s?.charging ? (s.power_kw ?? 0) * 1000 : null;
+  const average = v.spare_w != null ? Math.max(0, v.spare_w) : null;
+  const spare = live != null ? Math.max(0, live) : average;
   const amps = s?.charging && s.amps != null ? Math.max(lo, Math.min(v.max_amps, s.amps)) : null;
   // How full each is, from the spare sun: the start block to the lowest current, then each amp's worth past it.
   const filled = (from: number, to: number) =>
@@ -156,16 +160,6 @@ function AmpMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
   ];
   const columns = `minmax(0, ${Math.max(3, Math.round(n / 3))}fr) repeat(${n}, minmax(0, 1fr))`;
   const floor = Math.max(0, start - shortBy);
-  const caption =
-    draw != null
-      ? `Charging at ${kW(draw)}`
-      : spare == null
-        ? "Working out how much is spare…"
-        : v.solar_amps
-          ? `Enough to charge at ${v.solar_amps} A (${kW(v.solar_amps * perAmp)})`
-          : !s?.charging && v.solar_from
-            ? `Spare sun expected from ${hhmm(v.solar_from)}`
-            : `Needs ${kW(start - spare)} more to start`;
   const label = (a: number, i: number) =>
     i === 0
       ? `Starts at ${a} A`
@@ -179,10 +173,12 @@ function AmpMeter({ v, shortBy }: { v: EvVehicle; shortBy: number }) {
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px]">
         <span className="flex items-center gap-1.5">
           <Dot color={COLOR.solar} />
-          <span className="text-ink-muted">Spare for the car</span>
+          <span className="text-ink-muted">Spare now</span>
           <span className="font-medium tabular-nums">{spare != null ? kW(spare) : "—"}</span>
         </span>
-        <span className="text-ink-muted tabular-nums">{caption}</span>
+        <span className="text-ink-muted tabular-nums" title="What starting, stopping and the speed go by">
+          {average != null ? `${clockWords(v.control.average)} average ${kW(average)}` : "Averaging…"}
+        </span>
       </div>
       <div
         role="img"
@@ -368,6 +364,46 @@ function ChargePower({ v, onSave }: { v: BluelinkCar; onSave: (w: number | null)
   );
 }
 
+/**
+ * The settings for how it charges, folded away under a line saying what they're set to ("Battery first · borrows up
+ * to 300 W · 3 min of sun to start · no amp limit"); opened, each with its control.
+ */
+function SettingsFold({ summary, children }: { summary: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="flex flex-col border-t border-line-subtle pt-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+        className="flex cursor-pointer items-center justify-between gap-3 rounded-lg text-left"
+      >
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-sm font-semibold">Charging settings</span>
+          <span className="truncate text-[13px] text-ink-muted first-letter:uppercase">{summary}</span>
+        </span>
+        <Icon
+          name="chevD"
+          size={18}
+          className={cn("flex-none text-ink-muted transition-transform duration-300", open && "rotate-180")}
+        />
+      </button>
+      <Collapse open={open} id={id} className="flex flex-col gap-4 pt-2">
+        {children}
+      </Collapse>
+    </div>
+  );
+}
+
+/** A wait in words, for the average it goes by: "2½ min", "45 s", "5 min". */
+function clockWords(secs: number): string {
+  if (secs < 60) return `${secs} s`;
+  const m = secs / 60;
+  return Number.isInteger(m) ? `${m} min` : m % 1 === 0.5 ? `${Math.floor(m)}½ min` : `${Math.round(m)} min`;
+}
+
 const AMPS_SETTLE = 700; // ms after the last tap of − or + before the current's sent
 const MOST_AMPS = 48; // the most a car may be held to (app.features.tesla.control.MAX_AMPS)
 
@@ -503,9 +539,9 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
 }
 
 /**
- * How the car charges at home: by hand, or from solar only. With solar only, where the sun's going now and the car's
- * share of it, then the two choices (who gets the sun first; how far it may run short through a cloud), each a row
- * with its control beside it. Then starting, stopping and its speed, now.
+ * How the car charges at home: by hand, or from solar only. With solar only, what's next and when (starting, stopping,
+ * a change of speed, and what it's waiting on), then where the sun's going now and the car's share of it, live.
+ * Then starting, stopping and its speed by hand, and its settings folded away under a line saying what they are.
  */
 export function EvCharging({
   v,
@@ -542,11 +578,25 @@ export function EvCharging({
       ? ["Manual", COLOR.inkMuted]
       : v.hold
         ? ["Paused", COLOR.warn]
-        : s?.charging
-          ? ["Charging on solar", COLOR.solar]
-          : v.follow === "ready"
-            ? ["Ready to go", COLOR.solar]
-            : ["Waiting for sun", COLOR.inkMuted];
+        : v.outlook?.state === "stopping"
+          ? ["Stopping soon", COLOR.warn]
+          : s?.charging
+            ? ["Charging on solar", COLOR.solar]
+            : v.outlook?.state === "counting"
+              ? ["Starting soon", COLOR.solar]
+              : v.follow === "ready"
+                ? ["Ready to go", COLOR.solar]
+                : ["Waiting for sun", COLOR.inkMuted];
+  const live = useSpareNow(v);
+  // The settings, folded away, in a line.
+  const summary = [
+    c.mode === "solar" && FIRST_WORDS[c.first],
+    c.mode === "solar" && (c.grid_w ? `borrows up to ${kW(c.grid_w)}` : "stops straight away"),
+    c.mode === "solar" && `${clockWords(c.start_after)} of sun to start`,
+    !fixed && (c.max_amps ? `up to ${c.max_amps} A` : "no amp limit"),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const share = v.share;
   const firstAbout =
     c.first === "battery"
@@ -595,6 +645,7 @@ export function EvCharging({
 
       {c.mode === "solar" && (
         <>
+          {!fixed && <SolarOutlook v={v} live={live} />}
           <Row
             title="Your sun right now"
             control={
@@ -608,46 +659,12 @@ export function EvCharging({
             }
           >
             <SunShare carW={carW} first={c.first} />
-            {fixed ? <FixedMeter v={v} shortBy={shortBy.value} /> : <AmpMeter v={v} shortBy={shortBy.value} />}
+            {fixed ? (
+              <FixedMeter v={v} shortBy={shortBy.value} />
+            ) : (
+              <AmpMeter v={v} shortBy={shortBy.value} live={live} />
+            )}
           </Row>
-          {fixed && <ChargePower v={fixed} onSave={(w) => set({ vin: v.vin, charge_w: w })} />}
-          <Row
-            title="Who gets the sun first"
-            about={firstAbout}
-            control={
-              <Segmented
-                label="Who gets the sun first"
-                options={FIRST.map((f) => ({
-                  value: f.value,
-                  label: (
-                    <>
-                      <Icon name={f.icon} size={14} /> {f.label}
-                    </>
-                  ),
-                }))}
-                value={c.first}
-                onChange={(first) => set({ vin: v.vin, first })}
-                buttonClassName="px-3 py-1.5 text-[13px]"
-              />
-            }
-          />
-          <Row
-            title="Through a cloud"
-            control={
-              <span className="text-sm font-medium tabular-nums">
-                {shortBy.value ? `Borrows up to ${kW(shortBy.value)}` : "Stops straight away"}
-              </span>
-            }
-            about={
-              <>
-                Once it's charging, it keeps going through a passing cloud by borrowing up to this much from the grid or
-                your home battery, rather than stopping straight away. Shown striped on the meter above.
-              </>
-            }
-          >
-            {shortBy.input}
-          </Row>
-          <EvTiming v={v} hasBattery={hasBattery} brand={brand} />
           {s?.at_home === false && s.in_range == null && s.plugged && (
             <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
               <span>The car doesn't seem to be at home, so it won't charge from solar here. Is this your home?</span>
@@ -658,7 +675,6 @@ export function EvCharging({
           )}
         </>
       )}
-      {!fixed && <MostAmps v={v} configure={configure} />}
       {configure.isError && <HelpText tone="bad">{errorMessage(configure.error)}</HelpText>}
 
       <Row
@@ -773,6 +789,53 @@ export function EvCharging({
                       : ""}
         </HelpText>
       </Row>
+      {(c.mode === "solar" || !fixed) && (
+        <SettingsFold summary={summary}>
+          {c.mode === "solar" && (
+            <>
+              {fixed && <ChargePower v={fixed} onSave={(w) => set({ vin: v.vin, charge_w: w })} />}
+              <Row
+                title="Who gets the sun first"
+                about={firstAbout}
+                control={
+                  <Segmented
+                    label="Who gets the sun first"
+                    options={FIRST.map((f) => ({
+                      value: f.value,
+                      label: (
+                        <>
+                          <Icon name={f.icon} size={14} /> {f.label}
+                        </>
+                      ),
+                    }))}
+                    value={c.first}
+                    onChange={(first) => set({ vin: v.vin, first })}
+                    buttonClassName="px-3 py-1.5 text-[13px]"
+                  />
+                }
+              />
+              <Row
+                title="Through a cloud"
+                control={
+                  <span className="text-sm font-medium tabular-nums">
+                    {shortBy.value ? `Borrows up to ${kW(shortBy.value)}` : "Stops straight away"}
+                  </span>
+                }
+                about={
+                  <>
+                    Once it's charging, it keeps going through a passing cloud by borrowing up to this much from the
+                    grid or your home battery, rather than stopping straight away. Shown striped on the meter above.
+                  </>
+                }
+              >
+                {shortBy.input}
+              </Row>
+              <EvTiming v={v} hasBattery={hasBattery} brand={brand} />
+            </>
+          )}
+          {!fixed && <MostAmps v={v} configure={configure} />}
+        </SettingsFold>
+      )}
     </Card>
   );
 }

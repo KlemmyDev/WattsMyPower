@@ -1326,6 +1326,18 @@ class TeslaService:
             spare = self._spare(vin, s, cfg, mem, spec)  # type: ignore[arg-type]
         return spare
 
+    def _outlook(
+        self, v: dict[str, Any], s: CarState | None, mem: Memory, spec: Charger | None, spare: float | None
+    ) -> dict[str, Any] | None:
+        """What's next for a car following the sun at home (control.outlook); None when it isn't (not in solar mode,
+        not plugged in at home, on hold, or with no charger figures)."""
+        cfg = v["control"]
+        if cfg["mode"] != "solar" or spec is None or s is None or mem.hold is not None:
+            return None
+        if not s.plugged or not s.at_home or s.fast_charger:
+            return None
+        return control.outlook(s, spec, spare, cfg["grid_w"], mem, int(self.clock()), control.Timing.of(cfg))
+
     def vehicle(self, vin: str, v: dict[str, Any]) -> dict[str, Any]:
         s = self._states.get(vin)
         mem = self._memory(vin)
@@ -1373,6 +1385,8 @@ class TeslaService:
             # by the end of the day's sun.
             "share": self._share_brief() if v["control"]["first"] == "shared" else None,
             "min_w": round(spec.watts(spec.min_amps)) if spec else None,
+            # What's next while it follows the sun at home (control.outlook): what it's waiting on, and when it'll act.
+            "outlook": self._outlook(v, s, mem, spec, spare),
             "max_amps": spec.max_amps if spec else None,
             # The most the car says it can draw, before what it's set to draw at most (control.max_amps).
             "car_max_amps": self._car_max(vin) if spec else None,

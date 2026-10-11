@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLive } from "~/features/common/live/hooks/useLive";
+import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import {
   commandEv,
   configureEv,
@@ -23,8 +24,10 @@ import type {
   EvControl,
   EvDetails,
   EvTimingKey,
+  EvVehicle,
   TeslaStatus,
 } from "~/features/ev/types";
+import { spareNow } from "~/features/ev/utils";
 
 const TIMING_KEYS: EvTimingKey[] = [
   "start_after",
@@ -141,4 +144,15 @@ export function useHomeCharging(): number {
   return (ev ?? [])
     .filter((c) => c.status === "charging" && c.at_home !== false && c.power_kw)
     .reduce((a, c) => a + (c.power_kw ?? 0) * 1000, 0);
+}
+
+/**
+ * The power there is for a car now (W), from the latest inverter reading as it arrives (spareNow), rather than the
+ * server's average over a few minutes that its decisions go by. Null until there's a reading.
+ */
+export function useSpareNow(v: EvVehicle): number | null {
+  const p = useSnapshot();
+  const system = useLive()?.system;
+  const batteryMaxW = (system?.battery_kwh ?? 0) > 0 ? (system?.battery_max_kw ?? 0) * 1000 : 0;
+  return spareNow(p, v, batteryMaxW);
 }

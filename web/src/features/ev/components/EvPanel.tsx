@@ -7,7 +7,7 @@ import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summar
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import { CarSteps } from "~/features/ev/components/CarSteps";
 import { EvChargeBar } from "~/features/ev/components/EvChargeBar";
-import { useEvChange, useRefreshDetails } from "~/features/ev/hooks";
+import { useEvChange, useRefreshDetails, useSpareNow } from "~/features/ev/hooks";
 import { duration, hhmm } from "~/features/common/formatting/utils/date";
 import type { EvBrand, EvVehicle } from "~/features/ev/types";
 import type { Reached } from "~/features/ev/components/ProviderChip";
@@ -112,6 +112,7 @@ export function EvPanel({
   const charging = mood.step === "charging";
   const power = charging ? (s?.power_kw ?? 0) * 1000 : null;
   const ready = readiness(v, provider);
+  const live = useSpareNow(v);
   return (
     <SummaryCard
       icon={mood.icon}
@@ -171,10 +172,10 @@ export function EvPanel({
         value={s?.limit != null ? `${Math.round(s.limit)}%` : DASH}
         sub={charging && s?.minutes_to_full ? `Full in ${duration(s.minutes_to_full * 60)}` : undefined}
       />
-      {v.control.mode === "solar" && v.spare_w != null && (
+      {v.control.mode === "solar" && (live ?? v.spare_w) != null && (
         <SummaryStat
           label="Spare solar"
-          value={kW(Math.max(0, v.spare_w))}
+          value={kW(Math.max(0, live ?? v.spare_w ?? 0))}
           sub={v.min_w != null ? `Starts at ${kW(v.min_w)}` : undefined}
         />
       )}

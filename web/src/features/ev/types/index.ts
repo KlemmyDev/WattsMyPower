@@ -102,6 +102,8 @@ export type EvVehicle = {
   /** Its lowest charging power (W). */
   min_w: number | null;
   min_amps: number | null;
+  /** A Tesla's, while it follows the sun at home: what's next (app.features.tesla.control.outlook). */
+  outlook?: EvOutlook | null;
   max_amps: number | null;
   /** A Tesla's: the most it says it can draw (A), before what it's set to draw at most (control.max_amps). */
   car_max_amps?: number | null;
@@ -110,6 +112,26 @@ export type EvVehicle = {
   /** The current spare solar alone would charge it at (0: not enough for its lowest current). */
   solar_amps: number | null;
   state: EvCarState | null;
+};
+
+/**
+ * What's next for a car following the sun, as the dashboard's decisions see it: not charging, it's measuring the spare
+ * power, short of what it takes to start (`need_w` more), or counting down to starting (enough since `since`, it starts
+ * at `at`, waiting on steady sun or on the least time since it last stopped); charging, it's following the sun (at
+ * `target` amps, changed at `at` when that's not what it's at) or stopping at `at` (short since `since`). `start_w` is
+ * what must be spare to start; `floor_w` what it keeps going on, borrowing through a cloud.
+ */
+export type EvOutlook = {
+  next: "start" | "stop" | "amps";
+  state: "measuring" | "short" | "counting" | "stopping" | "following";
+  start_w: number;
+  floor_w: number;
+  need_w?: number;
+  since?: number;
+  at?: number | null;
+  wait?: "steady" | "switch";
+  amps?: number;
+  target?: number | null;
 };
 
 /** How the cars are reached: Tessie's cloud, or this server's Bluetooth. The features are the same either way. */
