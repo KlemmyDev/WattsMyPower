@@ -56,7 +56,7 @@ class StorageService:
             {
                 "id": "dashboard",
                 "name": "Dashboard database",
-                "about": "Everything the dashboard works out and keeps: readings, weather, prices, your settings.",
+                "about": "Everything the dashboard works out and keeps, like readings, weather, prices and your settings.",
                 "available": True,
                 **_describe(mine, DASHBOARD, {"raw": self.config.raw_retention_days}, now),
             },
@@ -78,7 +78,7 @@ class StorageService:
             "about": "What the collector reads from your inverters, before the dashboard decodes it.",
         }
         if self.collector is None:
-            return {**head, "available": False, "error": "The demo has no collector: its readings are generated."}
+            return {**head, "available": False, "error": "The demo has no collector. Its readings are made up."}
         try:
             found = self.collector.storage()
         except CollectorError as e:

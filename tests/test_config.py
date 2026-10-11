@@ -22,8 +22,8 @@ def test_a_mistyped_number_names_the_setting_and_what_it_should_be() -> None:
     with pytest.raises(ConfigError) as e:
         Config.from_env({"POLL_INTERVAL": "60s", "LATITUDE": "south", "MAX_BACKOFF": "300"})
     assert e.value.problems == [
-        "POLL_INTERVAL is '60s', which isn't a whole number. Set it to one, e.g. POLL_INTERVAL=60",
-        "LATITUDE is 'south', which isn't a number. Set it to one, e.g. LATITUDE=-27.47",
+        "POLL_INTERVAL is '60s', which isn't a whole number. For example, POLL_INTERVAL=60.",
+        "LATITUDE is 'south', which isn't a number. For example, LATITUDE=-27.47.",
     ]
     assert "Can't read the settings in the environment" in str(e.value)
 
@@ -33,5 +33,5 @@ def test_the_collector_names_a_mistyped_number_too() -> None:
     with pytest.raises(CollectorConfigError) as e:
         CollectorConfig.from_env({"COLLECTOR_RETENTION_DAYS": "1y"})
     assert e.value.problems == [
-        "COLLECTOR_RETENTION_DAYS is '1y', which isn't a whole number. Set it to one, e.g. COLLECTOR_RETENTION_DAYS=365"
+        "COLLECTOR_RETENTION_DAYS is '1y', which isn't a whole number. For example, COLLECTOR_RETENTION_DAYS=365."
     ]

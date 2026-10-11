@@ -36,14 +36,14 @@ const ROWS: Row[] = [
   {
     key: "stop_after",
     label: "Wait before stopping",
-    about: "How long it keeps going once there isn't enough sun, even with what it may borrow, before it stops.",
+    about: "How long it keeps charging after spare sun runs out (counting what it can borrow) before it stops.",
     step: 30,
     shown: (s) => (s ? span(s) : "Straight away"),
   },
   {
     key: "min_switch",
-    label: "Least time between starting and stopping",
-    about: "Each start or stop wakes the car and clicks its charge port over, so not too often.",
+    label: "Minimum time between start and stop",
+    about: "Each start or stop wakes the car and clicks its charge port, so they shouldn't come too close together.",
     step: 60,
     shown: span,
   },
@@ -65,7 +65,7 @@ const ROWS: Row[] = [
     key: "lead",
     label: "Get the car ready before the sun",
     about:
-      "How long before spare sun is expected the car is checked each minute (and, over Bluetooth, woken), so it starts without delay.",
+      "How early before spare sun to start checking the car each minute (and waking it, over Bluetooth), so it starts without delay.",
     step: 300,
     shown: (s) => (s ? `${span(s)} before` : "Only once there's sun"),
   },
@@ -142,7 +142,7 @@ const PRESETS: Preset[] = [
   {
     id: "standard",
     label: "Standard",
-    about: "A balance: it rides out a short cloud without starting and stopping too often.",
+    about: "Balanced. Rides out a short cloud without starting and stopping too often.",
     values: null,
   },
   {
@@ -156,7 +156,7 @@ const PRESETS: Preset[] = [
     id: "steady",
     label: "Steady",
     about:
-      "Rides out clouds and changes little: fewer starts and stops, easier on the car. It may miss a short sunny spell.",
+      "Rides out clouds and changes speed less often. Fewer starts and stops are easier on the car, but it can miss a short sunny spell.",
     values: { start_after: 600, stop_after: 900, min_switch: 1200, amps_every: 180, average: 420, lead: 900 },
   },
 ];

@@ -22,7 +22,7 @@ const FIELD_NAMES: Record<string, string> = {
 export function friendly(detail: string | null): string {
   const m = /^(\w+) must be between (.+) and (.+)$/.exec(detail || "");
   if (m) return `${FIELD_NAMES[m[1]] || m[1]} must be between ${m[2]} and ${m[3]}.`;
-  return detail && /^[A-Z].*\.$/.test(detail) ? detail : "Invalid value.";
+  return detail && /^[A-Z].*\.$/.test(detail) ? detail : "That value isn't valid.";
 }
 
 /** Why saving settings failed: the range error as a sentence, or that the server failed or couldn't be reached. */

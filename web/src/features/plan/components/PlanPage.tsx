@@ -100,8 +100,8 @@ export function PlanPage({ day: selected = 0 }: { day?: number }) {
       ) : forecast === null ? (
         <Card>
           <div className="text-sm text-ink-faint">
-            Forecast unavailable. The server could not reach the Open-Meteo weather service, or the forecast is turned
-            off.
+            No forecast right now. Either the server can't reach Open-Meteo, or the forecast is turned off. Check the
+            server's internet connection.
           </div>
         </Card>
       ) : !forecast || !day || !times ? (
@@ -183,7 +183,7 @@ export function PlanPage({ day: selected = 0 }: { day?: number }) {
           <Footnote>
             {forecast.calibration.fitted_hours >= 0.5
               ? `Solar forecast calibrated on ${forecast.calibration.fitted_hours} hours of your inverter's output.`
-              : "Solar forecast not yet calibrated to your system. It needs a few daylight hours of data."}
+              : "The solar forecast isn't tuned to your system yet. It needs a few daylight hours of readings."}
             {forecast.model?.kind === "learned" &&
               ` It uses what it has learned from ${forecast.model.days} days of weather history.`}
           </Footnote>

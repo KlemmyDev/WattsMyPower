@@ -70,7 +70,7 @@ export function SmartHomeSettings() {
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-smart-home"
         title="Smart home"
-        sub="Plugs, appliances and batteries that say what they use, for the breakdown on the Home page. Connect as many brands as you have: each says how it's reached."
+        sub="Plugs, appliances and batteries that report what they use, so the Home page can break it down. Connect as many brands as you like. Each shows how it's reached."
       />
       {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
       {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}

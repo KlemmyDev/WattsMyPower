@@ -17,8 +17,8 @@ export function CostStep({ nav }: StepProps) {
   return (
     <>
       <StepIntro nav={nav} title="Cost and payback">
-        Optional, but satisfying: with what your system cost, Bills shows how much of it has paid back and when it pays
-        for itself. Your installer's invoice has the figures.
+        Optional, but satisfying. Add what your system cost and Bills will show how much it's paid back so far, and when
+        it pays for itself. Your installer's invoice has the figures.
       </StepIntro>
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
       {system ? <Cost system={system} nav={nav} /> : <StepFooter nav={nav} disabled />}
@@ -51,7 +51,7 @@ function Cost({ system, nav }: { system: SystemInfo; nav: StepProps["nav"] }) {
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[15px] font-semibold">The battery</span>
                     <span className="text-[13px] leading-5 text-ink-muted">
-                      For how much of its warranty is used, on Battery.
+                      So the Battery page can show how much of its warranty is used.
                     </span>
                   </div>
                   <OptionList>

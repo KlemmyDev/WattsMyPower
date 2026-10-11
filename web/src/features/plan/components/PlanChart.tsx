@@ -433,9 +433,9 @@ export function PlanChart({
     ["Solar", COLOR.solar, "line"],
     ["Home use", COLOR.ink, "line"],
     ["Battery level", COLOR.battery, "line"],
-    ["From grid", COLOR.fromGrid, "box"],
+    ["From the grid", COLOR.fromGrid, "box"],
     ["Battery charge", FLOW_COLOR.charge, "box"],
-    ["Sent to grid", COLOR.export, "box"],
+    ["Sent to the grid", COLOR.export, "box"],
     ["Battery discharge", FLOW_COLOR.discharge, "box"],
   ];
 

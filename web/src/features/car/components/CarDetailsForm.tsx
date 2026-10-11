@@ -108,7 +108,7 @@ export function CarDetailsForm({
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-7">
       <Group title="The car" sub="Its battery, and what it uses on the road.">
-        {num("car_battery_kwh", "Battery", "kWh", "Its usable size: the car's specs, or its app.")}
+        {num("car_battery_kwh", "Battery", "kWh", "Its usable size, from the car's specs or app.")}
         {num("car_wh_per_km", "Energy use", "Wh/km", "The trip screen's average. 150 to 200 is usual.")}
       </Group>
       <Group title="Charging at home" sub="What your charger gives, and what the car takes.">
@@ -183,7 +183,7 @@ export function CarDetailsForm({
             <span className="text-xs text-ink-muted">What the car says it is.</span>
           </div>
         ) : (
-          <Field label="Drawn as" help="Its own shape for some popular models; a sedan, SUV or hatch for the rest.">
+          <Field label="Drawn as" help="Popular models have their own shape. Others are a sedan, SUV or hatch.">
             <Select value={v.body} onChange={(e) => setV((o) => ({ ...o, body: e.target.value as CarBody }))}>
               {BODIES.map((b) => (
                 <option key={b} value={b}>

@@ -129,7 +129,7 @@ def ask(name: str, get: Get, url: str, **kw: Any) -> Any:
     except (urllib.error.URLError, OSError) as e:
         raise OutageFeedError(f"Couldn't reach {name}'s outage map.") from e
     except (ValueError, json.JSONDecodeError) as e:
-        raise OutageFeedError(f"{name}'s outage map couldn't be read.") from e
+        raise OutageFeedError(f"{name}'s outage map sent back something unexpected.") from e
 
 
 @dataclass(frozen=True)

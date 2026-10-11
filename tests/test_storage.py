@@ -260,7 +260,7 @@ def test_a_backup_is_a_zip_of_the_dashboard_database(
         assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"  # one file, no -wal to go with it
     readme = files["README.txt"].read_text()
     assert "KEEP IT PRIVATE" in readme and "docker compose stop" in readme and "-wal or -shm" in readme
-    assert "You chose the dashboard's only" in readme
+    assert "You chose to back up the dashboard's database only" in readme
     assert list(temp.iterdir()) == []  # deleted once it's sent
 
 

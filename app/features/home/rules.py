@@ -42,7 +42,7 @@ class RuleError(ValueError):
 def validate(body: dict[str, Any], kind: str) -> dict[str, Any]:
     """A rule from the dashboard's form, checked. Raises RuleError, in words."""
     if kind in PROTECTED:
-        raise RuleError("A fridge or freezer can't run on spare solar: switched off, it stops keeping food cold.")
+        raise RuleError("A fridge or freezer can't run on spare solar. Switched off, it stops keeping food cold.")
     if kind == "power_station":
         raise RuleError(
             "A portable battery's switch is its outlets, not its charging. To charge it on spare solar, plug its "
@@ -54,10 +54,12 @@ def validate(body: dict[str, Any], kind: str) -> dict[str, Any]:
     for key, words, top in (("start_w", "sending to the grid", 30_000), ("stop_w", "drawing from the grid", 30_000)):
         value = rule[key]
         if isinstance(value, bool) or not isinstance(value, int | float) or not 0 <= value <= top:
-            raise RuleError(f"Give how much the home is {words} as watts, 0 to {top:,}.")
+            raise RuleError(f"Enter how many watts the home is {words}, from 0 to {top:,}.")
         rule[key] = round(float(value))
     if rule["start_w"] < 100:
-        raise RuleError("Switch it on only once at least 100 W is going to the grid, or it'd run on grid power.")
+        raise RuleError(
+            "Set at least 100 W going to the grid before it switches on. Any lower and it'd run on grid power."
+        )
     for key in ("from", "until"):
         if rule[key] in ("", None):
             rule[key] = None
@@ -66,7 +68,7 @@ def validate(body: dict[str, Any], kind: str) -> dict[str, Any]:
     if (rule["from"] is None) != (rule["until"] is None):
         raise RuleError("Give both times, or neither.")
     if rule["from"] is not None and rule["from"] == rule["until"]:
-        raise RuleError("The times can't be the same: leave both empty to let it run any time.")
+        raise RuleError("The times can't be the same. Leave both empty to let it run any time.")
     price = rule["max_price"]
     if price in ("", None):
         rule["max_price"] = None

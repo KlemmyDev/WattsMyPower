@@ -111,7 +111,7 @@ export function AmberConnect({ onReady }: { onReady: () => void }) {
   if (!status.site_id) return <SitePicker status={status} onChosen={onReady} />;
   return (
     <HelpText className="text-[13px]">
-      Connected to Amber (API key {status.key}). The connection is in Manage → Integrations → Amber Electric.
+      Connected to Amber (API key {status.key}). You can change it in Manage → Integrations → Amber Electric.
     </HelpText>
   );
 }
@@ -134,7 +134,7 @@ function AmberConnection({ status }: { status: AmberStatus }) {
         <ConfirmAction
           label="Disconnect"
           doing="Disconnecting…"
-          note="The API key and Amber's prices are removed from this server. If your rates use Amber prices, they go back to a single rate at your fallback rates."
+          note="This removes the API key and Amber's prices from this server. If your rates use Amber's prices, they switch back to a single rate using your fallback rates."
           pending={disconnect.isPending}
           error={disconnect.error}
           run={(done) =>
@@ -167,7 +167,7 @@ export function AmberSettings() {
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-amber"
         title="Amber Electric"
-        sub="With Amber, the price of power changes every 5 or 30 minutes. Connect your account to cost your power at the price of the time."
+        sub="With Amber, your power price changes every 5 or 30 minutes. Connect your account so your costs use the price at the time."
       />
       {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
       {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
@@ -175,7 +175,7 @@ export function AmberSettings() {
         <SettingsSection
           id="h-amber-connect"
           title="Connect Amber"
-          sub="Its prices come from Amber's own API, through the internet: there's nothing to read on your network."
+          sub="Prices come from Amber's API over the internet. There's nothing to set up on your network."
         >
           <ConnectForm />
         </SettingsSection>
@@ -192,7 +192,7 @@ export function AmberSettings() {
             <SettingsSection
               id="h-amber-rates"
               title="Your rates"
-              sub="Costs, Bills and the Plan price your power at Amber's prices once your rates follow them."
+              sub="Switch your rates to Amber's prices and Costs, Bills and the Plan will use them."
               aside={
                 tariff &&
                 tariff.type !== "amber" && (
@@ -205,7 +205,7 @@ export function AmberSettings() {
               <p className="m-0 text-sm text-ink-muted">
                 {tariff?.type === "amber"
                   ? "Your rates follow Amber's prices. Today's prices are on the Overview."
-                  : "Your rates don't use Amber's prices yet: they're set in Bills → Rates & settings."}
+                  : "Your rates don't use Amber's prices yet. You can change that in Bills → Rates & settings."}
               </p>
             </SettingsSection>
           )}

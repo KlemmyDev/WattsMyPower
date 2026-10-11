@@ -252,7 +252,7 @@ def test_writes_are_made_in_order_and_read_back(settable: tuple[TestClient, Fake
 @pytest.mark.parametrize(
     ("body", "match"),
     [
-        ({"words": [[5000, 1]]}, "isn't one"),
+        ({"words": [[5000, 1]]}, "isn't allowed"),
         ({"words": [[13050, 70000]]}, "doesn't fit"),
         ({"words": [[13050, "2"]]}, "whole numbers"),
         ({"words": []}, "list of 1 to"),

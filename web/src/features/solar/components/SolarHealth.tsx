@@ -56,7 +56,7 @@ function performanceNote(
       : `on ${lows.length} clear days in the last 30, most recently ${listDays(lows.slice(-1))}`;
   return {
     tone: "warn",
-    note: `More than 10% below expected ${when}. Dust, bird droppings or new shade are the usual causes: worth a look if it carries on.`,
+    note: `More than 10% below expected ${when}. Dust, bird droppings or new shade are the usual causes. Worth a look if it keeps happening.`,
   };
 }
 
@@ -114,7 +114,7 @@ export function SolarPerformance({ performance: P }: { performance: SolarInsight
       {P?.causes && <LikelyCauses causes={P.causes} />}
       {P && P.fitted_hours >= 24 && (
         <Footnote>
-          {`Expected is learned from ${P.fitted_hours.toLocaleString("en-AU")} daylight hours of your inverter against past weather, so 100% is how your system usually does.`}
+          {`Expected is learned from ${P.fitted_hours.toLocaleString("en-AU")} daylight hours of your readings against past weather, so 100% is how your system usually does.`}
         </Footnote>
       )}
     </Card>
@@ -133,12 +133,12 @@ function LikelyCauses({ causes: c }: { causes: Causes }) {
   if (c.shade)
     items.push([
       `New shade in the ${c.shade.part}`,
-      `${c.shade.part === "afternoon" ? "Afternoons" : "Mornings"} are ${pct(c.shade.drop * 100)} down on the rest of the day over the last two weeks. A growing tree or something new nearby can do this; the sun's path moving with the seasons can too, a little.`,
+      `${c.shade.part === "afternoon" ? "Afternoons" : "Mornings"} are ${pct(c.shade.drop * 100)} down on the rest of the day over the last two weeks. A growing tree or something new nearby can do this. The sun's path shifting with the seasons can cause a little of it too.`,
     ]);
   if (c.capped && c.capped.days)
     items.push([
       "The inverter's limit",
-      `On ${c.capped.days} ${plural(c.capped.days, "day")}, output was held at about ${c.capped.limit_kw} kW while the sun could have given more: about ${kWh(c.capped.kwh)} in all. Normal with more panels than inverter.`,
+      `On ${c.capped.days} ${plural(c.capped.days, "day")}, output was held at about ${c.capped.limit_kw} kW when the sun could have given more, about ${kWh(c.capped.kwh)} in all. That's normal when the panels add up to more than the inverter.`,
     ]);
   if (!items.length) return null;
   return (
@@ -212,13 +212,13 @@ const WEAR = -0.008; // a fall faster than this a year is more than panels' usua
 
 function trendNote(t: NonNullable<SolarInsights["trend"]>): string {
   const n = t.months.length;
-  if (!n) return "Fills in as readings and weather build up: a month needs a few bright hours to count.";
+  if (!n) return "Fills in as readings and weather build up. Each month needs a few bright hours to count.";
   if (t.per_year == null)
     return `A trend shows once there are six months to compare (${n} so far). Seasons move this a few per cent.`;
   if (t.per_year <= WEAR)
     return "Faster than panels usually wear (about half a per cent a year). Dirt, a failing panel or new shade are worth checking.";
   if (t.per_year < 0) return "In line with panels' usual slow wear.";
-  return "No sign of wear: holding steady.";
+  return "Holding steady, with no sign of wear.";
 }
 
 /**
@@ -246,7 +246,7 @@ export function SolarTrend({ trend: t }: { trend: SolarInsights["trend"] }) {
         </Corner>
       </div>
       {!t ? (
-        <Muted>Needs the stored weather, which fills in once the forecast is on.</Muted>
+        <Muted>Needs past weather, which starts building up once the forecast is on.</Muted>
       ) : (
         <>
           {months.length > 0 && (

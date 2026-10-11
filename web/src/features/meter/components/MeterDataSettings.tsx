@@ -187,7 +187,7 @@ export function MeterDataSettings() {
         <SettingsTitle
           id="h-meter"
           title="Smart meter data"
-          sub="Your meter's own readings: what your retailer bills you on. Where they cover a day, bills and costs use them instead of the inverter's figures."
+          sub="The readings your retailer bills you on. For any day they cover, bills and costs use them instead of the inverter's figures."
         />
         <input
           ref={input}
@@ -220,8 +220,8 @@ export function MeterDataSettings() {
       {imports?.length === 0 && !file && (
         <div className={`text-[13px] leading-5 text-pretty text-ink-muted ${ROW}`}>
           Download your interval data as a NEM12 file (a CSV) from your electricity distributor's or retailer's website,
-          often under "usage data" or "download my data". Importing a file again later replaces the days it covers, so
-          newer data with fewer estimates is used.
+          often under "usage data" or "download my data". A newer file replaces the days it covers, so updated readings
+          replace earlier estimates.
         </div>
       )}
     </SettingsCard>

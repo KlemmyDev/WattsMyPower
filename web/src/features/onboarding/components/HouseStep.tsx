@@ -40,8 +40,8 @@ export function HouseStep({ nav }: StepProps) {
   return (
     <>
       <StepIntro nav={nav} title="Your house">
-        The Overview draws your home with the power moving through it. Pick what's closest to yours: it's only the
-        picture, nothing's worked out from it.
+        The Overview draws your home with the power moving through it. Pick what's closest to yours. It's just for the
+        picture, so nothing is calculated from it.
       </StepIntro>
       {/* Mounted once the status has loaded, so the choices start from the saved ones. */}
       {system ? <House system={system} /> : null}

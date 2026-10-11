@@ -20,7 +20,7 @@ export function Payback() {
       <TitleBlock
         id="h-pay"
         title="Return on your system"
-        sub="What solar and the battery have saved against buying it all from the grid, at your rates"
+        sub="What solar and the battery have saved you, compared with buying it all from the grid at your rates"
       />
       {p.saved_total == null ? (
         <Muted>Fills in after a full day of readings.</Muted>
@@ -56,7 +56,7 @@ export function Payback() {
             {p.cost ? (
               <DataRow label="Pays for itself">
                 {p.paid_off
-                  ? "Already has"
+                  ? "Already paid off"
                   : p.payback_at
                     ? `around ${monthYearLong.format(new Date(p.payback_at * 1000))}${p.payback_years ? `, ${p.payback_years} years in` : ""}`
                     : "Needs 30 days of readings"}
@@ -68,7 +68,7 @@ export function Payback() {
           </div>
           {!p.cost && <Muted>Add what the system cost in {settings} to see when it pays for itself.</Muted>}
           {p.cost && !p.installed && (
-            <Muted>Add when it was installed in {settings} to count the savings from before your readings start.</Muted>
+            <Muted>Add the install date in {settings} to count savings from before your readings start.</Muted>
           )}
         </>
       )}

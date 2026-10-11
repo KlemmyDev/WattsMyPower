@@ -34,7 +34,7 @@ export const EXTRAS: Extra[] = [
   {
     id: "ev",
     title: "An electric car",
-    sub: "A Tesla or BYD: its charge, and charging it from spare solar",
+    sub: "A Tesla or BYD. See its charge and top it up from spare solar.",
     icon: "car",
     color: COLOR.battery,
     href: "/integrations/ev",
@@ -43,7 +43,7 @@ export const EXTRAS: Extra[] = [
   {
     id: "home",
     title: "Smart plugs and appliances",
-    sub: "What each room and appliance uses, on the Home page",
+    sub: "See what each room and appliance uses on the Home page",
     icon: "plug",
     color: COLOR.good,
     href: "/integrations/home",
@@ -61,7 +61,7 @@ export const EXTRAS: Extra[] = [
   {
     id: "grid",
     title: "Power outages near you",
-    sub: "From your network, with weather and fire warnings",
+    sub: "Outages from your network, plus weather and fire warnings",
     icon: "grid",
     color: COLOR.warn,
     href: "/integrations/grid",
@@ -112,8 +112,8 @@ export function ExtrasStep({ nav }: StepProps) {
   return (
     <>
       <StepIntro nav={nav} title="Anything else at your place?">
-        WattsMyPower can read more than your inverter. Tick what you have, and the last page links straight to
-        connecting each.
+        WattsMyPower can read more than your inverter. Tick what you have and the last page will take you straight to
+        connecting each one.
       </StepIntro>
       <StepBody>
         <div className="@container">

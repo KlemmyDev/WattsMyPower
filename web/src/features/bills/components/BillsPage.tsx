@@ -26,7 +26,7 @@ export function BillsPage() {
     <>
       <PageHeader
         title="Bills"
-        sub="This billing period: what it's costing, which days drove it, and how to pay less"
+        sub="What this bill is costing so far, and how to pay less"
         action={
           // Below xl the row of pills over the page has it.
           <ButtonLink to="/bills/rates" variant="chip" className="flex-none gap-2 px-3.5 py-1.5 max-xl:hidden">
@@ -51,7 +51,7 @@ export function BillsPage() {
           </div>
           <TitleBlock
             title="Bills ahead and behind"
-            sub="What the next bills are likely to be, and how this one compares with the last year's"
+            sub="Your next bills, estimated, and how this one compares with the past year"
             className="pt-5"
           />
           <UpcomingBills bills={bills} />

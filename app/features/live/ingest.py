@@ -163,7 +163,7 @@ class CollectorIngest:
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # keep going no matter what: the collector may be restarting
-                self.live.last_error = f"Collector not reachable ({type(e).__name__}: {e})"
+                self.live.last_error = f"Can't reach the collector ({type(e).__name__}: {e})"
                 log.warning("%s; retrying in %ss", self.live.last_error, backoff)
                 self.live.publish()
                 await asyncio.sleep(backoff)

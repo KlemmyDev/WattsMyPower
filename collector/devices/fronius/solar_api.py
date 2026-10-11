@@ -83,7 +83,7 @@ class SolarApi:
                 with urllib.request.urlopen(url, timeout=self.timeout) as r:
                     body = json.loads(r.read().decode("utf-8", "replace"))
             except urllib.error.HTTPError as e:
-                raise ConnectionError(f"{self.host} answered {e.code} for {path.split('?')[0]}") from e
+                raise ConnectionError(f"{self.host} sent back an error ({e.code}) for {path.split('?')[0]}") from e
             except (urllib.error.URLError, OSError, ValueError) as e:
                 raise ConnectionError(f"{self.host}: {e}") from e
             finally:

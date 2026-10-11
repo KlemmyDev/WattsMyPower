@@ -33,7 +33,7 @@ export function LocationSettings() {
     <>
       <SettingsPageHeader
         title="Location"
-        sub="Where your system is. The solar forecast, sunrise and sunset, and the grid's region all follow it."
+        sub="Where your system is. The solar forecast, sunrise and sunset, and your grid region all depend on it."
       />
       <SettingsSplit
         visual={
@@ -41,7 +41,7 @@ export function LocationSettings() {
             id="h-daylight"
             title="Daylight"
             sub={
-              set ? `At ${locationLabel(s)}, worked out from where it is.` : "Set your location to see its daylight."
+              set ? `Sunrise and sunset at ${locationLabel(s)}.` : "Set your location to see its sunrise and sunset."
             }
           >
             {set ? (

@@ -7,11 +7,11 @@ function verdict(s: NonNullable<Insights["sizing"]>): string {
   const full = s.full_by_noon / s.days;
   const low = s.reserve_days / s.days;
   if (full >= 0.5 && low >= 0.5)
-    return "Often full by midday and often down to its reserve by night: more storage would be put to use.";
-  if (full >= 0.5) return "Often full by midday, but rarely runs down: it's big enough for your evenings.";
+    return "Often full by midday and down to its reserve by night. More storage would get used.";
+  if (full >= 0.5) return "Often full by midday but rarely runs down. It's big enough for your evenings.";
   if (low >= 0.5)
-    return "Often down to its reserve, but rarely full by midday: more panels would help more than more storage.";
-  return "Rarely full early and rarely run down: it suits your system.";
+    return "Often down to its reserve but rarely full by midday. More panels would help more than more storage.";
+  return "Rarely full early and rarely runs down. It's a good fit for your system.";
 }
 
 /** Whether the battery's size suits the house, and what more storage would have saved over the last 90 days. */
@@ -24,7 +24,7 @@ export function BatterySize({ sizing: s, className }: { sizing: Insights["sizing
         sub={s ? `From the last ${s.days} ${plural(s.days, "day")} of readings` : "From the last 90 days of readings"}
       />
       {!s ? (
-        <Muted>Needs two weeks of complete days of readings.</Muted>
+        <Muted>Needs two weeks of full days of readings.</Muted>
       ) : (
         <>
           <div className="text-[15px] leading-[22px] font-medium text-pretty text-ink">{verdict(s)}</div>
@@ -39,7 +39,7 @@ export function BatterySize({ sizing: s, className }: { sizing: Insights["sizing
             <DataRow label="Bought from the grid while it was at its reserve">{kWh(s.bought_while_low_kwh)}</DataRow>
           </div>
           <div className="flex flex-col gap-2">
-            <span className="text-[13px] font-semibold">With more storage beside your {s.capacity_kwh} kWh</span>
+            <span className="text-[13px] font-semibold">With more storage on top of your {s.capacity_kwh} kWh</span>
             {s.options.map((o) => (
               <DataRow key={o.extra_kwh} label={`${o.extra_kwh} kWh more`}>
                 {o.saved == null
@@ -48,9 +48,9 @@ export function BatterySize({ sizing: s, className }: { sizing: Insights["sizing
               </DataRow>
             ))}
             <Muted>
-              Replayed reading by reading: the extra storage keeps solar that went to the grid and uses it when the
-              house would have bought power, with about 10% lost on the way, at your rates. Compare a year's saving with
-              a quote for more storage.
+              Worked out by replaying your readings with the extra storage. It keeps solar you sent to the grid and uses
+              it when you'd have bought power, at your rates, losing about 10% on the way. Compare the yearly saving
+              with a quote for more storage.
             </Muted>
           </div>
         </>

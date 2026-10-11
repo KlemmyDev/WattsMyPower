@@ -20,12 +20,12 @@ export function InverterNotice() {
     return (
       <Notice tone="info" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <span className="text-pretty">
-          <span className="font-medium text-ink">No inverter connected yet.</span> Readings show here once one is.
-          Connect it in Manage → Integrations → Inverters, or with the{" "}
+          <span className="font-medium text-ink">No inverter connected yet.</span> Connect one in Manage → Integrations
+          → Inverters, or with the{" "}
           <Link to="/welcome" search={{ step: "inverter" }}>
             set-up guide
           </Link>
-          .
+          , and your readings will show up here.
         </span>
         <ButtonLink to="/integrations/inverters" variant="primary" size="sm">
           Connect one
@@ -34,13 +34,15 @@ export function InverterNotice() {
     );
   }
   if (st.error && !isFresh(st, now)) {
-    return <Notice>Inverter not responding. Retrying automatically. ({st.error})</Notice>;
+    return (
+      <Notice>Your inverter isn't answering ({st.error}). Still trying. Check it's on and on the same network.</Notice>
+    );
   }
   if (st.frozen_since) {
     return (
       <Notice tone="warn">
-        Readings frozen since {hhmm(st.frozen_since)} – the inverter's dongle isn't refreshing them. You're seeing the{" "}
-        {hhmm(st.frozen_since)} reading until it does.
+        Readings frozen since {hhmm(st.frozen_since)}. The inverter's dongle has stopped refreshing them, so you'll see
+        the {hhmm(st.frozen_since)} reading until it does.
       </Notice>
     );
   }

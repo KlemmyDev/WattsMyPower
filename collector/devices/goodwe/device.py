@@ -44,5 +44,5 @@ class GoodWeDevice:
         info = read_ranges(self.client.read, self.info, self._bad, self.name) if include_info else {}
         words = read_ranges(self.client.read, self.ranges, self._bad, self.name)
         if not words:
-            raise ConnectionError(f"{self.host} answered but returned no data")
+            raise ConnectionError(f"{self.host} answered but sent no data")
         return RawReading(input={**info, **words}, info_input=info)

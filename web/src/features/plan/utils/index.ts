@@ -234,7 +234,7 @@ export function notices(days: PlanDay[], reserve: number, usual: number | null |
       const better = days.find((o) => o !== d && o.pv >= usual * 0.8 && sunLeft(o));
       out.push({
         tone: "warn",
-        title: `${d.label} looks dull: about ${kWhInt(d.pv)} of solar`,
+        title: `${d.label} looks dull, with about ${kWhInt(d.pv)} of solar`,
         sub:
           `That's under half a usual day lately (${kWhInt(usual)})` +
           (fills ? "." : `, and the battery should top out around ${pct(d.battery.max)}.`) +

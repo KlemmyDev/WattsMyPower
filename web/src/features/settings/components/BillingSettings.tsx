@@ -23,7 +23,7 @@ export function BillingSettings() {
       id="period"
       className="scroll-mt-6"
       title="Billing period"
-      sub="Match these to your bill so estimates line up with what your retailer charges. Saved as you choose."
+      sub="Match these to your bill so estimates line up with what your retailer charges. Changes save straight away."
     >
       <BillPeriodVisual />
       <div className="flex flex-col gap-5 border-t border-line-subtle pt-5">
@@ -68,9 +68,9 @@ export function BillingFields({
   return (
     <>
       <div className="flex flex-col gap-2">
-        <span className="text-[13px] font-semibold">How often you are billed</span>
+        <span className="text-[13px] font-semibold">How often you're billed</span>
         <ChoiceTiles
-          label="How often you are billed"
+          label="How often you're billed"
           rows={rows}
           min="10rem"
           phone={3}

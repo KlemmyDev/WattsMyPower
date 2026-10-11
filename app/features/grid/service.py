@@ -287,8 +287,8 @@ class GridService:
                         "kind": "voltage_high",
                         "level": "watch",
                         "title": f"High grid voltage, {v:.0f} V",
-                        "detail": f"Above the {VOLTAGE_HIGH:.0f} V the standard allows. Your inverter may hold back "
-                        "solar it sends to the grid until it comes down.",
+                        "detail": f"That's above the {VOLTAGE_HIGH:.0f} V limit. Your inverter may send less solar "
+                        "to the grid until it drops.",
                     }
                 )
             elif v is not None and 50 < v < VOLTAGE_LOW:
@@ -297,8 +297,7 @@ class GridService:
                         "kind": "voltage_low",
                         "level": "watch",
                         "title": f"Low grid voltage, {v:.0f} V",
-                        "detail": f"Below the {VOLTAGE_LOW:.0f} V the standard allows: the local network is "
-                        "under strain.",
+                        "detail": f"That's below the {VOLTAGE_LOW:.0f} V limit, so the local network is under strain.",
                     }
                 )
             if f is not None and f > 0 and not FREQ_EVENT_LOW <= f <= FREQ_EVENT_HIGH:
@@ -307,7 +306,7 @@ class GridService:
                         "kind": "frequency",
                         "level": "warning",
                         "title": f"Grid frequency at {f:.2f} Hz",
-                        "detail": "Well outside the normal 49.85 to 50.15 Hz: something big on the grid has tripped.",
+                        "detail": "Well outside the normal 49.85 to 50.15 Hz. Something big on the grid has tripped.",
                     }
                 )
 
@@ -364,7 +363,7 @@ class GridService:
                     "kind": "price_cap",
                     "level": "warning",
                     "title": "Prices capped",
-                    "detail": "AEMO has capped wholesale prices after a run of extreme ones: supply is very tight.",
+                    "detail": "AEMO has capped wholesale prices after a run of extreme ones. Supply is very tight.",
                 }
             )
         if market and market.get("price") is not None and market["price"] >= SPIKE:

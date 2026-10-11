@@ -23,7 +23,7 @@ export function SystemStep({ nav }: StepProps) {
   return (
     <>
       <StepIntro nav={nav} title="Your system">
-        A few details your inverter can't tell us. The solar forecast and the battery's plan start from these.
+        A few details your inverter can't report. The solar forecast and the battery's plan start from these.
       </StepIntro>
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
       {system ? <Details system={system} nav={nav} /> : <StepFooter nav={nav} disabled />}

@@ -16,10 +16,10 @@ import { carMood, STATUS_LABEL } from "~/features/ev/utils";
 /** While it waits for spare solar: how closely it's followed, so it's clear why it's (not) being kept awake. */
 function readiness(v: EvVehicle, provider: Reached | null): string | null {
   if (v.night && v.status !== "charging")
-    return "Left to sleep overnight: checked every half hour without waking it. Wake it to read it now.";
+    return "Left to sleep overnight. It's checked every half hour without waking it, or wake it to read it now.";
   if (v.status !== "waiting") return null;
   if (provider === "hyundai" || provider === "kia") {
-    if (v.follow === "ready") return "Checked every 5 minutes, to start once the sun's spare";
+    if (v.follow === "ready") return "Checked every 5 minutes, ready to start once there's spare sun";
     if (v.solar_from != null) return `Spare solar expected from ${hhmm(v.solar_from)}`;
     return "No spare solar expected for it soon";
   }
@@ -27,8 +27,8 @@ function readiness(v: EvVehicle, provider: Reached | null): string | null {
   if (v.follow === "ready")
     return bt ? "Kept awake and checked each minute, to start quickly" : "Checked each minute, to start quickly";
   if (v.wake_at != null && v.solar_from != null)
-    return `${bt ? "Left to sleep" : "Checked every 5 minutes"} until ${hhmm(v.wake_at)}: spare solar expected from ${hhmm(v.solar_from)}`;
-  return bt ? "Left to sleep: no spare solar expected for it soon" : "No spare solar expected for it soon";
+    return `${bt ? "Left to sleep" : "Checked every 5 minutes"} until ${hhmm(v.wake_at)}. Spare solar expected from ${hhmm(v.solar_from)}`;
+  return bt ? "Left to sleep. No spare solar expected for it soon" : "No spare solar expected for it soon";
 }
 
 /** How fresh what's shown is: asleep or not, when its charge was read, and when it was last checked (over Bluetooth,
@@ -51,7 +51,7 @@ function freshness(v: EvVehicle, provider: Reached | null): string {
       ? `Not heard since ${hhmm(v.seen_at)}`
       : s?.asleep
         ? v.no_wake_until
-          ? `Asleep, and didn't wake for the dashboard: left to sleep until ${hhmm(v.no_wake_until)}`
+          ? `Asleep and didn't wake for the dashboard, so left to sleep until ${hhmm(v.no_wake_until)}`
           : "Asleep"
         : null,
     s?.as_of ? `charge read ${hhmm(s.as_of)}` : "charge not read yet",

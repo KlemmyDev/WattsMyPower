@@ -476,7 +476,7 @@ function HomeSources({ from, home, ahead }: { from: ReturnType<typeof sources>; 
   return (
     <div className="flex flex-col gap-2.5">
       <span className="text-xs text-ink-dim">
-        {ahead ? "Where the home's power should come from" : "Where the home's power came from"}
+        {ahead ? "Where your power should come from" : "Where your power came from"}
       </span>
       <div
         role="img"

@@ -35,7 +35,7 @@ function solarBattery(s: SystemInfo | undefined) {
       s.pv_kw ? `${s.pv_kw} kW of panels` : "Array size not set",
       s.battery_kwh ? `${s.battery_kwh} kWh battery` : null,
       s.battery_kwh && s.battery_reserve != null ? `${pct(s.battery_reserve)} reserve` : null,
-    ]) || "Array size, battery and its rates"
+    ]) || "Array size, battery and charge rate"
   );
 }
 
@@ -46,7 +46,7 @@ function costWarranty(s: SystemInfo | undefined) {
       s.system_cost ? `${dollars(s.system_cost)}` : null,
       s.system_installed ? `installed ${monthYear.format(new Date(s.system_installed * 1000))}` : null,
       s.battery_warranty_years ? `${s.battery_warranty_years}-year battery warranty` : null,
-    ]) || "Optional: for payback, and the battery's warranty"
+    ]) || "Optional. Used for payback and the battery warranty"
   );
 }
 
@@ -211,7 +211,7 @@ export function SettingsHub() {
                 icon="database"
                 color={COLOR.import}
                 label="Data"
-                detail="What's stored, and how much room it takes"
+                detail="What's stored and how much space it uses"
               />
             </SettingsGroup>
             <SettingsGroup id="h-group-app" title="WattsMyPower">

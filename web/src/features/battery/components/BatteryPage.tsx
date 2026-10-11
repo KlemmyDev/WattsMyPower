@@ -125,7 +125,7 @@ export function BatteryPage() {
           </div>
           {isError && !data && (
             <div className="text-sm text-ink-faint max-3xl:order-10">
-              The battery's figures could not be loaded. Try again shortly.
+              Couldn't load the battery's figures. Try again in a moment.
             </div>
           )}
         </div>

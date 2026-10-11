@@ -111,7 +111,7 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
           <SettingsSection
             id="h-inverter-wiring"
             title="Where it's wired"
-            sub="Which side of the main inverter's meter it connects on decides how its output is counted."
+            sub="Which side of the main inverter's meter it's on changes how its output is counted."
           >
             <InverterWiring device={device} readOnly={readOnly} bare />
           </SettingsSection>
@@ -121,7 +121,7 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
         <SettingsSection
           id="h-inverter-remove"
           title="Stop reading it"
-          sub="Takes it off WattsMyPower. It can be connected again any time."
+          sub="Takes it off WattsMyPower. You can connect it again any time."
           aside={
             <ConfirmAction
               label="Stop reading it"

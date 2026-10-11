@@ -25,8 +25,8 @@ function say(tip: BillTip, bills: Bills, tariff: Tariff | undefined): Said {
             {kWh(tip.kwh_day)} a day comes from the grid in {name.toLowerCase()} hours{hours}, at {centsShort(tip.rate)}{" "}
             a kWh.{" "}
             {tip.to === "solar"
-              ? `Running the dishwasher, washing machine or dryer while the panels are sending power to the grid uses solar that only earns ${centsShort(tip.to_rate)} instead.`
-              : `Running the dishwasher, washing machine or dryer in ${tip.to.toLowerCase()} hours costs ${centsShort(tip.to_rate)} a kWh instead.`}{" "}
+              ? `Run the dishwasher, washing machine or dryer while solar is going out to the grid, and it only costs you the ${centsShort(tip.to_rate)} that solar would have earned.`
+              : `Run the dishwasher, washing machine or dryer in ${tip.to.toLowerCase()} hours instead, at ${centsShort(tip.to_rate)} a kWh.`}{" "}
             The saving is for moving a quarter of it, about {kWh(tip.moved_kwh_day)} a day.
           </>
         ),
@@ -37,9 +37,9 @@ function say(tip: BillTip, bills: Bills, tariff: Tariff | undefined): Said {
         title: "Use more of your own solar",
         body: (
           <>
-            You send {kWh(tip.export_kwh_day)} a day to the grid for {centsShort(tip.feed_in)} a kWh, and buy grid power
-            at {centsShort(tip.import_price)} on average. Running appliances, the pool pump or a hot water timer in the
-            middle of the day would use about {kWh(tip.moved_kwh_day)} a day more of it.
+            You send {kWh(tip.export_kwh_day)} a day to the grid for {centsShort(tip.feed_in)} a kWh, but pay{" "}
+            {centsShort(tip.import_price)} on average for grid power. Run appliances, the pool pump or a hot water timer
+            in the middle of the day and you'd keep about {kWh(tip.moved_kwh_day)} a day more of it.
           </>
         ),
       };
@@ -48,24 +48,23 @@ function say(tip: BillTip, bills: Bills, tariff: Tariff | undefined): Said {
         title: "Trim what's always on",
         body: (
           <>
-            About {tip.watts} W runs around the clock, even at 3am: {kWh(tip.kwh_day)} a day, about {dollars(tip.cost)}{" "}
-            a bill.{" "}
+            About {tip.watts} W runs around the clock, even at 3 am. That's {kWh(tip.kwh_day)} a day, or about{" "}
+            {dollars(tip.cost)} a bill.{" "}
             {tip.grid_share >= 0.5
               ? `Most of it comes from the grid overnight, at ${centsShort(tip.night_rate)} a kWh.`
-              : "The battery covers most of it overnight, so it mostly costs the feed-in that solar would have earned."}{" "}
-            An old fridge or freezer, a pool pump, or devices left on standby are the usual causes. The saving is for{" "}
-            {tip.cut_watts} W less.
+              : "Your battery covers most of it overnight, so it mostly costs you the feed-in that solar would have earned."}{" "}
+            The usual culprits are an old fridge or freezer, a pool pump, or things left on standby. The saving is for
+            cutting {tip.cut_watts} W.
           </>
         ),
       };
     case "supply":
       return {
-        title: "Compare plans: the supply charge is a big part of this bill",
+        title: "Look for a plan with a lower supply charge",
         body: (
           <>
-            The daily supply charge ({money(tip.per_day)} a day) is {Math.round(tip.share * 100)}% of what you pay
-            before feed-in, {dollars(tip.cost)} a bill. Using less power doesn't change it; a plan with a lower supply
-            charge does.
+            At {money(tip.per_day)} a day, the supply charge is {Math.round(tip.share * 100)}% of what you pay before
+            feed-in, or {dollars(tip.cost)} a bill. Using less power won't change it, but a cheaper plan will.
           </>
         ),
         action: (
@@ -86,13 +85,13 @@ export function WaysToSave({ bills, tariff }: { bills: Bills; tariff: Tariff | u
       <TitleBlock
         id="h-ways"
         title="Ways to lower this bill"
-        sub="Worked out from your last 30 days at your current rates. Savings are for a whole bill, and roughly what each change is worth."
+        sub="From your last 30 days at your current rates. Savings are rough, for a whole bill."
       />
       {tips.length === 0 ? (
         <Muted>
           {days < 3
             ? "Suggestions show up after a few days of readings."
-            : "Nothing stands out: your grid use, feed-in and always-on use are already low for your rates."}
+            : "Nothing stands out. Your grid use, feed-in and always-on use are already low for your rates."}
         </Muted>
       ) : (
         <ol className="flex flex-col">

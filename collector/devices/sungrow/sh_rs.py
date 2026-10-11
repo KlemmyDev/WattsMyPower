@@ -114,7 +114,7 @@ class ShRsDevice:
             finally:
                 client.close()
         if not words:
-            raise ConnectionError("Inverter connected but returned none of its battery settings")
+            raise ConnectionError("The inverter answered but sent none of its battery settings")
         return words
 
     def write_holding(self, words: list[tuple[int, int]]) -> None:
@@ -122,7 +122,7 @@ class ShRsDevice:
         firmware that takes writes accepts). Raises WriteRefused or ConnectionError."""
         for address, _ in words:
             if address not in WRITABLE:
-                raise WriteRefused(f"Register {address} isn't one the dashboard may change.")
+                raise WriteRefused(f"The dashboard isn't allowed to change register {address}.")
         with self._lock:
             client = self._connect()
             try:
@@ -151,7 +151,7 @@ class ShRsDevice:
         finally:
             client.close()
         if not words:
-            raise ConnectionError("Inverter connected but returned no data")
+            raise ConnectionError("The inverter answered but sent no data")
         return RawReading(
             input={**info_input, **words},
             holding=dict(info_holding),

@@ -83,7 +83,7 @@ export function BillPeriodVisual() {
           <span className="text-xs text-ink-faint">
             {budget != null
               ? expected != null
-                ? `${dollars(Math.abs(expected - budget))} ${over ? "over" : "under"} your ${dollars(budget)} budget, as it's going.`
+                ? `On track to finish ${dollars(Math.abs(expected - budget))} ${over ? "over" : "under"} your ${dollars(budget)} budget.`
                 : `Your budget is ${dollars(budget)} a bill.`
               : "Set a budget below to see this bill against it."}
           </span>

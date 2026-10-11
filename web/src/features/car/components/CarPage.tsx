@@ -34,7 +34,7 @@ export function CarPage({ carId }: { carId: number }) {
   if (!view)
     return (
       <>
-        <SubPageHeader back={back} id="h-car" title="Car" sub={isPending ? "Loading…" : "There's no such car."} />
+        <SubPageHeader back={back} id="h-car" title="Car" sub={isPending ? "Loading…" : "Can't find this car."} />
         {error && <Notice>{errorMessage(error)}</Notice>}
       </>
     );
@@ -48,14 +48,14 @@ export function CarPage({ carId }: { carId: number }) {
         back={back}
         id="h-car"
         title={carName(view)}
-        sub="How it charges at home, what its range is worked out from, and how the Overview draws it."
+        sub="Its battery, home charging and how the Overview draws it."
       />
       <SettingsSection
         id="h-car-details"
         title="Details"
         sub={
           vehicle
-            ? `The details ${vehicle.name ?? "this Tesla"} charges from spare solar with.`
+            ? `Used when ${vehicle.name ?? "this Tesla"} charges from spare solar.`
             : "Added by hand, and not tied to a Tesla. The Overview still draws it."
         }
       >
@@ -66,8 +66,8 @@ export function CarPage({ carId }: { carId: number }) {
         title="Remove this car"
         sub={
           vehicle
-            ? `Its recorded levels go with it. The Tesla carries on as a standard ${carTitle(vehicle)}.`
-            : "Its recorded levels go with it."
+            ? `Its recorded levels are removed too. The Tesla then uses a standard ${carTitle(vehicle)}'s details.`
+            : "Its recorded levels are removed too."
         }
         aside={
           confirming ? (

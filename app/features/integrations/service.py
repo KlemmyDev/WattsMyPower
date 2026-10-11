@@ -241,7 +241,7 @@ class IntegrationsService:
         if role == "pv2":
             bm = body.get("behind_meter", (body.get("settings") or {}).get("behind_meter", True))
             if not isinstance(bm, bool):
-                raise IntegrationError("Say whether it's on the house side of the main inverter's meter.")
+                raise IntegrationError("Choose whether it's on the house side of the main inverter's meter.")
             settings["behind_meter"] = bm
         request = {
             "driver": driver,
@@ -256,7 +256,9 @@ class IntegrationsService:
         except CollectorError as e:
             if e.status == 422 and "answered like" in e.detail:  # say which inverter in words, not its driver id
                 where = request["host"] + (f":{request['port']}" if request["port"] != kind.port else "")
-                raise IntegrationError(f"Nothing at {where} answered like a {kind.brand} {kind.label}.") from e
+                raise IntegrationError(
+                    f"No {kind.brand} {kind.label} answered at {where}. Check the address, and that it's on."
+                ) from e
             raise IntegrationError(e.detail, e.status if e.status in (404, 409, 422) else 502) from e
         device = self._device(result["device"])
         return {**device, "identified": identify(driver, result.get("input") or {})}

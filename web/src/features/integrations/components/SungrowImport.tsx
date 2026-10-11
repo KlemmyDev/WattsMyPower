@@ -13,7 +13,7 @@ export function SungrowImport() {
         }
         id="h-import-page"
         title="History from iSolarCloud"
-        sub="For a Sungrow: bring in the days before WattsMyPower was set up, or fill gaps, from iSolarCloud's 5-minute exports."
+        sub="Fill in the days before WattsMyPower was set up, or any gaps, from iSolarCloud's 5-minute exports."
       />
       <ImportSettings />
     </>

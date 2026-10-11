@@ -33,8 +33,8 @@ export function PlanStep({ nav }: StepProps) {
   return (
     <>
       <StepIntro nav={nav} title="Your electricity plan">
-        So costs and savings match your bill. Copy the rates from your latest bill: what you pay for grid power, what
-        you earn for feed-in, and the daily supply charge.
+        So costs and savings match your bill. From your latest bill, copy what you pay for grid power, what you earn for
+        feed-in and the daily supply charge.
       </StepIntro>
       <StepBody>
         <div className="@container">

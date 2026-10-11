@@ -22,11 +22,11 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
           note={
             !bills
               ? failed
-                ? "Bills could not be loaded. Try again shortly."
+                ? "Couldn't load your bills. Try again in a moment."
                 : "Loading"
               : exp
-                ? `Expected total${budgetNote(exp.net_cost, bills.budget)}. Without solar and battery this bill would be about ${dollars(exp.without_solar)}.`
-                : "The bill so far. An expected total needs at least one full day of readings."
+                ? `Expected total${budgetNote(exp.net_cost, bills.budget)}. Without solar and the battery, it'd be about ${dollars(exp.without_solar)}.`
+                : "The bill so far. An expected total shows up after a full day of readings."
           }
         />
         <ButtonLink to="/bills/rates" hash="period" variant="chip" className="flex-none px-3.5 py-1.5">
@@ -66,7 +66,7 @@ export function CurrentBill({ bills, failed }: { bills: Bills | undefined; faile
         <Footnote>
           {soFar.meter_days === soFar.days
             ? "Grid usage and feed-in so far are from your smart meter's data."
-            : `Grid usage and feed-in for ${soFar.meter_days} of ${soFar.days} days so far are from your smart meter's data, the rest from the inverter.`}
+            : `Grid usage and feed-in come from your smart meter for ${soFar.meter_days} of ${soFar.days} days so far, and from the inverter for the rest.`}
         </Footnote>
       )}
     </Card>

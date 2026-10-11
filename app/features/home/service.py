@@ -276,7 +276,7 @@ class HomeService:
         self.poll(account.id)  # read them now, so new ones are on the page
         word = lambda n: "device" if n == 1 else "devices"  # noqa: E731
         message = (f"Found {new} new {word(new)}." if new
-                   else f"No new devices: {answered} answered, all already here." if answered
+                   else f"No new devices. All {answered} that answered are already here." if answered
                    else "Nothing answered.")  # fmt: skip
         return {**self.overview(), "found": {"new": new, "answered": answered, "message": message}}
 
@@ -312,7 +312,7 @@ class HomeService:
             raise HomeSetupError(f"{d.name} can't be switched from here.", 409)
         if not on and d.kind in PROTECTED and confirm is not True:
             raise HomeSetupError(
-                f"{d.name} is set as a {KINDS[d.kind].label.lower()}: switched off, it stops keeping food cold. "
+                f"{d.name} is set as a {KINDS[d.kind].label.lower()}. Switched off, it stops keeping food cold. "
                 "Confirm to switch it off anyway.",
                 409,
             )
@@ -389,8 +389,8 @@ class HomeService:
             raise HomeSetupError(str(e)) from e
         if (self._now.get(d.id) or {}).get("switched_on") is None:
             raise HomeSetupError(
-                f"{d.name} doesn't say whether it's on (or hasn't been read since the dashboard started), so a rule "
-                "couldn't switch it.",
+                f"{d.name} isn't reporting whether it's on, so a rule can't switch it. If it was just added, wait for "
+                "its first reading.",
                 409,
             )
         state = {k: v for k, v in (d.rule.get("state") or {}).items() if k != "paused_until"}

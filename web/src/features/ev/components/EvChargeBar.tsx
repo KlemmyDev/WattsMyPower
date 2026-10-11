@@ -203,7 +203,7 @@ export function EvChargeBar({
       {command.isError && <HelpText tone="bad">{errorMessage(command.error)}</HelpText>}
       {limit != null && ask == null && !command.isError && (
         <span className="text-xs text-ink-faint">
-          Drag the handle to change the limit ({LOWEST}–{HIGHEST}%{step > 1 ? ", in tens" : ""}): it's sent to the car
+          Drag the handle to change the limit ({LOWEST}–{HIGHEST}%{step > 1 ? ", in tens" : ""}). It's sent to the car
           when you let go.
         </span>
       )}

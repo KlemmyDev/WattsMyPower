@@ -11,9 +11,9 @@ export const REACH: Record<Reach, { label: string; icon: IconName; title: string
   cloud: {
     label: "Cloud",
     icon: "cloud",
-    title: "Read through its maker's cloud: it can lag, and stops while their service is down",
+    title: "Read through its maker's cloud. It can lag, and stops when their service is down.",
   },
-  public: { label: "Public data", icon: "globe", title: "Public data from the internet: no account needed" },
+  public: { label: "Public data", icon: "globe", title: "Public data from the internet. No account needed." },
 };
 
 /** A quiet tag saying how an integration is read ("On your network", "Cloud"). */
@@ -34,7 +34,7 @@ export function ReachTag({ reach, className }: { reach: Reach; className?: strin
 export function UntestedTag({ className }: { className?: string }) {
   return (
     <span
-      title="Read from what its maker documents, but not yet tried on a real one. If anything looks off, an issue saying so gets it checked."
+      title="Built from its maker's documentation but not yet tried on a real one. If anything looks off, open an issue and it'll get checked."
       className={cn("inline-flex items-center gap-1 text-xs whitespace-nowrap text-warn", className)}
     >
       <Icon name="flask" size={12} />

@@ -114,9 +114,7 @@ def test_connecting_checks_the_kind_matches_the_role(service: IntegrationsServic
         service.connect("hybrid", {"driver": "sungrow.sg_d", "host": "192.168.0.10"})
     with pytest.raises(IntegrationError, match="which kind"):
         service.connect("hybrid", {"driver": "acme.x", "host": "192.168.0.10"})
-    with pytest.raises(
-        IntegrationError, match=r"Nothing at 192\.168\.0\.99 answered like a Sungrow SH-series hybrid"
-    ) as e:
+    with pytest.raises(IntegrationError, match=r"No Sungrow SH-series hybrid answered at 192\.168\.0\.99") as e:
         service.connect("hybrid", {"driver": "sungrow.sh_rs", "host": "192.168.0.99"})
     assert e.value.status == 422
     device = service.connect("hybrid", {"driver": "sungrow.sh_rs", "host": " 192.168.0.244 "})
@@ -223,7 +221,7 @@ def test_the_integrations_api(client: TestClient, collector: FakeCollector) -> N
     assert [k["driver"] for k in body["kinds"]] == ["sungrow.sh_rs", "sungrow.sg_d"]
 
     r = client.put("/api/integrations/hybrid", json={"driver": "sungrow.sh_rs", "host": "192.168.0.99"})
-    assert r.status_code == 422 and "answered like" in r.json()["detail"]
+    assert r.status_code == 422 and "answered at" in r.json()["detail"]
     r = client.put("/api/integrations/hybrid", json={"driver": "sungrow.sh_rs", "host": "192.168.0.244"})
     assert r.status_code == 200 and r.json()["identified"]["model"] == "SH5.0RS"
     [device] = client.get("/api/integrations").json()["devices"]

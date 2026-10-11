@@ -64,7 +64,9 @@ class CollectorClient:
             try:
                 return json.load(resp)
             except (urllib.error.URLError, OSError) as e:
-                raise CollectorError(502, f"The collector couldn't be reached ({type(e).__name__}).") from e
+                raise CollectorError(
+                    502, f"The collector couldn't be reached ({type(e).__name__}). Check it's running."
+                ) from e
 
     @contextmanager
     def _open(
@@ -96,12 +98,16 @@ class CollectorClient:
                     else "change the battery's settings" if path.endswith("/holding")
                     else "connect inverters"
                 )  # fmt: skip
-                detail = f"The collector is out of date and can't {missing} yet. Update it with: bash install.sh"
+                detail = f"The collector is out of date and can't {missing} yet. Run bash install.sh to update it."
             elif e.code == 401:
                 detail = "The collector refused the dashboard's COLLECTOR_TOKEN. Check both use the same one."
-            raise CollectorError(e.code, detail if isinstance(detail, str) else f"The collector said {e.code}.") from e
+            raise CollectorError(
+                e.code, detail if isinstance(detail, str) else f"The collector sent back an error ({e.code})."
+            ) from e
         except (urllib.error.URLError, OSError) as e:
-            raise CollectorError(502, f"The collector couldn't be reached ({type(e).__name__}).") from e
+            raise CollectorError(
+                502, f"The collector couldn't be reached ({type(e).__name__}). Check it's running."
+            ) from e
         with resp:
             yield resp
 

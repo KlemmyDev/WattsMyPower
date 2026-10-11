@@ -158,7 +158,7 @@ export function useSectionPages(section: string): SectionPages | null {
   if (section === "/bills")
     return {
       title: "Bills",
-      sub: "What it's costing, and everything it's worked out from",
+      sub: "What your power's costing and how it's worked out",
       root: { link: { to: "/bills" }, label: "This period", active: path === "/bills" },
       pages: [
         {

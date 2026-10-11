@@ -419,7 +419,7 @@ export function WallSwatches({ e }: { e: HouseEditor }) {
       options={[
         {
           value: "auto",
-          name: `Its own: ${FINISHES[e.own.walls].name}`,
+          name: `Style default: ${FINISHES[e.own.walls].name}`,
           style: finishBackground(FINISHES[e.own.walls]),
         },
         ...WALL_FINISHES.map((k) => ({ value: k, name: FINISHES[k].name, style: finishBackground(FINISHES[k]) })),
@@ -435,7 +435,11 @@ export function RoofSwatches({ e }: { e: HouseEditor }) {
       value={e.values.house_roof}
       onChange={(v) => e.set({ house_roof: v })}
       options={[
-        { value: "auto", name: `Its own: ${ROOFS[e.own.roof].name}`, style: { background: ROOFS[e.own.roof].face } },
+        {
+          value: "auto",
+          name: `Style default: ${ROOFS[e.own.roof].name}`,
+          style: { background: ROOFS[e.own.roof].face },
+        },
         ...ROOF_COLOURS.map((k) => ({ value: k, name: ROOFS[k].name, style: { background: ROOFS[k].face } })),
       ]}
     />
@@ -453,7 +457,7 @@ export function PanelsRow({ e }: { e: HouseEditor }) {
       help={
         e.values.house_panels ? (
           <>
-            Your {kw} kW array is about {e.arrayPanels}.{" "}
+            Your {kw} kW array is about {e.arrayPanels} panels.{" "}
             <button
               type="button"
               className="font-semibold text-ink underline-offset-2 hover:underline"
@@ -502,7 +506,7 @@ export function GardenRows({ e }: { e: HouseEditor }) {
           onChange={(ev) => e.set({ house_fence: ev.target.value as HouseValues["house_fence"] })}
           className="h-10 bg-surface light:bg-surface"
         >
-          <option value="auto">Its own ({FENCES[e.own.fence].toLowerCase()})</option>
+          <option value="auto">Style default ({FENCES[e.own.fence].toLowerCase()})</option>
           {(Object.keys(FENCES) as Fence[]).map((k) => (
             <option key={k} value={k}>
               {FENCES[k]}
@@ -517,7 +521,7 @@ export function GardenRows({ e }: { e: HouseEditor }) {
           onChange={(ev) => e.set({ house_garden: ev.target.value as HouseValues["house_garden"] })}
           className="h-10 bg-surface light:bg-surface"
         >
-          <option value="auto">Its own ({GARDENS[e.own.garden].toLowerCase()})</option>
+          <option value="auto">Style default ({GARDENS[e.own.garden].toLowerCase()})</option>
           {(Object.keys(GARDENS) as Garden[]).map((k) => (
             <option key={k} value={k}>
               {GARDENS[k]}
@@ -537,7 +541,7 @@ export const unitsSub = (e: HouseEditor) =>
   e.carport
     ? "They're on the house's wall under the carport, seen through its clear roof."
     : e.garage
-      ? "Where each one is: on an outside wall, or in the garage (drawn see-through, so what's inside shows)."
+      ? "Put each one on an outside wall or in the garage. The garage is drawn see-through so you can see inside."
       : "They're on the house's outside wall. Add a garage to put any of them inside it.";
 
 /** Each inverter and battery, and where it hangs: on an outside wall or in the garage, when there's one. */

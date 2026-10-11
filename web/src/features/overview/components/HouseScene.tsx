@@ -326,7 +326,7 @@ function SpotLinks({
             <a
               key={k}
               href={href}
-              aria-label={c ? `${c.label}: open it` : label}
+              aria-label={c ? `Open ${c.label}` : label}
               onClick={go(href)}
               onPointerEnter={() => setOn(k)}
               onPointerLeave={() => setOn((v) => (v === k ? null : v))}

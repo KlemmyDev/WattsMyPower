@@ -46,14 +46,14 @@ export function batteryOutlook(
     return {
       eyebrow: "On standby",
       headline: `Holding at ${pct(soc)}`,
-      detail: `${ours ? until : "Set from iSolarCloud."} The house runs on solar and the grid, and the battery keeps its charge.`,
+      detail: `${ours ? until : "Set from iSolarCloud."} Your home runs on solar and the grid while the battery keeps its charge.`,
     };
   if (soc != null && ours === "charge" && mode?.target != null) {
     const c = forcedCharge(soc, bat, cap, mode.target, now);
     return {
       eyebrow: "Charging from the grid",
       headline: c.headline,
-      detail: `Reaches ${pct(mode.target)}${c.at} at ${kw(mode.power_w)}, then goes back to normal${mode.until ? ` (or at ${when(mode.until, now)})` : ""}.`,
+      detail: `At ${kw(mode.power_w)}, reaching ${pct(mode.target)}${c.at}. Then back to normal${mode.until ? `, or at ${when(mode.until, now)} if that's sooner` : ""}.`,
     };
   }
   if (soc != null && theirs === "charge") {
@@ -61,7 +61,7 @@ export function batteryOutlook(
     return {
       eyebrow: "Force charging",
       headline: c.headline,
-      detail: `${mode?.owner === "isolarcloud" ? "iSolarCloud is" : "Something outside the dashboard is"} charging it at ${kw(mode?.power_w)}, from the grid when solar can't cover it. Full${c.at}.`,
+      detail: `${mode?.owner === "isolarcloud" ? "iSolarCloud is" : "Something outside the dashboard is"} charging it at ${kw(mode?.power_w)}, using the grid when solar can't keep up. Full${c.at}.`,
     };
   }
   // With a floor set here, the reserve is the floor (the inverter reports it as its reserve meanwhile).
@@ -76,7 +76,7 @@ export function batteryOutlook(
     const parts = [
       cover != null ? `Covering ${pct(cover)} of your home's use right now.` : "Powering your home right now.",
     ];
-    if (next) parts.push(`Solar is forecast to start charging it again from about ${hhmm(next.ts)}.`);
+    if (next) parts.push(`Solar should start charging it again from about ${hhmm(next.ts)}.`);
     const above = secs != null && soc > reserve + 0.5;
     return {
       eyebrow: ours === "floor" ? "Estimated time to floor" : "Estimated time to reserve",
@@ -87,7 +87,11 @@ export function batteryOutlook(
     };
   }
   if (soc != null && soc >= 99.5)
-    return { eyebrow: "Battery status", headline: "Fully charged", detail: "Excess solar now goes to the grid." };
+    return {
+      eyebrow: "Battery status",
+      headline: "Fully charged",
+      detail: "Nice. The extra sun now goes to the grid.",
+    };
   if (f?.summary.full_at && sameDay(f.summary.full_at, now)) {
     return {
       eyebrow: "Estimated time to full",
@@ -99,10 +103,10 @@ export function batteryOutlook(
     const endToday = addDays(midnight(now), 1);
     const sunLeft = f.hours.filter((h) => h.start < endToday && h.pv_kwh > 0.05);
     const detail = sunLeft.length
-      ? `Forecast solar will bring the battery to ${pct(Math.max(...sunLeft.map((h) => h.soc)))} before sunset.`
+      ? `The forecast sun should get it to ${pct(Math.max(...sunLeft.map((h) => h.soc)))} before sunset.`
       : f.summary.full_at
-        ? `Forecast solar should fill it tomorrow at about ${hhmm(f.summary.full_at)} ${tzName()}.`
-        : "Forecast solar will not fill the battery in the next day.";
+        ? `The forecast sun should fill it tomorrow at about ${hhmm(f.summary.full_at)} ${tzName()}.`
+        : "Not enough sun forecast to fill it in the next day.";
     return { eyebrow: "Estimated time to full", headline: "Not today", detail };
   }
   if (bat != null && bat < -ON && cap && soc != null) {

@@ -91,8 +91,8 @@ function Network() {
       title="Electricity network"
       sub={
         <>
-          The company that owns the poles and wires to your house (not your retailer). Its outage map says where the
-          power's off now and where it's planned to be, every 15 minutes.
+          The company that owns the poles and wires to your house (not your retailer). Its outage map shows where the
+          power's off now and where work is planned. Checked every 15 minutes.
           {out?.fetched_at && ` Updated ${hhmm(out.fetched_at)}.`}
         </>
       }
@@ -103,7 +103,7 @@ function Network() {
           onChange={(e) =>
             save.now(
               { power_network: e.target.value as Settings["power_network"] },
-              e.target.value === "none" ? "Outages won't be followed." : "Saved. Fetching its outages.",
+              e.target.value === "none" ? "Outages turned off." : "Saved. Fetching its outages.",
             )
           }
           className="h-9 text-sm"
@@ -124,14 +124,14 @@ function Network() {
     >
       {out?.error && (
         <HelpText>
-          {out.error} It tries again every 15 minutes
-          {out.fetched_at ? `, and shows the outages as they were at ${hhmm(out.fetched_at)} meanwhile.` : "."}
+          {out.error} Trying again every 15 minutes.
+          {out.fetched_at ? ` Until then, you'll see the outages from ${hhmm(out.fetched_at)}.` : ""}
         </HelpText>
       )}
       {value === "auto" && !out?.network && out?.location_set && (
         <HelpText>
-          No supported network found for {locationLabel(system)}. Every state's and territory's networks are, but the
-          Northern Territory's.
+          No supported network found for {locationLabel(system)}. Every state and territory is covered except the
+          Northern Territory.
         </HelpText>
       )}
       {value === "auto" && out && out.networks.length > 1 && (
@@ -141,8 +141,8 @@ function Network() {
         </HelpText>
       )}
       <HelpText>
-        From each network's public outage map (there's no official feed, so it may change). The whole network's outages
-        are downloaded and matched here: your street is never sent anywhere.
+        Comes from each network's public outage map. There's no official feed, so this may change. The whole network's
+        outages are downloaded and matched here, so your street is never sent anywhere.
       </HelpText>
     </SettingsSection>
   );
@@ -179,8 +179,10 @@ function Street() {
   const search = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
-    if (q.trim().length < 3) return setError("Enter your address: number, street and suburb.");
-    geocode.mutate(q.trim(), { onError: (err) => setError(failure(err, "The search didn't work. Try again.")) });
+    if (q.trim().length < 3) return setError("Enter your address, with the number, street and suburb.");
+    geocode.mutate(q.trim(), {
+      onError: (err) => setError(failure(err, "Couldn't search for places right now. Try again in a moment.")),
+    });
   };
   const places = geocode.data?.filter((p) => p.road);
   return (
@@ -200,7 +202,7 @@ function Street() {
             are marked as reaching you.
           </>
         ) : (
-          "Planned work lists the streets it turns off. Add yours to know which reach you."
+          "Planned work lists the streets it affects. Add yours to see which ones reach you."
         )
       }
       aside={
@@ -278,13 +280,13 @@ function Radius() {
     <SettingsSection
       id="h-radius"
       title="How far around"
-      sub={`Outages within this distance of ${locationLabel(system)} are shown on the Grid page and the Overview. Ones that reach your street always are.`}
+      sub={`The Grid page and Overview show outages within this distance of ${locationLabel(system)}. Ones that reach your street always show.`}
       aside={
         <Segmented
           label="Outage radius"
           options={RADII.map((r) => ({ value: String(r), label: `${r} km` }))}
           value={String(RADII.includes(value) ? value : 15)}
-          onChange={(v) => save.now({ outage_radius_km: +v }, `Outages within ${v} km are shown.`)}
+          onChange={(v) => save.now({ outage_radius_km: +v }, `Showing outages within ${v} km.`)}
         />
       }
     >
@@ -306,9 +308,9 @@ function Hazards() {
       title="Weather and fire warnings"
       sub={
         <>
-          The Bureau of Meteorology's severe weather, flood and fire weather warnings
-          {town ? ` for the ${town} area` : " for your area"}, and in Queensland the Fire Department's bushfire warnings
-          within your radius. They feed the Grid page's outlook.
+          Severe weather, flood and fire weather warnings from the Bureau of Meteorology
+          {town ? ` for the ${town} area` : " for your area"}. In Queensland, also the Fire Department's bushfire
+          warnings within your radius. They feed into the Grid page's outlook.
         </>
       }
       aside={
@@ -325,8 +327,8 @@ function Hazards() {
       }
     >
       <HelpText>
-        From the Bureau's public data service and QFD's public warnings feed, both meant for this. Matched to your
-        location here.
+        Comes from the Bureau's public data service and QFD's public warnings feed, both made for apps like this.
+        They're matched to your location here.
       </HelpText>
     </SettingsSection>
   );
@@ -350,8 +352,8 @@ function Market() {
       title="Wholesale market"
       sub={
         <>
-          AEMO's wholesale prices for your region every five minutes, and its warnings of tight supply and load
-          shedding. Public data, no account.{grid?.fetched_at && ` Updated ${hhmm(grid.fetched_at)}.`}
+          Wholesale prices for your region from AEMO every five minutes, plus its warnings about tight supply and load
+          shedding. Public data, no account needed.{grid?.fetched_at && ` Updated ${hhmm(grid.fetched_at)}.`}
         </>
       }
       aside={
@@ -361,7 +363,7 @@ function Market() {
           onChange={(e) =>
             save.now(
               { nem_region: e.target.value as Settings["nem_region"] },
-              e.target.value === "none" ? "AEMO won't be followed." : "Saved. Fetching its prices.",
+              e.target.value === "none" ? "Stopped following AEMO." : "Saved. Fetching its prices.",
             )
           }
           className="h-9 text-sm"
@@ -391,11 +393,11 @@ export function GridSettings() {
         back={<BackLink to="/integrations">Integrations</BackLink>}
         id="h-grid"
         title="Grid"
-        sub="Power outages around your house from your electricity network, weather and fire warnings, and the wholesale market from AEMO, for the Grid page."
+        sub="Outages near your house, weather and fire warnings, and AEMO's wholesale prices, all for the Grid page."
       />
       {located === false && (
         <LocationPrompt>
-          Outages, warnings and your region are worked out from where your house is, so they need your location.
+          Outages, warnings and your region all depend on where your house is. Set your location to get them.
         </LocationPrompt>
       )}
       {/* Started afresh once the saved street is known, and after it's saved. */}

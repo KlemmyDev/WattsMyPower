@@ -177,24 +177,24 @@ def blocked(settings: BatterySettings | None, who: str | None) -> str | None:
     if who in ("normal", "dashboard"):
         return None
     if who is None:
-        return "The inverter's battery settings couldn't be read, so the controls are off until they can be."
+        return "The controls are off until the inverter's battery settings can be read."
     s = settings or {}
     doing = {
-        "charge": f": a forced charge at {_kw(s.get('power_w'))}",
-        "discharge": f": a forced discharge at {_kw(s.get('power_w'))}",
-        "stop": ": the battery on standby",
+        "charge": f" (forced charging at {_kw(s.get('power_w'))})",
+        "discharge": f" (forced discharging at {_kw(s.get('power_w'))})",
+        "stop": " (standby)",
     }.get(s.get("command") or "", "")
     if who == "isolarcloud":
         return (
-            f"iSolarCloud is controlling the battery right now{doing}. The controls here come back once that "
-            "ends; stop it in the iSolarCloud app to end it sooner."
+            f"iSolarCloud is controlling the battery right now{doing}. The controls here come back when it "
+            "finishes. To end it sooner, stop it in the iSolarCloud app."
         )
     if who == "external":
         return "An external energy manager is controlling the battery, so the controls here are off."
     if who == "elsewhere":
         return (
-            f"The battery was put in forced mode outside the dashboard{doing}. The controls here come back once "
-            "it's back in self-consumption (in the iSolarCloud app)."
+            f"Something outside the dashboard put the battery in forced mode{doing}. The controls here come back "
+            "once it's in self-consumption mode again, which you can set in the iSolarCloud app."
         )
     return f"The inverter reports a battery mode the dashboard doesn't know ({s.get('mode_code')}), so the controls are off."
 
@@ -512,7 +512,7 @@ class BatteryService:
         spec = self._spec(body, driver, settings, self.clock())
         b = self._battery(settings, usual)
         if b is None:
-            raise BatteryError("The battery's level isn't known yet, so it can't be worked out.", 409)
+            raise BatteryError("The battery's level isn't known yet, so this can't be worked out.", 409)
         return self._project(b, plan.Control(spec["kind"], spec["until"], spec.get("floor"), spec.get("target"),
                                              spec.get("power_w")))  # fmt: skip
 
@@ -522,18 +522,18 @@ class BatteryService:
         if until is None:
             return None
         if not isinstance(until, (int, float)) or isinstance(until, bool):
-            raise BatteryError("Say until when, as a time, or leave it on until it's stopped.")
+            raise BatteryError("Choose an end time, or leave it on until you stop it.")
         if until <= now:
             raise BatteryError("That time has already passed.")
         if until > now + MAX_HOURS * 3600:
-            raise BatteryError(f"A control can be set for up to {MAX_HOURS} hours, or until it's stopped.")
+            raise BatteryError(f"A control can run for up to {MAX_HOURS} hours, or until you stop it.")
         return int(until)
 
     @staticmethod
     def _number(body: dict[str, Any], key: str, name: str, low: float, high: float, default: float | None) -> float:
         value = body.get(key, default)
         if value is None:
-            raise BatteryError(f"Give the {name}.")
+            raise BatteryError(f"Enter the {name}.")
         if not isinstance(value, (int, float)) or isinstance(value, bool) or not low <= value <= high:
             raise BatteryError(f"The {name} must be between {low:g} and {high:g}.")
         return float(value)
@@ -591,13 +591,16 @@ class BatteryService:
             if kind == "standby":
                 writes = driver.standby()
                 restore = driver.normal()
-                text = "Battery on standby: the house runs on solar and the grid"
+                text = "Battery on standby, so the house runs on solar and the grid"
             elif kind == "floor":
                 if usual_floor is None:
-                    raise BatteryError("The inverter didn't report its usual reserve, so it couldn't be put back.", 502)
+                    raise BatteryError(
+                        "The inverter didn't report its usual reserve, so the dashboard couldn't put it back afterwards.",
+                        502,
+                    )
                 writes = driver.floor(spec["floor"])
                 restore = driver.floor(usual_floor)
-                text = f"Reserve raised to {spec['floor']}%: below it the house runs on the grid"
+                text = f"Reserve raised to {spec['floor']}%. Below that, the house runs on the grid"
             else:
                 writes = driver.charge(spec["power_w"])
                 restore = driver.normal()
@@ -648,7 +651,7 @@ class BatteryService:
         if control["kind"] in FORCED_KINDS and who != "dashboard":
             # Something else took the battery over meanwhile: nothing of ours left to undo.
             self._end(control, control["ending"])
-            self._note(f"{label} ended ({why}); the battery was already under other control", control["kind"])
+            self._note(f"{label} ended ({why}); something else already had the battery", control["kind"])
             return
         if control["kind"] == "floor" and who != "normal":
             if not self._waiting_noted:

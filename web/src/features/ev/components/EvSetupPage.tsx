@@ -28,8 +28,8 @@ export function EvSetupPage() {
             Charge your EV from spare solar
           </h2>
           <p className="m-0 text-[15px] leading-6 text-pretty text-ink-muted">
-            The dashboard talks to the car over this server's Bluetooth, or through Tessie. Either way nothing on this
-            server is opened up to the internet and your Tesla account's password is never seen here.
+            The dashboard talks to your car over this server's Bluetooth or through Tessie. Either way, nothing on this
+            server is opened up to the internet, and the dashboard never sees your Tesla password.
           </p>
         </div>
         <div className="flex flex-col rounded-xl border border-line-subtle">
@@ -49,16 +49,16 @@ export function EvSetupPage() {
           ))}
         </div>
         <p className="m-0 text-[13px] leading-5 text-ink-muted">
-          It only reads the car until you choose how it charges on the EV page, and it leaves the car alone whenever you
-          start, stop or change charging yourself, until it's next unplugged.
+          It only reads the car until you choose how it charges on the EV page. If you start, stop or change charging
+          yourself, it leaves the car alone until it's next unplugged.
         </p>
         <div className="flex flex-col gap-3">
           <span className="text-[13px] font-semibold">Connect your Tesla</span>
           <TeslaConnect onConnected={() => void navigate({ to: "/ev" })} />
         </div>
         <p className="m-0 text-[13px] text-ink-faint">
-          A Hyundai or Kia is connected in Integrations → Electric vehicles → Hyundai and Kia, and charged from spare
-          solar the same way. More cars and chargers can be connected later.
+          Got a Hyundai or Kia? Connect it in Integrations → Electric vehicles → Hyundai and Kia, and it can charge from
+          spare solar too. You can add more cars and chargers later.
         </p>
         <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
           <ButtonLink to="/ev" variant="outline" size="md">

@@ -73,11 +73,11 @@ export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null |
       {accuracy === undefined ? (
         <Muted>Loading</Muted>
       ) : accuracy === null ? (
-        <Muted>Unavailable right now.</Muted>
+        <Muted>Can't load forecast accuracy right now. Try again in a moment.</Muted>
       ) : !days.length || accuracy.mae_kwh == null ? (
         <Muted>
-          Each day's solar forecast is kept as it stood the day before, to compare with what the panels made. The first
-          comparison shows after a full day.
+          Each day's solar forecast is saved the day before, then compared with what your panels made. The first
+          comparison shows up after a full day.
         </Muted>
       ) : (
         <>
@@ -132,7 +132,7 @@ function Stats({ accuracy }: { accuracy: ForecastAccuracy }) {
         value={kWh(mae)}
         sub={
           mean
-            ? `a day: ${Math.round((mae / mean) * 100)}% of an average ${kWh(mean)} day, over ${all.length} ${plural(all.length, "day")}`
+            ? `a day, ${Math.round((mae / mean) * 100)}% of an average ${kWh(mean)} day · over ${all.length} ${plural(all.length, "day")}`
             : `a day, over ${all.length} ${plural(all.length, "day")}`
         }
       />
@@ -141,15 +141,15 @@ function Stats({ accuracy }: { accuracy: ForecastAccuracy }) {
         value={lean ? "Be about right" : bias > 0 ? "Guess high" : "Guess low"}
         sub={
           lean
-            ? "No lean either way: misses go both ways."
-            : `By ${kWh(Math.abs(bias))} a day on average: the panels made ${bias > 0 ? "less" : "more"} than forecast.`
+            ? "Misses go both ways, with no lean either way."
+            : `By ${kWh(Math.abs(bias))} a day on average. Your panels made ${bias > 0 ? "less" : "more"} than forecast.`
         }
       />
       {r ? (
         <Stat
           label="Inside the likely range"
           value={`${hits} of ${all.length}`}
-          sub={`Days that made ${Math.round(r.low * 100)}–${Math.round(r.high * 100)}% of the forecast, the range each day's forecast gives.`}
+          sub={`Days that made ${Math.round(r.low * 100)}–${Math.round(r.high * 100)}% of their forecast, the likely range.`}
         />
       ) : (
         <Stat

@@ -220,13 +220,13 @@ class DemoTessie:
         from app.features.tesla import details
 
         if vin != VIN:
-            raise TeslaError("Tessie doesn't know that car. It may have been removed from the account.", 404)
+            raise TeslaError("Tessie can't find that car. It might have been removed from the account.", 404)
         row = self.vehicles()[0]
         return {"vin": vin, "last_state": row["last_state"], "details": details.from_fleet(row["last_state"])}
 
     def command(self, vin: str, name: str, **params: Any) -> bool:
         if vin != VIN:
-            raise TeslaError("Tessie doesn't know that car. It may have been removed from the account.", 404)
+            raise TeslaError("Tessie can't find that car. It might have been removed from the account.", 404)
         return self.car.run(vin, name, **params)
 
 

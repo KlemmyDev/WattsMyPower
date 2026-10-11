@@ -341,10 +341,10 @@ function ChargePower({ v, onSave }: { v: BluelinkCar; onSave: (w: number | null)
   const about =
     chosen === "auto"
       ? v.charge_from === "measured"
-        ? `It charges at ${kW(v.min_w ?? 0)} at home, as the car measured it.`
-        : `It's taken to charge at ${kW(v.min_w ?? 0)}, what a 10 A portable charger gives. Choose your charger if it's another: this car doesn't say.`
+        ? `It charges at ${kW(v.min_w ?? 0)} at home, measured by the car.`
+        : `Assumed to charge at ${kW(v.min_w ?? 0)}, what a 10 A portable charger gives. This car doesn't report it, so pick your charger if it's different.`
       : preset
-        ? `${kW(v.min_w ?? 0)}: ${preset.about}.`
+        ? `${kW(v.min_w ?? 0)} with ${preset.about}.`
         : `${kW(v.min_w ?? 0)}.`;
   return (
     <Row
@@ -360,8 +360,8 @@ function ChargePower({ v, onSave }: { v: BluelinkCar; onSave: (w: number | null)
       }
       about={
         <>
-          {about} {v.make}'s cloud can start and stop a charge but can't set how fast it charges, so the car charges at
-          whatever its charger gives, and only starts once that much sun is spare.
+          {about} {v.make}'s cloud can start and stop a charge but can't set its speed. So the car charges at whatever
+          its charger gives, and only starts once that much sun is spare.
         </>
       }
     />
@@ -396,12 +396,12 @@ function MostAmps({ v, configure }: { v: EvVehicle; configure: ReturnType<typeof
   };
   return (
     <Row
-      title="Most it may draw"
+      title="Most it can draw"
       control={
         <div
           className="flex items-center gap-1 rounded-full border border-chip-line bg-canvas p-1"
           role="group"
-          aria-label="Most it may draw"
+          aria-label="Most it can draw"
         >
           <Button size="sm" variant="chip" aria-label="Less" disabled={shown <= 1} onClick={() => step(-1)}>
             −
@@ -417,7 +417,7 @@ function MostAmps({ v, configure }: { v: EvVehicle; configure: ReturnType<typeof
       about={
         value == null
           ? `Up to what the car says it can take on this charger, ${own} A. If your socket or circuit can't take that, set its limit here.`
-          : `Your socket's or circuit's limit: the dashboard never asks the car for more than ${value} A, charging from solar or by hand. The car says it could take ${own} A.`
+          : `Held to your socket's or circuit's limit. The dashboard never asks the car for more than ${value} A, from solar or by hand. The car says it could take ${own} A.`
       }
     />
   );
@@ -487,7 +487,7 @@ function useShortBy(v: EvVehicle, onSave: (w: number) => void) {
     <input
       type="range"
       aria-label="Borrow up to"
-      aria-valuetext={value ? `Up to ${kW(value)}` : "Nothing: stops straight away"}
+      aria-valuetext={value ? `Up to ${kW(value)}` : "Nothing, stops straight away"}
       min={0}
       max={MAX_SHORT_BY}
       step={100}
@@ -558,7 +558,7 @@ export function EvCharging({
           : share.battery <= 0
             ? "Your home battery's full, so the car gets all the spare sun."
             : share.battery >= 1
-              ? "Your home battery isn't sure to be full by sunset yet, so it comes first for now. The car gets the rest."
+              ? "Your home battery might not be full by sunset, so it comes first for now. The car gets the rest."
               : `Your home battery needs about ${share.need_kwh} kWh more to be full by sunset, so it gets about ${Math.round(share.battery * 100)}% of what it could take. The car gets the rest.`;
 
   return (
@@ -641,7 +641,7 @@ export function EvCharging({
             about={
               <>
                 Once it's charging, it keeps going through a passing cloud by borrowing up to this much from the grid or
-                your home battery, rather than stopping straight away. Shown striped on the meter above.
+                your home battery. Shown striped on the meter above.
               </>
             }
           >
@@ -665,9 +665,7 @@ export function EvCharging({
         title="Right now"
         control={
           fixed ? (
-            <span className="text-xs text-ink-muted tabular-nums">
-              At {kW(fixed.min_w ?? 0)}: its speed can't be set
-            </span>
+            <span className="text-xs text-ink-muted tabular-nums">Fixed at {kW(fixed.min_w ?? 0)}</span>
           ) : auto ? (
             <span className="text-xs text-ink-muted">The sun sets the speed</span>
           ) : (
@@ -765,7 +763,7 @@ export function EvCharging({
                 : blocked
                   ? "Enter the 4-digit PIN you use in the app (Integrations → Hyundai and Kia) to start and stop this car."
                   : fixed?.pending
-                    ? `Sent to the car at ${hhmm(fixed.pending.at)}: waiting for it to say it's done.`
+                    ? `Sent to the car at ${hhmm(fixed.pending.at)}. Waiting for it to confirm.`
                     : c.mode !== "off"
                       ? fixed
                         ? `Starting or stopping here or in the ${app} app pauses solar charging until you unplug.`

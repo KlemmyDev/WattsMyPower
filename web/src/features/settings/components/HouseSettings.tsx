@@ -40,7 +40,11 @@ export const GROUPS: { value: Group; label: string }[] = [
 export function groupOf(e: HouseEditor, g: Group): { title: string; sub: string; body: ReactNode } {
   switch (g) {
     case "kind":
-      return { title: "Kind of house", sub: "Its shape: walls, roof, windows and porch.", body: <KindTiles e={e} /> };
+      return {
+        title: "Kind of house",
+        sub: "Sets the shape of the walls, roof, windows and porch.",
+        body: <KindTiles e={e} />,
+      };
     case "size":
       return {
         title: "Size",
@@ -55,7 +59,7 @@ export function groupOf(e: HouseEditor, g: Group): { title: string; sub: string;
     case "look":
       return {
         title: "Look",
-        sub: "The walls and the roof. A is the kind of house's own.",
+        sub: "Wall and roof colours. A is the house style's default.",
         body: (
           <>
             <WallSwatches e={e} />
@@ -89,7 +93,7 @@ export function HouseSettings() {
     <>
       <SettingsPageHeader
         title="Your house"
-        sub="How the Overview draws your home. Choose what's closest: it's only the picture, nothing's worked out from it."
+        sub="How the Overview draws your home. Pick what's closest. It's only for the picture and doesn't change any figures."
       />
       {/* Mounted once the status has loaded, so the choices start from the saved ones. */}
       {live && <HouseEditorView system={live.system} />}

@@ -32,7 +32,7 @@ from app.features.home.types import IntegrationError
 HOSTS = ("api.ecoflow.com", "api-e.ecoflow.com", "api-a.ecoflow.com")
 KEY_REFUSED = "8513"
 TIMEOUT = 20
-UNREACHABLE = "EcoFlow couldn't be reached. Check the server's internet connection; it'll try again shortly."
+UNREACHABLE = "EcoFlow couldn't be reached. Check the server's internet connection. Trying again shortly."
 
 # (method, url, headers, body, timeout) -> the decoded JSON answer. Raises as urllib does.
 Transport = Callable[[str, str, dict[str, str], bytes | None, float], Any]
@@ -102,11 +102,11 @@ class EcoFlowClient:
         try:
             answer = self.transport(method, url, headers, data, TIMEOUT)
         except urllib.error.HTTPError as e:
-            raise IntegrationError(f"EcoFlow answered with an error ({e.code}). It'll try again shortly.") from e
+            raise IntegrationError(f"EcoFlow sent back an error ({e.code}). Trying again shortly.") from e
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise IntegrationError(UNREACHABLE) from e
         if not isinstance(answer, dict):
-            raise IntegrationError("EcoFlow answered with something unexpected. It'll try again shortly.")
+            raise IntegrationError("EcoFlow sent back something unexpected. Trying again shortly.")
         code = str(answer.get("code", ""))
         if code == KEY_REFUSED:
             raise IntegrationError(
@@ -115,7 +115,7 @@ class EcoFlowClient:
                 signed_out=True,
             )
         if code != "0":
-            raise IntegrationError(f"EcoFlow refused: {answer.get('message') or 'code ' + code}.")
+            raise IntegrationError(f"EcoFlow refused the request ({answer.get('message') or 'code ' + code}).")
         return answer.get("data")
 
     def devices(self) -> list[dict[str, Any]]:

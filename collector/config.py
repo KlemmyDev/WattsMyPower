@@ -114,5 +114,5 @@ def _parse[T](
     try:
         return kind(raw)
     except ValueError:
-        problems.append(f"{name} is {raw!r}, which isn't {what}. Set it to one, e.g. {name}={default}")
+        problems.append(f"{name} is {raw!r}, which isn't {what}. For example, {name}={default}.")
         return default

@@ -17,7 +17,7 @@ GROUPS: dict[str, tuple[str, str]] = {
         "Every word read from your inverters each poll, exactly as they sent it. The dashboard decodes these into "
         "readings, and can decode them again if a mapping is fixed.",
     ),
-    "readings": ("Readings", "Your inverters' figures, decoded: power, energy counters, battery, temperatures."),
+    "readings": ("Readings", "Your inverters' decoded figures, like power, energy counters, battery and temperatures."),
     "weather": ("Weather and forecast", "Hourly weather from Open-Meteo, and the day-ahead solar forecast."),
     "prices": ("Electricity prices", "Amber's prices for each interval, when a tariff follows them."),
     "meter": ("Smart meter", "Interval readings from smart-meter (NEM12) files imported in Bills → Rates & settings."),
@@ -25,10 +25,9 @@ GROUPS: dict[str, tuple[str, str]] = {
     "cars": ("Electric cars", "The cars connected, and their battery levels."),
     "home": (
         "Smart home",
-        "Appliances and smart plugs connected in Manage → Integrations: what each used, and each run of a washer "
-        "or dryer.",
+        "What each appliance and smart plug from Manage → Integrations used, and each run of a washer or dryer.",
     ),
-    "battery": ("Battery controls", "Each standby, floor or charge from the grid started on the Battery page."),
+    "battery": ("Battery controls", "Each standby, reserve or grid charge started on the Battery page."),
     "settings": ("Settings and account", "Your settings, rates, the dashboard's account and signed-in browsers."),
     "devices": ("Connected inverters", "The inverters the collector reads, connected in Manage → Integrations."),
     "sqlite": ("SQLite's own", "The database's description of its tables, kept by SQLite itself."),
@@ -63,7 +62,7 @@ DASHBOARD: dict[str, Table] = {
     "samples": Table(
         "readings",
         "Every poll",
-        "One row per poll: each reading as it arrived, about once a minute.",
+        "Each reading as it arrived, about once a minute.",
         "{raw}",
         Spec("ts"),
         grows=True,
@@ -84,8 +83,8 @@ DASHBOARD: dict[str, Table] = {
     "weather_hours": Table(
         "weather",
         "Hourly weather",
-        "Sunlight, temperature, cloud, rain and wind for each hour: the forecast for hours to come, and the best "
-        "estimate of hours past, for History and so the forecast can learn.",
+        "Sunlight, temperature, cloud, rain and wind for each hour. Forecasts for the hours ahead and best "
+        "estimates for the hours past, used by History and to help the forecast learn.",
         "Kept for good",
         Spec(
             "ts",
@@ -106,7 +105,7 @@ DASHBOARD: dict[str, Table] = {
     "prices": Table(
         "prices",
         "Amber prices",
-        "The price of each 5 or 30 minutes: what a kWh costs to import and earns to export.",
+        "What a kWh costs to import and earns to export, for each 5 or 30 minutes.",
         "Kept while Amber is connected",
         Spec(
             "ts",
@@ -131,7 +130,7 @@ DASHBOARD: dict[str, Table] = {
     "meter_imports": Table(
         "meter",
         "Meter files",
-        "Each smart-meter file imported: its name and when.",
+        "Each smart-meter file imported, with its name and when.",
         "Kept until removed",
         Spec("imported_at"),
     ),
@@ -152,7 +151,7 @@ DASHBOARD: dict[str, Table] = {
     "cars": Table(
         "cars",
         "Cars",
-        "Each car connected: its name, model and charging details.",
+        "Each connected car, with its name, model and charging details.",
         "Kept until removed",
         Spec("created_at"),
     ),
@@ -178,8 +177,8 @@ DASHBOARD: dict[str, Table] = {
     "ev_energy": Table(
         "cars",
         "Charging energy",
-        "What a connected Tesla drew from the house in every 5 minutes it charged at home, and how much of it came "
-        "from the grid, for the Home page's car line.",
+        "What a connected Tesla drew from the house in each 5 minutes it charged at home, and how much came from "
+        "the grid. The Home page's car line uses it.",
         "Kept for good",
         Spec("ts"),
         grows=True,
@@ -187,7 +186,7 @@ DASHBOARD: dict[str, Table] = {
     "ev_sessions": Table(
         "cars",
         "Trips and charges",
-        "Each time a connected Tesla was away (its level leaving and back, and the distance) and each charge at home.",
+        "Each trip a connected Tesla made (its level out and back, and the distance) and each charge at home.",
         "Kept for good",
         Spec("start"),
         grows=True,
@@ -195,7 +194,7 @@ DASHBOARD: dict[str, Table] = {
     "ev_wakes": Table(
         "cars",
         "Wakes",
-        "Each time the dashboard woke a connected Tesla, and why: to see that it isn't woken too often.",
+        "Each time the dashboard woke a connected Tesla, and why. It shows the car isn't being woken too often.",
         "90 days",
         Spec("ts"),
         grows=True,
@@ -204,8 +203,8 @@ DASHBOARD: dict[str, Table] = {
     "ev_events": Table(
         "cars",
         "Activity",
-        "What the dashboard did with a connected Tesla and what it saw done (charging started from solar, a change in "
-        "the car's app, each charge's total), for its day-by-day chart on the EV page.",
+        "What the dashboard did with a connected Tesla and what it saw happen, like solar charging starting, a change "
+        "in the car's app or each charge's total. The EV page's day-by-day chart uses it.",
         "Kept for good",
         Spec("ts"),
         grows=True,
@@ -213,21 +212,21 @@ DASHBOARD: dict[str, Table] = {
     "home_accounts": Table(
         "home",
         "Connected accounts",
-        "Each smart-home integration connected: what it keeps to sign in (never shown), and how its polling is going.",
+        "Each connected smart-home integration, with what it needs to sign in (never shown) and how its polling is going.",
         "Kept until disconnected",
         Spec("created_at"),
     ),
     "home_devices": Table(
         "home",
         "Devices",
-        "Each appliance or plug an account brought: its name, what it's set as, and where its readings had got to.",
+        "Each appliance or plug from a connected account, with its name, what it's set as, and how far its readings go.",
         "Kept until its account is disconnected",
         Spec("created_at"),
     ),
     "home_energy": Table(
         "home",
         "Device energy",
-        "What each device used in every 5 minutes, for the Home page's breakdown.",
+        "What each device used in each 5 minutes, for the Home page's breakdown.",
         "Kept for good",
         Spec("ts", _DEVICE.format("home_energy")),
         grows=True,
@@ -235,7 +234,7 @@ DASHBOARD: dict[str, Table] = {
     "home_peaks": Table(
         "home",
         "Device peaks",
-        "The most each device drew in every 5 minutes, for the power spikes on its page and its room's.",
+        "The most each device drew in each 5 minutes, for the power spikes on its page and its room's page.",
         "Kept for good",
         Spec("ts", _DEVICE.format("home_peaks")),
         grows=True,
@@ -243,7 +242,7 @@ DASHBOARD: dict[str, Table] = {
     "home_runs": Table(
         "home",
         "Appliance runs",
-        "Each run of an appliance that runs in cycles (a wash, a dry): when, how long, and what it used.",
+        "Each cycle of an appliance like a washer or dryer, with when it ran, how long for, and what it used.",
         "Kept for good",
         Spec("start", _DEVICE.format("home_runs")),
         grows=True,
@@ -251,7 +250,7 @@ DASHBOARD: dict[str, Table] = {
     "battery_controls": Table(
         "battery",
         "Battery controls",
-        "Each battery control as it ran: when it started and ended, and how it was set, for the Battery page's chart.",
+        "Each battery control as it ran, with when it started and ended and how it was set. The Battery page's chart uses it.",
         "Kept for good",
         Spec("started_at"),
         grows=True,
@@ -259,21 +258,21 @@ DASHBOARD: dict[str, Table] = {
     "settings": Table(
         "settings",
         "Settings",
-        "Numbers saved from the dashboard: location, system details, costs.",
+        "Numbers saved in the dashboard, like location, system details and costs.",
         "Kept until changed",
     ),
     "kv": Table(
         "settings",
         "Saved details",
-        "Text saved from the dashboard: your tariff, the place name, the set-up guide's progress and connections. "
-        "Only the names are shown here, never what's in them.",
+        "Text saved in the dashboard, like your tariff, the place name, the set-up guide's progress and "
+        "connections. Only the names show here, never what's in them.",
         "Kept until changed",
         Spec(None, "SELECT key, 1, LENGTH(key) + LENGTH(value) FROM kv ORDER BY LENGTH(value) DESC"),
     ),
     "users": Table(
         "settings",
         "Account",
-        "The dashboard's account: its username and a hash of its password.",
+        "The dashboard's account, with its username and a hash of its password.",
         "Kept until reset",
         Spec("created_at"),
     ),
@@ -299,13 +298,13 @@ COLLECTOR: dict[str, Table] = {
     "readings": Table(
         "registers",
         "Register reads",
-        "One row per inverter per poll: the raw 16-bit words it answered with, by register address, as JSON.",
+        "The raw 16-bit words each inverter sent back each poll, by register address, as JSON.",
         "{collector}",
         grows=True,
         retention="collector",
     ),
     "devices": Table(
-        "devices", "Inverters", "Each inverter connected: its driver, address and settings.", "Kept until removed"
+        "devices", "Inverters", "Each connected inverter, with its driver, address and settings.", "Kept until removed"
     ),
     "kv": Table(
         "devices",

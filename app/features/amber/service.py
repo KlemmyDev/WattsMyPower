@@ -291,7 +291,7 @@ class AmberService:
                 st["retry_at"] = ts + (e.retry_after or REFRESH)
         except Exception as e:  # keep the loop going; the page shows the problem
             log.exception("Amber price sync failed")
-            st["error"] = f"Prices could not be updated ({type(e).__name__}). Trying again in a few minutes."
+            st["error"] = f"Couldn't update prices ({type(e).__name__}). Trying again in a few minutes."
 
         with self._lock:
             if gen == self._gen:

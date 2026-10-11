@@ -182,7 +182,7 @@ function TableRow({ table: t, total }: { table: StorageTable; total: number }) {
 
 function growthText(t: StorageTable): string | null {
   if (t.bytes_per_day == null) return t.rows_per_day === 0 ? "Nothing added in the last week" : null;
-  if (t.growing_per_day === 0) return `Steady at about ${bytes(t.bytes)}: old rows go as new ones come`;
+  if (t.growing_per_day === 0) return `Steady at about ${bytes(t.bytes)}. Old rows are removed as new ones arrive`;
   return `About ${bytes(t.bytes_per_day)} a day, ${bytes(t.bytes_per_day * 30)} a month`;
 }
 
@@ -301,7 +301,7 @@ function Files({ db }: { db: MeasuredDatabase }) {
     ["Database file", db.files.database, "The tables and indexes above, in pages of " + bytes(db.page_size) + "."],
     ["Write-ahead log", db.files.wal, "Recent writes, folded into the database file every so often."],
     ["Shared-memory index", db.files.shm, "The log's index, so readers can find recent writes."],
-    ["Empty pages", db.free_bytes, "Inside the database file: left by deleted rows, and reused as rows are added."],
+    ["Empty pages", db.free_bytes, "Space left by deleted rows. It gets reused as new data comes in."],
   ];
   return (
     <div>

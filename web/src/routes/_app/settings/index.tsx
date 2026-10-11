@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_app/settings/")({
 function SettingsPage() {
   return (
     <>
-      <PageHeader title="Settings" sub="Your solar and battery system, the dashboard, and keeping it up to date" />
+      <PageHeader title="Settings" sub="Your system, the dashboard and updates" />
       <SettingsHub />
     </>
   );

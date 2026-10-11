@@ -47,7 +47,7 @@ def parse_network(text: str) -> ipaddress.IPv4Network:
     except ValueError as e:
         raise ValueError(f"{text.strip() or 'That'} isn't a network address, e.g. 192.168.1.0/24.") from e
     if not isinstance(net, ipaddress.IPv4Network) or not net.is_private:
-        raise ValueError("Only your home network can be scanned: a private address range such as 192.168.1.0/24.")
+        raise ValueError("Only your home network can be scanned. Use a private address range, such as 192.168.1.0/24.")
     if net.num_addresses > MAX_HOSTS:
         raise ValueError(f"{net} is too big to scan. Use a /22 or smaller, such as {net.network_address}/24.")
     return net

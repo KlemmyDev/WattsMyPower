@@ -340,7 +340,7 @@ function VersionTag({ full }: { full: boolean }) {
       <button
         type="button"
         onClick={() => window.location.reload()}
-        title={`Updated to ${app.version}: reload for the new dashboard`}
+        title={`Updated to ${app.version}. Reload for the new dashboard.`}
         className={cn(
           "flex cursor-pointer items-center gap-2 rounded-xl border border-good/30 bg-good-subtle font-sans font-medium text-good",
           full ? "px-3 py-2 text-[12.5px]" : "px-1.5 py-0.5 text-[10px]",

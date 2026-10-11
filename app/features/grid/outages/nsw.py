@@ -268,7 +268,7 @@ class Evoenergy(Provider):
         try:
             items = evoenergy_list(str(page))
         except ValueError as e:
-            raise OutageFeedError(f"{self.name}'s outage map couldn't be read.") from e
+            raise OutageFeedError(f"{self.name}'s outage map sent back something unexpected.") from e
         return kept(evoenergy_outage(o) for o in items)
 
     def serves(self, house: House, where: Any) -> bool | None:

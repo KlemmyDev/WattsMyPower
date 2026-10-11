@@ -87,7 +87,7 @@ export function BatteryPanel({
                     })
                   }
                 >
-                  {stop.isPending ? "Putting it back…" : "Resume normal"}
+                  {stop.isPending ? "Putting it back…" : "Back to normal"}
                 </Button>
                 {v?.plan && (
                   <span className="text-[13px] text-ink-muted tabular-nums">
