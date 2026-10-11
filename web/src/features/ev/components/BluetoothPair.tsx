@@ -16,13 +16,13 @@ const VIN = /^[A-HJ-NPR-Z0-9]{17}$/;
 
 const ROLE_ABOUT: Record<KeyRole, string> = {
   charging_manager:
-    "It can start, stop and set charging, and can't unlock or drive the car. It can't wake the car either: once the car's asleep, charging from solar waits until it wakes (as you use it, or from the Tesla app).",
+    "It can start, stop and set charging, but can't unlock or drive the car. It can't wake the car either, so once the car's asleep, solar charging waits until it wakes (when you use it, or from the Tesla app).",
   driver:
-    "It can wake the car, as your phone key does, so charging from solar can start the car even after it's fallen asleep plugged in. Like a phone key, it could also unlock and drive the car.",
+    "It can wake the car like your phone key does, so solar charging can start even after the car's fallen asleep plugged in. Like a phone key, it could also unlock and drive the car.",
 };
 
 const STEPS = [
-  "Park the car near the server: Bluetooth reaches about 10 m, less through walls.",
+  "Park the car near the server. Bluetooth reaches about 10 m, less through walls.",
   "Enter its VIN, then sit in the car with your key card.",
   "When the car asks, tap the card on the reader on the centre console to add this server's key.",
 ];
@@ -125,8 +125,8 @@ export function BluetoothPair({
         <span className="text-[13px] leading-5 text-pretty text-ink-muted">{ROLE_ABOUT[role]}</span>
         {status?.bluetooth.role && role !== status.bluetooth.role && (
           <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-            This makes the server a new key, used once the car's taken it. Any other car paired over Bluetooth needs
-            pairing again too, and you can remove the old key in the car (Controls → Locks).
+            This gives the server a new key, used once the car accepts it. Any other car paired over Bluetooth needs
+            pairing again too. You can remove the old key in the car (Controls → Locks).
           </span>
         )}
       </div>
@@ -143,8 +143,8 @@ export function BluetoothPair({
             <Icon name="bluetooth" size={20} />
           </span>
           <span>
-            <b className="font-semibold">Tap your key card on the console now.</b> The car shows a request to add a key;
-            it waits a couple of minutes.
+            <b className="font-semibold">Tap your key card on the console now.</b> The car shows a request to add a key
+            and waits a couple of minutes.
           </span>
         </Notice>
       )}

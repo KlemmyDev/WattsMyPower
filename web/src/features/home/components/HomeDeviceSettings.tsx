@@ -28,8 +28,8 @@ function Properties({ device }: { device: HomeDevice }) {
       {data && (
         <>
           <HelpText>
-            {data.ts ? `As read at ${hhmm(data.ts)}.` : "Not read since the dashboard started."} Share these when a
-            device reads wrongly, so its properties can be mapped.
+            {data.ts ? `Read at ${hhmm(data.ts)}.` : "Not read since the dashboard started."} Share these if a device
+            shows the wrong values, so its properties can be mapped.
           </HelpText>
           <pre className="m-0 max-h-[420px] overflow-auto rounded-2xl bg-canvas/60 p-4 font-mono text-xs leading-5 text-ink-soft light:bg-canvas">
             {text}
@@ -68,7 +68,7 @@ function Settings({
     <SettingsSection
       id="h-device-settings"
       title="Settings"
-      sub="Saved as you change them. A smart plug can be set as the appliance it powers, so its runs are recorded; plugs in the same room can share a group, and the Home page shows them as one."
+      sub="Changes save as you go. Set a smart plug as the appliance it powers to record its runs. Put plugs in the same room in one group and the Home page shows them together."
     >
       <OptionList>
         <OptionRow label="Name" help="What it's called across the dashboard.">
@@ -97,7 +97,7 @@ function Settings({
             ))}
           </Select>
         </OptionRow>
-        <OptionRow label="Group" help="Shown with the others in it as one on the Home page, e.g. a room.">
+        <OptionRow label="Group" help="Devices in a group, like a room, show as one on the Home page.">
           <GroupInput
             key={device.group ?? ""}
             className="w-[240px] max-sm:w-full"
@@ -110,7 +110,7 @@ function Settings({
         </OptionRow>
         <OptionRow
           label="In the breakdown"
-          help="Left out, it's off the Home page and its use counts as everything else."
+          help="Turn off to hide it from the Home page. Its use then counts as everything else."
         >
           <Switch
             on={!device.hidden}
@@ -124,8 +124,8 @@ function Settings({
             label="Estimate its power while it runs"
             help={
               e.w != null
-                ? `It only says what a run used once it's finished. With this on, while it runs it shows what its runs usually draw: about ${kW(e.w)}, from its last ${runs(e.runs)}. That's only shown: what's counted is still what it reports at the end.`
-                : `It only says what a run used once it's finished. Once ${runs(e.needs)} have finished with their energy (${e.runs} so far), this can show what its runs usually draw while it runs.`
+                ? `It only reports a run's energy once it finishes. Turn this on to show its usual draw while it runs (about ${kW(e.w)}, from its last ${runs(e.runs)}). It's only for display. Totals still use what it reports at the end.`
+                : `It only reports a run's energy once it finishes. After ${runs(e.needs)} have finished with their energy (${e.runs} so far), this can show its usual draw while it runs.`
             }
           >
             <Switch
@@ -196,7 +196,7 @@ export function HomeDeviceSettings({ integrationId, deviceId }: { integrationId:
       <SettingsSection
         id="h-device-raw"
         title="What it sends"
-        sub="Its last reading as the integration received it, for checking how it's read."
+        sub="Its last reading, exactly as the integration received it. Handy for checking how it's read."
         aside={
           <Button variant="outline" size="sm" aria-pressed={raw} onClick={() => setRaw(!raw)}>
             {raw ? "Hide" : "Show"}

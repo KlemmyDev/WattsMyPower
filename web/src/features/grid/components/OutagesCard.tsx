@@ -393,7 +393,7 @@ function OutageDetail({ o, now, network, onBack }: { o: Outage; now: number; net
           </a>
           {!o.url_exact && (
             <span className="text-xs text-ink-faint">
-              {network} can't link to one outage: look for {suburbs[0] ?? "it"} there.
+              {network} doesn't link to single outages, so look for {suburbs[0] ?? "it"} on its map.
             </span>
           )}
         </div>
@@ -552,7 +552,7 @@ export function OutagesCard({
             ) : (
               <div className="py-6 text-[13px] text-ink-faint">
                 {waiting
-                  ? `Nothing from ${net.name}'s outage map yet. Outages and planned work within ${radius} km show here as it reports them.`
+                  ? `Nothing from ${net.name}'s outage map yet. Outages and planned work within ${radius} km will show up here once it reports them.`
                   : tab === "now"
                     ? `No outages within ${radius} km right now.`
                     : `No planned work within ${radius} km in the next two weeks.`}
@@ -593,7 +593,7 @@ export function OutagesCard({
           </div>
         </div>
       ) : !view.location_set ? (
-        <LocationPrompt>Outages are found around your house, so they need to know where it is.</LocationPrompt>
+        <LocationPrompt>Set your location to see outages around your house.</LocationPrompt>
       ) : (
         <div className="text-[13px] text-ink-muted">
           {view.supported ? (

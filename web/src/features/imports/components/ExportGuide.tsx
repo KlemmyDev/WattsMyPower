@@ -71,10 +71,10 @@ export function ExportGuide() {
     <SettingsSection
       id="h-export-guide"
       title="What to export from iSolarCloud"
-      sub="History needs the plant's power curve: a reading every 5 minutes. iSolarCloud's Report page only has daily and monthly totals, which aren't enough."
+      sub="You need the plant's power curve, with a reading every 5 minutes. iSolarCloud's Report page only has daily and monthly totals, which aren't enough."
     >
       <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4">
-        <Steps title="Many days at once: the Curve page" badge="Best for a lot of history">
+        <Steps title="Many days at once, from the Curve page" badge="Best for a lot of history">
           <li>Sign in to iSolarCloud in a web browser on a computer, and open your plant.</li>
           <li>
             Open <b className="text-ink">Curve</b> from the menu on the left.
@@ -102,12 +102,13 @@ export function ExportGuide() {
             </a>
           </li>
         </Steps>
-        <Steps title="One day at a time: the plant's day chart">
+        <Steps title="One day at a time, from the day chart">
           <li>In the iSolarCloud app or website, open your plant and that day's power chart.</li>
           <li>
             Use <b className="text-ink">Export</b> (or download) on the chart. The file has Time, PV, Load, and the grid
-            and battery at 5-minute steps, which is everything needed. Some have a column each way (Purchased Energy and
-            Feed-in, Battery Charge and Battery Discharge), others one signed Grid and Battery column: either works.
+            and battery at 5-minute steps, which is everything needed. Some files have a column each way (Purchased
+            Energy and Feed-in, Battery Charge and Battery Discharge). Others have one signed Grid and Battery column.
+            Either works.
           </li>
           <li>Repeat for each day, then select all the files here at once.</li>
         </Steps>
@@ -144,8 +145,8 @@ export function ExportGuide() {
           .xlsx first.
         </li>
         <li>
-          Times are read as the plant's local time. Imports never replace what WattsMyPower recorded itself, and each
-          import can be removed again.
+          Times are read as the plant's local time. Imports keep what WattsMyPower recorded itself unless you choose to
+          replace it, and you can remove any import later.
         </li>
       </ul>
     </SettingsSection>

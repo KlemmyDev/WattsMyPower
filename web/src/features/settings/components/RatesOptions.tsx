@@ -41,7 +41,7 @@ export function RatesOptions({
       id="rates"
       className="scroll-mt-6"
       title="Rates"
-      sub="Find these on your electricity bill. Savings, grid cost and feed-in credit on every page use them."
+      sub="Find these on your electricity bill. Every page uses them for savings, grid cost and feed-in credit."
     >
       <RateRows draft={draft} dispatch={dispatch} />
       <SaveBanner
@@ -50,7 +50,7 @@ export function RatesOptions({
         error={state.status?.bad ? state.status.text : undefined}
         saveLabel="Save rates"
         onDiscard={onDiscard}
-        onSave={() => save.save(draft, () => toast("Rates saved. Savings on every page now use them."))}
+        onSave={() => save.save(draft, () => toast("Rates saved. Every page now uses them."))}
       />
     </SettingsSection>
   );
@@ -92,7 +92,7 @@ export function RateRows({ draft, dispatch }: { draft: Tariff; dispatch: Dispatc
       />
       {dynamic && (
         <HelpText className="text-[13px] leading-5">
-          For any time Amber has no price for, the fallback rates below are used instead.
+          If Amber has no price for a time, the fallback rates below are used.
         </HelpText>
       )}
       {tou && <ImportRates draft={draft} edit={edit} timeline={false} />}
@@ -113,7 +113,7 @@ export function RateRows({ draft, dispatch }: { draft: Tariff; dispatch: Dispatc
         {money(
           "supply_charge",
           "Daily supply charge",
-          dynamic ? "Amber's network charge and membership, a day." : "Your retailer's fixed daily charge.",
+          dynamic ? "Amber's daily network and membership fees." : "Your retailer's fixed daily charge.",
           "/day",
         )}
       </OptionList>

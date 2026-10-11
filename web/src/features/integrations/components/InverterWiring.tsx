@@ -52,7 +52,7 @@ export function InverterWiring({
       )}
       <HelpText>
         {behind
-          ? "The usual setup: the main inverter's meter sees its surplus as export, so its output is added to home use."
+          ? "The usual setup. The main inverter's meter sees any surplus as export, so its output is added to home use."
           : "The main inverter's meter never sees it, so all of its output counts as exported."}
       </HelpText>
       {meter.isError && <HelpText tone="bad">{errorMessage(meter.error)}</HelpText>}

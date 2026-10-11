@@ -42,12 +42,12 @@ def _message(status: int) -> str:
     if status in (401, 403):
         return "Tessie didn't accept the access token. Check it in Tessie (Settings → API) and paste it again."
     if status == 404:
-        return "Tessie doesn't know that car. It may have been removed from the account."
+        return "Tessie can't find that car. It might have been removed from the account."
     if status == 429:
         return "Tessie is asking for fewer requests. Trying again shortly."
     if status >= 500:
         return "Tessie is having trouble. Trying again shortly."
-    return f"Tessie answered with an error ({status})."
+    return f"Tessie sent back an error ({status})."
 
 
 class TessieClient:
@@ -67,7 +67,7 @@ class TessieClient:
         except urllib.error.HTTPError as e:
             raise TeslaError(_message(e.code), e.code) from e
         except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as e:
-            raise TeslaError("Tessie could not be reached. Check the server's internet connection.") from e
+            raise TeslaError("Can't reach Tessie. Check the server's internet connection.") from e
 
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]:
         """Every car on the account: {vin, is_active, last_state}. Tessie knows where each is, not whether it's in

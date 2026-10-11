@@ -190,7 +190,7 @@ def test_null_intervals_are_left_out_so_the_day_falls_back_to_the_inverter(meter
 def test_channels_that_arent_energy_are_skipped_with_a_note() -> None:
     f = parse(nem12(channel("E1", {JULY_1: 0.5}), channel("Q1", {JULY_1: 0.1}, unit="kVArh")))
     assert [c.suffix for c in f.channels] == ["E1"]
-    assert f.notes == ["Left out what isn't grid import or export in kWh: Q1 (kVArh)."]
+    assert f.notes == ["Only grid import and export in kWh were imported. Skipped Q1 (kVArh)."]
 
 
 def test_several_meters_are_added_together_with_a_note(meter: MeterService) -> None:

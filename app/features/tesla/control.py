@@ -48,13 +48,13 @@ TIMING: dict[str, tuple[int, int, int, str]] = {
     # seconds it must have been short before stopping
     "stop_after": (300, 0, 3600, "The wait before stopping must be 0 to 60 minutes."),
     # seconds between starting and stopping (each wakes the car and wears the charge port's contactor)
-    "min_switch": (300, 60, 3600, "The least time between starting and stopping must be 1 to 60 minutes."),
+    "min_switch": (300, 60, 3600, "The shortest time between starting and stopping must be 1 to 60 minutes."),
     # seconds between changes of current
-    "amps_every": (60, 10, 600, "The time between changes of speed must be 10 seconds to 10 minutes."),
+    "amps_every": (60, 10, 600, "The time between changes of current must be 10 seconds to 10 minutes."),
     # seconds of readings averaged into the spare power
     "average": (150, 20, 900, "The spare power must be averaged over 20 seconds to 15 minutes."),
     # seconds before spare solar is expected for a car that it's made ready (woken and read each minute)
-    "lead": (1800, 0, 7200, "How early the car's made ready must be 0 to 2 hours."),
+    "lead": (1800, 0, 7200, "How early the car gets ready must be 0 to 2 hours."),
     # the home battery counts as full from here (%), with the home battery first
     "battery_full": (98, 50, 100, "The home battery's full level must be 50 to 100%."),
 }

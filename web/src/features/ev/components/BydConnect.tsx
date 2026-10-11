@@ -68,7 +68,7 @@ export function BydConnect({
       <HelpText>
         {status.mock
           ? "Mock mode: any email and password connects a made-up Atto 3."
-          : "The ones you sign in to the BYD app with. They're kept on this server and only ever sent to BYD. BYD signs an account in one place at a time, so this signs the app out on your phone: share the car to a second account from the BYD app and use that one here to avoid it."}
+          : "Use the ones you sign in to the BYD app with. They stay on this server and are only ever sent to BYD. BYD allows one sign-in per account at a time, so this signs out the app on your phone. To avoid that, share the car to a second account from the BYD app and use that one here."}
       </HelpText>
       {connect.isError && <HelpText tone="bad">{errorMessage(connect.error)}</HelpText>}
       <Button type="submit" size="sm" className="self-start" disabled={!ready || connect.isPending}>

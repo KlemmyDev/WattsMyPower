@@ -17,8 +17,8 @@ export const ROLE_LABEL: Record<KeyRole, string> = { charging_manager: "Charging
 export const PROVIDER_LABEL: Record<TeslaProvider, string> = { bluetooth: "Bluetooth", tessie: "Tessie" };
 
 export const MODE_LABEL: Record<EvMode, string> = {
-  off: "Off",
-  solar: "Spare solar",
+  off: "Manual",
+  solar: "Solar only",
 };
 
 export const STATUS_LABEL: Record<EvStatus, string> = {
@@ -33,8 +33,7 @@ export const STATUS_LABEL: Record<EvStatus, string> = {
 };
 
 /** What a Tesla's offered for, until one's connected. */
-export const TESLA_ABOUT =
-  "Over Bluetooth or through Tessie: its level, its charging at home, and charging it from spare solar";
+export const TESLA_ABOUT = "See its charge and charge it from spare solar, over Bluetooth or through Tessie";
 
 /** The Teslas at a glance, for Integrations: whether they're connected and reading, each car's level and how it
  * charges ("Model Y · 80% · Spare solar"), and how they're reached (either way, until one's connected). */
@@ -63,7 +62,7 @@ export function teslaSummary(status: TeslaStatus | undefined): {
 }
 
 /** What a BYD's offered for, until one's connected. */
-export const BYD_ABOUT = "Through BYD's cloud, as the BYD app reads it: each car's charge, range and charging";
+export const BYD_ABOUT = "Each car's charge, range and charging, through BYD's cloud";
 
 /** The BYDs at a glance, for Integrations: whether they're connected and reading, and each car's level and what it's
  * doing ("Atto · 64% · Charging"). Always through BYD's cloud, as there's no local way. */
@@ -90,8 +89,7 @@ export function bydSummary(status: BydStatus | undefined): {
 }
 
 /** What a Hyundai or Kia's offered for, until one's connected. */
-export const BLUELINK_ABOUT =
-  "Through Bluelink or Kia Connect, as their apps reach the car: its charge and charging, and charging it from spare solar";
+export const BLUELINK_ABOUT = "See its charge and charge it from spare solar, through Bluelink or Kia Connect";
 
 /** The Hyundais and Kias at a glance, for Integrations: whether they're connected and reading, and each car's level
  * and how it charges ("Ioniq · 64% · Spare solar"). Always through the maker's cloud, as there's no local way. */

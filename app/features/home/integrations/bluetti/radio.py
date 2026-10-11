@@ -96,7 +96,7 @@ class Bleak:
         except (BleakError, OSError) as e:
             raise _unavailable(e) from e
         if device is None:
-            raise RadioError("It wasn't heard over Bluetooth: check it's switched on and in range of this server.")
+            raise RadioError("It wasn't heard over Bluetooth. Check it's switched on and in range of this server.")
 
         buffer = bytearray()
         arrived = asyncio.Event()
@@ -115,9 +115,13 @@ class Bleak:
                     await client.write_gatt_char(WRITE_CHAR, request, response=True)
                     answers.append(await _answer(request, buffer, arrived))
         except TimeoutError as e:
-            raise RadioError("It didn't answer over Bluetooth in time. Is the Bluetti app connected to it?") from e
+            raise RadioError(
+                "It didn't answer over Bluetooth in time. Check the Bluetti app on a phone isn't connected to it."
+            ) from e
         except BleakError as e:
-            raise RadioError(f"The Bluetooth connection failed ({e}). Is the Bluetti app connected to it?") from e
+            raise RadioError(
+                f"The Bluetooth connection failed ({e}). Check the Bluetti app on a phone isn't connected to it."
+            ) from e
         return answers
 
 

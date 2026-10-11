@@ -146,8 +146,8 @@ export function AllBatteries({
       </ul>
       {unsized.length > 0 && (
         <p className="m-0 text-[13px] text-pretty text-ink-muted">
-          {unsized.map((b) => b.name).join(", ")}: {plural(unsized.length, "its", "their")} size isn't known, so{" "}
-          {plural(unsized.length, "it's", "they're")} not in the total.
+          {unsized.map((b) => b.name).join(", ")} {plural(unsized.length, "isn't", "aren't")} in the total because{" "}
+          {plural(unsized.length, "its", "their")} size isn't known.
         </p>
       )}
     </Card>

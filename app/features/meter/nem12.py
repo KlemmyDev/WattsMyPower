@@ -132,7 +132,7 @@ def decode(data: bytes) -> str:
     if data.startswith(b"PK\x03\x04"):
         raise Nem12Error("This is a zip file. Unzip it first, then choose the CSV file inside.")
     if b"\x00" in data[:4096]:
-        raise Nem12Error("This doesn't look like a NEM12 file: it isn't a text (CSV) file.")
+        raise Nem12Error("This doesn't look like a NEM12 file. It isn't a text (CSV) file.")
     try:
         return data.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -207,7 +207,7 @@ def parse(data: bytes) -> Nem12File:
             raise Nem12Error(f"This file has no grid import or export readings in it, only {others}.")
         raise Nem12Error("Every reading in this file is missing (quality N), so there's nothing to import.")
     if skipped:
-        notes.append(f"Left out what isn't grid import or export in kWh: {others}.")
+        notes.append(f"Only grid import and export in kWh were imported. Skipped {others}.")
     if not seen_end:
         notes.append("The file has no end record (900), so it may have been cut short. Check the last day looks right.")
     nmis = sorted({c.nmi for c in kept})

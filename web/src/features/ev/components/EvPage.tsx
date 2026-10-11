@@ -82,9 +82,9 @@ export function EvPage({ vin }: { vin?: string } = {}) {
             </ButtonLink>
           }
         >
-          Connect your Tesla, over this server's Bluetooth or through Tessie, and the charge rate follows the sun
-          through the day, so the car gets spare solar and the home battery still fills. A Hyundai or Kia can be charged
-          from spare solar too (started and stopped through its cloud), and a BYD connected to see its charge.
+          Connect your Tesla over this server's Bluetooth or through Tessie. Its charge rate then follows the sun, so
+          the car gets spare solar and your home battery still fills. A Hyundai or Kia can charge from spare solar too
+          (started and stopped through its cloud). A BYD shows its charge.
         </EmptyState>
       </>
     );
@@ -138,8 +138,8 @@ export function EvPage({ vin }: { vin?: string } = {}) {
               <NextRead status={data} className="text-inherit" />
             </span>
             <span className="text-pretty text-ink-muted">
-              A Tesla takes about three at once, and each phone or watch with its key holds one while it's near the car.
-              The dashboard gets in once one of them is out of range; it eases off trying in the meantime. If this keeps
+              A Tesla allows about three at once, and each phone or watch with its key uses one while it's nearby. Once
+              one moves out of range, the dashboard can connect. It tries less often until then. If this keeps
               happening, remove a key you don't use (in the car, under Controls → Locks).
             </span>
           </Notice>

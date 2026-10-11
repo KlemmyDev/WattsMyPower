@@ -37,7 +37,7 @@ const WAKE = COLOR.lilac;
 const NEAR = 10 * 60; // a wake or an event within this of the pointer shows in its tooltip
 const WHY: Record<string, string> = {
   first: "to read it after a restart",
-  ready: "ready for spare solar",
+  ready: "to get it ready for spare solar",
   refresh: "to read its details",
   command: "for a command",
   solar: "to charge from solar",

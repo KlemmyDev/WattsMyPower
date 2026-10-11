@@ -30,9 +30,9 @@ const short = (commit: string) => commit.slice(0, 7);
 const UNDER_WAY = new Set(["requested", "running"]);
 
 const ABOUT: Record<Channel, string> = {
-  nightly: "Every change as soon as it's merged. The newest, and the least tried.",
+  nightly: "Every change as soon as it's merged. Newest, but the least tested.",
   beta: "Pre-releases to try before they're stable, and every stable release.",
-  stable: "Releases only, once they've been tried. Updates less often.",
+  stable: "Tested releases only. Updates less often.",
 };
 const CHANNEL_ICON: Record<Channel, IconName> = { nightly: "moon", beta: "flask", stable: "shield" };
 const CHANNEL_TILES = (Object.keys(CHANNEL) as Channel[]).map((value) => ({
@@ -75,7 +75,7 @@ export function UpdatesSettings() {
     <>
       <SettingsPageHeader
         title="Updates"
-        sub="The version you're running, the release channel it follows, and installing newer ones."
+        sub="The version you're running, which releases it follows, and how to update."
       />
       <UpdatesBody />
     </>
@@ -113,7 +113,7 @@ function UpdatesBody() {
     onSuccess: (s) => {
       qc.setQueryData(updatesQuery.queryKey, s);
       setConfirming(false);
-      toast(`Following ${channelName(s.channel)}.`);
+      toast(`Now following ${channelName(s.channel)}.`);
     },
     onError: (e) => toast(errorMessage(e)),
   });
@@ -187,8 +187,8 @@ function UpdatesBody() {
           {s?.error && !underWay && <Notice tone="warn">{s.error}</Notice>}
           {s?.unreleased && !channel.isPending && (
             <Notice tone="info">
-              Nothing has been released on {channelName(s.channel)} yet, so this version stays until there is. Nightly
-              has every change as it's merged.
+              Nothing's been released on {channelName(s.channel)} yet, so you'll stay on this version until there is.
+              Nightly gets every change as it's merged.
             </Notice>
           )}
 
@@ -204,7 +204,7 @@ function UpdatesBody() {
           )}
           {!underWay && s?.install.state === "expired" && (
             <Notice tone="warn">
-              The update was asked for while the updater wasn't running, so it was dropped. Try again.
+              The updater wasn't running when you asked, so the update was dropped. Try again.
             </Notice>
           )}
 
@@ -221,16 +221,17 @@ function UpdatesBody() {
                     {older && (
                       <span className="text-pretty text-ink-muted">
                         It's older than this version, so {leftOut(s)} won't be in it. Anything they recorded stays in
-                        the database, for when it's updated again.
+                        the database for when you update again.
                       </span>
                     )}
                     <span className="text-pretty text-ink-muted">
-                      It downloads it, backs up your data and rebuilds, which takes a few minutes. The dashboard is away
-                      for a minute while it restarts, and then this page reloads. Your inverters keep being recorded.
+                      This downloads that version, backs up your data and rebuilds, which takes a few minutes. The
+                      dashboard goes offline for about a minute while it restarts, then this page reloads. Your
+                      inverters keep recording the whole time.
                     </span>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" onClick={() => install.mutate()} disabled={install.isPending}>
-                        {install.isPending ? "Asking…" : older ? "Go back" : "Update now"}
+                        {install.isPending ? "Starting…" : older ? "Go back" : "Update now"}
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
                         Cancel
@@ -256,7 +257,7 @@ function UpdatesBody() {
         <SettingsSection
           id="h-channel"
           title="Release channel"
-          sub="Which releases this dashboard follows. Choosing one behind this version offers to go back to it."
+          sub="Which releases this dashboard follows. If you pick one that's behind this version, you can go back to it."
         >
           <ChoiceTiles
             label="Release channel"
@@ -273,7 +274,7 @@ function UpdatesBody() {
         <OptionList>
           <OptionRow
             label="Check for updates"
-            help="Every few hours WattsMyPower asks GitHub whether there's a newer version on your channel."
+            help="Asks GitHub every few hours whether there's a newer version on your channel."
             icon="clock"
             color={COLOR.brand}
           >
@@ -287,7 +288,7 @@ function UpdatesBody() {
                   {
                     onSuccess: () => {
                       qc.invalidateQueries({ queryKey: updatesQuery.queryKey });
-                      toast(v ? "Checking for updates." : "Not checking for updates.");
+                      toast(v ? "Update checks are on." : "Update checks are off.");
                     },
                     onError: (e) => toast(saveSettingsError(e)),
                   },
@@ -309,7 +310,7 @@ function Progress({ s, restarting }: { s: UpdateStatus; restarting: boolean }) {
       ? "Starting the update…"
       : "Updating…";
   const sub = restarting
-    ? "The dashboard is away for a moment. This page reloads once it's back."
+    ? "The dashboard is offline for a moment. This page reloads once it's back."
     : s.install.state === "requested"
       ? "The updater on this machine picks it up within a minute."
       : "Downloading, backing up your data and rebuilding. This takes a few minutes; the dashboard restarts at the end.";

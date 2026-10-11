@@ -71,7 +71,7 @@ def addresses(where: str) -> tuple[list[str], list[str]]:
                 if not isinstance(net, ipaddress.IPv4Network) or not net.is_private:
                     raise WhereError(f"{part} isn't a home network.")
                 if net.num_addresses > MAX_HOSTS + 2:
-                    raise WhereError(f"{part} is bigger than a home network: give a /22 or smaller.")
+                    raise WhereError(f"{part} is bigger than a home network. Give a /22 or smaller.")
                 hosts += [str(h) for h in net.hosts()]
             else:
                 ip = ipaddress.ip_address(part)

@@ -155,7 +155,7 @@ def test_on_windows_it_says_to_run_install_ps1(svc: UpdateService, monkeypatch: 
     monkeypatch.setattr(updates, "WINDOWS", True)
     status = svc.status()
     assert status["windows"] is True
-    assert "run install.ps1 once more on the PC" in status["install"]["why"]
+    assert "Run install.ps1 once more on the PC" in status["install"]["why"]
 
 
 def test_stable_behind_this_one_is_older(svc: UpdateService, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -236,7 +236,7 @@ def _updater(svc: UpdateService, **note: Any) -> None:
 def test_without_the_updater_it_says_how_to_set_it_up(svc: UpdateService) -> None:
     install = svc.installer()
     assert install["ready"] is False and install["state"] == "idle"
-    assert "run bash install.sh once more" in install["why"]
+    assert "Run bash install.sh once more" in install["why"]
     with pytest.raises(UpdateRefused):
         svc.install()
 

@@ -12,7 +12,7 @@ const winControl =
   "h-10 rounded-xl border border-line-subtle bg-surface px-2.5 font-sans text-sm text-ink tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line focus:border-brand focus:shadow-focus focus:outline-none";
 
 const NEVER_APPLIES =
-  "Never applies: the other rates already cover every hour. To use two rates, select “Use for all other times” on one of them, then remove this one.";
+  "Never applies, because the other rates already cover every hour. To use two rates, choose “Use for all other times” on one, then remove this one.";
 
 function WindowRow({
   window: w,

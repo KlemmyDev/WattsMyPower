@@ -73,7 +73,7 @@ export function GridPage() {
           </div>
         </div>
         {isError && !grid && (
-          <div className="text-sm text-ink-faint">The grid's figures could not be loaded. Try again shortly.</div>
+          <div className="text-sm text-ink-faint">Couldn't load the grid's figures. Try again in a moment.</div>
         )}
       </div>
     </>
@@ -259,8 +259,8 @@ function TodayCard({
           title="Today"
           sub={
             peak?.v != null && peak.v > ON
-              ? `Drew the most from the grid at ${hhmm(peak.t)}: ${kW(peak.v)}`
-              : "Power from the grid and sent to it, through the day"
+              ? `Peak draw ${kW(peak.v)} at ${hhmm(peak.t)}`
+              : "Power bought and sold through the day"
           }
         />
         <div className="flex gap-4 text-xs text-ink-dim">
@@ -354,8 +354,8 @@ function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
           title="Wholesale price"
           sub={
             grid.enabled
-              ? `What power sells for in ${grid.region_name ?? "your region"} before network charges and your retailer's margin, from AEMO every five minutes. Most bills don't follow it; Amber's does.`
-              : "Follow your region's wholesale price, and AEMO's warnings of tight supply and load shedding."
+              ? `What power sells for in ${grid.region_name ?? "your region"} before network charges and your retailer's cut. AEMO updates it every five minutes. Most bills don't follow it, but Amber's does.`
+              : "Choose your region to see its wholesale price and AEMO's warnings about tight supply and load shedding."
           }
         />
         <Select
@@ -472,7 +472,7 @@ function QualityCard({
         title="Grid quality"
         sub={
           high > 0
-            ? `Above ${lim.voltage_high} V for ${duration(high)} today: your inverter may have held back exports.`
+            ? `Above ${lim.voltage_high} V for ${duration(high)} today, so your inverter may have held back exports.`
             : "The grid's voltage and frequency at your house"
         }
       />
@@ -548,7 +548,7 @@ function NoticesCard({ grid }: { grid: GridView }) {
         </ul>
       ) : (
         <div className="text-[13px] text-ink-faint">
-          None: no tight supply, load shedding or system events in your region.
+          All quiet. No tight supply, load shedding or system events in your region.
         </div>
       )}
     </Card>

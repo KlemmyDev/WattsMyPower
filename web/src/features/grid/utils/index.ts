@@ -41,17 +41,17 @@ export const LEVEL: Record<OutlookLevel, { word: string; color: string; sub: str
     color: COLOR.warn,
     sub: "Keep your battery charged, and go easy on big appliances.",
   },
-  outage: { word: "Grid down", color: COLOR.danger, sub: "Your battery is running the house." },
+  outage: { word: "Grid down", color: COLOR.danger, sub: "Power's out in your area." },
 };
 
 /** What each kind of AEMO notice means, for someone who isn't an energy trader. */
 export const NOTICE_HELP: Record<NoticeKind, string> = {
-  lor1: "Lack of Reserve 1: spare generation is lower than AEMO likes. Rarely leads to anything.",
-  lor2: "Lack of Reserve 2: if one big generator or line failed, there wouldn't be enough to go round.",
-  lor3: "Lack of Reserve 3: there isn't enough supply for demand. Rotating blackouts (load shedding) may follow.",
+  lor1: "Lack of Reserve 1 means spare generation is lower than AEMO likes. It rarely leads to anything.",
+  lor2: "Lack of Reserve 2 means that if one big generator or line failed, there wouldn't be enough to go round.",
+  lor3: "Lack of Reserve 3 means there isn't enough supply to meet demand. Rotating blackouts (load shedding) may follow.",
   load_shedding: "AEMO has directed networks to cut supply to some areas to keep the system running.",
   system_event: "Something on the power system tripped or failed unexpectedly.",
-  suspension: "AEMO has suspended the market: the system is in serious trouble.",
+  suspension: "AEMO has suspended the market, which means the system is in serious trouble.",
   price_cap: "Prices were extreme for long enough that AEMO has capped them, or is reviewing them.",
   msl1: "Very little demand on the grid (lots of rooftop solar). AEMO is watching.",
   msl2: "Very little demand on the grid. AEMO may act to keep the system secure.",

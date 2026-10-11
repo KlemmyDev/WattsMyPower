@@ -203,8 +203,8 @@ function SignIn({ redirectTo }: { redirectTo?: string }) {
       <SubmitButton busy={login.isPending}>{login.isPending ? "Signing in…" : "Sign in"}</SubmitButton>
       <Disclosure label="Forgotten your password?">
         <span>
-          There's no reset by email: the account lives on your own server. To start again with a new one, run this from
-          the install folder:
+          There's no email reset, because the account lives on your own server. To start over with a new one, run this
+          in the install folder.
         </span>
         <Command text={RESET} />
       </Disclosure>
@@ -277,7 +277,7 @@ function CreateAccount({ onCreated }: { onCreated: (username: string) => void })
       {stage === "code" ? (
         <div key="code" className="flex animate-rise flex-col gap-7">
           <CardIntro eyebrow={<Steps stage={stage} />} title="Welcome aboard">
-            Enter the set-up code from when WattsMyPower was installed. It shows this dashboard is yours.
+            Enter the set-up code you got when WattsMyPower was installed. It proves this dashboard is yours.
           </CardIntro>
           <div className="flex flex-col gap-3">
             <label htmlFor={codeId} className="text-[13px] font-semibold">
@@ -408,7 +408,7 @@ function Command({ text }: { text: string }) {
 function WhereIsTheCode() {
   return (
     <Disclosure label="Where do I find it?">
-      <span>The installer printed it when it finished. It's also in the dashboard's logs:</span>
+      <span>The installer printed it when it finished. You'll also find it in the dashboard's logs.</span>
       <Command text={LOGS} />
       <span>
         Or open <code className="font-mono text-ink">data/setup-code</code> in the install folder. It's only needed this
@@ -450,7 +450,7 @@ function Created({ username, redirectTo }: { username: string; redirectTo?: stri
         </p>
       </div>
       <Button size="lg" className="animate-rise justify-center [animation-delay:320ms]" onClick={go}>
-        Let's go
+        Get started
         <Icon name="arrowR" size={17} />
       </Button>
     </div>

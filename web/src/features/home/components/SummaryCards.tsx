@@ -52,14 +52,14 @@ function ChangeLine({ c }: { c: Change }) {
     case "use":
       return (
         <>
-          {link(c.id, c.name)} used {pct(c.now, c.before)}% {more(c.now, c.before)} than the week before ({kWh(c.now)},
-          against {kWh(c.before)}).
+          {link(c.id, c.name)} used {pct(c.now, c.before)}% {more(c.now, c.before)} than the week before ({kWh(c.now)}{" "}
+          vs {kWh(c.before)}).
         </>
       );
     case "new":
       return (
         <>
-          {link(c.id, c.name)} used {kWh(c.now)}, the first week it's used anything.
+          {link(c.id, c.name)} used {kWh(c.now)}, its first week using any power.
         </>
       );
     case "runs":
@@ -72,7 +72,7 @@ function ChangeLine({ c }: { c: Change }) {
     case "car":
       return (
         <>
-          The car charged {kWh(c.now)}, against {kWh(c.before)} the week before.
+          The car charged {kWh(c.now)}, compared with {kWh(c.before)} the week before.
         </>
       );
     case "standby":
@@ -98,7 +98,7 @@ export function ChangesCard({ changes }: { changes: HomeInsights["changes"] | un
     <Card aria-labelledby="h-changes" className="col-span-12 gap-3">
       <div className="flex flex-col gap-0.5">
         <h2 id="h-changes">This week</h2>
-        <span className="text-[13px] text-ink-muted">What's changed in the last 7 days, against the 7 before</span>
+        <span className="text-[13px] text-ink-muted">The last 7 days compared with the 7 before</span>
       </div>
       <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-sm text-pretty text-ink-muted marker:text-ink-faint">
         {changes.items.map((c, i) => (
@@ -142,7 +142,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h2 id="h-goals">Goals</h2>
-          <span className="text-[13px] text-ink-muted">This bill against its budget, and what's always on</span>
+          <span className="text-[13px] text-ink-muted">Your bill against its budget, and your always-on use</span>
         </div>
         {!editing && (
           <Button variant="outline" size="sm" onClick={open}>
@@ -153,7 +153,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
       {editing ? (
         <form onSubmit={submit} className="flex flex-wrap items-end gap-4">
           <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-            Budget a bill
+            Bill budget
             <Input
               prefix="$"
               inputMode="decimal"
@@ -163,7 +163,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
             />
           </label>
           <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-            Always on, at most
+            Always-on target
             <Input
               unit="W"
               inputMode="numeric"
@@ -178,7 +178,9 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
           <Button type="button" variant="muted-link" onClick={() => setEditing(false)}>
             Cancel
           </Button>
-          <HelpText className="basis-full">Leave one blank for none. The budget is the one on the Bills page.</HelpText>
+          <HelpText className="basis-full">
+            Leave one blank for no goal. The budget is shared with the Bills page.
+          </HelpText>
           {save.isError && <HelpText tone="bad">{errorMessage(save.error)}</HelpText>}
         </form>
       ) : (
@@ -200,7 +202,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
                     <span className={cn("text-[13px]", expected > target ? "text-bad" : "text-good")}>
                       {expected > target
                         ? `On course to go ${dollars(expected - target)} over`
-                        : `On track: about ${dollars(target - expected)} to spare`}
+                        : `On track, about ${dollars(target - expected)} to spare`}
                     </span>
                   </>
                 )}
@@ -211,7 +213,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
           <div className="flex flex-col gap-2">
             <span className="text-[13px] text-ink-muted">Always on</span>
             {standbyW == null ? (
-              <span className="text-sm text-ink-muted">This shows after a few nights of readings.</span>
+              <span className="text-sm text-ink-muted">This fills in after a few nights of readings.</span>
             ) : (
               <>
                 <span className="text-sm tabular-nums">
@@ -223,7 +225,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
                     <Meter
                       value={standbyGoal / Math.max(standbyW, 1)}
                       bad={standbyW > standbyGoal * 1.5}
-                      label="The always-on target, against what's always on"
+                      label="Always-on use against its target"
                     />
                     <span className={cn("text-[13px]", standbyW > standbyGoal ? "text-ink-muted" : "text-good")}>
                       {standbyW > standbyGoal ? `${Math.round(standbyW - standbyGoal)} W to go` : "Target met"}
@@ -231,7 +233,7 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
                   </>
                 )}
                 {!standbyGoal && (
-                  <span className="text-[13px] text-ink-muted">Set a target to track it coming down.</span>
+                  <span className="text-[13px] text-ink-muted">Set a target and watch it come down.</span>
                 )}
               </>
             )}

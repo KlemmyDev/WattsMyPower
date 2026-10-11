@@ -77,5 +77,5 @@ async def search_places(svc: ServicesDep, q: str):
     except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail=f"The place search couldn't be reached ({type(e).__name__}). Try again, or enter coordinates instead.",
+            detail=f"Can't reach the place search ({type(e).__name__}). Try again, or enter coordinates instead.",
         ) from e

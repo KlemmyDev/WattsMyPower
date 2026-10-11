@@ -68,8 +68,8 @@ LOG_KEY = "tesla_log"  # kv: what it did lately (JSON list, newest last)
 CHARGE_KEY = "tesla_charge"  # kv: each car's last charge reading over Bluetooth (BluetoothClient's), across restarts
 DETAILS_KEY = "tesla_details"  # kv: each car's details, group by group (app.features.tesla.details), as last read
 WAKE_WHY = {
-    "first": "to read it (nothing known of it since the dashboard started)",
-    "ready": "ready for spare solar",
+    "first": "to read it after a restart",
+    "ready": "to get it ready for spare solar",
     "refresh": "to read its details",
     "command": "to send it a command",
     "solar": "to charge from spare solar",
@@ -360,17 +360,17 @@ class TeslaService:
         works). Runs in the background: status()'s `bluetooth.pairing` follows it. Raises TeslaSetupError."""
         vin = str(vin or "").strip().upper()
         if not VIN.match(vin):
-            raise TeslaSetupError("Enter the car's VIN: 17 letters and numbers, as on the car's screen (Controls → "
-                                  "Software) or the Tesla app.")  # fmt: skip
+            raise TeslaSetupError("Enter the car's 17-character VIN. It's on the car's screen (Controls → "
+                                  "Software) and in the Tesla app.")  # fmt: skip
         role = role or self._key_role() or "charging_manager"
         if role not in bluetooth.ROLES:
-            raise TeslaSetupError("Pair the key as a charging manager (charging_manager) or a driver (driver).")
+            raise TeslaSetupError("Choose whether to pair the key as a charging manager or a driver.")
         with self._lock:
             if self._pairing and self._pairing["step"] in ("looking", "tap"):
                 raise TeslaSetupError("A car is already being paired. Wait for it to finish.", 409)
             c = self._conn()
             if c.get("provider") == "bluetooth" and vin not in c["vehicles"] and len(c["vehicles"]) >= MAX_CARS:
-                raise TeslaSetupError(f"Up to {MAX_CARS} cars can be paired.")
+                raise TeslaSetupError(f"You can pair up to {MAX_CARS} cars.")
             key = self._key() if role == self._key_role() else None
             key = key or bluetooth.new_key()
             self._pairing = {"vin": vin, "step": "looking", "error": None, "at": int(self.clock()), "role": role}
@@ -411,7 +411,7 @@ class TeslaService:
                 self._bluetooth.names[vin] = name
             self._next_read = 0
             self._note(
-                vin, f"Paired over Bluetooth, as a {'driver' if role == 'driver' else 'charging manager'}", "mode"
+                vin, f"Paired over Bluetooth as a {'driver' if role == 'driver' else 'charging manager'}", "mode"
             )
         self.wake()
 
@@ -566,11 +566,11 @@ class TeslaService:
                 self._woke(vin, "command")
             if not ok:
                 raise TeslaSetupError(
-                    "The car didn't take the command. It may be out of reach; try again shortly.", 502
+                    "The car didn't take the command. It might be out of range, so try again shortly.", 502
                 )
             if hold and c["vehicles"][vin]["control"]["mode"] != "off":
                 mem.hold, mem.hold_at = hold, now
-                text += ": on hold from spare solar until it's unplugged"
+                text += ". The dashboard takes over again once it's unplugged"
             if name == "set_charging_amps":
                 mem.amps, mem.amps_at = params["amps"], now
             self._took(vin, name, params)
@@ -713,8 +713,8 @@ class TeslaService:
             after = BUSY_BACKOFF[min(self._busy, len(BUSY_BACKOFF)) - 1]
             if self._busy == 1:
                 for vin in self._conn()["vehicles"]:
-                    self._note(vin, "Couldn't connect over Bluetooth: the car's taking no more connections (phones "
-                                    "or watches with its key are near it)", "error")  # fmt: skip
+                    self._note(vin, "Couldn't connect over Bluetooth. The car is taking no more connections while "
+                                    "phones or watches with its key are nearby", "error")  # fmt: skip
         else:
             self._busy = 0
             after = POLL_IDLE if e.refused else READ_BACKOFF[min(self._failed, len(READ_BACKOFF)) - 1]
@@ -736,9 +736,9 @@ class TeslaService:
             self._woke(vin, str(row["woke"]))
         if row.get("wake_failed"):
             self._no_wake[vin] = int(row["wake_failed"])
-            self._note(vin, "The car didn't wake up for the dashboard's key: it's left asleep for half an hour, and its "
-                            "charge is read once it's awake (charging, in use, or woken from the Tesla app)"
-                            + (". A charging-only key can't wake it: pair it again as a driver to let it"
+            self._note(vin, "The car didn't wake up for the dashboard's key. It's left asleep for half an hour, and its "
+                            "charge is read once it wakes (charging, in use, or woken from the Tesla app)"
+                            + (". A charging-only key can't wake it, so pair it again as a driver if you'd like it to"
                                if self._key_role() == "charging_manager" else ""), "error")  # fmt: skip
         elif self._states[vin].asleep is False:
             self._no_wake.pop(vin, None)
@@ -1041,7 +1041,7 @@ class TeslaService:
         changed = False
         if not s.plugged and s.in_range is not False and mem != Memory():
             if mem.hold:
-                self._note(vin, "Unplugged: the dashboard is in charge of charging again", "mode")
+                self._note(vin, "Unplugged. The dashboard is in charge of charging again", "mode")
             mem, changed = Memory(), True
             self._samples.pop(vin, None)
         cfg = v["control"]
@@ -1053,7 +1053,7 @@ class TeslaService:
         spare = self._spare(vin, s, cfg, mem, spec)
         if mem.hold is None and (why := control.taken_over(s, mem, now)):
             mem.hold, mem.hold_at = why, now
-            self._note(vin, f"{why}: on hold until it's unplugged", "manual")
+            self._note(vin, f"{why}. The dashboard takes over again once it's unplugged", "manual")
             self._remember(vin, mem)
             return
         if mem.hold is not None:
@@ -1181,19 +1181,19 @@ class TeslaService:
             done = self.history.finish(charge["id"], int(now), s.soc, None)
             if done:
                 d = history.describe(done, self._battery_kwh(vin))
-                share = f", {d['solar_share']:.0%} from solar or the battery" if d["solar_share"] is not None else ""
-                levels = (f"{d['soc_start']:.0f}% → {d['soc_end']:.0f}%: "
+                share = f" ({d['solar_share']:.0%} from solar or the battery)" if d["solar_share"] is not None else ""
+                levels = (f"{d['soc_start']:.0f}% → {d['soc_end']:.0f}%, "
                           if d["soc_start"] is not None and d["soc_end"] is not None else "")  # fmt: skip
                 self._note(vin, f"Charged {levels}{d['kwh']:.1f} kWh from the house{share}", "charge")
 
     def _back(self, done: dict[str, Any], vin: str) -> str:
         d = history.describe(done, self._battery_kwh(vin))
         change = d["soc_change"] or 0
-        used = (f"used {-change:.0f}%" if change <= 0 else f"gained {change:.0f}%") + (
+        used = (f"Used {-change:.0f}%" if change <= 0 else f"Gained {change:.0f}%") + (
             f" (about {abs(d['used_kwh']):.0f} kWh)" if d["used_kwh"] else ""
         )
-        km = f", {d['km']:.0f} km" if d["km"] else ""
-        return f"Back home at {d['soc_end']:.0f}%: {used}{km}"
+        km = f" after {d['km']:.0f} km" if d["km"] else ""
+        return f"Back home at {d['soc_end']:.0f}%{km}. {used}"
 
     def car_history(self, vin: str, days: int = 30) -> dict[str, Any]:
         """The car's in and out over the last `days`: its sessions (newest first), and their totals."""
@@ -1271,9 +1271,9 @@ class TeslaService:
         mode = v["control"]["mode"]
         amps = s.request_amps
         if s.in_range is False:
-            return "away", "Not heard over Bluetooth: away from home, or out of the server's range"
+            return "away", "Not heard over Bluetooth. It's away, or out of the server's range"
         if not s.charging_state:  # neither its charge nor its charge port read since the dashboard started
-            return "unknown", "Not read since the dashboard started: its level is as last read"
+            return "unknown", "Not read since the dashboard started. Showing its last known level"
         if not s.plugged:
             return "unplugged", "Not plugged in"
         if s.fast_charger:
@@ -1287,7 +1287,9 @@ class TeslaService:
         if mode != "off" and s.at_home is None:
             return ("charging" if s.charging else "waiting"), "The car's location isn't known, so it's left alone"
         if mem.hold and mode != "off":
-            return ("charging" if s.charging else "hold"), f"{mem.hold}: on hold until it's unplugged"
+            return (
+                "charging" if s.charging else "hold"
+            ), f"{mem.hold}. The dashboard takes over again once it's unplugged"
         if s.charging:
             if mode == "off":
                 return "charging", f"Charging at {amps} A" if amps else "Charging"

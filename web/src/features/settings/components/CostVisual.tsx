@@ -175,7 +175,7 @@ export function CostVisual({ figures: f }: { figures: CostFigures }) {
         <Figure
           label="Saved so far"
           value={saved != null ? dollars(saved) : "—"}
-          sub={p?.saved_before ? `${dollars(p.saved_before)} of it estimated, from before your readings` : undefined}
+          sub={p?.saved_before ? `${dollars(p.saved_before)} estimated from before your readings began` : undefined}
         />
         <Figure
           label="Pays for itself"
@@ -183,7 +183,7 @@ export function CostVisual({ figures: f }: { figures: CostFigures }) {
             !f.cost
               ? "Add what it cost"
               : pct != null && pct >= 100
-                ? "Already has"
+                ? "Already paid off"
                 : paysAt
                   ? `Around ${month(paysAt)}`
                   : "Needs 30 days of readings"
@@ -198,8 +198,8 @@ export function CostVisual({ figures: f }: { figures: CostFigures }) {
         </div>
       ) : (
         <div className="rounded-2xl bg-canvas/60 px-4 py-3 text-[13px] text-ink-muted light:bg-canvas">
-          Add when it was installed to see its life from then: today, when it pays for itself, and when the battery's
-          warranty ends.
+          Add the install date to see a timeline, including when it pays for itself and when the battery's warranty
+          ends.
         </div>
       )}
       {(!!warrantyEnds || (f.warrantyMwh > 0 && w?.used_mwh != null)) && (

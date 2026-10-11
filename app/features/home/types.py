@@ -60,13 +60,13 @@ CATEGORIES: dict[str, Category] = {
     ),
     "appliances": Category(
         "Appliances",
-        "White goods that report on themselves: washers, dryers, dishwashers, fridges, ovens and air conditioners.",
+        "Washers, dryers, dishwashers, fridges, ovens and air conditioners that report their own use.",
     ),
     "batteries": Category(
         "Portable batteries",
-        "Power stations in a room: their charge, and what they're charging from and powering.",
+        "Power stations around the house. See how full each is, what's charging it and what it's powering.",
     ),
-    "hubs": Category("Home hubs", "Whatever your smart-home hub already measures, whatever the brand."),
+    "hubs": Category("Home hubs", "Anything your smart-home hub already measures, whatever the brand."),
 }
 
 

@@ -13,7 +13,7 @@ export const WAYS: Record<Reached, { icon: IconName; name: string; where: string
     name: "Bluetooth",
     where: "Local",
     color: COLOR.battery,
-    title: "Read over this server's Bluetooth: nothing leaves home",
+    title: "Read over this server's Bluetooth. Nothing leaves your home.",
   },
   tessie: {
     icon: "cloud",
@@ -27,21 +27,21 @@ export const WAYS: Record<Reached, { icon: IconName; name: string; where: string
     name: "BYD",
     where: "Cloud",
     color: COLOR.lilac,
-    title: "Read through BYD's cloud, as the BYD app reads it",
+    title: "Read through BYD's cloud, the same one the BYD app uses",
   },
   hyundai: {
     icon: "cloud",
     name: "Bluelink",
     where: "Cloud",
     color: COLOR.lilac,
-    title: "Read and charged through Hyundai's Bluelink cloud, as the Bluelink app does",
+    title: "Read and charged through Hyundai's Bluelink cloud, the same one the Bluelink app uses",
   },
   kia: {
     icon: "cloud",
     name: "Kia Connect",
     where: "Cloud",
     color: COLOR.lilac,
-    title: "Read and charged through Kia Connect, as the Kia Connect app does",
+    title: "Read and charged through Kia Connect, the same cloud the Kia Connect app uses",
   },
 };
 

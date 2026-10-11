@@ -44,7 +44,7 @@ const COVERED_BY: Record<string, string[]> = {
 function emptyLabel(field: string, preview: ImportPreview): string {
   const by = COVERED_BY[field];
   if (by?.every((f) => preview.mapping[f]?.length))
-    return `Not needed: ${by.map((f) => preview.mapping[f].join(" + ")).join(" and ")} cover${by.length === 1 ? "s" : ""} it`;
+    return `Covered by ${by.map((f) => preview.mapping[f].join(" + ")).join(" and ")}`;
   // The battery's level can't be worked out from the flows; the rest can, if only one is missing.
   return field === "soc" ? "Not in this file" : "Not in this file (worked out if it can be)";
 }
@@ -379,7 +379,7 @@ export function ImportUpload() {
                 ? `${shortDay.format(parseYmd(overlap[0].date))}: ${overlap[0].recorded >= overlap[0].buckets ? "all of it" : `${Math.round((overlap[0].recorded / overlap[0].buckets) * 100)}% of the file's readings`}.`
                 : `From ${shortDay.format(parseYmd(overlap[0].date))} to ${shortDay.format(parseYmd(overlap[overlap.length - 1].date))}.`}{" "}
               Keep what it recorded and fill only the gaps, or use the file's readings for{" "}
-              {overlap.length === 1 ? "that day" : "those days"} when what was recorded is incomplete or wrong.
+              {overlap.length === 1 ? "that day" : "those days"} if the recording is incomplete or wrong.
             </span>
           </div>
           <Segmented
@@ -427,7 +427,7 @@ export function ImportUpload() {
             <span className="text-sm font-medium">Fetch the weather for these days</span>
             <span className="text-[13px] text-ink-muted">
               {locationSet
-                ? "From Open-Meteo, straight after importing, however long ago they were, so History shows each day's weather and the forecast can learn from them."
+                ? "Fetched from Open-Meteo right after importing, however far back. History then shows each day's weather, and the forecast learns from it."
                 : "Choose your location first, so the weather is fetched for the right place. Days imported before then get theirs once it's set."}
             </span>
             {!locationSet && (

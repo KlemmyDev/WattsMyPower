@@ -27,12 +27,12 @@ export function OverviewPage() {
   const none = useNoBattery();
   return (
     <>
-      <PageHeader title={greeting(now)} sub="Here is how your home is running right now" />
+      <PageHeader title={greeting(now)} sub="How your home's running right now" />
       <div className="grid grid-cols-12 gap-5">
         <PowerFlowHero p={p} s={s} f={f} now={now} />
         {located === false && (
           <LocationPrompt className="col-span-12">
-            The solar forecast, the weather, and power outages and warnings near you need your location.
+            The solar forecast, the weather, and outages and warnings near you all need your location.
           </LocationPrompt>
         )}
         <GridOverviewCard now={now} />

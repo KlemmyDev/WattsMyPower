@@ -195,7 +195,7 @@ class MockHybrid(MockDevice):
     def write_holding(self, words: list[tuple[int, int]]) -> None:
         for address, word in words:
             if address not in WRITABLE:
-                raise WriteRefused(f"Register {address} isn't one the dashboard may change.")
+                raise WriteRefused(f"The dashboard isn't allowed to change register {address}.")
             self.site.holding[address] = word
 
 

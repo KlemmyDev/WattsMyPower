@@ -126,7 +126,7 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
     <Card>
       <TitleBlock title="Warnings" sub={sub} />
       {view.enabled && !view.location_set ? (
-        <LocationPrompt>Warnings are matched to where your house is, so they need your location.</LocationPrompt>
+        <LocationPrompt>Set your location to see warnings for your area.</LocationPrompt>
       ) : view.enabled ? (
         <>
           {(view.weather.length > 0 || view.fires.length > 0) && (

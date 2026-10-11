@@ -27,11 +27,11 @@ function note(g: GridHours): string {
       if (peak.has(hour)) dear += c.cost;
       if (!best || c.cost > best.cost) best = { cost: c.cost, hour, month: m.month };
     }
-  if (!best || total < 0.05) return "Almost no grid power bought in the months recorded so far.";
+  if (!best || total < 0.05) return "You've bought almost no grid power in the months recorded so far.";
   const when = `The costliest hour is around ${hourLabel(best.hour)} in ${monthLong.format(parseYmd(best.month))}, at ${money(best.cost)} a day on average`;
   if (g.dearest && dear > 0)
-    return `${when}. ${g.dearest.name} hours make up ${pct((dear / total) * 100)} of what grid power cost: moving use out of them saves the most.`;
-  return `${when}. Running big loads in the middle of the day, on solar, cuts it.`;
+    return `${when}. ${g.dearest.name} hours make up ${pct((dear / total) * 100)} of your grid spend, so moving use out of them saves the most.`;
+  return `${when}. Running big loads on midday solar brings it down.`;
 }
 
 /** What grid power cost by hour of the day and month: where on the clock the bill comes from. */

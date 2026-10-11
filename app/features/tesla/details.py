@@ -151,11 +151,11 @@ def overrides_solar(schedule: dict[str, Any] | None) -> str | None:
     if not schedule:
         return None
     if schedule.get("mode") == "start_at":
-        return "Scheduled charging is on in the car: it starts charging by itself at the set time"
+        return "Scheduled charging is on in the car, so it starts charging by itself at the set time"
     if schedule.get("mode") == "depart_by":
-        return "A departure time is set in the car: it starts charging by itself to be ready by then"
+        return "A departure time is set in the car, so it starts charging by itself to be ready by then"
     if any(s["enabled"] and s["start"] is not None for s in schedule.get("charge_schedules") or []):
-        return "A charge schedule is set in the car: it starts charging by itself when it's due"
+        return "A charge schedule is set in the car, so it starts charging by itself when it's due"
     return None
 
 

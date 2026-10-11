@@ -165,7 +165,7 @@ export function HistoryPage() {
 
   return (
     <>
-      <PageHeader title="History" sub="Solar generation, home use, and grid activity over time" />
+      <PageHeader title="History" sub="Your solar, home use and grid use over time" />
       <PageBody className="gap-10 max-md:gap-8">
         <div className="flex max-w-full min-w-0 flex-col gap-2.5">
           <div role="tablist" aria-label="Period" className={cn(PILLS, "self-start")}>
@@ -190,7 +190,7 @@ export function HistoryPage() {
         {loaded && (startsLate || !totals.days) && (
           <div className="rounded-2xl border border-line-subtle bg-surface px-5 py-4 text-sm leading-[22px] text-pretty text-ink-quiet">
             {totals.days
-              ? `Your history starts on ${dmy(historyFrom!)}, so ${viewName} only covers part of the time.`
+              ? `Your history starts on ${dmy(historyFrom!)}, so ${viewName} only covers part of the year.`
               : `There's no data for ${viewName} yet. Days fill in as your system records them.`}
           </div>
         )}
@@ -215,14 +215,14 @@ export function HistoryPage() {
                 sub={`${totals.greatDays} ${totals.greatDays === 1 ? "day" : "days"} at 90% or more`}
               />
               <Total
-                label="Grid import"
+                label="From the grid"
                 {...energy(totals.imp)}
                 sub={`${kWh(totals.imp / totals.days)} a day on average`}
               />
               <Total
-                label="Exported to grid"
+                label="Sent to the grid"
                 {...energy(totals.exp)}
-                sub={`Earned ${dollars(totals.credit)} in feed-in credit`}
+                sub={`${dollars(totals.credit)} earned in feed-in credit`}
               />
               <Total
                 label="Saved"
@@ -256,9 +256,9 @@ export function HistoryPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line-subtle bg-surface px-5 py-4 text-sm text-pretty text-ink-quiet">
               <span>
                 {weatherKnown
-                  ? `Weather is stored for ${weatherKnown} of the ${totals.days} days with readings.`
-                  : "No weather is stored for these days yet."}{" "}
-                Past weather can be filled in from Open-Meteo.
+                  ? `You have weather for ${weatherKnown} of the ${totals.days} days with readings.`
+                  : "No weather saved for these days yet."}{" "}
+                Open-Meteo can fill in past weather.
               </span>
               <ButtonLink to="/integrations/weather" variant="link" size="sm">
                 Fill in past weather

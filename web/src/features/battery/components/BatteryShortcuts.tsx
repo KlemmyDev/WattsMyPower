@@ -32,13 +32,13 @@ function shortcuts(now: number, full: boolean): Shortcut[] {
   return [
     {
       label: "Standby for 1 hour",
-      hint: "Run the house on solar and the grid",
+      hint: "Run your home on solar and the grid",
       body: { kind: "standby", until: now + 3600 },
       said: `Battery on standby until ${when(now + 3600, now)}.`,
     },
     {
       label: "Standby for 3 hours",
-      hint: "Run the house on solar and the grid",
+      hint: "Run your home on solar and the grid",
       body: { kind: "standby", until: now + 3 * 3600 },
       said: `Battery on standby until ${when(now + 3 * 3600, now)}.`,
     },

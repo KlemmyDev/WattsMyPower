@@ -37,7 +37,7 @@ function Head({ title, sub, children }: { title: string; sub: ReactNode; childre
 }
 
 /** Before the first day's readings are in, there's no usual to show. */
-const LEARNING = "Builds up from a day of readings: what's usual, and what's likely ahead, sharpen over eight weeks.";
+const LEARNING = "This starts after a day of readings, and gets sharper over eight weeks.";
 
 /**
  * Today's power through the day against a usual day (the same weekday's, once there are a few), with where today is
@@ -146,7 +146,7 @@ export function AheadCard({
   const price = (kwh: number) => (rate != null ? money(kwh * rate) : null);
   return (
     <Card className={className}>
-      <Head title="Coming up" sub="What the next seven days usually use, and the range most of them land in">
+      <Head title="Coming up" sub="Usual use for the next seven days, and the range most days land in">
         {known.length > 0 && (
           <Corner label="Next 7 days" sub={price(week) ? `about ${price(week)}` : undefined}>
             {kWh(week)}
@@ -248,7 +248,7 @@ export function WeekCard({
         title="When it uses power"
         sub={
           seen.length && top > 0.001
-            ? `Most on ${WEEKDAY_LONG[busiestDay]}s, and around ${hourLabel(busiestHour)}. The average hour of each day, over the last ${p.days} days`
+            ? `Busiest on ${WEEKDAY_LONG[busiestDay]}s, around ${hourLabel(busiestHour)} · average hour, last ${p.days} days`
             : "The average hour of each day of the week"
         }
       >
@@ -343,10 +343,7 @@ export function SpikesCard({
   const top = Math.max(1, ...p.peaks.map((x) => x.max.w));
   return (
     <Card className={className}>
-      <Head
-        title="Power spikes"
-        sub="What it peaks at when it's used, and any day it drew far more, over the last 30 days"
-      >
+      <Head title="Power spikes" sub="Its usual peak, and any day it drew far more, over the last 30 days">
         {today && (
           <Corner label="Highest today" sub={`at ${hhmm(today.ts)}${many ? `, ${name(today.device)}` : ""}`}>
             {kW(today.w)}
@@ -383,14 +380,12 @@ export function SpikesCard({
           })}
         </ul>
       ) : (
-        <Muted>
-          Peaks are kept from now on, from each reading of what it's drawing: they show here as they come in.
-        </Muted>
+        <Muted>Peaks are recorded from now on. They'll show up here as they come in.</Muted>
       )}
       {p.peaks.length > 0 &&
         (p.spikes.length ? (
           <div className="flex flex-col">
-            <span className="pb-1 text-xs text-ink-faint">Spikes: half as much again as usual, or more</span>
+            <span className="pb-1 text-xs text-ink-faint">Spikes (1.5× usual or more)</span>
             {p.spikes.map((x) => (
               <div
                 key={`${x.device}-${x.ts}`}
@@ -409,7 +404,7 @@ export function SpikesCard({
             ))}
           </div>
         ) : (
-          <Muted>No spikes: nothing drew much more than it usually does.</Muted>
+          <Muted>No spikes. Nothing drew much more than usual.</Muted>
         ))}
       {standby && standby.w >= 0.5 && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-fg/4 px-4 py-3 text-[13px]">

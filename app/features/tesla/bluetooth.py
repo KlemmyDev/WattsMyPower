@@ -79,8 +79,8 @@ KEEPALIVE_SECONDS = 20.0
 # bleak-retry-connector's word for a connect that waited its full time: the car offered no connection.
 BUSY = "timed out"
 BUSY_MESSAGE = (
-    "The car isn't taking Bluetooth connections right now. A Tesla takes about three at once, and each phone or watch "
-    "with its key holds one while it's near the car; once one of them is out of range, the dashboard gets in."
+    "The car isn't taking Bluetooth connections right now. A Tesla allows about three at once, and each phone or watch "
+    "with its key uses one while it's nearby. Once one moves out of range, the dashboard can connect."
 )
 HANG_UP_SECONDS = 5.0  # to disconnect once done: what was read stands whether or not it went cleanly
 WAKE_BACKOFF = 1800  # seconds the car isn't woken again after it didn't wake (the key may not be allowed to wake it)
@@ -311,7 +311,7 @@ class BluetoothClient:
         """Read everything about the car now: its charge and every group of details, waking it only with `wake`."""
         r = self.radio.read(vin, self.key, True, False, None, details.EXTRAS, wake)
         if not r.get("heard"):
-            raise TeslaError("The car wasn't heard over Bluetooth. Is it home, and in range of the server?")
+            raise TeslaError("The car wasn't heard over Bluetooth. Check it's home and in range of the server.")
         if r.get("asleep") and not wake:
             raise CarAsleep(self._row(vin, r))  # what its security computer said still counts
         return self._row(vin, r)
@@ -375,7 +375,7 @@ def _where(talk: dict[str, Any] | None) -> str:
     if rssi is not None:
         out += f" Its signal was {signal(rssi)}"
         out += (
-            ": the server's Bluetooth adapter may be too far from the car (a USB extension lead helps)."
+            ". The server's Bluetooth adapter may be too far from the car (a USB extension lead helps)."
             if rssi < WEAK_RSSI
             else "."
         )
@@ -432,8 +432,8 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
     waking = str((talk or {}).get("step") or "").startswith("waking")
     if waking and (named("BluetoothTimeout", "BluetoothCommandFailed") or isinstance(e, TimeoutError)):
         return TeslaError(
-            "The car is asleep and didn't wake up for the dashboard's key. A charging-only key can't wake it: pair it "
-            "again as a driver (Manage → Integrations → Tesla), or wake it in the Tesla app, then try again."
+            "The car is asleep and didn't wake up for the dashboard's key. A charging-only key can't wake it. Pair it "
+            "again as a driver (Manage → Integrations → Tesla), or wake it in the Tesla app and try again."
         )
     if named("BluetoothTransportError") and _busy(talk):
         return TeslaError(BUSY_MESSAGE, busy=True)
@@ -445,10 +445,10 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
     if named("BluetoothTimeout") or isinstance(e, TimeoutError):
         return TeslaError(f"The car didn't answer over Bluetooth in time{_where(talk)}")
     if named("TeslaFleetError"):
-        return TeslaError(f"The car turned it down ({type(e).__name__}).")
+        return TeslaError(f"The car refused the request ({type(e).__name__}).")
     if isinstance(e, BleakError | OSError):
         return TeslaError(unavailable(e))
-    return TeslaError(f"Bluetooth went wrong ({type(e).__name__}: {e}).")
+    return TeslaError(f"Bluetooth failed ({type(e).__name__}: {e}).")
 
 
 def _busy(talk: dict[str, Any] | None) -> bool:
@@ -802,7 +802,7 @@ def _command_now(vin: str, key: str, name: str, params: dict[str, Any]) -> bool:
 
     out = _converse(lambda: _talk(vin, key, then, wake=True))
     if out is None:
-        raise TeslaError("The car wasn't heard over Bluetooth. Is it home, and in range of the server?")
+        raise TeslaError("The car wasn't heard over Bluetooth. Check it's home and in range of the server.")
     return bool(out)
 
 
@@ -846,7 +846,7 @@ def _pair_now(vin: str, key: str, seconds: float, role: str = "charging_manager"
 
     out = _converse(lambda: _talk(vin, key, then, wake=False))
     if out is None:
-        raise TeslaError("The car wasn't heard over Bluetooth any more. Try again closer to the server.")
+        raise TeslaError("The car went out of Bluetooth range. Try again closer to the server.")
     return out["name"]
 
 

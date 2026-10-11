@@ -32,11 +32,11 @@ const UNDER_HEADER = 76;
 /** Each part: its name, what its dot says to a screen reader, its icon and colour, and its choices. */
 const PARTS: Record<HousePart, { title: string; dot: string; icon: IconName; color: string }> = {
   kind: { title: "Kind of house", dot: "Kind of house and storeys", icon: "home", color: COLOR.brand },
-  roof: { title: "Roof", dot: "Roof: its colour and the solar panels", icon: "sun", color: COLOR.solar },
-  walls: { title: "Walls", dot: "Walls: their finish", icon: "layout", color: COLOR.lilac },
-  cars: { title: "Garage or carport", dot: "Garage or carport: the car spaces", icon: "car", color: COLOR.good },
-  garden: { title: "Garden", dot: "Garden: the pool, the fence and the trees", icon: "droplet", color: COLOR.teal },
-  units: { title: "Inverters", dot: "Inverters and battery: where they hang", icon: "bolt", color: COLOR.battery },
+  roof: { title: "Roof", dot: "Roof colour and solar panels", icon: "sun", color: COLOR.solar },
+  walls: { title: "Walls", dot: "Wall finish", icon: "layout", color: COLOR.lilac },
+  cars: { title: "Garage or carport", dot: "Garage or carport spaces", icon: "car", color: COLOR.good },
+  garden: { title: "Garden", dot: "Pool, fence and trees", icon: "droplet", color: COLOR.teal },
+  units: { title: "Inverters", dot: "Where the inverters and battery go", icon: "bolt", color: COLOR.battery },
 };
 
 const ORDER: HousePart[] = ["kind", "roof", "walls", "cars", "garden", "units"];
@@ -47,7 +47,7 @@ function partSheet(e: HouseEditor, part: HousePart): { title: string; sub: strin
     case "kind":
       return {
         title: "Kind of house",
-        sub: "Its shape: walls, roof, windows and porch, on one level or two.",
+        sub: "The shape of the walls, roof, windows and porch, on one level or two.",
         body: (
           <>
             <StoreyTiles e={e} />
@@ -61,7 +61,7 @@ function partSheet(e: HouseEditor, part: HousePart): { title: string; sub: strin
     case "roof":
       return {
         title: "Roof",
-        sub: "Its colour, and the panels on it. A is the kind of house's own.",
+        sub: "Roof colour and solar panels. A is the house style's default.",
         body: (
           <>
             <RoofSwatches e={e} />
@@ -72,11 +72,11 @@ function partSheet(e: HouseEditor, part: HousePart): { title: string; sub: strin
         ),
       };
     case "walls":
-      return { title: "Walls", sub: "Their finish. A is the kind of house's own.", body: <WallSwatches e={e} /> };
+      return { title: "Walls", sub: "Wall finish. A is the house style's default.", body: <WallSwatches e={e} /> };
     case "cars":
       return {
         title: "Garage or carport",
-        sub: "How many cars it takes, beside the house.",
+        sub: "How many cars fit beside the house.",
         body: <CarSpaces e={e} />,
       };
     case "garden":

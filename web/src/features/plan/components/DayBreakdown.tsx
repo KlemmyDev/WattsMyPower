@@ -89,13 +89,13 @@ function HomeUse({ day, forecast }: { day: PlanDay; forecast: Forecast }) {
     <div className="flex flex-col gap-4">
       <Total label="Home use" total={day.load} color={COLOR.ink} parts={parts} />
       <About>
-        Your typical day is <b className="font-medium text-ink">{kWh(typical)}</b>. For each hour of the day it takes
-        what your home used in that hour over the last {basis?.window_days ?? 14} days, leaving out the highest and
-        lowest fifth of days, so a one-off like guests or a long car charge doesn't move it.
-        {day.soFar ? " The rest of today is the typical day's remaining hours." : ""} It's the same whichever day of the
-        week it is, and doesn't change with the weather.
+        Your typical day is <b className="font-medium text-ink">{kWh(typical)}</b>. Each hour is what your home used in
+        that hour over the last {basis?.window_days ?? 14} days. The highest and lowest fifth of days are left out, so a
+        one-off like guests or a long car charge doesn't skew it.
+        {day.soFar ? " The rest of today is the typical day's remaining hours." : ""} It's the same every day of the
+        week and doesn't change with the weather.
         {missing > 0 &&
-          ` ${missing} ${missing === 1 ? "hour" : "hours"} of the day ${missing === 1 ? "has" : "have"} no readings yet, so ${missing === 1 ? "it uses" : "they use"} a typical household's use.`}
+          ` ${missing} ${missing === 1 ? "hour" : "hours"} of the day ${missing === 1 ? "has" : "have"} no readings yet, so a typical household's use fills ${missing === 1 ? "it" : "them"} in.`}
       </About>
       {basis && basis.days.length > 0 && <RecentDays basis={basis} weekday={wd} same={same} />}
     </div>
@@ -173,15 +173,15 @@ function Solar({ day, forecast, system }: { day: PlanDay; forecast: Forecast; sy
       <Total label="Solar" total={day.pv} color={COLOR.solar} parts={parts} />
       {day.pvRange && (
         <span className="text-[13px] text-ink-muted tabular-nums">
-          Likely {Math.round(day.pvRange[0])} to {kWhInt(day.pvRange[1])}: where 8 in 10 days like it have landed, from
-          how the forecast has done lately.
+          Likely {Math.round(day.pvRange[0])} to {kWhInt(day.pvRange[1])}. That's where 8 in 10 days like this have
+          landed, going by how the forecast has done lately.
         </span>
       )}
       <About>
         {model?.kind === "learned" ? (
           <>
-            From the forecast weather for {what}, through a model learned from {model.days} days of your weather history
-            and what your panels made. It's used because it has come closer than the simple model
+            Based on the forecast weather for {what} and a model learned from {model.days} days of your weather and what
+            your panels made. It's in use because it has come closer than the simple model
             {bt?.learned_mae != null && bt.simple_mae != null
               ? ` (off by about ${kWh(bt.learned_mae)} a day, against ${kWh(bt.simple_mae)})`
               : ""}
@@ -197,9 +197,9 @@ function Solar({ day, forecast, system }: { day: PlanDay; forecast: Forecast; sy
             ) : (
               ""
             )}{" "}
-            times <b className="font-medium text-ink">{cal.kwh_per_kwh_m2.toFixed(2)} kWh</b> for each kWh/m², which is
-            what your panels have made from the sunlight over the last week ({cal.fitted_hours} hours of readings). That
-            takes in which way they face, shade and the inverter's limit without them being set.
+            times <b className="font-medium text-ink">{cal.kwh_per_kwh_m2.toFixed(2)} kWh</b> for each kWh/m². That's
+            what your panels have made from the sunlight over the last week ({cal.fitted_hours} hours of readings), so
+            it already allows for which way they face, shade and the inverter's limit. You don't need to set those.
           </>
         ) : (
           <>

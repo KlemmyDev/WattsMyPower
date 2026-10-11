@@ -375,7 +375,7 @@ def test_looking_for_new_plugs_adds_one_set_up_since(lan: Network, db: Database,
     assert view["found"] == {"new": 1, "answered": 3, "message": "Found 1 new device."}
     kettle = next(d for d in view["devices"] if d["name"] == "Kettle")
     assert kettle["now"]["power_w"] == 2000.0  # read straight away
-    assert home.find("tapo")["found"]["message"] == "No new devices: 3 answered, all already here."
+    assert home.find("tapo")["found"]["message"] == "No new devices. All 3 that answered are already here."
 
 
 def test_looking_for_new_plugs_needs_a_working_sign_in(lan: Network, db: Database, config: Config) -> None:

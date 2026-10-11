@@ -80,7 +80,7 @@ class Air:
 
     def exchange(self, address: str, requests: list[bytes]) -> list[bytes]:
         if address not in self.stations:
-            raise RadioError("It wasn't heard over Bluetooth: check it's switched on and in range of this server.")
+            raise RadioError("It wasn't heard over Bluetooth. Check it's switched on and in range of this server.")
         station = self.stations[address][1]
         answers = [station.answer(r) for r in requests]
         if answers and answers[0].startswith(b"**"):
@@ -196,7 +196,7 @@ def test_a_station_that_doesnt_answer_is_offline_and_all_of_them_is_an_error(air
     by_key = {r.key: r for r in bluetti.poll()}
     assert by_key[AC180].online and not by_key[EB3A].online
     del air.stations["AA:01"]
-    with pytest.raises(IntegrationError, match="couldn't be read: It wasn't heard"):
+    with pytest.raises(IntegrationError, match=r"couldn't be read\. It wasn't heard"):
         bluetti.poll()
 
 

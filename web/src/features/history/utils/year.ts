@@ -84,7 +84,7 @@ export const METRICS: Record<
 > = {
   gen: { label: "Solar", value: (d) => d.gen, format: kWh, color: COLOR.solar },
   ss: { label: "Self-sufficiency", value: (d) => d.ss, format: (v) => `${Math.round(v * 100)}%`, color: COLOR.good },
-  imp: { label: "Grid import", value: (d) => d.imp, format: kWh, color: COLOR.import },
+  imp: { label: "From the grid", value: (d) => d.imp, format: kWh, color: COLOR.import },
   saved: { label: "Saved", value: (d) => d.saved, format: money, color: COLOR.ink },
 };
 
@@ -122,7 +122,7 @@ export function weatherCells(days: Day[], weather: WeatherDaySummary[] | undefin
     const base = { i: d.i, ts: d.ts };
     if (d.kind === "future" || d.kind === "pending" || !weather) return { ...base, label: null, fill: null };
     const w = byDate.get(d.key);
-    if (!w || w.code == null) return { ...base, label: `${dayMonth(d.ts)}: no weather stored`, fill: null };
+    if (!w || w.code == null) return { ...base, label: `${dayMonth(d.ts)}: no weather saved`, fill: null };
     const temps =
       w.temp_min != null && w.temp_max != null
         ? `, ${degrees(w.temp_min, fahrenheit).slice(0, -1)}–${degrees(w.temp_max, fahrenheit)}`

@@ -738,7 +738,7 @@ def test_solar_mode_starts_follows_and_stops(svc: TeslaService, provider: str, t
     assert tessie.commands[-1] == ("stop_charging", {})
     kinds = [e["kind"] for e in svc.log()]
     assert kinds[:2] == ["charge", "solar"]  # the charge, summed up once it's stopped; the stop
-    assert svc.log()[0]["text"].startswith("Charged 50% → 50%: ")
+    assert svc.log()[0]["text"].startswith("Charged 50% → 50%, ")
 
 
 def test_a_car_waits_as_long_as_its_set_to(svc: TeslaService, provider: str, tessie: FakeTessie, live: FakeLive,
@@ -978,7 +978,9 @@ def test_the_car_is_woken_ahead_of_spare_solar(ble: TeslaService, radio: FakeRad
     assert len(radio.asked[: woken[0]]) <= 30  # left alone until then: every half hour at night, then every five
     assert ble.status()["vehicles"][0]["follow"] == "ready"
     [wake] = ble.history.wakes(VIN, 0, 2**40)
-    assert wake["reason"] == "ready" and "Woke the car ready for spare solar" in [e["text"] for e in ble.log()]
+    assert wake["reason"] == "ready" and "Woke the car to get it ready for spare solar" in [
+        e["text"] for e in ble.log()
+    ]
     n = len(radio.asked)
     minutes(ble, live, clock, 5, grid=500)
     assert len(radio.asked) - n == 5  # each minute, kept awake
@@ -1112,7 +1114,7 @@ def test_time_away_is_logged_with_what_it_used(svc: TeslaService, provider: str,
     [trip] = [s for s in h["sessions"] if s["kind"] == "away"]
     assert (trip["soc_start"], trip["soc_end"], trip["soc_change"], trip["used_kwh"]) == (70, 50, -20, 15.0)
     assert trip["km"] == 120.7 and trip["kwh_per_100km"] == 12.4
-    assert svc.log()[0]["text"] == "Back home at 50%: used 20% (about 15 kWh), 121 km"
+    assert svc.log()[0]["text"] == "Back home at 50% after 121 km. Used 20% (about 15 kWh)"
     day = svc.car_levels(VIN, int(clock()) - 86400, int(clock()) + 1)
     socs = [p["soc"] for p in day["points"]]
     assert socs[0] == 70 and socs[-1] == 50  # left at 70, back at 50: the page draws the line between
@@ -1146,7 +1148,7 @@ def test_charging_at_home_is_counted_with_its_grid_share(svc: TeslaService, prov
     [charge] = svc.car_history(VIN)["sessions"]
     assert charge["kind"] == "charge" and (charge["soc_start"], charge["soc_end"]) == (40, 48)
     assert charge["kwh"] == pytest.approx(6.9, abs=0.3) and charge["solar_share"] == pytest.approx(0.75, abs=0.01)
-    assert svc.log()[0]["text"].startswith("Charged 40% → 48%: ")
+    assert svc.log()[0]["text"].startswith("Charged 40% → 48%, ")
     # The Home page's car line: what it drew, 5 minutes at a time.
     w = svc.history.charged_w(start, int(clock()))
     assert len(w) >= 11 and all(v == pytest.approx(6900, rel=0.25) for v in list(w.values())[1:-1])
@@ -1218,7 +1220,7 @@ def test_a_bluetooth_timeout_says_where_it_failed_and_how_strong_the_car_was_hea
     with pytest.raises(TeslaError) as e:
         bluetooth._converse(weak)
     assert str(e.value).startswith("The car didn't answer over Bluetooth in time while reading its charge. Its signal was"
-                                   " weak (−91 dBm): the server's Bluetooth adapter may be too far")  # fmt: skip
+                                   " weak (−91 dBm). The server's Bluetooth adapter may be too far")  # fmt: skip
 
     async def strong() -> None:
         bluetooth._TALK.get()["rssi"] = -60

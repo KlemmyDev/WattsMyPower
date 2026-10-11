@@ -46,8 +46,8 @@ class Bluetti(Integration):
     name = "Bluetti"
     via = "Bluetooth"
     about = (
-        "Bluetti power stations as room batteries (AC180, AC70, EB3A, AC200M, Elite 100 V2 and more): their charge, "
-        "what they're charging from and powering, read over this server's Bluetooth without Bluetti's cloud."
+        "See how full your Bluetti power stations are, and what they're charging from and powering. Works with the "
+        "AC180, AC70, EB3A, AC200M, Elite 100 V2 and more, over this server's Bluetooth without Bluetti's cloud."
     )
     icon = "battery"
     category = "batteries"
@@ -94,8 +94,8 @@ class Bluetti(Integration):
         found, unsupported = cls._listen(address)
         if not found and unsupported:
             raise IntegrationError(
-                f"Heard {', '.join(unsupported)}, but that model can't be read yet: only Bluetti's portable stations "
-                "(AC, EB and Elite) are, so far."
+                f"Heard {', '.join(unsupported)}, but that model can't be read yet. Only Bluetti's portable stations "
+                "(AC, EB and Elite) work so far."
             )
         if not found:
             where = f"at {address}" if address else "nearby"
@@ -129,7 +129,7 @@ class Bluetti(Integration):
         except RadioError as e:
             if e.encrypted:
                 raise IntegrationError(ENCRYPTED.format(name=f"The {station['model']}")) from e
-            raise IntegrationError(f"The {station['model']} couldn't be read: {e}") from e
+            raise IntegrationError(f"The {station['model']} couldn't be read. {e}") from e
         except ProtocolError as e:
             if str(e) == "encrypted":
                 raise IntegrationError(ENCRYPTED.format(name=f"The {station['model']}")) from e
@@ -193,6 +193,6 @@ class Bluetti(Integration):
         except RadioError as e:
             if e.encrypted:
                 raise IntegrationError(ENCRYPTED.format(name=f"The {station['model']}")) from e
-            raise IntegrationError(f"The {station['model']} couldn't be switched: {e}") from e
+            raise IntegrationError(f"The {station['model']} couldn't be switched. {e}") from e
         except ProtocolError as e:
             raise IntegrationError(f"The {station['model']} didn't take the switch: {e}.") from e

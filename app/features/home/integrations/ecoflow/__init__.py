@@ -32,8 +32,8 @@ class EcoFlow(Integration):
     via = "EcoFlow's Developer API"
     cloud = True
     about = (
-        "EcoFlow power stations as room batteries (RIVER 2 and 3, DELTA 2 and 3, DELTA Pro and Max): their charge, "
-        "what they're charging from and powering, through EcoFlow's cloud."
+        "See how full your EcoFlow power stations are, and what they're charging from and powering. Works with "
+        "RIVER 2 and 3, DELTA 2 and 3, and DELTA Pro and Max, through EcoFlow's cloud."
     )
     icon = "battery"
     category = "batteries"
@@ -42,8 +42,8 @@ class EcoFlow(Integration):
         Field(
             "access_key",
             "Access key",
-            help="Made for your EcoFlow account in EcoFlow's developer portal (developer.ecoflow.com: sign in, apply "
-            "to become a developer, then Profile → Developer → Create access key).",
+            help="Create one in EcoFlow's developer portal at developer.ecoflow.com. Sign in, apply to become a "
+            "developer, then go to Profile → Developer → Create access key.",
         ),
         Field(
             "secret_key",
@@ -86,7 +86,7 @@ class EcoFlow(Integration):
         if not stations:
             raise IntegrationError(
                 f"EcoFlow accepted the keys, but the account has no power stations "
-                f"({len(devices)} other device{'s' if len(devices) != 1 else ''}). Add it in the EcoFlow app first."
+                f"({len(devices)} other device{'s' if len(devices) != 1 else ''}). Add your power station in the EcoFlow app first."
             )
         return {"access_key": access_key, "secret_key": secret_key, "host": host, "stations": stations}
 

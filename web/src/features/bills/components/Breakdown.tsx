@@ -74,7 +74,7 @@ export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | u
   const priciest = tou && parts.length ? parts.reduce((a, b) => (rate(b.i) > rate(a.i) ? b : a)) : null;
   return (
     <Card aria-labelledby="h-tod">
-      <TitleBlock id="h-tod" title="Cost by time of day" sub="Grid spend this period so far, by tariff period" />
+      <TitleBlock id="h-tod" title="Cost by time of day" sub="Grid spend this period so far, by rate" />
       <ShareBar parts={parts.map((b) => ({ value: b.cost, color: bandColor(b.i) }))} />
       <div>
         {parts.map((b) => (
@@ -93,7 +93,7 @@ export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | u
           ? "No power from the grid this period yet."
           : priciest
             ? `${priciest.name} hours are ${pctOf(priciest.import_kwh, kwh)} of your grid use and ${pctOf(priciest.cost, cost)} of your grid spend. Using less power ${priciest.hours === "All other times" ? "at those times" : `from ${priciest.hours}`} lowers your bill the most.`
-            : "You are on a flat rate, so grid power costs the same at any time of day."}
+            : "You're on a flat rate, so grid power costs the same all day."}
       </Muted>
     </Card>
   );
@@ -127,7 +127,7 @@ function CostOnAmber({ bills }: { bills: Bills }) {
       <Muted>
         {kwh <= 0
           ? "No power from the grid this period yet."
-          : "Your price changes through the day. Using grid power when prices are low, often the middle of the day, lowers your bill the most."}
+          : "Your price changes through the day. Using grid power when it's cheap (often the middle of the day) saves the most."}
       </Muted>
     </Card>
   );
@@ -151,15 +151,11 @@ export function BillPace({ bills }: { bills: Bills }) {
       : Math.abs(diff) <= tol
         ? ["On track", COLOR.ink, "Your spending so far is in line with the expected total."]
         : diff > 0
-          ? [
-              "Above expected",
-              COLOR.solar,
-              `At your current daily rate this bill would be ${dollars(diff)} more than expected.`,
-            ]
+          ? ["Above expected", COLOR.solar, `At this pace, the bill will be about ${dollars(diff)} more than expected.`]
           : [
               "Below expected",
               COLOR.good,
-              `At your current daily rate this bill would be ${dollars(-diff)} less than expected.`,
+              `At this pace, the bill will be about ${dollars(-diff)} less than expected.`,
             ];
   return (
     <Card aria-labelledby="h-pace">

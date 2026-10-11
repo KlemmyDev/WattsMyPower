@@ -130,5 +130,5 @@ class DongleDevice:
             raise ConnectionError(f"{self.host}: {e}") from e
         if not words:
             self._key_day = None
-            raise ConnectionError(f"{self.host} answered but returned no data")
+            raise ConnectionError(f"{self.host} answered but sent no data")
         return RawReading(input=words)

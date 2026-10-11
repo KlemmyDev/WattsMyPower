@@ -11,7 +11,8 @@ const WAYS: { id: TeslaProvider; icon: IconName; name: string; tag: string; abou
     icon: "bluetooth",
     name: "Bluetooth",
     tag: "Local",
-    about: "This server talks to the car directly, while it's parked within range. No account, nothing leaves home.",
+    about:
+      "This server talks to the car directly while it's parked in range. No account needed, and nothing leaves your home.",
   },
   {
     id: "tessie",

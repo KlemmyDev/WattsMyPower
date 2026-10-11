@@ -95,7 +95,7 @@ export function InverterSettings() {
       <SettingsSection
         id="h-brands"
         title="Brands"
-        sub="One main inverter (with the meter, and the battery if there is one) and an optional second, AC-coupled one, of any brand here. Open yours to connect it."
+        sub="Connect one main inverter (with the meter and any battery), plus an optional second, AC-coupled one. Any brand here works. Open yours to connect it."
       >
         {order.length > 0 && (
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
@@ -191,7 +191,7 @@ export function InverterBrand({ slug }: { slug: string }) {
         title="Connected"
         sub={
           brand.inverters.length
-            ? "Each one's page has what it reported about itself, how it's wired, and removing it."
+            ? "Open one to see its details and wiring, or to remove it."
             : `No ${brand.name} inverter is connected yet.`
         }
       >
@@ -209,7 +209,7 @@ export function InverterBrand({ slug }: { slug: string }) {
                 detail={
                   anyMain
                     ? "A second solar inverter, or a new one to replace yours"
-                    : "Your main inverter, with the meter and the battery: nothing is recorded until it's connected"
+                    : "Your main inverter, with the meter and battery. Nothing is recorded until it's connected"
                 }
               />
             )}
@@ -223,7 +223,7 @@ export function InverterBrand({ slug }: { slug: string }) {
         sub={
           brand.verified
             ? "Tried on real inverters."
-            : `Untested: read from what ${brand.name} documents, not yet tried on a real one. If you have one, how it reads (or doesn't) gets it checked.`
+            : `Untested. Built from ${brand.name}'s documentation but not yet tried on a real one. If you have one, open an issue saying how it goes and it'll get checked.`
         }
       >
         <div className="flex flex-col gap-3 rounded-2xl bg-canvas/60 p-5 light:bg-canvas">
@@ -249,7 +249,7 @@ export function InverterBrand({ slug }: { slug: string }) {
               params={{ brand: "sungrow" }}
               icon="upload"
               name="Import history from iSolarCloud"
-              detail="Bring in the days before WattsMyPower was set up, or fill gaps, from iSolarCloud's 5-minute exports"
+              detail="Fill in the days before WattsMyPower was set up, or any gaps, from iSolarCloud's 5-minute exports"
             />
           </div>
         </SettingsSection>

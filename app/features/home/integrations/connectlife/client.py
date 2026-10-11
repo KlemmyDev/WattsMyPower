@@ -76,7 +76,7 @@ TIMEOUT = 30
 # (method, url, headers, body, timeout) -> the decoded JSON answer. Raises as urllib does.
 Transport = Callable[[str, str, dict[str, str], bytes | None, float], Any]
 
-UNREACHABLE = "ConnectLife couldn't be reached. Check the server's internet connection; it'll try again shortly."
+UNREACHABLE = "ConnectLife couldn't be reached. Check the server's internet connection. Trying again shortly."
 
 
 def _transport(method: str, url: str, headers: dict[str, str], body: bytes | None, timeout: float) -> Any:
@@ -110,11 +110,11 @@ def _gigya_error(body: dict[str, Any]) -> IntegrationError:
         )
     if code == 403048:
         return IntegrationError(
-            "ConnectLife is limiting sign-ins for now. It'll try again in 15 minutes.", retry_after=900
+            "ConnectLife is limiting sign-ins for now. Trying again in 15 minutes.", retry_after=900
         )
     if code == 403120:
         return IntegrationError(
-            "ConnectLife has locked the account for a while after too many sign-ins. It'll try again in 30 minutes.",
+            "ConnectLife has locked the account for a while after too many sign-ins. Trying again in 30 minutes.",
             retry_after=1800,
         )
     detail = body.get("errorDetails") or body.get("errorMessage") or "no reason given"
@@ -166,7 +166,7 @@ class ConnectLifeClient:
                 raise IntegrationError("ConnectLife refused the sign-in. Sign in again.", signed_out=True) from e
             if e.code == 429:
                 raise IntegrationError("ConnectLife is limiting requests for now.", retry_after=900) from e
-            raise IntegrationError(f"ConnectLife had a problem ({e.code}). It'll try again shortly.") from e
+            raise IntegrationError(f"ConnectLife had a problem ({e.code}). Trying again shortly.") from e
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
             raise IntegrationError(UNREACHABLE) from e
 
@@ -177,13 +177,13 @@ class ConnectLifeClient:
             "POST", GIGYA_LOGIN, form={"loginID": self.email, "password": self.password, "APIKey": GIGYA_KEY}
         )
         if not isinstance(login, dict):
-            raise IntegrationError("ConnectLife answered the sign-in strangely. It'll try again shortly.")
+            raise IntegrationError("ConnectLife sent back something unexpected while signing in. Trying again shortly.")
         if login.get("errorCode") or login.get("errorMessage"):
             raise _gigya_error(login)
         uid, cookie = login.get("UID"), (login.get("sessionInfo") or {}).get("cookieValue")
         jwt = self._send("POST", GIGYA_JWT, form={"APIKey": GIGYA_KEY, "login_token": str(cookie)})
         if not uid or not cookie or not isinstance(jwt, dict) or not jwt.get("id_token"):
-            raise IntegrationError("ConnectLife's sign-in didn't give what it should. It'll try again shortly.")
+            raise IntegrationError("ConnectLife's sign-in came back incomplete. Trying again shortly.")
         code = self._send(
             "POST",
             OAUTH_AUTHORIZE,
@@ -191,7 +191,7 @@ class ConnectLifeClient:
                   "response_type": "code", "thirdType": "CDC", "thirdClientId": uid},
         )  # fmt: skip
         if not isinstance(code, dict) or not code.get("code"):
-            raise IntegrationError("ConnectLife didn't authorise the sign-in. It'll try again shortly.")
+            raise IntegrationError("ConnectLife didn't authorise the sign-in. Trying again shortly.")
         self._token({"grant_type": "authorization_code", "code": str(code["code"])})
 
     def _token(self, grant: dict[str, str]) -> None:
@@ -244,7 +244,7 @@ class ConnectLifeClient:
         body = self._send("GET", f"{url}?{urllib.parse.urlencode(fields)}")
         answer = body.get("response") if isinstance(body, dict) else None
         if not isinstance(answer, dict):
-            raise IntegrationError("ConnectLife answered strangely. It'll try again shortly.")
+            raise IntegrationError("ConnectLife sent back something unexpected. Trying again shortly.")
         if answer.get("resultCode") in (0, "0", None):
             return answer
         code = answer.get("errorCode")
@@ -253,7 +253,9 @@ class ConnectLifeClient:
             return self._gateway(url, payload, again=False)
         if again and code == RANDSTR_REFUSED:
             return self._gateway(url, payload, again=False)
-        raise IntegrationError(f"ConnectLife couldn't answer ({code}: {answer.get('errorDesc') or 'no reason given'}).")
+        raise IntegrationError(
+            f"ConnectLife sent back an error ({code}: {answer.get('errorDesc') or 'no reason given'})."
+        )
 
     def appliances(self) -> list[dict[str, Any]]:
         """Every appliance on the account, with its properties now (statusList)."""

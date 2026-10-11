@@ -122,11 +122,11 @@ function Start({ name, onStart }: { name: string; onStart: () => void }) {
           Welcome{name ? `, ${name}` : ""}
         </h1>
         <p className="m-0 max-w-[480px] text-[17px] leading-7 text-pretty text-ink-muted">
-          Let's make this dashboard yours. A few quick steps and it'll show your system and your house, what your power
-          costs, and tomorrow's solar. Skip anything you'd rather do later: it's all in Settings too.
+          A few quick steps and this dashboard is yours. It'll show your system and your house, what your power costs
+          and tomorrow's solar. Skip anything you'd rather do later. It's all in Settings too.
         </p>
         <Button size="lg" className="mt-2" onClick={onStart}>
-          Let's go
+          Get started
           <Icon name="arrowR" size={17} />
         </Button>
       </div>
@@ -192,7 +192,7 @@ function Steps({
         <div className="flex flex-col gap-1.5">
           <h1 className="text-[30px] leading-9 tracking-[-0.8px] wrap-anywhere">{title}</h1>
           <p className="m-0 text-sm leading-[22px] text-pretty text-ink-muted">
-            Skip anything you'd rather do later: it's all in Settings too.
+            Skip anything you'd rather do later. It's all in Settings too.
           </p>
         </div>
         <Overall steps={onboarding} />
@@ -246,7 +246,7 @@ function Finish({ steps, extras }: { steps: Partial<Record<StepId, StepMark>>; e
         </h1>
         <p className="m-0 text-base leading-6 text-pretty text-ink-muted">
           {skipped
-            ? `Your dashboard's ready. ${skipped === 1 ? "One step was" : `${skipped} steps were`} skipped: pick ${skipped === 1 ? "it" : "them"} up whenever you like.`
+            ? `Your dashboard's ready. Pick up the ${skipped === 1 ? "step you skipped" : `${skipped} steps you skipped`} whenever you like.`
             : "Your dashboard has everything it needs. Enjoy the sunshine."}
         </p>
       </div>

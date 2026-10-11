@@ -35,7 +35,7 @@ from app.features.home.types import Field, Hints, Integration, IntegrationError,
 log = logging.getLogger(__name__)
 
 REFIND = 10 * 60  # the soonest to look for plugs again after one stops answering
-THIRD_PARTY = "and that Third-Party Compatibility is on in the Tapo app (Tapo Lab → Third-Party Compatibility)"
+THIRD_PARTY = "Third-Party Compatibility is on in the Tapo app (Tapo Lab → Third-Party Compatibility)"
 
 Finder = Callable[[list[str]], list[Found]]
 PROTOCOLS = ("klap", "tpap")
@@ -131,7 +131,7 @@ class Tapo(Integration):
             "TP-Link ID",
             "email",
             placeholder="you@example.com",
-            help="The email you sign in to the Tapo app with, exactly as you type it there: the plugs only answer to "
+            help="The email you sign in to the Tapo app with, typed exactly as you do there. The plugs only answer to "
             "their owner.",
         ),
         Field(
@@ -139,17 +139,17 @@ class Tapo(Integration):
             "Password",
             "password",
             secret=True,
-            help="Kept on this server and never shown or sent anywhere but your plugs: those on the newest firmware "
-            "need it each time they're read.",
+            help="Plugs on the newest firmware need it each time they're read. Kept on this server and never shown or "
+            "sent anywhere but your plugs.",
         ),
         Field(
             "where",
             "Where to look",
             placeholder="Your home network",
             optional=True,
-            help="Leave empty to look on the network your inverter is on. Plugs on a separate IoT or guest Wi-Fi are on "
-            "a network of their own: give it here (192.168.20.0/24), or the plugs' addresses, separated by commas (in the "
-            "Tapo app: the plug → ⚙ → Device info). Several can be given.",
+            help="Leave empty to look on the same network as your inverter. If your plugs are on a separate IoT or guest "
+            "Wi-Fi, enter that network (like 192.168.20.0/24) or the plugs' addresses, separated by commas. A plug's "
+            "address is in the Tapo app under the plug → ⚙ → Device info.",
         ),
     )
     poll_seconds = 15
@@ -163,7 +163,7 @@ class Tapo(Integration):
     def _client(cls, host: str, port: int, protocol: str, account: Account) -> Client:
         if protocol == "tpap":
             if account.password is None:
-                raise TapoError(f"{host} has newer firmware that needs the password: sign in again.", refused=True)
+                raise TapoError(f"{host} has newer firmware that needs the password. Sign in again.", refused=True)
             return TpapClient(host, account.email, account.password, post=cls.post, port=port)
         return KlapClient(host, [account.hash], post=cls.post, port=port)
 
@@ -175,7 +175,7 @@ class Tapo(Integration):
         except WhereError as e:
             raise IntegrationError(str(e)) from e
         if not hosts:
-            raise IntegrationError("Say where to look: your home network, or the plugs' addresses.")
+            raise IntegrationError("Say where to look. Enter your home network or the plugs' addresses.")
         found = cls.finder(hosts)
         # Each address, and how it may be spoken to (in order).
         candidates: dict[str, tuple[int, tuple[str, ...]]] = {
@@ -243,14 +243,13 @@ class Tapo(Integration):
         if why == "refused":
             raise IntegrationError(
                 f"Tapo plugs answered on {where}, but not to that TP-Link ID and password. Check them (the email is "
-                f"case-sensitive), {THIRD_PARTY}.",
+                f"case-sensitive), and that {THIRD_PARTY}.",
                 signed_out=True,
             )
         if why and why.startswith("failed: "):
             raise IntegrationError(
                 f"Tapo plugs answered on {where}, but couldn't be read ({why.removeprefix('failed: ').rstrip('.')}). "
-                "Check that Third-Party Compatibility is on in the Tapo app (Tapo Lab → Third-Party Compatibility), "
-                "then try again."
+                f"Check that {THIRD_PARTY}, then try again."
             )
         if why == "no_energy":
             raise IntegrationError(
@@ -263,9 +262,9 @@ class Tapo(Integration):
             )
         if why == "none":
             raise IntegrationError(
-                f"No Tapo plugs answered on {where}. Check they're plugged in, {THIRD_PARTY}. If they're on a separate IoT "
-                "or guest Wi-Fi, give that network (or their addresses) in Where to look, and let your router reach it "
-                "from this server."
+                f"No Tapo plugs answered on {where}. Check they're plugged in, and that {THIRD_PARTY}. If they're on a "
+                "separate IoT or guest Wi-Fi, enter that network or their addresses in Where to look, and make sure "
+                "your router lets this server reach it."
             )
         return {
             "email": form["email"],
@@ -285,7 +284,8 @@ class Tapo(Integration):
             )
         if not found and why == "refused":
             raise IntegrationError(
-                f"The Tapo plugs no longer accept the saved TP-Link ID (a changed password?). Sign in again, {THIRD_PARTY}.",
+                f"The Tapo plugs no longer accept the saved TP-Link ID, perhaps after a password change. Sign in again, "
+                f"and check that {THIRD_PARTY}.",
                 signed_out=True,
             )
         plugs: dict[str, dict[str, Any]] = {k: dict(v) for k, v in (self.saved.get("plugs") or {}).items()}
@@ -381,7 +381,8 @@ class Tapo(Integration):
             )
         if refused and not readings:
             raise IntegrationError(
-                f"The Tapo plugs no longer accept the saved TP-Link ID (a changed password?). Sign in again, {THIRD_PARTY}.",
+                f"The Tapo plugs no longer accept the saved TP-Link ID, perhaps after a password change. Sign in again, "
+                f"and check that {THIRD_PARTY}.",
                 signed_out=True,
             )
         self.saved = {**self.saved, "plugs": plugs}

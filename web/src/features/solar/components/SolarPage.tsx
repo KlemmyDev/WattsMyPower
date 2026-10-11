@@ -62,7 +62,7 @@ export function SolarPage() {
   const series = day?.series;
   return (
     <>
-      <PageHeader title="Solar" sub="What your panels are making, what they should, and how they're holding up" />
+      <PageHeader title="Solar" sub="What your panels are making against the forecast, and how they're holding up" />
       <div className="flex flex-col gap-5">
         <SolarNow p={p} s={s} f={f} acc={acc} series={series} now={now} />
         <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
@@ -217,8 +217,8 @@ function TodayCard({
           title="Today"
           sub={
             planned
-              ? `Solar as it came, against the ${kWh(planned)} the forecast expected this morning`
-              : "Solar as it came, against what the forecast expected"
+              ? `Solar so far, against the ${kWh(planned)} the forecast expected this morning`
+              : "Solar so far, against what the forecast expected"
           }
         />
         <div className="flex gap-4 text-xs text-ink-dim">
@@ -348,7 +348,7 @@ function Strings({ p, s }: { p: Snapshot | null; s: SystemInfo | undefined }) {
         title={inverters.length ? "Inverters and strings" : "Strings"}
         sub={
           strings.length
-            ? "Each string of panels as the inverter tracks it (MPPT). One well behind the other in full sun is shade, dirt or a fault."
+            ? "Each string of panels, as the inverter tracks it (MPPT). If one lags well behind in full sun, look for shade, dirt or a fault."
             : "Each inverter's solar now"
         }
       />
@@ -485,7 +485,7 @@ function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <TitleBlock
           title={`Last ${days.length} days`}
-          sub={`${kWh(total)} in all, ${kWh(total / days.length)} a day${acc?.mae_kwh != null ? `. The forecast was out by ${kWh(acc.mae_kwh)} on an average day` : ""}`}
+          sub={`${kWh(total)} in all · ${kWh(total / days.length)} a day${acc?.mae_kwh != null ? ` · forecast out by ${kWh(acc.mae_kwh)} on an average day` : ""}`}
         />
         <div className="flex gap-4 text-xs text-ink-dim">
           <span className="flex items-center gap-1.5">

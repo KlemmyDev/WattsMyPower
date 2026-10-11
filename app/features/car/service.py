@@ -149,7 +149,7 @@ class CarService:
         name = body.get("name")
         model = body.get("model")
         if model is not None and model not in BY_ID:
-            raise ValueError("That isn't one of the cars to choose from.")
+            raise ValueError("Choose a car from the list.")
         return (str(name).strip()[:60] or None) if name else None, model
 
     def create(self, body: dict[str, Any], now: int | None = None) -> dict[str, Any]:
@@ -159,7 +159,7 @@ class CarService:
         details = from_model(model) | clean({k: v for k, v in body.items() if k not in ("name", "model")})
         with self.db.writing() as conn:
             if conn.execute("SELECT COUNT(*) FROM cars").fetchone()[0] >= MAX_CARS:
-                raise ValueError(f"Up to {MAX_CARS} cars can be connected.")
+                raise ValueError(f"You can connect up to {MAX_CARS} cars.")
             position = conn.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM cars").fetchone()[0]
             car_id = conn.execute(
                 "INSERT INTO cars (name, model, details, position, created_at) VALUES (?, ?, ?, ?, ?)",

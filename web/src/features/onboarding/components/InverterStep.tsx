@@ -81,10 +81,10 @@ function Searching() {
         </span>
       </span>
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-[15px] font-semibold">Let's find it</span>
+        <span className="text-[15px] font-semibold">Find your inverter</span>
         <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-          The scan knocks on every address on your network and asks what's there, which takes about a minute. The
-          inverter's Wi-Fi dongle needs to be on the same network as this server.
+          The scan knocks on every address on your network to see what's there. It takes about a minute. The inverter's
+          Wi-Fi dongle needs to be on the same network as this server.
         </span>
       </div>
     </div>

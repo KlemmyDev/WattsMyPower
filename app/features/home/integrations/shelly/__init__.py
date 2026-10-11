@@ -60,9 +60,9 @@ class Shelly(Integration):
             "Where to look",
             placeholder="Your home network",
             optional=True,
-            help="Leave empty to look on the network your inverter is on. Shellys on a separate IoT or guest Wi-Fi are "
-            "on a network of their own: give it here (192.168.20.0/24), or the Shellys' addresses, separated by commas "
-            "(in the Shelly app: the device → ⚙ → Device information). Several can be given.",
+            help="Leave empty to look on the same network as your inverter. If your Shellys are on a separate IoT or "
+            "guest Wi-Fi, enter that network (like 192.168.20.0/24) or the Shellys' addresses, separated by commas. A "
+            "Shelly's address is in the Shelly app under the device → ⚙ → Device information.",
         ),
         Field(
             "password",
@@ -70,7 +70,7 @@ class Shelly(Integration):
             "password",
             secret=True,
             optional=True,
-            help="Only if your Shellys are protected by one (in the Shelly app: the device → ⚙ → Authentication). Kept "
+            help="Only needed if your Shellys have one (in the Shelly app under the device → ⚙ → Authentication). Kept "
             "on this server and never shown or sent anywhere but your Shellys.",
         ),
     )
@@ -92,7 +92,7 @@ class Shelly(Integration):
         except WhereError as e:
             raise IntegrationError(str(e)) from e
         if not hosts:
-            raise IntegrationError("Say where to look: your home network, or the Shellys' addresses.")
+            raise IntegrationError("Say where to look. Enter your home network or the Shellys' addresses.")
         devices: dict[str, dict[str, Any]] = {}
         refused = no_power = 0
         failed: list[str] = []  # answered, but couldn't be read: what went wrong, in words
@@ -130,14 +130,14 @@ class Shelly(Integration):
         devices, why = cls._find(password, where)
         if why == "refused" and not password:
             raise IntegrationError(
-                f"The Shellys on {where} are protected by a password. Enter it (in the Shelly app: the device → ⚙ → "
-                "Authentication).",
+                f"The Shellys on {where} are protected by a password. Enter it here (it's in the Shelly app under the "
+                "device → ⚙ → Authentication).",
                 signed_out=True,
             )
         if why == "refused":
             raise IntegrationError(
-                f"Shellys answered on {where}, but not to that password. Check it (it's the one set in the Shelly app, "
-                "for the user admin).",
+                f"Shellys answered on {where}, but not to that password. Check it's the one set for the admin user "
+                "in the Shelly app.",
                 signed_out=True,
             )
         if why and why.startswith("failed: "):
@@ -151,8 +151,8 @@ class Shelly(Integration):
             )
         if why == "none":
             raise IntegrationError(
-                f"No Shellys answered on {where}. {ON_WIFI}. If they're on a separate IoT or guest Wi-Fi, give that "
-                "network (or their addresses) in Where to look, and let your router reach it from this server."
+                f"No Shellys answered on {where}. {ON_WIFI}. If they're on a separate IoT or guest Wi-Fi, enter that "
+                "network or their addresses in Where to look, and make sure your router lets this server reach it."
             )
         return {
             **({"password": password} if password else {}),
@@ -169,7 +169,8 @@ class Shelly(Integration):
         found, why = self._find(self._password(), str(self.saved.get("where") or ""))
         if not found and why == "refused":
             raise IntegrationError(
-                "The Shellys no longer accept the saved password (a changed one?). Sign in again.", signed_out=True
+                "The Shellys no longer accept the saved password, perhaps after it was changed. Sign in again.",
+                signed_out=True,
             )
         devices: dict[str, dict[str, Any]] = {k: dict(v) for k, v in (self.saved.get("devices") or {}).items()}
         new = sum(mac not in devices for mac in found)
@@ -187,7 +188,7 @@ class Shelly(Integration):
         word = "on" if on else "off"
         if not about.get("switch"):
             raise IntegrationError(
-                f"{about.get('name') or 'That Shelly'} only measures: it has no switch to turn {word}."
+                f"{about.get('name') or 'That Shelly'} only measures power. It has no switch to turn {word}."
             )
         if int(device.get("gen") or 1) >= 2:
             path = f"/rpc/Switch.Set?id={channel}&on={'true' if on else 'false'}"
@@ -264,7 +265,8 @@ class Shelly(Integration):
             self.saved = {**self.saved, "found_at": now}
         if refused and not readings:
             raise IntegrationError(
-                "The Shellys no longer accept the saved password (a changed one?). Sign in again.", signed_out=True
+                "The Shellys no longer accept the saved password, perhaps after it was changed. Sign in again.",
+                signed_out=True,
             )
         self.saved = {**self.saved, "devices": devices}
         out = [r for rs in readings.values() for r in rs]

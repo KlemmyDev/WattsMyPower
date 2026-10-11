@@ -87,7 +87,7 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
       </div>
       <PageHeader title={room} sub={sub} />
       {overview.data && !members.length && (
-        <Notice>There's no room called {room}. It may have been renamed, or its devices taken out of it.</Notice>
+        <Notice>There's no room called {room}. It may have been renamed, or its devices moved out.</Notice>
       )}
       {members.length > 0 && (
         <div className="grid grid-cols-12 gap-5">
@@ -188,7 +188,7 @@ function RoomUsageCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h2 id="h-room-use">What {room} used</h2>
-          <span className="text-[13px] text-ink-muted">Each device's part of it, {RANGE_WORDS[range]}</span>
+          <span className="text-[13px] text-ink-muted">Each device's share, {RANGE_WORDS[range]}</span>
         </div>
         <Segmented label="Period" options={RANGES} value={range} onChange={onRange} />
       </div>

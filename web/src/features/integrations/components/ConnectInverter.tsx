@@ -106,15 +106,15 @@ function FoundRow({
         <span className="text-[13px] text-ink-muted tabular-nums">{sub}</span>
         {found.untested && found.supported && !found.connected_as && (
           <span className="text-xs text-ink-muted">
-            Not a model WattsMyPower knows by name yet. {found.brand ?? "Its maker"}&apos;s models in this family share
-            their registers, so it should read fine: if anything looks wrong, an issue with its type code gets it
-            sorted.
+            WattsMyPower doesn&apos;t know this model by name yet. {found.brand ?? "Its maker"}&apos;s models in this
+            family share their registers, so it should read fine. If anything looks wrong, open an issue with its type
+            code.
           </span>
         )}
         {found.verified === false && found.supported && !found.connected_as && (
           <span className="text-xs text-ink-muted">
-            Read from {found.brand ?? "its maker"}&apos;s documented registers, but not yet tried on a real one. If
-            anything looks off, an issue saying so gets it checked.
+            Built from {found.brand ?? "its maker"}&apos;s documented registers but not yet tried on a real one. If
+            anything looks off, open an issue and it&apos;ll get checked.
           </span>
         )}
         {confirming && replaces && (
@@ -239,9 +239,9 @@ function Scan({
       )}
       {done && !running && found.length === 0 && !scan.error && (
         <div className="rounded-xl bg-canvas px-[18px] py-4 text-sm leading-[22px] text-ink-muted">
-          Nothing on {scan.network} answered like {brand ? `a ${brand}` : "an"} inverter. Check the inverter's dongle is
-          on this network (its address is in your router's device list or the inverter's app), or enter its address
-          below.
+          Nothing on {scan.network} answered like {brand ? `a ${brand}` : "an"} inverter. Check its dongle is on this
+          network, or enter its address below. You&apos;ll find the address in your router&apos;s device list or the
+          inverter&apos;s app.
         </div>
       )}
       {done && !running && elsewhere.length > 0 && (
@@ -374,7 +374,7 @@ function Manual({
         <HelpText tone="bad">
           {errorMessage(error)}{" "}
           {kind?.role === "pv2"
-            ? "String inverters power down after dark: connect it anyway and it's read once it wakes."
+            ? "String inverters power down after dark. Connect it anyway and it'll be read once it wakes."
             : "Check the address, and that nothing else (such as another app) is reading it right now."}
         </HelpText>
       )}

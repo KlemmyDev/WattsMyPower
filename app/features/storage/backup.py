@@ -126,10 +126,10 @@ class Backups:
     def _zip(self, path: str, mine: str, everything: bool, now: datetime) -> str | None:
         """Write the zip; why the collector's database isn't in it, when it was asked for and isn't."""
         if not everything:
-            _write(path, mine, None, "You chose the dashboard's only.", now)
+            _write(path, mine, None, "You chose to back up the dashboard's database only.", now)
             return None
         if self.collector is None:
-            skipped = "The demo has no collector: its readings are generated."
+            skipped = "The demo has no collector. Its readings are made up."
             _write(path, mine, None, skipped, now)
             return skipped
         with ExitStack() as stack:
@@ -176,9 +176,9 @@ def _copy(source: IO[bytes], dest: IO[bytes]) -> None:
 
 def readme(now: datetime, collector: bool, skipped: str | None) -> str:
     """README.txt: what's in the backup, that it's private, and how to put it back."""
-    files = f"  {DASHBOARD}  the dashboard's: readings, bills, your settings and connected services\n"
+    files = f"  {DASHBOARD}  the dashboard's readings, bills, settings and connected services\n"
     if collector:
-        files += f"  {COLLECTOR}     the collector's: what it reads from your inverters, and which inverters\n"
+        files += f"  {COLLECTOR}     what the collector reads from your inverters, and which inverters it reads\n"
     elif skipped:
         files += f"\nThe collector's database isn't in it. {skipped}\n"
     copy = "both files" if collector else DASHBOARD
@@ -198,5 +198,5 @@ To restore it, in the folder WattsMyPower is installed in (where docker-compose.
      database files you've just replaced.
   4. Start it again:  docker compose start
 
-Restore it to this version of WattsMyPower or a newer one: an older version may not understand it.
+Restore it to this version of WattsMyPower or a newer one. An older version may not be able to read it.
 """

@@ -55,7 +55,8 @@ async def _server_error(request: Request, exc: Exception) -> JSONResponse:
     # The traceback follows from uvicorn, once Starlette raises the exception again; this says which request it was.
     log.error("%s %s failed: %s: %s", request.method, request.url.path, type(exc).__name__, exc)
     return JSONResponse(
-        status_code=500, content={"detail": "Something went wrong on the server (500). Its log says what happened."}
+        status_code=500,
+        content={"detail": "Something went wrong on the server (500). Check its log to see what happened."},
     )
 
 

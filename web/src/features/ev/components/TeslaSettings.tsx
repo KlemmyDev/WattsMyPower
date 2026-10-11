@@ -21,9 +21,9 @@ const OTHER: Record<TeslaProvider, TeslaProvider> = { bluetooth: "tessie", tessi
 
 const SWITCH_ABOUT: Record<TeslaProvider, string> = {
   bluetooth:
-    "Reach the car over this server's Bluetooth instead, with nothing going through the cloud. Pair it here; once it's paired, Tessie's token is removed.",
+    "Reach the car over this server's Bluetooth instead, with nothing going through the cloud. Pair it here. Once it's paired, the Tessie token is removed.",
   tessie:
-    "Reach the car through Tessie instead, from anywhere. Once Tessie's connected, the cars it has replace the ones paired here.",
+    "Reach the car through Tessie instead, from anywhere. Once Tessie's connected, its cars replace the ones paired here.",
 };
 
 /** How the cars are reached, in words (this server's key, or Tessie's token) and when they were last read, with
@@ -40,8 +40,8 @@ function Connection({ status }: { status: TeslaStatus }) {
       sub={
         <>
           {bt
-            ? `This server's key ${status.bluetooth.key ?? ""}: ${status.bluetooth.role === "driver" ? "a driver's, so it can wake the car" : "charging only, so it can't wake the car"}.`
-            : `With the access token ${status.token}.`}{" "}
+            ? `This server's key${status.bluetooth.key ? ` ${status.bluetooth.key}` : ""} is ${status.bluetooth.role === "driver" ? "a driver key, so it can wake the car" : "charging only, so it can't wake the car"}.`
+            : `Using the access token ${status.token}.`}{" "}
           {status.reading ? "Reading now…" : status.read_at ? `Last read at ${hhmm(status.read_at)}.` : ""}
         </>
       }
@@ -56,7 +56,7 @@ function Connection({ status }: { status: TeslaStatus }) {
                 disconnect.mutate(undefined, {
                   onSuccess: () => {
                     setConfirming(false);
-                    toast(bt ? "The Teslas are disconnected." : "Disconnected from Tessie.");
+                    toast(bt ? "Your Teslas are disconnected." : "Disconnected from Tessie.");
                   },
                 })
               }
@@ -77,7 +77,7 @@ function Connection({ status }: { status: TeslaStatus }) {
       {confirming && (
         <HelpText>
           {bt
-            ? "The dashboard stops reading the cars and charging from solar. The cars keep this server's key (remove it in the car, under Controls → Locks, if you like), so pairing again needs no tap."
+            ? "The dashboard stops reading the cars and charging them from solar. The cars keep this server's key, so pairing again needs no tap. You can remove it in the car under Controls → Locks."
             : "The token is removed from this server and the dashboard stops charging from solar."}{" "}
           Your cars and their levels stay.
         </HelpText>
@@ -96,7 +96,7 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
     provider === "bluetooth" && v.state
       ? v.state.in_range
         ? v.linked
-          ? "connected, the link held open"
+          ? "connected, link held open"
           : "in range"
         : "not heard"
       : null;
@@ -121,7 +121,7 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Select
-          aria-label={`The details ${v.name ?? "this Tesla"} charges with`}
+          aria-label={`Car details for ${v.name ?? "this Tesla"}`}
           className="w-48"
           value={v.car ?? ""}
           disabled={configure.isPending}
@@ -170,8 +170,8 @@ function VehicleRow({ v, provider }: { v: EvVehicle; provider: TeslaProvider }) 
       </div>
       {confirming && (
         <HelpText className="basis-full">
-          The dashboard stops reading this car and charging it from solar. To add it back, pair it again here, sitting
-          in the car with your key card in case it asks for a tap.
+          The dashboard stops reading this car and charging it from solar. To add it back, pair it again here. Sit in
+          the car with your key card, in case it asks for a tap.
         </HelpText>
       )}
       {(configure.isError || remove.isError) && (
@@ -193,7 +193,7 @@ function HandAdded({ status }: { status?: TeslaStatus }) {
     <SettingsSection
       id="h-tesla-other-cars"
       title="Cars added by hand"
-      sub="From before cars came from a connected Tesla. The Overview still draws them; remove one you don't need."
+      sub="Added before cars came from a connected Tesla. The Overview still shows them, so remove any you don't need."
     >
       <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
         {loose.map((c) => (
@@ -229,7 +229,7 @@ export function TeslaSettings() {
         back={<BackLink to="/integrations/ev">Electric vehicles</BackLink>}
         id="h-tesla"
         title="Tesla"
-        sub="See each car's charge, and charge it from spare solar on the EV page. Over this server's Bluetooth or through Tessie: the dashboard does the same either way."
+        sub="See each car's charge and charge it from spare solar on the EV page. It works the same over this server's Bluetooth or through Tessie."
       />
       {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
       {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
@@ -237,7 +237,7 @@ export function TeslaSettings() {
         <SettingsSection
           id="h-tesla-connect"
           title="Connect your Tesla"
-          sub="Choose how the dashboard reaches it. You can switch later; each car keeps how it charges."
+          sub="Choose how the dashboard reaches it. You can switch later, and each car keeps its charging settings."
         >
           <TeslaConnect />
         </SettingsSection>
@@ -248,7 +248,7 @@ export function TeslaSettings() {
           <SettingsSection
             id="h-tesla-cars"
             title="Cars"
-            sub="Each charges with its own details (phases, the lowest and highest current) once it's charged at home and reported them, or its model's until then."
+            sub="Uses each car's own phases and current limits after its first charge at home. Until then, it uses its model's."
             aside={
               provider === "bluetooth" &&
               !adding && (
@@ -282,7 +282,7 @@ export function TeslaSettings() {
         <SettingsSection
           id="h-tesla-wake"
           title="Let the dashboard wake the car"
-          sub="This server's key is charging only, so it can't wake the car: once it's asleep, charging from solar waits until it wakes. Pair it again as a driver, as your phone key is, and the dashboard can wake it."
+          sub="This server's key is charging only, so it can't wake the car. Once the car's asleep, solar charging waits until it wakes. Pair again as a driver (like your phone key) and the dashboard can wake it."
           aside={
             !asDriver && (
               <Button variant="outline" size="sm" onClick={() => setAsDriver(true)}>
@@ -307,7 +307,7 @@ export function TeslaSettings() {
             <SettingsSection
               id="h-tesla-slots"
               title="A Tesla takes only a few Bluetooth connections"
-              sub="About three at once: each phone or watch with its key holds one while it's near the car, and with them all taken the car won't take the dashboard's. So while the car's plugged in at home by day (or charging), the dashboard keeps its connection open after each read, to keep its place; at night, and once the car's unplugged, it lets go so the car can sleep. When the dashboard can't get in, the EV page says so and tries again every few minutes. Keys you don't use are best removed in the car, under Controls → Locks."
+              sub="About three at once. Each phone or watch with its key holds one while it's nearby, and when they're all taken the dashboard can't get in. So while the car's plugged in at home by day (or charging), the dashboard keeps its connection open between reads to hold its place. At night, and once the car's unplugged, it lets go so the car can sleep. If it can't get in, the EV page says so and tries again every few minutes. It helps to remove keys you don't use, in the car under Controls → Locks."
             >
               {null}
             </SettingsSection>

@@ -82,7 +82,7 @@ export function GroupInput({
   );
   // The group its name suggests first, if it's there already.
   there.sort(([a], [b]) => Number(!!suggestion && same(b, suggestion)) - Number(!!suggestion && same(a, suggestion)));
-  for (const [g, n] of there) options.push({ value: g, label: g, hint: g === value ? "In it" : word(n) });
+  for (const [g, n] of there) options.push({ value: g, label: g, hint: g === value ? "Current" : word(n) });
   if (changed && typed && !there.some(([g]) => same(g, typed)))
     options.push({ value: typed, label: `New group “${typed}”` });
   if ((!changed || !typed) && suggestion && ![...groups.keys()].some((g) => same(g, suggestion)))

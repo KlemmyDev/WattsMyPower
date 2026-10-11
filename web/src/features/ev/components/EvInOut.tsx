@@ -113,9 +113,7 @@ export function EvInOut({ vin, now, className }: { vin: string; now: number; cla
         </p>
       )}
       {!isPending && h?.sessions.length === 0 && (
-        <p className="m-0 text-sm text-ink-muted">
-          Nothing yet. Each charge at home, and each time it's away and back, shows here.
-        </p>
+        <p className="m-0 text-sm text-ink-muted">Nothing yet. Charges at home and trips away will show up here.</p>
       )}
       {h && h.sessions.length > 0 && (
         <ol className="m-0 flex list-none flex-col p-0">
