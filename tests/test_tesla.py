@@ -806,6 +806,45 @@ def test_what_the_car_measures_sets_the_amps(svc: TeslaService, provider: str, t
     assert "Charging on 1 phase at 240 V" in svc.log()[0]["text"]
 
 
+def test_the_most_it_draws_is_what_the_car_says(svc: TeslaService, provider: str, tessie: FakeTessie) -> None:
+    connect(svc, provider)  # a Model Y from the catalog: 11 kW on three phases, 16 A in its details
+    tessie.charge(charge_current_request_max=20)  # its charger offers more
+    svc.read()
+    assert svc.status()["vehicles"][0]["max_amps"] == 20
+    svc.command(VIN, {"action": "amps", "amps": 20})
+    assert tessie.commands[-1] == ("set_charging_amps", {"amps": 20})
+    with pytest.raises(TeslaSetupError):
+        svc.command(VIN, {"action": "amps", "amps": 21})
+    # Until the car says, it's its details' figure.
+    tessie.charge(charge_current_request_max=None)
+    svc.read()
+    assert svc.status()["vehicles"][0]["max_amps"] == 16
+
+
+def test_it_can_be_held_to_what_the_socket_takes(svc: TeslaService, provider: str, tessie: FakeTessie,
+                                                 live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    connect(svc, provider)
+    svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 1, "car_min_amps": 5})
+    tessie.charge(charge_current_request_max=32)  # the car could take 32 A, but the socket's 20 A
+    svc.read()
+    v = svc.configure(VIN, {"mode": "solar", "max_amps": 20})["vehicles"][0]
+    assert (v["max_amps"], v["car_max_amps"], v["control"]["max_amps"]) == (20, 32, 20)
+    # All the sun in the world: still 20 A, never more.
+    minutes(svc, live, clock, 12, spare=9000)
+    assert ("set_charging_amps", {"amps": 20}) in tessie.commands
+    assert max(p["amps"] for n, p in tessie.commands if n == "set_charging_amps") == 20
+    # Nor by hand.
+    svc.configure(VIN, {"mode": "off"})
+    with pytest.raises(TeslaSetupError, match="1 to 20"):
+        svc.command(VIN, {"action": "amps", "amps": 21})
+    # Let go: back to what the car says.
+    v = svc.configure(VIN, {"max_amps": None})["vehicles"][0]
+    assert v["max_amps"] == 32 and "max_amps" not in v["control"]
+    for bad in (0, 49, 12.5, True, "20"):
+        with pytest.raises(TeslaSetupError, match="whole amps"):
+            svc.configure(VIN, {"max_amps": bad})
+
+
 def test_a_command_from_the_page_holds_and_resume_lets_go(svc: TeslaService, provider: str,
                                                           tessie: FakeTessie) -> None:  # fmt: skip
     connect(svc, provider)

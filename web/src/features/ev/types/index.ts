@@ -10,6 +10,8 @@ export type EvControl = {
   first: EvFirst;
   /** How far short (W) the car may run, from the grid or the home battery, before it's stopped. */
   grid_w: number;
+  /** A Tesla's: the most it may draw at home (A), the socket's or circuit's limit; missing: the car's own. */
+  max_amps?: number;
 } & Record<EvTimingKey, number>;
 
 /** How a car's solar charging is timed (app.features.tesla.control.TIMING), each as set or its default: the waits
@@ -19,8 +21,10 @@ export type EvTimingKey =
   "start_after" | "stop_after" | "min_switch" | "amps_every" | "average" | "lead" | "battery_full";
 
 /** A change to how a car charges: a timing given as null goes back to its default. */
-export type EvControlChange = Partial<Omit<EvControl, EvTimingKey>> &
+export type EvControlChange = Partial<Omit<EvControl, EvTimingKey | "max_amps">> &
   Partial<Record<EvTimingKey, number | null>> & {
+    /** A Tesla's most it may draw (A); null: the car's own. */
+    max_amps?: number | null;
     /** A Hyundai or Kia's: its charging power at home (W; null: measured, or the default), and how often the car
      * itself may be asked (seconds; 0: never). */
     charge_w?: number | null;
@@ -99,6 +103,8 @@ export type EvVehicle = {
   min_w: number | null;
   min_amps: number | null;
   max_amps: number | null;
+  /** A Tesla's: the most it says it can draw (A), before what it's set to draw at most (control.max_amps). */
+  car_max_amps?: number | null;
   phases: number | null;
   volts: number | null;
   /** The current spare solar alone would charge it at (0: not enough for its lowest current). */

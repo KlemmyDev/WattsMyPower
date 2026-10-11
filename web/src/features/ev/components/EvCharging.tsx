@@ -369,6 +369,59 @@ function ChargePower({ v, onSave }: { v: BluelinkCar; onSave: (w: number | null)
 }
 
 const AMPS_SETTLE = 700; // ms after the last tap of − or + before the current's sent
+const MOST_AMPS = 48; // the most a car may be held to (app.features.tesla.control.MAX_AMPS)
+
+/**
+ * The most a Tesla may draw at home, by − and +: the socket's or circuit's limit ("20 A"), or none, the car's own (what
+ * it says it can take with the charger it's on). Past the car's own is none. Each tap shows at once; once they stop
+ * it's saved, and shown as being until the answer has it.
+ */
+function MostAmps({ v, configure }: { v: EvVehicle; configure: ReturnType<typeof useEvChange>["configure"] }) {
+  const own = v.car_max_amps ?? v.max_amps ?? 32;
+  const [moving, setMoving] = useState<number | null | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const value = moving !== undefined ? moving : (v.control.max_amps ?? null);
+  const shown = value ?? own;
+  const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
+  const step = (d: number) => {
+    const next = Math.max(1, Math.min(MOST_AMPS, shown + d));
+    const to = next > own ? null : next;
+    setMoving(to);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(
+      () => configure.mutate({ vin: v.vin, max_amps: to }, { onSettled: () => setMoving(undefined) }),
+      AMPS_SETTLE,
+    );
+  };
+  return (
+    <Row
+      title="Most it can draw"
+      control={
+        <div
+          className="flex items-center gap-1 rounded-full border border-chip-line bg-canvas p-1"
+          role="group"
+          aria-label="Most it can draw"
+        >
+          <Button size="sm" variant="chip" aria-label="Less" disabled={shown <= 1} onClick={() => step(-1)}>
+            −
+          </Button>
+          <span className="min-w-24 text-center text-sm tabular-nums">
+            {value == null ? "No limit" : `${value} A${perAmp ? ` · ${kW(value * perAmp)}` : ""}`}
+          </span>
+          <Button size="sm" variant="chip" aria-label="More" disabled={value == null} onClick={() => step(1)}>
+            +
+          </Button>
+        </div>
+      }
+      about={
+        value == null
+          ? `Up to what the car says it can take on this charger, ${own} A. If your socket or circuit can't take that, set its limit here.`
+          : `Held to your socket's or circuit's limit. The dashboard never asks the car for more than ${value} A, from solar or by hand. The car says it could take ${own} A.`
+      }
+    />
+  );
+}
 
 /**
  * The charging current by hand: each tap of − or + shows at once, and once the taps stop the last is sent to the car
@@ -605,6 +658,7 @@ export function EvCharging({
           )}
         </>
       )}
+      {!fixed && <MostAmps v={v} configure={configure} />}
       {configure.isError && <HelpText tone="bad">{errorMessage(configure.error)}</HelpText>}
 
       <Row

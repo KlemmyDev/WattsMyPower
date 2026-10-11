@@ -62,6 +62,7 @@ START_AFTER, STOP_AFTER, MIN_SWITCH, AMPS_EVERY, AVERAGE, LEAD, FULL_SOC = (t[0]
 GRACE = 180  # seconds for the car (and Tessie's copy of its state) to show a command before it counts as changed
 HOME_RADIUS_M = 500  # a car within this of home is at home
 MAX_GRID_W = 5000
+MAX_AMPS = 48  # the most a car may be held to (`max_amps`): a Model S's own charger's most
 QUIET_READ = 3600  # a car with no chance of charging soon has its charge read at most this often, never woken for it
 READINESS = ("active", "ready", "quiet")
 FIRST = ("battery", "shared", "car")  # who gets the sun first
@@ -125,6 +126,14 @@ def clean(body: dict[str, Any], current: dict[str, Any] | None = None) -> dict[s
         if isinstance(v, bool) or not isinstance(v, int | float) or not 0 <= v <= MAX_GRID_W:
             raise ValueError(f"How far short the car may run must be 0 to {MAX_GRID_W:,} W.")
         out["grid_w"] = round(float(v))
+    if "max_amps" in body:  # the most it may draw at home (the socket's or circuit's limit); null: the car's own
+        v = body["max_amps"]
+        if v is None:
+            out.pop("max_amps", None)
+        elif isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= MAX_AMPS:
+            raise ValueError(f"Set the most it can draw in whole amps, from 1 to {MAX_AMPS}.")
+        else:
+            out["max_amps"] = v
     for key, (_, lo, hi, words) in TIMING.items():
         if key not in body:
             continue
