@@ -64,8 +64,8 @@ export function RuleCard({ device }: { device: HomeDevice }) {
         <div className="flex max-w-[620px] flex-col gap-0.5">
           <h2 id="h-rule">Run on spare solar</h2>
           <span className="text-[13px] text-pretty text-ink-muted">
-            Switch {device.name} on when you're sending solar to the grid, and off again when the house starts drawing
-            from it, so it runs on what you'd otherwise export. Switching it yourself pauses this until tomorrow.
+            Turns {device.name} on while you're sending solar to the grid, and off when the house starts drawing from
+            it. That way it runs on sun you'd otherwise export. Switch it yourself and this pauses until tomorrow.
           </span>
         </div>
         {r && (
@@ -83,12 +83,12 @@ export function RuleCard({ device }: { device: HomeDevice }) {
       {r && (
         <span className="text-sm text-ink-muted">
           {paused
-            ? `Paused until tomorrow: ${device.name} was switched by hand.`
+            ? `Paused until tomorrow, since ${device.name} was switched by hand.`
             : r.last
-              ? `Last switched ${r.last.on ? "on" : "off"} at ${hhmm(r.last.at)}: ${r.last.why}.`
+              ? `Last switched ${r.last.on ? "on" : "off"} at ${hhmm(r.last.at)} (${r.last.why}).`
               : r.enabled
                 ? "Waiting for spare solar."
-                : "Off: it won't switch anything."}
+                : "Off. It won't switch anything."}
         </span>
       )}
       <form onSubmit={save(r?.enabled ?? true)} className="flex flex-col gap-4">

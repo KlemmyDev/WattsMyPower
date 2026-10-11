@@ -22,9 +22,9 @@ export const RATE_TYPES: { value: Tariff["type"]; label: string; icon: IconName 
 
 export const RATE_HELP: Record<Tariff["type"], string> = {
   flat: "One price for grid electricity at any time of day.",
-  tou: "Different rates at different times of day, for example peak, shoulder, and off-peak.",
+  tou: "Different rates at different times of day, like peak, shoulder and off-peak.",
   amber:
-    "Amber's own prices for every 5 or 30 minutes, from your Amber account. Grid power and feed-in are costed at the price of the time.",
+    "Live prices from your Amber account, changing every 5 or 30 minutes. Grid power and feed-in are costed at the price at the time.",
 };
 
 export function ImportRates({
@@ -89,7 +89,7 @@ export function useSaveRates(dispatch: Dispatch<EditorAction>) {
       dispatch({ type: "saving" });
       save.mutate(draft, {
         onSuccess: () => {
-          dispatch({ type: "saved", message: `Saved at ${hhmm(nowS())}. Savings on every page now use these rates.` });
+          dispatch({ type: "saved", message: `Saved at ${hhmm(nowS())}. Every page now uses these rates.` });
           onSaved?.();
         },
         onError: (err) => dispatch({ type: "failed", message: failure(err, "Check the rates and try again.") }),
@@ -101,7 +101,7 @@ export function useSaveRates(dispatch: Dispatch<EditorAction>) {
 export function RatesLoading({ failed }: { failed: boolean }) {
   return (
     <div className="text-sm text-ink-muted">
-      {failed ? "The rates could not be loaded. Reload the page to try again." : "Loading rates…"}
+      {failed ? "Couldn't load your rates. Reload the page to try again." : "Loading rates…"}
     </div>
   );
 }

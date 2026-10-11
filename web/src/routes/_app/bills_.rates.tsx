@@ -21,7 +21,7 @@ function BillsSettingsPage() {
       <div className="pt-2 max-xl:hidden">
         <BackLink to="/bills">Bills</BackLink>
       </div>
-      <PageHeader title="Rates & settings" sub="Everything your bills are worked out from" />
+      <PageHeader title="Rates & settings" sub="The rates and dates behind your bills" />
       <BillsRatesSettings />
     </>
   );

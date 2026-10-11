@@ -25,7 +25,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 type GroupId = "energy" | "home" | "vehicles" | "services";
 
 const GROUPS: { id: GroupId; title: string; sub: string }[] = [
-  { id: "energy", title: "Solar and battery", sub: "Inverters it reads on your network, by brand" },
+  { id: "energy", title: "Solar and battery", sub: "Inverters on your home network, by brand" },
   { id: "home", title: "Smart home", sub: "Plugs, meters and appliances, for the breakdown on the Home page" },
   { id: "vehicles", title: "Electric vehicles", sub: "Your car's charge, and charging it from spare solar" },
   { id: "services", title: "Grid, prices and weather", sub: "Outages and prices around you, and the solar forecast" },
@@ -66,7 +66,8 @@ function inverterStatus(inverters: InverterState[]): { status: string; on: boole
   const frozen = inverters.find((i) => i.frozen);
   const silent = inverters.filter((i) => !i.ok && i.last);
   const waiting = inverters.filter((i) => !i.last);
-  if (frozen) return { status: "Frozen", on: false, detail: "Readings frozen – the dongle isn't refreshing them" };
+  if (frozen)
+    return { status: "Frozen", on: false, detail: "Readings frozen (the dongle has stopped refreshing them)" };
   if (silent.length)
     return {
       status: "Not responding",
@@ -267,7 +268,7 @@ function useGridEntry(): Entry {
         networks.length
           ? `${networks.map((n) => n.name).join(" and ")} outages within ${out?.radius_km} km${out?.street ? "" : " (no street set)"}`
           : grid.location_set
-            ? "No network's outages"
+            ? "Not following any outages"
             : "Set your location for outages near you",
         grid.enabled ? `AEMO prices for ${grid.region_name}` : null,
       ]
@@ -344,7 +345,7 @@ function useEvEntry(): Entry {
         to="/integrations/ev"
         icon="car"
         name="Electric vehicles"
-        detail="Your Tesla (over Bluetooth or through Tessie), Hyundai or Kia charged from spare solar; or your BYD's charge, through BYD's cloud"
+        detail="Charge your Tesla (over Bluetooth or Tessie), Hyundai or Kia from spare solar, or see your BYD's charge"
         tags={tags(tesla.reach)}
       />
     ),
@@ -511,7 +512,7 @@ export function IntegrationSettings() {
         )}
         {connected.length > 0 && firstBrand && (
           <p className="m-0 text-sm text-warn">
-            Nothing is recorded until your main inverter is connected: it's first under Available to connect.
+            Connect your main inverter to start recording. It's first under Available to connect.
           </p>
         )}
       </Section>
@@ -521,7 +522,7 @@ export function IntegrationSettings() {
           id="available"
           title="Available to connect"
           count={counted.filter((e) => !e.connected).length}
-          sub="Everything else WattsMyPower can read. Each says how it's reached: on your network, over Bluetooth, from public data, or through its maker's cloud."
+          sub="Everything else WattsMyPower can read. Each tile shows how it connects (on your network, Bluetooth, public data or its maker's cloud)."
         >
           <div className="flex flex-col gap-6">
             {GROUPS.map((g) => {

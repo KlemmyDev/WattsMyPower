@@ -226,7 +226,7 @@ function Weather({
         type="button"
         aria-expanded={open}
         aria-controls="weather-ahead"
-        aria-label={`${wx.label}: the hours ahead`}
+        aria-label={`${wx.label}. Show the hours ahead`}
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-center border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] leading-5 font-medium text-inherit"
       >
@@ -426,7 +426,7 @@ function WeatherDue({ timing, next }: { timing: WeatherTiming; next: number }) {
   return (
     <span
       className={cn("flex items-center gap-1.5", retry && "text-warn")}
-      title={retry ? "Open-Meteo couldn't be reached; trying again" : `Fetched every ${duration(timing.every)}`}
+      title={retry ? "Can't reach Open-Meteo. Trying again shortly." : `Updates every ${duration(timing.every)}`}
     >
       <Ring due={next} left={left} interval={retry ? RETRY_GUESS : timing.every} busy={busy} size={12} />
       <span className="tabular-nums" role="timer" aria-live="off">
@@ -487,8 +487,8 @@ function NextPoll() {
       className={cn("flex items-center gap-1", retry && "text-warn")}
       title={
         retry
-          ? `The inverter didn't answer; trying again in ${clock(left)}`
-          : `Next reading in ${clock(left)}: the inverters are read every ${duration(interval)}`
+          ? `The inverter didn't answer. Trying again in ${clock(left)}.`
+          : `Next reading in ${clock(left)} (every ${duration(interval)})`
       }
     >
       <Ring due={next} left={left} interval={interval} busy={reading} size={12} />
@@ -816,7 +816,7 @@ function HomeSplit({ split, colors }: { split: Split; colors: Map<number, string
           </li>
         )}
         {other > 0 && (
-          <li className="col-span-full flex min-w-0 items-center gap-2" title="What no plug or appliance measures">
+          <li className="col-span-full flex min-w-0 items-center gap-2" title="Power no plug or appliance measures">
             <span className="size-2 flex-none rounded-full" style={{ background: OTHER_COLOR }} />
             <span className="truncate text-ink-sub">Everything else</span>
             <b className="ml-auto pl-1 font-semibold whitespace-nowrap text-ink tabular-nums">{kW(other)}</b>
@@ -927,7 +927,7 @@ function Cell({
       {/* the cell as a link: under everything, so the home's own links and button still take their clicks */}
       <Link
         to={to}
-        aria-label={`${k} ${v} ${unit}: ${go}`}
+        aria-label={`${k} ${v} ${unit}. Open ${go}`}
         className="absolute inset-0 rounded-[inherit] transition-colors duration-200 hover:bg-(--wash) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand active:bg-(--press)"
       />
       {/* edge to edge along the bottom, under the padded content */}

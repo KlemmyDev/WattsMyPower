@@ -25,11 +25,11 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
   const wait = v.force_from != null && v.force_from > now;
   return (
     <Card aria-labelledby={`h-bl-${v.vin}`} className={cn("gap-4", className)}>
-      <TitleBlock id={`h-bl-${v.vin}`} title="Reading the car" sub={`Through ${app}, as the app reads it`} />
+      <TitleBlock id={`h-bl-${v.vin}`} title="Reading the car" sub={`Through the ${app} cloud`} />
       <Muted>
-        The dashboard reads what {app} last heard from the car every 15 minutes (every 5 while it could charge from
-        solar), which doesn't touch the car. The car sends its state when it's plugged in or out, starts or stops
-        charging, or takes a command; in between, its charge can lag.
+        Every 15 minutes (every 5 while it could charge from solar), the dashboard reads what {app} last heard from the
+        car. This doesn't touch the car. The car only sends its state when it's plugged in or out, starts or stops
+        charging, or takes a command, so its charge can lag in between.
       </Muted>
       <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-4">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -44,8 +44,8 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
         </div>
         <Muted>
           {v.control.force_every
-            ? `By day in Spare solar mode, when what ${app} has is older than this, the car's asked for its state, so the dashboard knows it's been plugged in and how full it is. Each time wakes the car's modem and draws a little on its 12 V battery.`
-            : `The car's never asked by the dashboard: it goes on what the car sends ${app} by itself, so a car plugged in may not be seen until it does.`}
+            ? `By day in Solar only mode, if what ${app} has is older than this, the car's asked for its state, so the dashboard knows it's plugged in and how full it is. Each ask wakes the car's modem and draws a little on its 12 V battery.`
+            : `The dashboard never asks the car. It goes on what the car sends ${app} by itself, so plugging in may not show until the car next sends an update.`}
         </Muted>
         <div className="flex flex-wrap items-center gap-3">
           <Button
@@ -60,7 +60,7 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
             {refresh.isError
               ? errorMessage(refresh.error)
               : wait
-                ? `Asked at ${hhmm(v.forced_at!)}: it can be asked again from ${hhmm(v.force_from!)}.`
+                ? `Asked at ${hhmm(v.forced_at!)}. You can ask again from ${hhmm(v.force_from!)}.`
                 : v.forced_at
                   ? `Last asked at ${hhmm(v.forced_at)}.`
                   : "Reads it now, from the car."}
@@ -84,7 +84,7 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
             ))}
           </ul>
         ) : (
-          <Muted>Nothing yet. What the dashboard does with the car shows here.</Muted>
+          <Muted>Nothing yet. Anything the dashboard does with the car will show up here.</Muted>
         )}
       </div>
     </Card>

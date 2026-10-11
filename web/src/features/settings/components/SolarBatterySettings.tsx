@@ -28,10 +28,7 @@ export function SolarBatterySettings() {
   const live = useLive();
   return (
     <>
-      <SettingsPageHeader
-        title="Solar and battery"
-        sub="What your inverters report about your system, and the details they can't."
-      />
+      <SettingsPageHeader title="Solar and battery" sub="What your inverters report, plus the details they can't." />
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
       {live && <SolarBattery system={live.system} last={live.last_success} />}
     </>
@@ -73,7 +70,7 @@ function SolarBattery({ system: s, last }: { system: SystemInfo; last: number | 
       <SettingsSection
         id="h-sys-details"
         title="Details"
-        sub="What your inverter can't tell us. The forecast and bills use them as soon as they're saved."
+        sub="Things your inverter can't report. The forecast and bills use them as soon as you save."
       >
         <SystemDetailRows system={s} form={form} />
         <SaveBanner
@@ -211,7 +208,7 @@ export function SystemDetailRows({ system: s, form }: { system: SystemInfo; form
       {row(
         "pv_kw",
         "Solar array size",
-        "All your panels, on every inverter. The forecast starts from it, then learns.",
+        "All your panels, across every inverter. The forecast starts here, then learns.",
         "kW",
         "0.01",
         "e.g. 13.2",
@@ -220,8 +217,8 @@ export function SystemDetailRows({ system: s, form }: { system: SystemInfo; form
         "battery_kwh_override",
         "Battery capacity",
         reportedKwh
-          ? `0 uses what your inverter reports (${reportedKwh} kWh). Set it only if that's wrong.`
-          : "Your inverter doesn't report one, so set it here.",
+          ? `Leave at 0 to use what your inverter reports (${reportedKwh} kWh). Only change it if that's wrong.`
+          : "Your inverter doesn't report this, so enter it here.",
         "kWh",
         "0.1",
       )}
@@ -229,7 +226,7 @@ export function SystemDetailRows({ system: s, form }: { system: SystemInfo; form
         "battery_reserve_fallback",
         "Backup reserve",
         reportedReserve != null
-          ? `Your inverter reports ${pct(reportedReserve)}, which is used instead.`
+          ? `Your inverter reports ${pct(reportedReserve)}, so that's used instead.`
           : "The charge kept for blackouts.",
         "%",
         "1",
@@ -237,7 +234,7 @@ export function SystemDetailRows({ system: s, form }: { system: SystemInfo; form
       {row(
         "battery_max_kw",
         "Charge and discharge rate",
-        "How fast the battery fills and empties, for the forecast.",
+        "How fast the battery can charge and discharge. The forecast uses it.",
         "kW",
         "0.1",
       )}

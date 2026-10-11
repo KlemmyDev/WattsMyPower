@@ -174,8 +174,8 @@ def _words(e: Exception, cloud: str) -> BluelinkError:
         return e
     if isinstance(e, hx.AuthenticationError):
         return BluelinkError(
-            f"{cloud} didn't accept the email and password. Check them in the {cloud} app, and that the make and "
-            "country are the ones the account is with.",
+            f"{cloud} didn't accept the email and password. Check them in the {cloud} app, and that you've picked "
+            "the right make and country.",
             refused=True,
         )
     if isinstance(e, hx.PINMissingError) or (isinstance(e, hx.APIError) and "PIN" in str(e)):
@@ -186,23 +186,25 @@ def _words(e: Exception, cloud: str) -> BluelinkError:
         )
     if isinstance(e, hx.RateLimitingError):
         return BluelinkError(
-            f"{cloud} says there have been too many requests for this account today. The dashboard leaves it alone "
-            "for an hour.",
+            f"{cloud} has had too many requests from this account today. The dashboard will wait an hour before "
+            "trying again.",
             limited=True,
         )
     if isinstance(e, hx.DuplicateRequestError):
         return BluelinkError("The car is still working on the last command. Try again in a minute.")
     if isinstance(e, hx.RequestTimeoutError):
-        return BluelinkError("The car didn't answer in time: it may be out of mobile coverage. Trying again later.")
+        return BluelinkError("The car didn't answer in time. It might be out of mobile coverage. Trying again later.")
     if isinstance(e, hx.ServiceTemporaryUnavailable):
         return BluelinkError(f"{cloud} is unavailable for a moment. Trying again shortly.")
     if isinstance(e, hx.UnsupportedControlError):
         return BluelinkError(f"{cloud} says this car can't take that command.")
     if isinstance(e, requests.RequestException):
-        return BluelinkError(f"{cloud}'s servers couldn't be reached. Check the server's internet connection.")
+        return BluelinkError(f"Can't reach {cloud}'s servers. Check the server's internet connection.")
     if isinstance(e, hx.APIError):
-        return BluelinkError(f"{cloud} answered with an error ({str(e)[:120] or type(e).__name__}).")
-    return BluelinkError(f"{cloud}'s answer couldn't be read. It may have changed how its app talks to its servers.")
+        return BluelinkError(f"{cloud} sent back an error ({str(e)[:120] or type(e).__name__}).")
+    return BluelinkError(
+        f"{cloud} sent back something unexpected. It might have changed how its app talks to its servers."
+    )
 
 
 class BluelinkAccount:

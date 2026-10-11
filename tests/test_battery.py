@@ -170,7 +170,7 @@ def test_a_charge_ends_when_the_battery_tops_out_short_of_its_level(svc: Battery
 def test_nothing_is_written_while_isolarcloud_has_the_battery(svc: BatteryService, regs: FakeRegisters) -> None:
     regs.isolarcloud_charge()
     v = svc.view()
-    assert v["owner"] == "isolarcloud" and "forced charge at 6.6 kW" in v["blocked"]
+    assert v["owner"] == "isolarcloud" and "forced charging at 6.6 kW" in v["blocked"]
     with pytest.raises(BatteryError) as e:
         svc.start({"kind": "standby", "until": None})
     assert e.value.status == 409 and "iSolarCloud" in e.value.detail
@@ -236,7 +236,7 @@ def test_switching_from_a_floor_to_standby_puts_the_floor_back_first(svc: Batter
         ({"kind": "standby", "until": NOW - 1}, "already passed"),
         ({"kind": "standby", "until": NOW + 49 * HOUR}, "up to 48 hours"),
         ({"kind": "floor", "floor": 80, "until": None}, "between 5 and 50"),
-        ({"kind": "floor", "until": None}, "Give the reserve"),
+        ({"kind": "floor", "until": None}, "Enter the reserve"),
         ({"kind": "charge", "power_w": 9000, "until": None}, "between 500 and 6600"),
         ({"kind": "charge", "target": 50, "until": None}, "already at 60%"),
     ],
@@ -252,7 +252,7 @@ def test_controls_that_cant_be_done_are_explained(
 def test_an_unreachable_inverter_is_a_502(svc: BatteryService, regs: FakeRegisters) -> None:
     regs.fail = True
     v = svc.view()
-    assert v["owner"] is None and "couldn't be read" in v["blocked"] and "timed out" in v["error"]
+    assert v["owner"] is None and "can be read" in v["blocked"] and "timed out" in v["error"]
     with pytest.raises(BatteryError) as e:
         svc.start({"kind": "standby", "until": None})
     assert e.value.status == 502

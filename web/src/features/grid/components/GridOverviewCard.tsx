@@ -29,7 +29,7 @@ export function GridOverviewCard({ now }: { now: number }) {
       text: `${unplanned.length} ${unplanned.length === 1 ? "outage" : "outages"} within ${out?.radius_km} km · ${intAU(out?.summary.customers ?? 0)} homes`,
     });
   if (mine && top?.kind !== "planned_here")
-    chips.push({ key: "mine", color: PLANNED, text: `Planned at your street: ${when(mine, now)}` });
+    chips.push({ key: "mine", color: PLANNED, text: `Planned work on your street · ${when(mine, now)}` });
   if (!top && unplanned[0])
     chips.push({
       key: "near",

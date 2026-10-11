@@ -69,7 +69,7 @@ class AmberClient:
             reset = _int(e.headers.get("RateLimit-Reset")) if e.headers else None
             raise AmberError(_message(e.code), e.code, reset if e.code == 429 else None) from e
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
-            raise AmberError("Amber could not be reached. Check the server's internet connection.") from e
+            raise AmberError("Can't reach Amber. Check the server's internet connection.") from e
         self.remaining = _int(headers.get("RateLimit-Remaining"))
         return body
 
@@ -98,7 +98,7 @@ class AmberClient:
 
 def _site(site_id: str) -> str:
     if not SITE_ID.match(site_id or ""):
-        raise AmberError("Invalid Amber site.")
+        raise AmberError("That isn't a valid Amber site.")
     return site_id
 
 

@@ -48,7 +48,7 @@ function Figures({ c }: { c?: CostDay }) {
           k={credit ? "Credit today" : "Cost today"}
           v={c ? money(Math.abs(c.net_cost)) : "—"}
           good={credit}
-          sub={credit ? "Feed-in credit covers your costs so far" : "Including the daily supply charge"}
+          sub={credit ? "Nice, feed-in covers today's costs so far" : "Including the daily supply charge"}
         />
         <Figure
           k="Saved today"
@@ -242,7 +242,7 @@ function AmberTable({ c }: { c: CostDay }) {
       </div>
       {unpriced >= 0.05 && (
         <p className="mt-3 mb-0 text-xs leading-[18px] text-ink-faint">
-          {kWh(unpriced)} was costed at your fallback rates, because Amber had no price for those times yet.
+          {kWh(unpriced)} was priced at your fallback rate because Amber had no price for those times yet.
         </p>
       )}
     </div>

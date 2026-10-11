@@ -270,7 +270,7 @@ def _net(
         return list(lone) if pos is not None else [None if v is None else -v for v in lone]
     have, missing = names if pos is not None else names[::-1]
     warnings.append(
-        f"There's a {have} column but no {missing} column, so that was worked out from the others where it could be."
+        f"There's a {have} column but no {missing} column, so {missing} was worked out from the others where possible."
     )
     return [None] * n
 
@@ -340,7 +340,7 @@ def _curve(name: str, table: Table, at: int, overrides: Mapping[str, Sequence[st
             mapping[f] = [h for h in headers if h in by_header]
     mapping = {f: hs for f, hs in mapping.items() if hs}
     if not mapping:
-        raise NotACurve(f"{name}: none of its columns are set to be imported.")
+        raise NotACurve(f"{name} has no columns set to import.")
 
     t_col = next((i for i, c in enumerate(columns) if _TIME_HEADER.match(c.point)), 0)
     rows = [r for r in table[at + 1 :] if len(r) > t_col]
@@ -378,7 +378,7 @@ def _curve(name: str, table: Table, at: int, overrides: Mapping[str, Sequence[st
     if interval > MAX_INTERVAL:
         raise NotACurve(
             f"{name} has one row every {_span(interval)}, so it's a report of totals rather than the power "
-            "curve. History needs readings every 5 minutes: export the plant's power curve for a day or a range of days."
+            "curve. History needs readings every 5 minutes, so export the plant's power curve for a day or a range of days."
         )
 
     def column(f: str) -> list[float | None] | None:
@@ -415,9 +415,9 @@ def _curve(name: str, table: Table, at: int, overrides: Mapping[str, Sequence[st
         if sign is None:
             sign = -1
             warnings.append(
-                "The file couldn't show which way the battery column runs, so positive was taken as charging. "
-                "If the battery's history looks backwards, remove this import and choose its charging and "
-                "discharging columns by hand."
+                "The file doesn't say which way the battery column runs, so positive is taken as charging. "
+                "If the battery's history looks backwards, remove this import and pick the charging and "
+                "discharging columns yourself."
             )
         battery = [None if v is None else sign * v for v in signed_battery]
     else:

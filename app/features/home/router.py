@@ -186,7 +186,7 @@ async def get_profile(svc: ServicesDep, devices: str):
     try:
         ids = [int(x) for x in devices.split(",") if x.strip()]
     except ValueError as e:
-        raise HTTPException(status_code=422, detail="devices: device ids, comma-separated.") from e
+        raise HTTPException(status_code=422, detail="Device ids must be numbers, separated by commas.") from e
     if not ids:
         raise HTTPException(status_code=422, detail="Choose at least one device.")
     return await asyncio.to_thread(profile.profile, svc.home.repo, ids, int(time.time()))

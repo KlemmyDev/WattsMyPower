@@ -30,7 +30,7 @@ const MODELS: { value: WeatherModel; label: string; help: string }[] = [
   },
   { value: "ecmwf_ifs025", label: "ECMWF", help: "The European centre's global model." },
   { value: "gfs_seamless", label: "GFS", help: "The US weather service's global model." },
-  { value: "icon_seamless", label: "ICON", help: "Germany's weather service's global model." },
+  { value: "icon_seamless", label: "ICON", help: "The German weather service's global model." },
 ];
 
 const DIRECTIONS = [
@@ -65,7 +65,7 @@ export function WeatherLocation() {
       title="Location"
       sub={
         located === false ? (
-          "No location is set yet, so there's no forecast, and no power outages or warnings near you. Search for your suburb to set it."
+          "Without a location there's no forecast, and no power outages or warnings near you. Search for your suburb to set it."
         ) : (
           <>
             The forecast is for <b className="font-semibold text-ink">{locationLabel(system)}</b>. Search for a suburb
@@ -124,7 +124,7 @@ function Model({ status }: { status: WeatherStatus | undefined }) {
     <SettingsSection
       id="h-model"
       title="Weather model"
-      sub="Where the forecast's sunshine, cloud, rain and temperature come from. Past weather is filled in from the same model. Open-Meteo is a free public weather service: no account, and only your location is sent."
+      sub="Where the forecast's sunshine, cloud, rain and temperature come from. Past weather uses the same model. Open-Meteo is a free public weather service. It needs no account, and only your location is sent."
     >
       <Field label="Model" help={chosen.help} className="max-w-[420px]">
         <Select
@@ -167,7 +167,7 @@ function Panels() {
     save.mutate(
       { panel_tilt: t, panel_bearing: Number(bearing) },
       {
-        onSuccess: () => toast("Saved. The forecast's learning starts again for the new angle."),
+        onSuccess: () => toast("Saved. The forecast starts learning again for the new angle."),
         onError: (e) => setError(saveSettingsError(e)),
       },
     );
@@ -177,7 +177,7 @@ function Panels() {
     <SettingsSection
       id="h-panels"
       title="Your panels"
-      sub="How steep the panels are and which way they face. It's optional: the forecast learns your roof from its history either way, and this gives it a head start. Leave the tilt at 0 if you're not sure."
+      sub="How steep your panels are and which way they face. It's optional. The forecast learns your roof over time anyway, and this gives it a head start. Leave the tilt at 0 if you're not sure."
     >
       <div className="grid grid-cols-[minmax(0,200px)_minmax(0,240px)_auto] items-start justify-start gap-3 max-sm:grid-cols-1">
         <Field label="Tilt" help="Degrees from flat. Most Australian roofs are 20 to 25.">
@@ -222,7 +222,7 @@ function History({ status }: { status: WeatherStatus | undefined }) {
     <SettingsSection
       id="h-history"
       title="Weather history"
-      sub={`Each hour's weather is kept, so History can show what it was like on any day and the forecast can learn from it. It's filled in for every day with readings, including imported ones, as far back as they go (Open-Meteo's archive starts in ${status.archive_from.slice(0, 4)}).`}
+      sub={`Each hour's weather is kept so History can show any day's weather and the forecast can learn from it. Every day with readings gets its weather, imported days included, as far back as they go (Open-Meteo's archive starts in ${status.archive_from.slice(0, 4)}).`}
     >
       <div className="flex flex-col gap-1 text-sm">
         <span>
@@ -233,7 +233,7 @@ function History({ status }: { status: WeatherStatus | undefined }) {
         {!backfill.running && (
           <span className="text-ink-muted">
             {remaining
-              ? `${intAU(remaining)} ${plural(remaining, "day")} with readings ${remaining === 1 ? "has" : "have"} no weather yet. They're filled in a few months each half hour, or all at once now.`
+              ? `${intAU(remaining)} ${plural(remaining, "day")} with readings ${remaining === 1 ? "has" : "have"} no weather yet. They fill in a few months at a time every half hour, or you can fetch them all now.`
               : "Every day with readings has its weather."}
           </span>
         )}
@@ -258,8 +258,8 @@ function History({ status }: { status: WeatherStatus | undefined }) {
       )}
       {!backfill.running && days > 0 && (
         <HelpText>
-          Fetching it all again replaces the filled-in history, say after changing the weather model. Hours the forecast
-          recorded as they happened are kept.
+          Fetching it all again replaces the filled-in history, which is handy after changing the weather model. Hours
+          the forecast recorded live are kept.
         </HelpText>
       )}
       {fetchWeather.isError && <HelpText tone="bad">{errorMessage(fetchWeather.error)}</HelpText>}
@@ -275,7 +275,7 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
   const train = useMutation({
     mutationFn: retrain,
     onSuccess: () => {
-      toast("Retrained.");
+      toast("Retrained on your latest days.");
       qc.invalidateQueries({ queryKey: ["weather"] });
       qc.invalidateQueries({ queryKey: ["forecast"] });
     },
@@ -288,14 +288,14 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
   const recent = accuracy.days.slice(-7).reverse();
 
   const state = !on
-    ? "Off: the forecast uses the plain model, fitted on the last week."
+    ? "Off. The forecast uses the plain model, fitted to the last week."
     : learning.in_use
       ? `In use, learned from ${intAU(learning.days)} ${plural(learning.days, "day")} of weather and solar.`
       : !tested
         ? "Not in use yet. It needs a few weeks of days with both readings and weather to learn from and test on."
         : b.days < learning.min_days
-          ? `Not in use yet: it's been tested on ${b.days} ${plural(b.days, "day")} so far, and needs ${learning.min_days}.`
-          : "Not in use: the plain forecast has been closer so far. It's tested again every day.";
+          ? `Not in use yet. It's been tested on ${b.days} ${plural(b.days, "day")} so far and needs ${learning.min_days}.`
+          : "Not in use, because the plain forecast has been closer so far. It's tested again every day.";
 
   return (
     <SettingsSection
@@ -324,9 +324,9 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
         </span>
         {tested && (
           <span className="text-ink-muted">
-            Tested on the last {b.days} {plural(b.days, "day")}: out by {kWh(b.learned_mae)} a day on average, against{" "}
-            {kWh(b.simple_mae)} for the plain forecast
-            {b.actual_mean ? `, on days averaging ${kWh(b.actual_mean)}` : ""}.
+            Tested on the last {b.days} {plural(b.days, "day")}, it was out by {kWh(b.learned_mae)} a day on average,
+            versus {kWh(b.simple_mae)} for the plain forecast
+            {b.actual_mean ? ` (on days averaging ${kWh(b.actual_mean)})` : ""}.
           </span>
         )}
         {learning.trained_at && (
@@ -343,8 +343,8 @@ function Learning({ status }: { status: WeatherStatus | undefined }) {
         <span className="text-[13px] font-semibold">The day-ahead forecast</span>
         {accuracy.mae_kwh == null ? (
           <HelpText>
-            Each day's forecast is kept as it stood the day before, to measure it against what the panels made. The
-            first comparison shows after a full day.
+            Each day's forecast is saved the day before, then compared with what your panels made. The first comparison
+            shows after a full day.
           </HelpText>
         ) : (
           <>
@@ -401,13 +401,13 @@ export function WeatherSettings() {
         title="Weather"
         sub={
           <>
-            Open-Meteo's hourly forecast for {locationLabel(system)}: sunshine, cloud, rain and temperature, for the
-            solar forecast.{updated && ` ${updated}.`}
+            Open-Meteo's hourly sunshine, cloud, rain and temperature for {locationLabel(system)}. The solar forecast is
+            built on it.{updated && ` ${updated}.`}
           </>
         }
       />
       {status?.error && (
-        <p className="m-0 text-sm text-bad">{status.error}. The last forecast stored is shown meanwhile.</p>
+        <p className="m-0 text-sm text-bad">{status.error}. Showing the last saved forecast until it's back.</p>
       )}
       <WeatherLocation />
       <div className="grid gap-5 xl:grid-cols-2">

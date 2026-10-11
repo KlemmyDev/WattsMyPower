@@ -155,7 +155,7 @@ export function BatteryToday({
           sub={
             cap && discharged
               ? `About ${(discharged / cap).toFixed(1)} of a full cycle so far`
-              : "What went into the battery and what came out"
+              : "Where its charge came from and where it went"
           }
         />
         {eta && eta.h > 0 && eta.h < 48 && (
@@ -187,7 +187,7 @@ export function BatteryToday({
         <Split
           total={discharged}
           parts={[
-            { key: "home", label: "To the house", kwh: home, color: COLOR.teal },
+            { key: "home", label: "To your home", kwh: home, color: COLOR.teal },
             { key: "out", label: "To the grid", kwh: out, color: COLOR.export },
           ]}
         />
@@ -249,7 +249,7 @@ export function BatteryBackup({
         <TitleBlock
           className="min-w-0 flex-1"
           title="If the grid went down"
-          sub="How long the battery would keep the house going from now, with no solar, down to its reserve"
+          sub="How long it would run your home with no solar, down to the reserve"
         />
         <Corner label="Usable now">{usable != null ? kWh(usable) : DASH}</Corner>
       </div>
@@ -272,7 +272,7 @@ export function BatteryBackup({
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
-        <span>Only with backup power wired in. Reserve {pct(reserve)} kept back.</span>
+        <span>Needs backup power wired in. Keeps {pct(reserve)} in reserve.</span>
         {level && (
           <Link to="/grid" className="flex items-center gap-1.5 text-ink-muted no-underline hover:text-ink">
             <i aria-hidden className="size-1.5 rounded-full" style={{ background: LEVEL[level].color }} />
@@ -321,9 +321,9 @@ export function BatteryReadings({
           title="Readings"
           sub={
             hot
-              ? "Running warm: it may hold back its rate until it cools"
+              ? "Running warm, so it may slow down until it cools"
               : cold
-                ? "Cold: it may charge slowly until it warms up"
+                ? "Cold, so it may charge slowly until it warms up"
                 : "What the battery reports, and its temperature through today"
           }
         />
@@ -361,8 +361,8 @@ export function BatteryReadings({
       )}
       {vs.length > 1 && (
         <span className="text-xs text-ink-faint">
-          {Math.round(Math.min(...vs))} to {Math.round(Math.max(...vs))}°C today. Batteries last longest kept between
-          about 15 and 35°C.
+          {Math.round(Math.min(...vs))} to {Math.round(Math.max(...vs))}°C today. Batteries last longest between about
+          15 and 35°C.
         </span>
       )}
     </Card>
@@ -395,7 +395,7 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
         <TitleBlock
           className="min-w-0 flex-1"
           title={`Last ${days.length} days`}
-          sub={`${kWh(out)} delivered, ${kWh(out / days.length)} a day`}
+          sub={`${kWh(out)} delivered · ${kWh(out / days.length)} a day`}
         />
         {cap ? <Corner label="Cycles a day">{(out / days.length / cap).toFixed(2)}</Corner> : null}
       </div>

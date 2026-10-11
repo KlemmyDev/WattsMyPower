@@ -27,7 +27,7 @@ export const billSpread = (v: number) => Math.max(10, Math.abs(v) * 0.12);
 export function basisNote(basis: Basis): string {
   if (basis === "last_year") return "Estimated from your usage in the same months last year, at your current rates";
   if (basis === "mixed")
-    return "Estimated from the same months last year where there's data, otherwise your last 30 days, at your current rates";
+    return "Estimated from the same months last year where there's data, or your last 30 days, at your current rates";
   return "Estimated from your average day over the last 30 days, at your current rates";
 }
 

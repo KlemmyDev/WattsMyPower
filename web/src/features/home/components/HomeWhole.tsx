@@ -184,7 +184,7 @@ export function HomeTodayCard({
           title="Today against a usual day"
           sub={
             f?.load_basis
-              ? `The usual day is the last ${f.load_basis.window_days} days' home use, hour by hour`
+              ? `Usual is your average over the last ${f.load_basis.window_days} days, hour by hour`
               : "Home use through the day"
           }
         />
@@ -309,7 +309,7 @@ export function HomeDaysCard({ days }: { days: DataDay[] }) {
         <TitleBlock
           className="min-w-0 flex-1"
           title={`Last ${whole.length} days`}
-          sub={`${kWh(avg(whole))} a day. The biggest was ${shortDay.format(parseYmd(biggest.key))}, ${kWh(biggest.home)}`}
+          sub={`${kWh(avg(whole))} a day · biggest ${kWh(biggest.home)} on ${shortDay.format(parseYmd(biggest.key))}`}
         />
         <div className="flex gap-6">
           {[

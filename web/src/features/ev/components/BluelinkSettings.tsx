@@ -166,7 +166,7 @@ export function BluelinkSettings() {
         back={<BackLink to="/integrations/ev">Electric vehicles</BackLink>}
         id="h-bl"
         title="Hyundai and Kia"
-        sub="See each car's charge on the EV page, and charge it from spare solar, as a Tesla is."
+        sub="See each car's charge on the EV page and charge it from spare solar."
       />
       <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
         <ReachTag reach="cloud" />
@@ -178,7 +178,7 @@ export function BluelinkSettings() {
         <SettingsSection
           id="h-bl-connect"
           title="Connect your Hyundai or Kia"
-          sub="Ioniq 5, Ioniq 6, Kona Electric, EV6, EV9, EV5, Niro EV and the other electric cars and plug-in hybrids in the Bluelink or Kia Connect app. The dashboard reaches them through the maker's cloud, as the app does: these cars can't be reached on the home network or over Bluetooth."
+          sub="Ioniq 5, Ioniq 6, Kona Electric, EV6, EV9, EV5, Niro EV and any other electric car or plug-in hybrid in the Bluelink or Kia Connect app. The dashboard reaches them through the maker's cloud, like the app does. These cars can't be reached on your home network or over Bluetooth."
         >
           <BluelinkConnect status={status} />
         </SettingsSection>
@@ -189,7 +189,7 @@ export function BluelinkSettings() {
             <SettingsSection
               id="h-bl-signin"
               title="Sign in again"
-              sub={`${status.error ?? "The email and password are no longer accepted."} The cars aren't read until they are.`}
+              sub={`${status.error ?? "The email and password are no longer accepted."} The cars won't be read until you sign in again.`}
             >
               <BluelinkConnect status={status} />
             </SettingsSection>
@@ -199,7 +199,7 @@ export function BluelinkSettings() {
           <SettingsSection
             id="h-bl-cars"
             title="Cars"
-            sub="Each car's state is read from the cloud every 15 minutes (every 5 while it could charge from solar). How it charges is set on its EV page."
+            sub="Each car is read from the cloud every 15 minutes (every 5 while it could charge from solar). Set how it charges on its EV page."
           >
             {status.vehicles.length > 0 ? (
               <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
@@ -217,14 +217,14 @@ export function BluelinkSettings() {
       <SettingsSection
         id="h-bl-about"
         title="What it can do"
-        sub="It reads each car's charge, range, plug and charging, time to full, charge limit and where it's parked, and on its EV page it can charge it from spare solar: start it once there's been enough spare sun for its charger for a while, stop it once there hasn't, with the same choices and timing as a Tesla. Hyundai's and Kia's clouds can start and stop a charge and set the charge limit (in tens of percent), but can't set how fast it charges, so the car always charges at what its charger gives: choose your charger on its EV page, as solar charging only starts once that much is spare."
+        sub="It reads each car's charge, range, plug and charging state, time to full, charge limit and where it's parked. On its EV page it can charge from spare solar, with the same choices and timing as a Tesla. It starts a charge once there's been enough spare sun for its charger for a while, and stops once there hasn't. Hyundai's and Kia's clouds can start and stop a charge and set the charge limit (in tens of percent), but can't set the charging speed. So the car always charges at what its charger gives. Choose your charger on its EV page, since solar charging only starts once that much is spare."
       >
         {null}
       </SettingsSection>
       <SettingsSection
         id="h-bl-limits"
         title="Worth knowing"
-        sub="Everything goes through Hyundai's or Kia's cloud, as their apps do: there's no public API, so it could stop working if they change it, and a passing outage there pauses solar charging. The cloud only knows what the car last sent it, so the dashboard asks the car itself now and then by day (it wakes the car's modem and draws a little on its 12 V battery: choose how often, or never, on the car's EV page). Too many requests in a day and the cloud refuses more for a while. Genesis isn't supported yet: in Australia it has its own app and servers. It hasn't been tried on a real Hyundai or Kia yet: if anything looks off, an issue saying so gets it checked."
+        sub="Everything goes through Hyundai's or Kia's cloud, like their apps. There's no public API, so it could stop working if they change it, and an outage there pauses solar charging. The cloud only knows what the car last sent it, so by day the dashboard asks the car itself now and then. That wakes the car's modem and draws a little on its 12 V battery (choose how often, or never, on the car's EV page). Too many requests in a day and the cloud refuses more for a while. Genesis isn't supported yet, as in Australia it has its own app and servers. It hasn't been tried on a real Hyundai or Kia yet, so if anything looks off, open an issue and it'll get checked."
       >
         {null}
       </SettingsSection>

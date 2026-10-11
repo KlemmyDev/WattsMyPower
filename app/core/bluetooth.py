@@ -33,14 +33,14 @@ RADIO_LOCK = threading.Lock()
 APART = sys.platform == "darwin"  # each conversation in a process of its own (see above)
 
 REFUSED = (
-    "macOS stopped the dashboard using Bluetooth. Allow Bluetooth for the app it runs from (System Settings → Privacy "
+    "macOS blocked the dashboard from using Bluetooth. Allow Bluetooth for the app it runs from (System Settings → Privacy "
     "& Security → Bluetooth), or run it on a Linux server."
 )
 
 
 FIX_DOCKER = (
-    "On the server, run bash install.sh again in the WattsMyPower folder: it connects Bluetooth through to the "
-    "dashboard when it finds an adapter with BlueZ running (and says what's missing when it doesn't)."
+    "On the server, run bash install.sh again in the WattsMyPower folder. It connects Bluetooth to the dashboard "
+    "if it finds an adapter with BlueZ running, and tells you what's missing if it doesn't."
 )
 
 
@@ -49,8 +49,8 @@ def unavailable(e: BaseException) -> str:
     if isinstance(e, FileNotFoundError):  # no D-Bus socket: in Docker, the host's isn't mounted in
         return f"The dashboard can't reach this server's Bluetooth (there's no D-Bus to talk to BlueZ). {FIX_DOCKER}"
     return (
-        f"This server's Bluetooth can't be used ({type(e).__name__}: {e}). It needs a Bluetooth adapter, switched on, "
-        f"with BlueZ running. {FIX_DOCKER}"
+        f"This server's Bluetooth can't be used ({type(e).__name__}: {e}). It needs a Bluetooth adapter that's "
+        f"switched on, with BlueZ running. {FIX_DOCKER}"
     )
 
 

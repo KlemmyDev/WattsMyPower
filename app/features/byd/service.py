@@ -50,7 +50,7 @@ def car_status(car: dict[str, Any]) -> tuple[str, str]:
     """What a car's doing, as a status the EV page colours (charging, complete, stopped, unknown) and in a sentence."""
     s = car.get("state")
     if not s:
-        return "unknown", "Not read yet: BYD hasn't had an answer from the car."
+        return "unknown", "Not read yet. BYD hasn't heard from the car."
     if s.get("charging"):
         m = s.get("minutes_to_full")
         return "charging", f"Charging, full in {_duration(m)}." if m else "Charging."

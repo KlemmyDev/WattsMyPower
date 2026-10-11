@@ -50,7 +50,7 @@ TIMEOUT = 20
 # (method, url, headers, body, timeout) -> the decoded JSON answer. Raises as urllib does.
 Transport = Callable[[str, str, dict[str, str], bytes | None, float], Any]
 
-UNREACHABLE = "Electrolux couldn't be reached. Check the server's internet connection; it'll try again shortly."
+UNREACHABLE = "Electrolux couldn't be reached. Check the server's internet connection. Trying again shortly."
 NEW_TOKENS = (
     "Get new tokens at developer.electrolux.one (Dashboard → GET ACCESS TOKEN) and sign in again here with them."
 )
@@ -109,19 +109,21 @@ class ElectroluxClient:
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 raise IntegrationError(
-                    "Electrolux is limiting requests for now. It'll try again later.", retry_after=_retry_after(e)
+                    "Electrolux is limiting requests for now. Trying again later.", retry_after=_retry_after(e)
                 ) from e
             if e.code in (400, 401, 403):
                 raise IntegrationError(
-                    f"Electrolux didn't accept the refresh token (it may have been used already, or the API key "
-                    f"changed). {NEW_TOKENS}",
+                    f"Electrolux didn't accept the refresh token. It might have been used already, or the API key "
+                    f"changed. {NEW_TOKENS}",
                     signed_out=True,
                 ) from e
-            raise IntegrationError(f"Electrolux had a problem ({e.code}). It'll try again shortly.") from e
+            raise IntegrationError(f"Electrolux had a problem ({e.code}). Trying again shortly.") from e
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise IntegrationError(UNREACHABLE) from e
         if not isinstance(answer, dict) or not answer.get("accessToken"):
-            raise IntegrationError("Electrolux answered the token refresh strangely. It'll try again shortly.")
+            raise IntegrationError(
+                "Electrolux sent back something unexpected when refreshing the token. Trying again shortly."
+            )
         access = str(answer["accessToken"])
         expires_in = answer.get("expiresIn")
         expires_at = token_expiry(access)
@@ -155,7 +157,7 @@ class ElectroluxClient:
                 return self._get(path, again=False)
             if e.code == 401:
                 raise IntegrationError(
-                    f"Electrolux didn't accept the API key and access token. Check the API key; if it's right, "
+                    f"Electrolux didn't accept the API key and access token. Check the API key. If it's right, "
                     f"{NEW_TOKENS[0].lower()}{NEW_TOKENS[1:]}",
                     signed_out=True,
                 ) from e
@@ -167,13 +169,12 @@ class ElectroluxClient:
                 ) from e
             if e.code == 429:
                 raise IntegrationError(
-                    "Electrolux is limiting requests for now (its free tier allows 5,000 a day). It'll try again "
-                    "later.",
+                    "Electrolux is limiting requests for now (its free tier allows 5,000 a day). Trying again later.",
                     retry_after=_retry_after(e),
                 ) from e
             if e.code in (403, 404):
                 raise IntegrationError("Electrolux doesn't have that appliance on the account any more.") from e
-            raise IntegrationError(f"Electrolux had a problem ({e.code}). It'll try again shortly.") from e
+            raise IntegrationError(f"Electrolux had a problem ({e.code}). Trying again shortly.") from e
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise IntegrationError(UNREACHABLE) from e
 
@@ -185,7 +186,7 @@ class ElectroluxClient:
         """Every appliance on the account: [{"applianceId", "applianceName", "applianceType", "created"}]."""
         answer = self._get(APPLIANCES)
         if not isinstance(answer, list):
-            raise IntegrationError("Electrolux answered with something unexpected. It'll try again shortly.")
+            raise IntegrationError("Electrolux sent back something unexpected. Trying again shortly.")
         return [a for a in answer if isinstance(a, dict) and a.get("applianceId")]
 
     def info(self, appliance_id: str) -> dict[str, Any]:

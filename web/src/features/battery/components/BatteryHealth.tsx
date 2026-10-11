@@ -29,7 +29,7 @@ export function BatteryHealth({
       "Full cycles since install",
       L.cycles == null
         ? null
-        : `${L.cycles.toLocaleString("en-AU")}${perDay != null ? `, about ${perDay.toFixed(1)} a day lately` : ""}`,
+        : `${L.cycles.toLocaleString("en-AU")}${perDay != null ? ` · about ${perDay.toFixed(1)} a day lately` : ""}`,
     ],
     ["Average daily depth of discharge", B.avg_swing != null ? pct(B.avg_swing) : null],
     ["Round-trip efficiency", L.round_trip_pct != null ? pct(L.round_trip_pct) : null],
@@ -115,7 +115,7 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
         <Link to="/settings/cost" className="text-link">
           Settings → Cost and warranty
         </Link>{" "}
-        to track how much of it is used.
+        to see how much of it you've used.
       </Muted>
     );
   const bars: [label: string, used: number, note: string][] = [];
@@ -127,7 +127,8 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
     ]);
   if (w.energy_pct != null && w.mwh)
     bars.push(["Warranty energy", w.energy_pct, `${w.used_mwh} of ${w.mwh} MWh delivered`]);
-  if (!bars.length) return <Muted>Add when the battery was installed in Settings to track its warranty years.</Muted>;
+  if (!bars.length)
+    return <Muted>Add the battery's install date in Settings to see how many warranty years you've used.</Muted>;
   return (
     <div className="flex flex-col gap-3">
       <Eyebrow>Warranty used</Eyebrow>

@@ -21,14 +21,14 @@ export function BestTimes({ times, today }: { times: ReturnType<typeof bestTimes
       title: `${span(w)}: use spare solar`,
       sub:
         `About ${kWh(w.kwh)} of solar would go to the grid${w.rate == null ? "" : ` for ${priceLabel(w.rate)}/kWh`}. ` +
-        "Run the dishwasher, washing machine, dryer or pool pump then.",
+        "A good time for the dishwasher, washing machine, dryer or pool pump.",
     })),
     ...paid.map((w) => ({
       w,
       icon: "dollar" as const,
       color: COLOR.good,
       title: `${span(w)}: paid to use power`,
-      sub: `Amber's price is below zero${w.rate == null ? "" : ` (${priceLabel(w.rate)}/kWh)`}, so this is the time for big loads.`,
+      sub: `Amber's price drops below zero${w.rate == null ? "" : ` (${priceLabel(w.rate)}/kWh)`}, so you're paid to run big loads.`,
     })),
     ...avoid.map((w) => ({
       w,
@@ -45,7 +45,7 @@ export function BestTimes({ times, today }: { times: ReturnType<typeof bestTimes
     return (
       <div className="text-sm text-ink-muted">
         {today ? "For the rest of today" : "On this day"}, no spare solar or costly grid hours are forecast. Use power
-        whenever suits.
+        whenever suits you.
       </div>
     );
   return (

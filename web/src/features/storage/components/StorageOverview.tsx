@@ -15,7 +15,7 @@ const KINDS = [
   { id: "readings", name: "Readings", color: COLOR.battery },
   { id: "weather", name: "Weather and forecast", color: COLOR.solar },
   { id: "prices", name: "Electricity prices", color: COLOR.lilac },
-  { id: "other", name: "Settings and the rest", color: COLOR.gridSoft },
+  { id: "other", name: "Settings and everything else", color: COLOR.gridSoft },
   { id: "overhead", name: "Logs and empty pages", color: COLOR.bar },
 ] as const;
 
@@ -58,7 +58,7 @@ function RoomBar({ parts, total }: { parts: Slice[]; total: number }) {
   const lit = (k: Kind) => hover == null || hover === k;
   return (
     <div className="flex flex-col gap-3" {...plot}>
-      <div className="flex h-2.5 gap-0.5" role="img" aria-label="What takes the room in the databases">
+      <div className="flex h-2.5 gap-0.5" role="img" aria-label="What's using space in the databases">
         {parts.map((p) => (
           <span
             key={p.id}
@@ -157,7 +157,7 @@ export function StorageSummary({
   return (
     <SettingsSection
       id="h-storage"
-      title="What takes the room"
+      title="What's using the space"
       sub="Everything stays on this server, in two SQLite databases."
       aside={
         <Button variant="outline" size="sm" onClick={onMeasure} disabled={measuring}>
@@ -174,11 +174,11 @@ export function StorageSummary({
       <RoomBar parts={slices(dbs)} total={total} />
       <OptionList>
         <Fact label="Rows stored">{compact(rows)}</Fact>
-        <Fact label="Empty pages" help="Left by deleted rows, and used again as rows are added.">
+        <Fact label="Empty pages" help="Space left by deleted rows. It gets reused as new data comes in.">
           {bytes(empty)}
         </Fact>
         <div>
-          <Fact label="Growing by" help="A month, at this week's rate.">
+          <Fact label="Growing by" help="Per month, at this week's rate.">
             {growth > 0 ? bytes(growth * 30) : "Not growing"}
           </Fact>
           {growth > 0 && <Projection now={total} perDay={growth} />}

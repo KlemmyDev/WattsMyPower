@@ -101,7 +101,7 @@ export function BluelinkConnect({
       <HelpText>
         {status.mock
           ? "Mock mode: any email and password connects a made-up 2023 Ioniq 5."
-          : `The ones you sign in to the ${app} app with, and the 4-digit PIN it asks for before a command. Newer cars (an Ioniq 5 from 2024, an EV9, an EV5…) need the PIN to start and stop charging; older ones don't. They're kept on this server and only ever sent to ${brand === "kia" ? "Kia" : "Hyundai"}.`}
+          : `Use the ones you sign in to the ${app} app with, plus the 4-digit PIN it asks for before a command. Newer cars (like a 2024 Ioniq 5, EV9 or EV5) need the PIN to start and stop charging. Older ones don't. They stay on this server and are only ever sent to ${brand === "kia" ? "Kia" : "Hyundai"}.`}
       </HelpText>
       {connect.isError && <HelpText tone="bad">{errorMessage(connect.error)}</HelpText>}
       <Button type="submit" size="sm" className="self-start" disabled={!ready || connect.isPending}>

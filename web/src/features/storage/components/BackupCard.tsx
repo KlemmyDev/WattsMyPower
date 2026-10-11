@@ -41,7 +41,7 @@ export function BackupCard({ report }: { report: StorageReport }) {
       sub:
         collector != null
           ? "The collector's raw inverter readings too. Bigger, so it takes longer."
-          : "The collector's isn't available right now, so only the dashboard's would be in it.",
+          : "The collector's database can't be read right now, so only the dashboard's would be included.",
       icon: "pulse" as const,
     },
   ];

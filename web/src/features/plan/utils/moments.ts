@@ -30,7 +30,12 @@ export function moments(
   if (fullAt != null && fullAt < end)
     out.push(
       fullAt <= now
-        ? { t: fullAt, title: "Battery filled", sub: "Extra solar has gone to the grid since", color: COLOR.battery }
+        ? {
+            t: fullAt,
+            title: "Battery filled",
+            sub: "Extra solar has been going to the grid since",
+            color: COLOR.battery,
+          }
         : { t: fullAt, title: "Battery full", sub: "Extra solar goes to the grid", color: COLOR.battery },
     );
 

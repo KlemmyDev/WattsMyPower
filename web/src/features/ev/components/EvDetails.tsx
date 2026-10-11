@@ -72,7 +72,9 @@ function Group<T>({
         </span>
       </div>
       {!group && (
-        <p className="m-0 mt-2 text-[13px] text-ink-muted">Read the next time the car's awake, or with Refresh.</p>
+        <p className="m-0 mt-2 text-[13px] text-ink-muted">
+          Fills in next time the car's awake, or when you tap Refresh.
+        </p>
       )}
       {group?.refused && <p className="m-0 mt-2 text-[13px] text-ink-muted">{group.refused}.</p>}
       {group?.data && <div className="[&>div:last-child]:border-b-0">{children(group.data)}</div>}
@@ -139,7 +141,7 @@ function Groups({ d, now }: { d: Details; now: number }) {
             <DataRow label="The charger offers">{c.pilot_amps ? `${c.pilot_amps} A` : "—"}</DataRow>
             <DataRow label="Cable">{c.cable ?? "—"}</DataRow>
             <DataRow label="Port latch">{c.latch ?? "—"}</DataRow>
-            <DataRow label="To its limit">
+            <DataRow label="Time to limit">
               {c.minutes_to_limit ? `${Math.floor(c.minutes_to_limit / 60)} h ${c.minutes_to_limit % 60} min` : "—"}
             </DataRow>
             <DataRow label="Usable charge">{pct(c.usable_soc)}</DataRow>
@@ -258,8 +260,8 @@ export function EvDetails({ vin, name, className }: { vin: string; name: string;
           title="Car details"
           sub={
             d?.provider === "bluetooth"
-              ? "Read while the car's awake, every 15 minutes; never woken just for these"
-              : "As Tessie last had them; never woken just for these"
+              ? "Read every 15 minutes while the car's awake. It's never woken just for these."
+              : "From Tessie's latest read. The car's never woken just for these."
           }
         />
         {!askingNow && (
@@ -268,7 +270,7 @@ export function EvDetails({ vin, name, className }: { vin: string; name: string;
             size="sm"
             disabled={refresh.isPending || !d}
             onClick={() => (sleepy ? setAsking(true) : run(false))}
-            title={sleepy ? "The car's asleep: you'll be asked before it's woken" : "Read everything now"}
+            title={sleepy ? "The car's asleep. You'll be asked before it's woken." : "Read everything now"}
           >
             {refresh.isPending ? "Reading…" : sleepy ? "Refresh…" : "Refresh"}
           </Button>
@@ -277,8 +279,8 @@ export function EvDetails({ vin, name, className }: { vin: string; name: string;
       {askingNow && (
         <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1 text-pretty">
-            <b className="font-semibold">{name} is asleep.</b> Reading its details wakes it, and it then stays awake for
-            a while, using a little power. Its locks and doors (below) are already current.
+            <b className="font-semibold">{name} is asleep.</b> Reading its details wakes it, and it stays awake for a
+            while using a little power. Its locks and doors (below) are already up to date.
           </span>
           <span className="flex items-center gap-3">
             <Button size="sm" disabled={refresh.isPending} onClick={() => run(true)}>
@@ -302,7 +304,7 @@ export function EvDetails({ vin, name, className }: { vin: string; name: string;
       )}
       {d?.overrides_solar && (
         <Notice tone="warn">
-          {d.overrides_solar}. When it does, the dashboard leaves it charging and puts it on hold until it's unplugged.
+          {d.overrides_solar}. When it does, the dashboard leaves it charging and takes over again once it's unplugged.
           Turn it off in the car (Charging → Schedule) to charge from spare solar only.
         </Notice>
       )}

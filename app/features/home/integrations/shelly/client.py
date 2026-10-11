@@ -111,7 +111,7 @@ class ShellyClient:
         try:
             answer = json.loads(body) if body else None
         except ValueError as e:
-            raise ShellyError(f"{self.host} answered with something that isn't a Shelly's.") from e
+            raise ShellyError(f"{self.host} sent back something that isn't from a Shelly.") from e
         if status != 200:
             message = answer.get("message") if isinstance(answer, dict) else None
             raise ShellyError(f"{self.host} answered {status}" + (f": {message}" if message else "") + ".")

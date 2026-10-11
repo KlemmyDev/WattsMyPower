@@ -170,7 +170,7 @@ function Account({ integration }: { integration: HomeIntegration }) {
             <HelpText tone={disconnect.isError ? "bad" : undefined}>
               {disconnect.isError
                 ? errorMessage(disconnect.error)
-                : `Its devices, and everything they've used and every run recorded, are removed from this server. To change the account or its password, sign in again instead: that keeps them.`}
+                : `This removes its devices, their usage history and every recorded run from this server. To change the account or password, use Sign in again instead. That keeps everything.`}
             </HelpText>
           </div>
         )}
@@ -221,16 +221,16 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
           <div className="flex flex-col gap-4">
             {integration.id === "connectlife" && (
               <Notice tone="info">
-                ConnectLife has no public API: this reads it the way its app does, so a change on Hisense's side can
-                stop it working until it's updated here. Washers and dryers report each cycle's energy once it's
-                finished, not their power as they run.
+                ConnectLife has no public API, so this reads it the way the Hisense app does. A change on Hisense's side
+                could break it until WattsMyPower is updated. Washers and dryers report each cycle's energy when it
+                finishes, not their power while they run.
               </Notice>
             )}
             {integration.id === "electrolux" && (
               <Notice tone="info">
-                Electrolux, AEG and +home appliances only talk to Electrolux's cloud (there's no way to reach them on
-                your network), so this needs the internet. It only reads them. They don't report their power: a fridge
-                shows its temperatures, doors and alerts, and the rest show when they run.
+                Electrolux, AEG and +home appliances only talk to Electrolux's cloud, so this needs the internet. It's
+                read-only. They don't report their power. A fridge shows its temperatures, doors and alerts, and the
+                others show when they run.
               </Notice>
             )}
             <SignInForm integration={integration} />
@@ -241,7 +241,7 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
         <SettingsSection
           id="h-home-account"
           title="Account"
-          sub="How it's signed in, and how it's going."
+          sub="How it's signed in, and whether it's updating."
           aside={<ReachTag reach={integrationReach(integration)} />}
         >
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
@@ -255,7 +255,7 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
           title="Devices"
           sub={
             devices.length
-              ? "Open one to name it, say what it is (a smart plug as the appliance it powers), put it in a group, or leave it out of the breakdown."
+              ? "Open a device to rename it, set what it is (say, the appliance a plug powers), group it or leave it out of the breakdown."
               : "Its devices appear here after the first reading, within a minute or so."
           }
         >

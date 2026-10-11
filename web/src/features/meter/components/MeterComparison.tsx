@@ -27,13 +27,7 @@ function Figure({ meter, dashboard, diff }: { meter: number; dashboard: number |
 }
 
 function DayRow({ day }: { day: ReconcileDay }) {
-  const note = !day.complete
-    ? "Part of the day"
-    : day.notable
-      ? "Differs"
-      : day.estimated > 0
-        ? "Includes estimates"
-        : "";
+  const note = !day.complete ? "Partial day" : day.notable ? "Differs" : day.estimated > 0 ? "Includes estimates" : "";
   return (
     <div className={`${COLUMNS} items-center py-2.5 text-[13px]`}>
       <div className="flex flex-col">
@@ -95,13 +89,13 @@ export function MeterComparison() {
         <SettingsTitle
           id="h-compare"
           title="Meter and dashboard compared"
-          sub={`Grid import and export each day from ${s.first && s.last ? ymdSpan(s.first, s.last) : DASH}, as your meter and the inverter counted them`}
+          sub={`Daily grid import and export from ${s.first && s.last ? ymdSpan(s.first, s.last) : DASH}, as counted by your meter and by the inverter`}
         />
       </div>
       <div className="flex flex-col gap-4 border-b border-line-subtle px-6 py-5 max-sm:px-4">
         {s.compared_days === 0 ? (
           <span className="text-[13px] text-ink-muted">
-            There are no full days with both meter data and inverter readings to compare yet.
+            Nothing to compare yet. You'll need a full day with both meter data and inverter readings.
           </span>
         ) : (
           <>

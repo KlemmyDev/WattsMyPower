@@ -98,7 +98,7 @@ function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: string })
         <div className="flex max-w-[260px] flex-col items-end gap-2 text-right">
           <span className="text-[13px] text-pretty text-ink-muted">
             {guarded
-              ? `It's set as a ${kindLabel.toLowerCase()}: switched off, it stops keeping food cold.`
+              ? `It's set as a ${kindLabel.toLowerCase()}. Switched off, it stops keeping food cold.`
               : `Switch ${device.name} off?`}
           </span>
           <div className="flex items-center gap-2">
@@ -194,9 +194,8 @@ function Use({
         {best && <BestTimeLine best={best} />}
         {saving && saving.saved >= 0.5 && (
           <span>
-            At each day's best time, its last {saving.runs} runs would have cost{" "}
-            <b className="font-medium text-ink">{money(saving.saved)} less</b> (around {hourLabel(saving.best_hour)}{" "}
-            rather than {hourLabel(saving.usual_hour)}).
+            Running around {hourLabel(saving.best_hour)} instead of {hourLabel(saving.usual_hour)} would have saved{" "}
+            <b className="font-medium text-ink">{money(saving.saved)}</b> on its last {saving.runs} runs.
           </span>
         )}
       </div>
@@ -255,7 +254,7 @@ function RuleLine({ device }: { device: HomeDevice }) {
         {!r.enabled
           ? "Its spare-solar rule is off"
           : paused
-            ? "Runs on spare solar, but switched by hand: it waits until tomorrow"
+            ? "Switched by hand, so its spare-solar rule waits until tomorrow"
             : ["Runs on spare solar", last].filter(Boolean).join(" · ")}
       </span>
     </div>

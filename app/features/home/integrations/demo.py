@@ -102,8 +102,8 @@ class Demo(Integration):
     name = "Demo appliances"
     via = "made-up readings"
     about = (
-        "A washer, dryer, fridge, TV and a bedroom battery that follow the clock, for trying the Home page without an "
-        "account."
+        "A pretend washer, dryer, fridge, TV and bedroom battery that run through the day. Try the Home page before "
+        "connecting anything real."
     )
     icon = "flask"
     category = "appliances"

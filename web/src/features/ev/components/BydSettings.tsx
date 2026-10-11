@@ -139,7 +139,7 @@ export function BydSettings() {
         <SettingsSection
           id="h-byd-connect"
           title="Connect your BYD"
-          sub="Atto 3, Dolphin, Seal, Sealion, Shark and the other BYDs in the BYD app. The dashboard reads them through BYD's cloud, as the app does: BYD's cars can't be reached on the home network or over Bluetooth."
+          sub="Atto 3, Dolphin, Seal, Sealion, Shark and any other BYD in the BYD app. The dashboard reads them through BYD's cloud, like the app does. BYDs can't be reached on your home network or over Bluetooth."
         >
           <BydConnect status={status} />
         </SettingsSection>
@@ -150,7 +150,7 @@ export function BydSettings() {
             <SettingsSection
               id="h-byd-signin"
               title="Sign in again"
-              sub={`${status.error ?? "BYD no longer accepts the email and password."} The cars aren't read until it does.`}
+              sub={`${status.error ?? "BYD no longer accepts the email and password."} The cars won't be read until you sign in again.`}
             >
               <BydConnect status={status} />
             </SettingsSection>
@@ -160,7 +160,7 @@ export function BydSettings() {
           <SettingsSection
             id="h-byd-cars"
             title="Cars"
-            sub="Each car is asked for its state every 10 minutes (every 5 while it's charging). A car out of mobile coverage keeps what it said last."
+            sub="Each car is checked every 10 minutes (every 5 while it's charging). A car out of mobile coverage shows what it last sent."
           >
             {status.vehicles.length > 0 ? (
               <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
@@ -178,7 +178,7 @@ export function BydSettings() {
       <SettingsSection
         id="h-byd-about"
         title="It only reads the cars"
-        sub="BYD's cloud can start a charge but can't stop one or set the current, so charging from spare solar isn't offered for a BYD: it would start the car with no way to slow it when a cloud passes. The dashboard never sends anything to the cars. BYD has no public API, so this reads the cloud the way the BYD app does, and could stop working if BYD changes it. It hasn't been tried on a real BYD yet: if anything looks off, an issue saying so gets it checked."
+        sub="BYD's cloud can start a charge but can't stop one or set the current. So solar charging isn't offered for a BYD, as there'd be no way to slow it when a cloud passes. The dashboard never sends anything to the cars. BYD has no public API, so this reads the cloud the way the BYD app does, and could stop working if BYD changes it. It hasn't been tried on a real BYD yet, so if anything looks off, open an issue and it'll get checked."
       >
         {null}
       </SettingsSection>

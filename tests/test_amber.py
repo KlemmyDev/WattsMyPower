@@ -156,13 +156,13 @@ def test_client_errors_are_readable() -> None:
     with pytest.raises(AmberError) as limited:
         AmberClient(KEY, FakeFetch(error=_http_error(429, RateLimit_Reset="120", RateLimit_Remaining="0"))).sites()
     assert (limited.value.status, limited.value.retry_after) == (429, 120)
-    with pytest.raises(AmberError, match="could not be reached"):
+    with pytest.raises(AmberError, match="Can't reach Amber"):
         AmberClient(KEY, FakeFetch(error=urllib.error.URLError("no route"))).sites()
 
 
 def test_client_only_puts_site_ids_it_trusts_in_urls() -> None:
     fetch = FakeFetch([])
-    with pytest.raises(AmberError, match="Invalid Amber site"):
+    with pytest.raises(AmberError, match="valid Amber site"):
         AmberClient(KEY, fetch).prices("../users", dt.date(2026, 10, 1), dt.date(2026, 10, 1))
     assert fetch.calls == []
 

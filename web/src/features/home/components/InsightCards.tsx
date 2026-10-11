@@ -30,13 +30,13 @@ export function StandbyCard({
       <div className="flex flex-col gap-0.5">
         <h2 id="h-standby">Always on</h2>
         <span className="text-[13px] text-pretty text-ink-muted">
-          The least your home draws overnight, on a typical night: what runs all day, every day
+          What runs all day, every day. It's the least your home draws on a typical night.
         </span>
       </div>
       {!standby ? (
         <Skeleton className="h-[120px]" />
       ) : standby.home_w == null ? (
-        <span className="text-sm text-ink-muted">This shows after a few nights of readings.</span>
+        <span className="text-sm text-ink-muted">This fills in after a few nights of readings.</span>
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
@@ -70,8 +70,8 @@ export function StandbyCard({
           </ul>
           {rest != null && rest >= 50 && (
             <span className="text-[13px] text-pretty text-ink-muted">
-              A smart plug on what's left on overnight (the router, the TV and its box, a second fridge) shows where the
-              rest goes.
+              To see where the rest goes, put a smart plug on what stays on overnight, like the router, the TV or a
+              second fridge.
             </span>
           )}
         </>
@@ -91,19 +91,19 @@ export function HabitsCard({ unexplained }: { unexplained: HomeInsights["unexpla
   return (
     <Card aria-labelledby="h-habits" className="col-span-6 gap-4 max-lg:col-span-12">
       <div className="flex flex-col gap-0.5">
-        <h2 id="h-habits">In everything else</h2>
+        <h2 id="h-habits">Habits in everything else</h2>
         <span className="text-[13px] text-pretty text-ink-muted">
-          Big use no device measures that comes back at about the same time, over the last {unexplained?.days || 14}{" "}
+          Big loads no device measures that come back at about the same time, over the last {unexplained?.days || 14}{" "}
           days
         </span>
       </div>
       {!unexplained ? (
         <Skeleton className="h-[120px]" />
       ) : unexplained.days < 3 ? (
-        <span className="text-sm text-ink-muted">This shows after a few days of readings.</span>
+        <span className="text-sm text-ink-muted">This fills in after a few days of readings.</span>
       ) : !unexplained.habits.length ? (
         <span className="text-sm text-ink-muted">
-          Nothing regular stands out: no big block comes back day after day.
+          Nothing regular stands out. No mystery loads coming back day after day.
         </span>
       ) : (
         <>
@@ -129,7 +129,7 @@ export function HabitsCard({ unexplained }: { unexplained: HomeInsights["unexpla
             ))}
           </ul>
           <span className="text-[13px] text-pretty text-ink-muted">
-            A smart plug or an energy monitor on it would give it its own line here, with what it costs.
+            Put a smart plug or energy monitor on it to see it as its own device, with what it costs.
           </span>
         </>
       )}

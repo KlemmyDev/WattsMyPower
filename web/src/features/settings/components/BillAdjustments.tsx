@@ -90,7 +90,12 @@ export function BillAdjustments({ system: s }: { system: SystemInfo }) {
       sub="Optional. What comes off your bill besides feed-in, and what you'd like each bill to stay under."
     >
       <OptionList>
-        {number("bill_discount_pct", "Discount", "Such as for paying on time. Blank if your rates include it.", "%")}
+        {number(
+          "bill_discount_pct",
+          "Discount",
+          "For example, for paying on time. Leave blank if your rates already include it.",
+          "%",
+        )}
         <OptionRow label="The discount comes off" help="Your plan's terms say which.">
           <Segmented
             label="The discount comes off"

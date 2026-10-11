@@ -99,11 +99,11 @@ def _why(e: Exception) -> str:
     """A failed check, in words for Settings."""
     if isinstance(e, urllib.error.HTTPError):
         if e.code in (403, 429):
-            return "GitHub's limit on checks was reached. It'll try again later."
-        return f"GitHub answered {e.code}."
+            return "GitHub's limit on update checks was reached. Trying again later."
+        return f"GitHub sent back an error ({e.code}). Trying again later."
     if isinstance(e, (urllib.error.URLError, OSError)):
         return "Couldn't reach GitHub. Check this machine's internet connection."
-    return "GitHub's answer couldn't be read."
+    return "GitHub sent back something unexpected. Trying again later."
 
 
 class UpdateService:
@@ -158,7 +158,7 @@ class UpdateService:
     def set_channel(self, channel: str) -> dict[str, Any]:
         """Follow another channel (Manage → System → Updates), and check it now."""
         if channel not in CHANNELS:
-            raise ValueError(f"There's no {channel!r} channel: it's one of {', '.join(CHANNELS)}.")
+            raise ValueError(f"There's no {channel!r} channel. Choose one of {', '.join(CHANNELS)}.")
         try:
             self._make_folder()
             tmp = self.folder / ".channel.tmp"
@@ -261,7 +261,7 @@ class UpdateService:
         why = None
         if not seen:
             again = "install.ps1 once more on the PC" if WINDOWS else "bash install.sh once more on the machine"
-            why = f"Updating from here isn't set up yet: run {again} it's installed on."
+            why = f"Updating from here isn't set up yet. Run {again} it's installed on."
         elif not here:
             why = "The updater on this machine hasn't checked in for a few minutes (it runs every minute, from cron)."
         elif not seen.get("can_update"):

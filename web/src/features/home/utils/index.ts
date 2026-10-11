@@ -46,7 +46,7 @@ export const CAR_ID = -1;
 export const watts = (w: number, estimated?: boolean) => (estimated ? `≈${kW(w)}` : kW(w));
 
 /** Said of a power that's estimated, for a tooltip. */
-export const ESTIMATED = "Estimated from what its runs usually draw: it doesn't report its power";
+export const ESTIMATED = "Estimated. It doesn't report its power, so this is what its runs usually draw.";
 
 /** What a device is doing now, in a few words. */
 export function nowLine(d: HomeDevice): { text: string; running: boolean } {

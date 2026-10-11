@@ -272,7 +272,7 @@ class BluelinkService:
     def _doing(self, c: dict[str, Any], vin: str, s: CarState | None, mem: Memory) -> tuple[str, str]:
         mode = self._settings(c, vin)["control"]["mode"]
         if s is None:
-            return "unknown", "Not read yet: the car hasn't sent its state to the cloud."
+            return "unknown", "Not read yet. The car hasn't sent its state to the cloud."
         st = c["cars"][vin]["state"]
         full_in = f", full in {_duration(s.minutes_to_full)}" if s.minutes_to_full else ""
         if st.get("plugged") is None and not s.charging:
@@ -290,7 +290,9 @@ class BluelinkService:
         if mode != "off" and not self._can_command(c, vin):
             return ("charging" if s.charging else "waiting"), "Enter the app's PIN to charge it from solar"
         if mem.hold and mode != "off":
-            return ("charging" if s.charging else "hold"), f"{mem.hold}: on hold until it's unplugged"
+            return (
+                "charging" if s.charging else "hold"
+            ), f"{mem.hold}. The dashboard takes over again once it's unplugged"
         if s.charging:
             return "charging", ("Charging" if mode == "off" else "Charging from spare solar") + full_in
         if mode == "off":
@@ -601,7 +603,7 @@ class BluelinkService:
                 raise BluelinkSetupError(str(e), 400 if e.pin else 502) from e
             if hold and self._settings(c, vin)["control"]["mode"] != "off":
                 mem.hold, mem.hold_at = hold, now
-                text += ": on hold from spare solar until it's unplugged"
+                text += ". The dashboard takes over again once it's unplugged"
             if action in ("start", "stop"):
                 self._took(c, vin, action == "start")
             else:
@@ -688,8 +690,8 @@ class BluelinkService:
             last = self._settings(c, vin).get("forced_at") or 0
             if self.clock() - last < FORCE_MIN:
                 raise BluelinkSetupError(
-                    "The car was asked a moment ago. Asking it often runs down its 12 V battery: try again in a few "
-                    "minutes.",
+                    "The car was asked a moment ago. Asking too often runs down its 12 V battery, so try again in a "
+                    "few minutes.",
                     429,
                 )
             force = {vin}
@@ -896,7 +898,7 @@ class BluelinkService:
         changed = False
         if not s.plugged and c["cars"][vin]["state"].get("plugged") is False and mem != Memory():
             if mem.hold:
-                self._note(vin, "Unplugged: the dashboard is in charge of charging again", "mode")
+                self._note(vin, "Unplugged. The dashboard is in charge of charging again", "mode")
             mem, changed = Memory(), True
             self._samples.pop(vin, None)
         cfg = self._settings(c, vin)["control"]
@@ -914,7 +916,7 @@ class BluelinkService:
         spare = self._spare(c, vin, s, mem)
         if mem.hold is None and (why := control.taken_over(s, mem, now)):
             mem.hold, mem.hold_at = why, now
-            self._note(vin, f"{why}: on hold until it's unplugged", "manual")
+            self._note(vin, f"{why}. The dashboard takes over again once it's unplugged", "manual")
             self._remember(vin, mem)
             return
         if mem.hold is not None:

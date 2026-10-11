@@ -37,7 +37,7 @@ export function BillsRatesSettings() {
         title="Your rates through the day"
         sub={
           dirty
-            ? "As you've changed them, not saved yet."
+            ? "Showing your changes. They're not saved yet."
             : draft?.type === "amber"
               ? "Amber's prices change every 5 or 30 minutes; these are the fallback rates."
               : "What grid power costs at each time of day, and what feed-in earns."

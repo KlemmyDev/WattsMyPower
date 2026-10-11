@@ -166,7 +166,7 @@ def test_without_home_use_the_battery_level_says_which_way_it_runs(charge_positi
 def test_when_nothing_says_which_way_the_battery_runs_positive_is_charging() -> None:
     curve = parse("plant.csv", signed_chart(load=False))
     assert curve.buckets[local(2025, 4, 21, 12)]["battery_power"] == -1000
-    assert any("positive was taken as charging" in w for w in curve.warnings)
+    assert any("positive is taken as charging" in w for w in curve.warnings)
 
 
 def test_semicolons_and_day_first_dates() -> None:

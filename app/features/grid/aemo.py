@@ -54,10 +54,10 @@ def _float(v: Any) -> float | None:
 
 def _why(e: Exception) -> str:
     if isinstance(e, urllib.error.HTTPError):
-        return f"AEMO answered {e.code}."
+        return f"AEMO sent back an error ({e.code}). Trying again shortly."
     if isinstance(e, (urllib.error.URLError, OSError)):
         return "Couldn't reach AEMO. Check this machine's internet connection."
-    return "AEMO's answer couldn't be read."
+    return "AEMO sent back something unexpected. Trying again shortly."
 
 
 Get = Callable[[str], Any]

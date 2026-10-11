@@ -31,7 +31,7 @@ const TILES: { kind: ControlKind; icon: IconName; title: string; sub: string }[]
 const ABOUT: Record<ControlKind, string> = {
   standby: "The battery holds its charge. Your home runs on solar and the grid, and spare solar goes to the grid.",
   floor: "The battery runs your home as usual until it's down to the reserve, then the grid takes over.",
-  charge: "The battery charges at a set speed, from the grid when solar can't cover it, then goes back to normal.",
+  charge: "The battery charges at a set speed, using the grid when solar can't keep up. Then it goes back to normal.",
 };
 
 const ACTION: Record<ControlKind, string> = {
@@ -46,7 +46,7 @@ function chargeAsk(c: ControlRequest, now: number): string {
   return (
     `This buys power from the grid to charge the battery to ${to}${c.power_w ? ` at ${kw(c.power_w)}` : ""}, ` +
     `for whatever solar can't cover. It stops once it reaches ${to}` +
-    (c.until ? `, or at ${when(c.until, now)} if that comes first.` : ", or when you choose Resume normal.")
+    (c.until ? `, or at ${when(c.until, now)} if that comes first.` : ", or when you choose Back to normal.")
   );
 }
 
@@ -62,7 +62,7 @@ function Experiment({ v }: { v: Supported }) {
   if (v.experimental)
     return (
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-ink-muted">
-        <span>Experimental: the controls haven't been tried on {model}.</span>
+        <span>Experimental. These controls haven't been tried on {model} yet.</span>
         <Button
           variant="muted-link"
           size="sm"
@@ -86,10 +86,10 @@ function Experiment({ v }: { v: Supported }) {
         (confirming ? (
           <>
             <span>
-              The controls change the inverter's battery settings (its battery mode, a forced charge and the reserve)
-              the same way as on the models they've been tried on, but that's never been tried on {model}. If this
-              model's settings work differently, they could set it up wrongly. Check the battery in iSolarCloud after
-              each change, and turn this off if anything looks wrong.
+              The controls change the inverter's battery mode, forced charge and reserve the same way they do on the
+              models they've been tried on. They've never been tried on {model}. If its settings work differently, they
+              could set it up wrongly. After each change, check the battery in iSolarCloud, and turn this off if
+              anything looks wrong.
             </span>
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -237,7 +237,7 @@ export function BatteryModes({
     { value: "1h", label: "1 hour" },
     { value: "3h", label: "3 hours" },
     { value: "morning", label: `Until ${hhmm(nextAt(MORNING, now) ?? now)}` },
-    ...(kind !== "charge" ? [{ value: "open" as const, label: "Until I stop" }] : []),
+    ...(kind !== "charge" ? [{ value: "open" as const, label: "Until you stop" }] : []),
   ];
 
   return (

@@ -163,7 +163,7 @@ def test_addresses_are_tidied() -> None:
 
 def test_signing_in_with_nothing_to_read_says_so(ha: FakeHA) -> None:
     ha.states = [s for s in ha.states if "grid" in s["entity_id"] or s["entity_id"].startswith("switch.")]
-    with pytest.raises(IntegrationError, match="no sensors measuring a single device"):
+    with pytest.raises(IntegrationError, match="no power or energy sensors for single devices"):
         HomeAssistant.sign_in(FORM, Hints())
 
 

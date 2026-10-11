@@ -46,12 +46,14 @@ export function LocationForm({
       setError("Enter at least three letters of a suburb, town or address.");
       return;
     }
-    geocode.mutate(q, { onError: (err) => setError(failure(err, "The search didn't work. Try again.")) });
+    geocode.mutate(q, {
+      onError: (err) => setError(failure(err, "Couldn't search for places right now. Try again in a moment.")),
+    });
   };
 
   const save = (changes: LocationChanges) => {
     if (Object.values(changes).some((v) => Number.isNaN(v))) {
-      setError("Enter a number.");
+      setError("Enter the latitude and longitude as numbers.");
       return;
     }
     saveSettings.mutate(changes, {

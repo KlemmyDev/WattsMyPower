@@ -63,13 +63,14 @@ const listed = (parts: string[]) =>
 function costLine(usage: HomeUsage, devices: HomeUsage["devices"], rangeWords: string) {
   const c = usage.total.cost;
   if (c.import < 0.01)
-    return `Your home cost ${money(c.supply)} ${rangeWords}, all of it supply charges: everything it used came from your panels and battery.`;
+    return `Nice, everything your home used ${rangeWords} came from your panels and battery. The ${money(c.supply)} it cost was just supply charges.`;
   const charged = usage.car && usage.car.cost >= 0.01 ? [{ name: "the car", cost: usage.car.cost }] : [];
   const top = [...devices, ...charged].filter((d) => d.cost >= 0.01).sort((a, b) => b.cost - a.cost);
   const named = top.slice(0, 3).map((d) => `${d.name} ${money(d.cost)}`);
   if (top.length > 3) named.push(`your other devices ${money(top.slice(3).reduce((a, d) => a + d.cost, 0))}`);
   const parts = [...named, `everything else ${money(c.other)}`];
-  return `Your home cost ${money(c.import + c.supply)} ${rangeWords}: ${listed(parts)}, and ${money(c.supply)} in supply charges.`;
+  const split = listed(parts);
+  return `Your home cost ${money(c.import + c.supply)} ${rangeWords}. ${split.charAt(0).toUpperCase()}${split.slice(1)}, plus ${money(c.supply)} in supply charges.`;
 }
 
 /** One part of the home's use, hour by hour or day by day: a device, the car, or everything else. */
@@ -182,7 +183,7 @@ export function UsageCard({
         <div className="flex flex-col gap-0.5">
           <h2 id="h-usage">Where your power went</h2>
           <span className="text-[13px] text-ink-muted">
-            What your home used, from the inverter, and what each connected device used of it
+            Your home's total from the inverter, and each connected device's share
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -237,7 +238,9 @@ export function UsageCard({
                 {whole ? ` (${share(total?.measured ?? 0, whole)})` : ""}
               </span>
               {usage.total.cost.credit > 0 && <span>{money(usage.total.cost.credit)} earned from feed-in</span>}
-              {whole == null && <span>No inverter readings in this period, so only what was measured</span>}
+              {whole == null && (
+                <span>No inverter readings for this period, so this is only what your devices measured</span>
+              )}
               <span
                 aria-hidden={!compared}
                 className={cn("truncate transition-opacity duration-300", compared ? "opacity-100" : "opacity-0")}
@@ -282,7 +285,7 @@ export function UsageCard({
                   <li key={p.id}>
                     {fixed ? (
                       <span
-                        title={[said, "What no device measured: the line less the bars"].filter(Boolean).join(". ")}
+                        title={[said, "Use no device measured (the line minus the bars)"].filter(Boolean).join(". ")}
                         style={style}
                         className={chip}
                       >
@@ -292,7 +295,7 @@ export function UsageCard({
                       <button
                         type="button"
                         aria-pressed={shown}
-                        title={[said, "Tap to show or hide it in the bars, double-click to see it on its own"]
+                        title={[said, "Show or hide it in the bars. Double-click to see it alone"]
                           .filter(Boolean)
                           .join(". ")}
                         onClick={() => toggle(p.id)}

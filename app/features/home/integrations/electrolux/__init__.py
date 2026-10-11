@@ -53,9 +53,9 @@ class Electrolux(Integration):
     via = "Electrolux Group's developer API"
     cloud = True
     about = (
-        "Electrolux, AEG, Frigidaire and Westinghouse appliances in the Electrolux, AEG or +home app: each fridge's "
-        "temperatures, doors and alerts, and when washers, dryers, dishwashers and ovens run. Through Electrolux's "
-        "cloud: there's no local way to reach them."
+        "Electrolux, AEG, Frigidaire and Westinghouse appliances from the Electrolux, AEG or +home app. See each "
+        "fridge's temperatures, doors and alerts, and when washers, dryers, dishwashers and ovens run. Read through "
+        "Electrolux's cloud, as there's no local way to reach them."
     )
     icon = "fridge"
     category = "appliances"
@@ -136,7 +136,7 @@ class Electrolux(Integration):
             raise IntegrationError(
                 "Electrolux accepted the key and tokens, but the account has no appliances. Add them in the "
                 "Electrolux, AEG or +home app first (or sign in at the portal with the account they're in)"
-                + (", then get new tokens: the ones entered have been swapped for others." if used else ".")
+                + (", then get new tokens, since the ones you entered have been swapped for others." if used else ".")
             )
         return {
             "api_key": client.api_key,

@@ -110,17 +110,17 @@ def _words(e: bx.BydError) -> BydError:
     """What went wrong, as the household can act on it."""
     if isinstance(e, bx.BydAuthenticationError) and not isinstance(e, bx.BydSessionExpiredError):
         return BydError(
-            "BYD didn't accept the email and password. Check them in the BYD app, and that the region is the one "
-            "the account was made in.",
+            "BYD didn't accept the email and password. Check them in the BYD app, and that you've picked the "
+            "region the account was made in.",
             refused=True,
         )
     if isinstance(e, bx.BydRateLimitError | bx.BydServiceBusyError):
         return BydError("BYD is busy and asked for fewer requests. Trying again shortly.")
     if isinstance(e, bx.BydTransportError):
-        return BydError("BYD's servers couldn't be reached. Check the server's internet connection.")
+        return BydError("Can't reach BYD's servers. Check the server's internet connection.")
     if isinstance(e, bx.BydCryptoError):
-        return BydError("BYD's answer couldn't be read. BYD may have changed how its app talks to its servers.")
-    return BydError(f"BYD answered with an error ({getattr(e, 'code', None) or type(e).__name__}).")
+        return BydError("BYD sent back something unexpected. It might have changed how its app talks to its servers.")
+    return BydError(f"BYD sent back an error ({getattr(e, 'code', None) or type(e).__name__}).")
 
 
 class BydAccount:

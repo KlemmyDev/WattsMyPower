@@ -128,7 +128,7 @@ export function useDragRange(
         ? {
             from: pc(picked.from),
             to: pc(picked.to),
-            label: `${hhmm(picked.from)} to ${hhmm(picked.to)}. Enter zooms in to it, Escape lets it go.`,
+            label: `${hhmm(picked.from)} to ${hhmm(picked.to)}. Press Enter to zoom in, or Escape to clear it.`,
           }
         : null,
     handlers: onRange
@@ -155,7 +155,7 @@ export function useDragRange(
           tabIndex: 0,
           role: "group",
           "aria-roledescription": "chart",
-          "aria-label": `${label}. The arrow keys pick a stretch of it to zoom in to.`,
+          "aria-label": `${label}. Use the arrow keys to pick a stretch to zoom in on.`,
           onKeyDown,
           onBlur: () => setKeyed(null),
         }

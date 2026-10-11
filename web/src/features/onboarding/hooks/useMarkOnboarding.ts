@@ -18,6 +18,6 @@ export function useMarkOnboarding() {
     onMutate: (changes: OnboardingChanges) => {
       qc.setQueryData(onboardingQuery.queryKey, (o) => applyChanges(o, changes));
     },
-    onError: (err) => toast(errorMessage(err, "Your progress couldn't be saved.")),
+    onError: (err) => toast(errorMessage(err, "Couldn't save your progress, so the guide will open again next visit.")),
   });
 }

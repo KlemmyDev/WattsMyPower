@@ -33,8 +33,8 @@ const NAMES: Record<OwnershipKey, string> = {
   system_cost: "what the system cost",
   system_installed: "when the system was installed",
   battery_installed: "when the battery was installed",
-  battery_warranty_years: "the battery warranty's years",
-  battery_warranty_mwh: "the battery warranty's energy",
+  battery_warranty_years: "the warranty length",
+  battery_warranty_mwh: "the warranty energy",
 };
 
 const LABELS: Record<OwnershipKey, [label: string, help: string, unit?: string]> = {
@@ -55,7 +55,7 @@ export function OwnershipSettings() {
     <>
       <SettingsPageHeader
         title="Cost and warranty"
-        sub="Optional. With these, Bills shows when the system pays for itself, and Battery how much of its warranty is used."
+        sub="Optional. Bills uses these to show when your system pays for itself, and Battery to show how much of its warranty is used."
       />
       {/* Mounted once the status has loaded, so the fields start from the saved values. */}
       {s && <Ownership system={s} />}
@@ -132,15 +132,23 @@ function Ownership({ system: s }: { system: SystemInfo }) {
   return (
     <SettingsSplit
       visual={
-        <SettingsSection id="h-own-return" title="Return on your system" sub="What it has saved against the grid.">
+        <SettingsSection
+          id="h-own-return"
+          title="Return on your system"
+          sub="What it's saved you compared with buying from the grid."
+        >
           <CostVisual figures={form.figures} />
         </SettingsSection>
       }
     >
-      <SettingsSection id="h-own-system" title="The system" sub="For when it pays for itself, on Bills.">
+      <SettingsSection id="h-own-system" title="The system" sub="Bills uses these to show when it pays for itself.">
         <OptionList>{(["system_cost", "system_installed"] as OwnershipKey[]).map(row)}</OptionList>
       </SettingsSection>
-      <SettingsSection id="h-own-battery" title="The battery" sub="For how much of its warranty is used, on Battery.">
+      <SettingsSection
+        id="h-own-battery"
+        title="The battery"
+        sub="Battery uses these to show how much of the warranty you've used."
+      >
         <OptionList>
           {(["battery_installed", "battery_warranty_years", "battery_warranty_mwh"] as OwnershipKey[]).map(row)}
         </OptionList>

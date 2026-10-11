@@ -58,7 +58,7 @@ def _row_json(r: Row) -> str:
 def require_token(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
     token: str = request.app.state.config.token
     if not token:
-        raise HTTPException(503, "The feed is disabled: set COLLECTOR_TOKEN (and give the API the same token)")
+        raise HTTPException(503, "The feed is off. Set COLLECTOR_TOKEN here, and give the dashboard the same token.")
     scheme, _, given = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not hmac.compare_digest(given.strip().encode(), token.encode()):
         raise HTTPException(401, "Missing or wrong token", headers={"WWW-Authenticate": "Bearer"})
@@ -191,8 +191,8 @@ def _local_host(host: str, port: int) -> None:
     if not addresses or not local:
         raise HTTPException(
             422,
-            f"{host} isn't on your home network. Enter the inverter's local IP address, e.g. 192.168.1.20 "
-            "(or set COLLECTOR_ALLOW_PUBLIC_HOSTS=true on the collector to allow any address).",
+            f"{host} isn't on your home network. Enter the inverter's local IP address, e.g. 192.168.1.20. "
+            "To allow any address, set COLLECTOR_ALLOW_PUBLIC_HOSTS=true on the collector.",
         )
 
 
@@ -276,7 +276,7 @@ def _writes(device: Settable, body: dict[str, Any]) -> list[tuple[int, int]]:
             raise HTTPException(422, "Each write must be [address, word], both whole numbers.")
         address, word = pair
         if address not in device.writable:
-            raise HTTPException(422, f"Register {address} isn't one the dashboard may change.")
+            raise HTTPException(422, f"The dashboard isn't allowed to change register {address}.")
         if not 0 <= word <= 0xFFFF:
             raise HTTPException(422, f"{word} doesn't fit in a register (0 to 65535).")
         out.append((address, word))

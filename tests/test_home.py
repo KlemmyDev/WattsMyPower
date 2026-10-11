@@ -500,7 +500,8 @@ def test_patterns_say_which_days_an_appliance_usually_runs(home: HomeService, cl
     found = {p["id"]: p for p in usage.patterns(home.repo, int(clock.t))}
     wash = found[view["devices"][0]["id"]]
     assert [n > 0 for n in wash["run_days"]] == [False, False, True, False, False, True, True]
-    assert wash["run_minutes"] in range(74, 78) and wash["days"] >= 27
+    # Four weeks back from the first midnight, counted from its first wash (Wed, Sat or Sun): 26 days at the fewest
+    assert wash["run_minutes"] in range(74, 78) and wash["days"] >= 26
     tv = found[view["devices"][3]["id"]]
     assert tv["runs"] == 0 and tv["by_hour"][20] > tv["by_hour"][3]  # it's on in the evenings
     assert tv["by_weekday"][1] < tv["by_weekday"][2]  # and not on Tuesdays

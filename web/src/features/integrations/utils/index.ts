@@ -71,7 +71,7 @@ export function inverterState(
   });
   const reading = hybrid
     ? frozen
-      ? `readings frozen since ${hhmm(frozen)} – the dongle isn't refreshing them`
+      ? `readings frozen since ${hhmm(frozen)} (the dongle has stopped refreshing them)`
       : last
         ? `last sync ${hhmm(last)}`
         : "waiting for its first reading"
@@ -103,20 +103,20 @@ export const BRAND_ABOUT: Record<string, { about: string; setup: string; app: st
   Sungrow: {
     about: "SH-series hybrids with their battery and meter, and SG-D string inverters, over Modbus on your network.",
     setup:
-      "Through its WiNet-S or WiNet-S2 dongle (or the inverter's own network port), over Modbus TCP. Nothing to turn on.",
+      "Read through its WiNet-S or WiNet-S2 dongle (or the inverter's own network port) over Modbus TCP. There's nothing to turn on.",
     app: "iSolarCloud",
   },
   GoodWe: {
     about: "ET-family hybrids (ET, EH, BT, BH) with their battery and meter, and DT-family string inverters.",
     setup:
-      "Through its Wi-Fi or LAN dongle, over Modbus on UDP port 8899 (newer LAN dongles take Modbus TCP on 502 too). Nothing to turn on.",
+      "Read through its Wi-Fi or LAN dongle over Modbus on UDP port 8899. Newer LAN dongles also take Modbus TCP on port 502. There's nothing to turn on.",
     app: "SEMS",
   },
   Fronius: {
     about:
-      "A GEN24 (with its battery), or a Symo or Primo with a Fronius Smart Meter, and any Fronius as a second system.",
+      "A GEN24 with its battery, or a Symo or Primo with a Fronius Smart Meter. Any Fronius works as a second solar inverter.",
     setup:
-      "Through its Solar API on the inverter's network port. A GEN24 ships with it off: turn it on in the inverter's web page, under Communication → Solar API. A main inverter needs a Fronius Smart Meter.",
+      "Read through the Solar API on the inverter's network port. A GEN24 ships with it off, so turn it on in the inverter's web page under Communication → Solar API. A main inverter needs a Fronius Smart Meter.",
     app: "Solar.web",
   },
 };

@@ -64,8 +64,8 @@ function InverterRow({
 export function ReadOnlyNote() {
   return (
     <div className="px-6 py-4 text-[13px] leading-5 text-ink-muted">
-      Read-only: this dashboard follows another server's collector (COLLECTOR_WRITES=false), so its inverters are
-      changed from that server's own dashboard.
+      Read-only. This dashboard follows another server's collector (COLLECTOR_WRITES=false), so change its inverters
+      from that server's dashboard.
     </div>
   );
 }

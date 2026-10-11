@@ -46,7 +46,7 @@ def address(url: str) -> str:
         parts = None
     if parts is None or parts.scheme not in ("http", "https") or not parts.hostname:
         raise IntegrationError(
-            f"{given or 'That'} isn't an address Home Assistant can be reached at: give one like {EXAMPLE}."
+            f"{given or 'That'} isn't an address Home Assistant can be reached at. Give one like {EXAMPLE}."
         )
     path = parts.path.rstrip("/").removesuffix("/api")
     return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, "", ""))
@@ -57,8 +57,8 @@ class HomeAssistant(Integration):
     name = "Home Assistant"
     via = "its API on your network"
     about = (
-        "The plugs and appliances your Home Assistant already measures, whatever their brand, from their power and "
-        "energy sensors every 30 seconds. Those with a switch there can be switched from here too."
+        "Plugs and appliances your Home Assistant already measures, whatever the brand, read from their power and "
+        "energy sensors every 30 seconds. Anything with a switch in Home Assistant can be switched from here too."
     )
     icon = "bolt"
     category = "hubs"
@@ -101,15 +101,15 @@ class HomeAssistant(Integration):
                 ) from e
             if e.code == 403:
                 raise IntegrationError(
-                    "Home Assistant is refusing this server: after too many wrong tokens it bans an address. Check its "
+                    "Home Assistant is blocking this server, which happens after too many wrong tokens. Check its "
                     "notifications, and take this server's address out of ip_bans.yaml."
                 ) from e
             if e.code == 404:
                 raise IntegrationError(
-                    f"Something answered at {url}, but not Home Assistant's API. Check the address: it's the one you "
-                    f"open Home Assistant at, like {EXAMPLE}."
+                    f"Something answered at {url}, but not Home Assistant's API. Use the address you open Home "
+                    f"Assistant at, like {EXAMPLE}."
                 ) from e
-            raise IntegrationError(f"Home Assistant had a problem ({e.code}). It'll try again shortly.") from e
+            raise IntegrationError(f"Home Assistant had a problem ({e.code}). Trying again shortly.") from e
         except urllib.error.URLError as e:
             if isinstance(e.reason, ssl.SSLError):
                 raise IntegrationError(
@@ -137,8 +137,8 @@ class HomeAssistant(Integration):
         saved = {"url": url, "token": token}
         if not cls(saved).poll():
             raise IntegrationError(
-                "Home Assistant has no sensors measuring a single device's power or energy (those on the whole home, "
-                "the grid, the solar or the battery are left out: the inverter measures those already)."
+                "Home Assistant has no power or energy sensors for single devices. Sensors for the whole home, grid, "
+                "solar and battery are skipped, since the inverter already measures those."
             )
         return saved
 
@@ -148,7 +148,7 @@ class HomeAssistant(Integration):
     def _states(self) -> list[Any]:
         states = self._call(str(self.saved.get("url") or ""), str(self.saved.get("token") or ""), "GET", "/api/states")
         if not isinstance(states, list):
-            raise IntegrationError("Home Assistant answered strangely. It'll try again shortly.")
+            raise IntegrationError("Home Assistant sent back something unexpected. Trying again shortly.")
         return states
 
     def poll(self) -> list[Reading]:

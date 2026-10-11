@@ -55,8 +55,7 @@ export function LocationStep({ nav }: StepProps) {
                     <Icon name="sun" size={26} />
                   </span>
                   <span className="max-w-[260px] text-[13px] leading-5 text-pretty text-ink-muted">
-                    Choose your suburb to see its daylight: today's sun, and how the days grow and shrink through the
-                    year.
+                    Choose your suburb to see today's sun and how the days grow and shrink through the year.
                   </span>
                 </div>
               )}

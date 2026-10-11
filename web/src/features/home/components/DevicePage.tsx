@@ -78,7 +78,7 @@ function Bars({ values, labels, color, title }: { values: number[]; labels: stri
 function Curve({ run, color }: { run: HomeRun; color: string }) {
   const { data, isPending } = useQuery(runCurveQuery(run.id));
   if (isPending) return <Skeleton className="h-[90px]" />;
-  if (!data?.w.length) return <span className="text-xs text-ink-muted">Nothing was read through this run.</span>;
+  if (!data?.w.length) return <span className="text-xs text-ink-muted">No readings for this run.</span>;
   const top = Math.max(...data.w, 1);
   const n = data.w.length;
   const x = (i: number) => (i / Math.max(1, n - 1)) * 100;
@@ -163,12 +163,12 @@ export function DevicePage({ id }: { id: number }) {
               variant="outline"
               size="sm"
             >
-              Its settings
+              Settings
             </ButtonLink>
           )
         }
       />
-      {overview.data && !device && <Notice>There's no such device. It may have been disconnected.</Notice>}
+      {overview.data && !device && <Notice>Can't find this device. It may have been disconnected.</Notice>}
       <div className="grid grid-cols-12 gap-5">
         {device && <RuleCard key={device.id} device={device} />}
         {device && profile.data ? (
@@ -195,8 +195,8 @@ export function DevicePage({ id }: { id: number }) {
             <h2 id="h-weeks">Week by week</h2>
             <span className="text-[13px] text-ink-muted">
               {change == null
-                ? `What it used each week, Monday to Sunday, over the last ${WEEKS}`
-                : `This week so far: ${kWh(thisWeek)}, ${
+                ? `Each week's use, Monday to Sunday, over the last ${WEEKS} weeks`
+                : `${kWh(thisWeek)} this week so far · ${
                     Math.abs(change) < 0.05
                       ? "about the same as"
                       : `${Math.round(Math.abs(change) * 100)}% ${change > 0 ? "more than" : "less than"}`
@@ -251,7 +251,7 @@ export function DevicePage({ id }: { id: number }) {
             <div className="flex flex-col gap-0.5 pb-2">
               <h2 id="h-runs">Runs</h2>
               <span className="text-[13px] text-ink-muted">
-                Every run in the last {WEEKS} weeks, newest first. Open one to see what it drew through it.
+                Every run in the last {WEEKS} weeks, newest first. Open one to see its power through the run.
               </span>
             </div>
             {runs.data && !runs.data.length && <span className="text-sm text-ink-muted">No runs yet.</span>}

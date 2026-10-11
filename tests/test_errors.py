@@ -66,7 +66,7 @@ def test_a_failure_is_json_and_logged(client: TestClient, caplog: pytest.LogCapt
     with caplog.at_level(logging.ERROR, logger="app.core.errors"):
         r = client.get("/api/boom")
     assert r.status_code == 500
-    assert r.json() == {"detail": "Something went wrong on the server (500). Its log says what happened."}
+    assert r.json() == {"detail": "Something went wrong on the server (500). Check its log to see what happened."}
     assert "GET /api/boom failed: KeyError" in caplog.text
 
 

@@ -48,7 +48,7 @@ export function BatteryActivity({ now, className }: { now: number; className?: s
       </div>
       {!isPending && events.length === 0 && (
         <p className="m-0 text-sm text-ink-muted">
-          Nothing yet. Controls you start, and ones from iSolarCloud, show here.
+          Nothing yet. When you or iSolarCloud change the battery, it'll show up here.
         </p>
       )}
       {days.map(([name, list]) => (
