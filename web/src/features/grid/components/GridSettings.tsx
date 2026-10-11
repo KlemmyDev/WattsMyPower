@@ -301,7 +301,7 @@ function Hazards() {
   const { data: grid } = useQuery(gridQuery);
   const save = useSaveNow();
   const on = save.isPending ? !!save.variables?.hazard_warnings : (system?.hazard_warnings ?? 1) === 1;
-  const town = grid?.hazards?.town;
+  const town = grid?.hazards?.area || grid?.hazards?.town;
   return (
     <SettingsSection
       id="h-hazards"
@@ -328,7 +328,8 @@ function Hazards() {
     >
       <HelpText>
         Comes from the Bureau's public data service and QFD's public warnings feed, both made for apps like this.
-        They're matched to your location here.
+        They're matched to your location here, down to your council area for storm warnings. Warnings for other parts of
+        your district show as nearby, without counting toward the outlook.
       </HelpText>
     </SettingsSection>
   );

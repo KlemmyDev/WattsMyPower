@@ -111,6 +111,15 @@ export type WeatherWarning = {
   url?: string | null;
 };
 
+/** A Bureau warning for part of the house's district whose named places are all far from it: shown, not counted. */
+export type NearbyWarning = WeatherWarning & {
+  /** The places it names that the Bureau knows, e.g. ["Caboolture", "Redcliffe"]. */
+  near: string[];
+  /** How far the house is from them (the nearest, or the line between two). */
+  distance_km: number;
+  direction: string | null;
+};
+
 /** A Queensland Fire Department fire or warning near the house. */
 export type FireWarning = {
   id: string;
@@ -135,10 +144,14 @@ export type HazardsView = {
   location_set: boolean;
   /** The Bureau's forecast town nearest the house, whose districts its warnings are matched by. */
   town: string | null;
+  /** The council area the house is in, whose detailed storm warnings are its own (null outside them). */
+  area: string | null;
   /** Fires are followed (in Queensland). */
   fires_followed: boolean;
   radius_km: number;
   weather: WeatherWarning[];
+  /** Warnings elsewhere in the house's district: on the page, not counted or in the outlook. */
+  nearby: NearbyWarning[];
   fires: FireWarning[];
   /** Each source followed: when it last answered, and why it didn't the last time it was asked. */
   sources: Partial<Record<"bom" | "qfd", { at: number | null; error: string | null }>>;

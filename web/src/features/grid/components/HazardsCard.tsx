@@ -8,7 +8,7 @@ import { buttonClass } from "~/features/common/ui/components/Button";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
-import type { FireWarning, HazardsView, WeatherWarning } from "~/features/grid/types";
+import type { FireWarning, HazardsView, NearbyWarning, WeatherWarning } from "~/features/grid/types";
 
 /** QFD's warning levels in the Australian Warning System's colours: advice yellow, watch and act orange, emergency red. */
 const FIRE_COLOR: Record<FireWarning["level"], string> = {
@@ -21,8 +21,22 @@ const FIRE_COLOR: Record<FireWarning["level"], string> = {
 const when = (ts: number, now: number) =>
   sameDay(ts, now) ? hhmm(ts) : `${shortDay.format(new Date(ts * 1000))} ${hhmm(ts)}`;
 
-function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
+/** "Queensland: Southeast Coast" → "Southeast Coast". */
+const areaName = (a: string) => a.replace(/^[^:]+:\s*/, "");
+
+/** "Caboolture and Redcliffe", "Gatton, Esk and Laidley". */
+const listed = (names: string[]) =>
+  names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
+
+function WeatherRow({ w, now }: { w: WeatherWarning | NearbyWarning; now: number }) {
   const [open, setOpen] = useState(false);
+  const nearby = "near" in w;
+  const tone = nearby ? alpha(COLOR.fg, 0.4) : w.level === "warning" ? COLOR.warn : COLOR.solar;
+  const where = nearby
+    ? `Near ${listed(w.near)}, ${w.distance_km} km ${w.direction ?? "away"}`
+    : w.here
+      ? "Drawn over your area"
+      : w.areas.map(areaName).join(", ");
   return (
     <li className="border-b border-line-subtle py-1 last:border-0">
       <button
@@ -33,19 +47,17 @@ function WeatherRow({ w, now }: { w: WeatherWarning; now: number }) {
       >
         <span
           className="mt-0.5 flex size-6 flex-none items-center justify-center rounded-lg"
-          style={{
-            background: alpha(w.level === "warning" ? COLOR.warn : COLOR.solar, 0.16),
-            color: w.level === "warning" ? COLOR.warn : COLOR.solar,
-          }}
+          style={{ background: alpha(tone, 0.16), color: tone }}
         >
           <Icon name={/flood|rain/i.test(w.event) ? "rain" : /fire/i.test(w.event) ? "flame" : "storm"} size={14} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-[13.5px] leading-5 text-ink">{w.headline || w.event}</span>
+          <span className={cn("text-[13.5px] leading-5", nearby ? "text-ink-muted" : "text-ink")}>
+            {w.headline || w.event}
+          </span>
           <span className="text-xs text-ink-faint">
-            Bureau of Meteorology
+            {where || "Bureau of Meteorology"}
             {w.expires ? ` · until ${when(w.expires, now)}` : ""}
-            {w.here ? " · drawn over your area" : ""}
           </span>
         </span>
         <Icon
@@ -98,8 +110,9 @@ function FireRow({ f }: { f: FireWarning }) {
 }
 
 /**
- * The Bureau of Meteorology's warnings for the house's districts and the Fire Department's fires around it: the early
- * signs the power may go. Shown whether or not there are any.
+ * The Bureau of Meteorology's warnings for the house's districts and council area, and the Fire Department's fires
+ * around it: the early signs the power may go. Shown whether or not there are any. Bureau warnings for elsewhere in
+ * the district come after, muted and not counted.
  */
 export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
   const count = view.weather.length + view.fires.filter((f) => f.level !== "Information").length;
@@ -119,7 +132,7 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
   const clear = [
     asked(bom) &&
       !view.weather.length &&
-      `no Bureau of Meteorology warnings${view.town ? ` for the ${view.town} area` : ""}`,
+      `no Bureau of Meteorology warnings${view.area || view.town ? ` for the ${view.area || view.town} area` : ""}`,
     view.fires_followed && asked(qfd) && !view.fires.length && `no fires within ${view.radius_km} km`,
   ].filter(Boolean);
   return (
@@ -138,6 +151,16 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
                 <FireRow key={f.id} f={f} />
               ))}
             </ul>
+          )}
+          {view.nearby.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <div className="text-xs font-medium text-ink-faint">Nearby, not for your area</div>
+              <ul className="-my-1 flex flex-col">
+                {view.nearby.map((w) => (
+                  <WeatherRow key={w.id} w={w} now={now} />
+                ))}
+              </ul>
+            </div>
           )}
           {clear.length > 0 && (
             <div className="text-[13px] text-ink-muted">

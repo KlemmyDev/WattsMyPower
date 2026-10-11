@@ -41,7 +41,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   (unofficial feeds, which may change), drawn around your house with the areas that are off. Choosing one shows it in
   full and links to it on the network's own site (the outage itself on Energex, Ausgrid, Essential Energy, AusNet
   Services and Western Power; elsewhere the network's map or list for its suburb). The Bureau of Meteorology's
-  warnings for your district; Queensland Fire Department bushfire warnings.
+  warnings for your district and council area (its detailed storm warnings, in the cities that have them); one for
+  another part of your district shows as nearby, with how far away, and stays out of the outlook. Queensland Fire
+  Department bushfire warnings.
 - **Plan:** today and the next two days of solar, home use, battery and cost from Open-Meteo's forecast, calibrated to
   your system and learning how your roof turns sunshine into solar, with the best times to use power and warnings
   when the battery will run down or won't fill.
