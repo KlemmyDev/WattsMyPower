@@ -10,13 +10,16 @@ built from (app.core.version.COMMIT), and GitHub's compare counts the commits be
 make it an update; only commits this has that it hasn't (moving to an older channel, nightly to stable) make it older,
 which can be installed too, going back. Its version is read from that commit's pyproject.toml. Without a commit to
 compare (an image built without install.sh), or one GitHub doesn't know (a local build), the versions are compared.
+The changes shown are counted along main's own history (see `count_changes`): a merged pull request is one change,
+however many commits it brought, and the Version workflow's commits aren't changes at all.
 
 The channel is kept in the folder shared with the host (below, `channel`), where install.sh reads it too: an update,
 from here or by hand, goes to the channel's commit, whichever way that is. install.sh saves it on every install: beta
 for a new one, and nightly for one from before beta was the default (which followed main without it saved).
 
 Manage → System turns it off (update_check), and then nothing is asked of GitHub but a check asked for by hand. A
-check makes three requests at most, well inside GitHub's 60 an hour without an account.
+check makes three requests at most (four going back, to count what's left out), well inside GitHub's 60 an hour
+without an account.
 
 Updating is done on the host, by updater.sh (run every minute by cron, set up by install.sh), through the data folder
 they share (data/update here, /data/update in the container): it notes that it's there and whether it can update
@@ -60,6 +63,8 @@ DEFAULT_CHANNEL = "beta"
 # (v2026.10.9-beta, v2026.10.9-beta.2), as scripts/release.sh makes them. Any other tag isn't a release.
 # install.sh and scripts/release.sh pick the same tags, in the same order (git's version sort).
 TAG = re.compile(r"v(\d+(?:\.\d+)*)(-beta(?:\.(\d+))?)?")
+# The Version workflow's commit moving the version to today (.github/workflows/version.yml): not a change of its own.
+VERSION_BUMP = re.compile(r"Version \d+(?:\.\d+)*\s*")
 
 
 def tag_key(name: str) -> tuple[tuple[int, ...], bool, int] | None:
@@ -69,6 +74,26 @@ def tag_key(name: str) -> tuple[tuple[int, ...], bool, int] | None:
     if not m:
         return None
     return version_key(m[1]), m[2] is None, int(m[3] or 1)
+
+
+def count_changes(compared: dict[str, Any], head: str) -> int:
+    """The changes in a GitHub compare (base...head), rather than its commits: what main took on, one step at a time
+    (following each commit's first parent back from head), so a merged pull request is one change however many
+    commits and merges of main it brought, and the Version workflow's commits aren't counted. Any commits at all are
+    at least one change (only a version moved is still newer). When GitHub left some commits out (it lists 250 at
+    most), its own count stands."""
+    total = int(compared["ahead_by"])
+    commits = compared.get("commits")
+    if not total or not isinstance(commits, list) or len(commits) < total:
+        return total
+    by_sha = {str(c.get("sha")): c for c in commits}
+    changes, at = 0, by_sha.get(head)
+    while at is not None:
+        if not VERSION_BUMP.fullmatch(str(at.get("commit", {}).get("message", ""))):
+            changes += 1
+        parents = at.get("parents") or []
+        at = by_sha.get(str(parents[0].get("sha"))) if parents else None
+    return max(changes, 1)
 
 
 def _on_windows() -> bool:
@@ -192,7 +217,11 @@ class UpdateService:
             elif COMMIT:
                 try:
                     compared = get_json(f"{API}/repos/{REPO}/compare/{COMMIT}...{sha}")
-                    changes, behind = int(compared["ahead_by"]), int(compared["behind_by"])
+                    changes, behind = count_changes(compared, sha), int(compared["behind_by"])
+                    if not changes and behind:  # going back: what it leaves out, counted the same way if it can be
+                        with contextlib.suppress(urllib.error.URLError, OSError, KeyError, TypeError, ValueError):
+                            back = get_json(f"{API}/repos/{REPO}/compare/{sha}...{COMMIT}")
+                            behind = count_changes(back, COMMIT) or behind
                 except urllib.error.HTTPError as e:
                     if e.code != 404:  # 404: GitHub doesn't have this commit (a local build); compare versions
                         raise
