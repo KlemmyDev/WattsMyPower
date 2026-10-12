@@ -75,19 +75,26 @@ type Drag = {
   dy: number;
   /** The rows' heights as they were when it started (they grow to fit what's in them), to count rows moved by. */
   rows: number[];
-  /** Where the widget was in the grid, and its size, as drawn. */
+  /** Where the widget was in the grid, and its size, in the grid's own pixels. */
   box: { left: number; top: number; width: number; height: number };
+  /** The space between widgets as drawn (compact closes it up). */
+  gap: number;
+  /**
+   * How much bigger the grid is on screen than in its own pixels: the page zooms with its text size, and a dashboard
+   * wider than the room beside the tray is drawn smaller. The pointer moves in screen pixels, so it's divided by this.
+   */
+  scale: number;
 };
 
 /**
  * How many rows a pull of `d` pixels from the line between rows `line - 1` and `line` crosses, by the rows' own heights:
  * a row counts once the pull is past half of it.
  */
-function rowsBy(rows: number[], line: number, d: number) {
+function rowsBy(rows: number[], gap: number, line: number, d: number) {
   let left = Math.abs(d);
   let n = 0;
   for (let r = d > 0 ? line : line - 1; r >= 0; r += d > 0 ? 1 : -1) {
-    const step = (rows[r] ?? ROW) + GAP;
+    const step = (rows[r] ?? ROW) + gap;
     if (left < step / 2) break;
     left -= step;
     n++;
@@ -153,7 +160,6 @@ export function DashboardGrid({
     return () => ro.disconnect();
   }, []);
 
-  const unitX = (width + GAP) / cols;
   const limits = (i: WidgetItem, w = i.w) => {
     const def = widgetDef(i.type);
     return def
@@ -164,14 +170,15 @@ export function DashboardGrid({
   /** Where everything would be if the drag ended here. */
   const layoutFor = (d: Drag | null) => {
     const it = d && items.find((i) => i.id === d.id);
+    const unitX = d ? (width + d.gap) / cols : 0;
     if (!d || !it || unitX <= 0) return items;
     return d.mode === "move"
-      ? move(items, d.id, it.x + Math.round(d.dx / unitX), it.y + rowsBy(d.rows, it.y, d.dy), cols)
+      ? move(items, d.id, it.x + Math.round(d.dx / unitX), it.y + rowsBy(d.rows, d.gap, it.y, d.dy), cols)
       : resize(
           items,
           d.id,
           it.w + Math.round(d.dx / unitX),
-          it.h + rowsBy(d.rows, it.y + it.h, d.dy),
+          it.h + rowsBy(d.rows, d.gap, it.y + it.h, d.dy),
           cols,
           limits(it, it.w + Math.round(d.dx / unitX)),
         );
@@ -225,6 +232,8 @@ export function DashboardGrid({
     if (!grid || !cell) return;
     const g = grid.getBoundingClientRect();
     const c = cell.getBoundingClientRect();
+    const k = g.width / grid.offsetWidth || 1;
+    const css = getComputedStyle(grid);
     setDrag({
       id,
       mode,
@@ -232,18 +241,25 @@ export function DashboardGrid({
       y0: e.clientY,
       dx: 0,
       dy: 0,
-      rows: getComputedStyle(grid).gridTemplateRows.split(" ").map(parseFloat),
-      box: { left: c.left - g.left, top: c.top - g.top, width: c.width, height: c.height },
+      rows: css.gridTemplateRows.split(" ").map(parseFloat),
+      box: { left: (c.left - g.left) / k, top: (c.top - g.top) / k, width: c.width / k, height: c.height / k },
+      gap: parseFloat(css.rowGap) || GAP,
+      scale: k,
     });
   };
+  const moved = (d: Drag, e: PointerEvent<HTMLElement>) => ({
+    ...d,
+    dx: (e.clientX - d.x0) / d.scale,
+    dy: (e.clientY - d.y0) / d.scale,
+  });
   const follow = (e: PointerEvent<HTMLElement>) => {
     const d = live.current;
-    if (d) setDrag({ ...d, dx: e.clientX - d.x0, dy: e.clientY - d.y0 });
+    if (d) setDrag(moved(d, e));
   };
   const end = (e: PointerEvent<HTMLElement>) => {
     const d = live.current;
     if (!d) return;
-    const last = { ...d, dx: e.clientX - d.x0, dy: e.clientY - d.y0 };
+    const last = moved(d, e);
     if (Math.abs(last.dx) > 3 || Math.abs(last.dy) > 3) onChange?.(layoutFor(last));
     setDrag(null);
   };

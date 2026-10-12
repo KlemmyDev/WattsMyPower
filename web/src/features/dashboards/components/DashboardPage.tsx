@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { errorMessage } from "~/features/common/api/utils";
 import { ON } from "~/features/common/energy/utils";
@@ -107,6 +107,19 @@ export function DashboardPage() {
   const [current, setCurrent] = useState(() => store.get(STORE_DASHBOARD));
   const [draft, setDraft] = useState<Draft | null>(null);
   const shown = useRef<HTMLDivElement>(null);
+  // Arranging, how wide the space for the dashboard is (beside the tray, on a computer).
+  const [room, setRoom] = useState(0);
+  const measureRoom = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const measure = () => {
+      const css = getComputedStyle(el);
+      setRoom(el.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, []);
   // Arranging on a computer, the page is the dashboard and the tray: the side nav steps aside (see AppShell), so the
   // dashboard keeps the width it's shown at.
   const arranging = !!draft && !phone;
@@ -274,6 +287,10 @@ export function DashboardPage() {
     );
 
   const others = draft.boards.filter((b) => b.id !== board.id);
+  // Arranged at the width it's shown at (or a phone's), so each widget looks just as it will; where the tray leaves
+  // less room than that (a laptop), it's drawn smaller to fit, all of it still in view.
+  const framed = phone ? 0 : screen === "phone" ? 402 : draft.width;
+  const fit = framed && room ? Math.min(1, room / framed) : 1;
   return (
     <>
       {/* On a computer the tray of widgets (or the one chosen's settings) is down the right edge, full height. */}
@@ -402,14 +419,12 @@ export function DashboardPage() {
             className={cn(
               "-mx-3 min-w-0 rounded-[28px] bg-[radial-gradient(var(--color-line)_1px,transparent_1px)] bg-[length:22px_22px] px-3 pt-5 pb-16",
               screen === "phone" && !phone && "flex justify-center",
-              screen === "computer" && !phone && "w-fit min-w-[calc(100%+24px)]",
             )}
+            ref={measureRoom}
           >
-            {/* At the width it's shown at, so each widget looks just as it will; where the tray leaves less room, the
-                dashboard runs under it. */}
             <div
               data-widgets
-              style={screen === "computer" && !phone && draft.width ? { width: draft.width } : undefined}
+              style={framed ? { width: screen === "computer" ? framed : undefined, zoom: fit } : undefined}
               className={cn(
                 screen === "phone" && !phone && "w-[402px] rounded-[32px] border border-line bg-canvas p-4",
               )}
