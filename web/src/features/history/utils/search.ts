@@ -53,3 +53,13 @@ export function validateHistorySearch(raw: Record<string, unknown>): HistorySear
 export const daySearch = (ts: number, r: Range): Pick<HistorySearch, "day"> => ({
   day: ts === lastDay(r) ? undefined : dateKey(ts),
 });
+
+/**
+ * The same stretch of the year before, to compare against: [start, until) moved back a year (1 January to the same
+ * date, or the whole year when the view is a whole year).
+ */
+export function yearBefore(start: number, until: number): { start: number; until: number } {
+  const y = yearOf(start);
+  const u = partsOf(until);
+  return { start: yearStart(y - 1), until: u.year > y ? yearStart(y) : siteTime(y - 1, u.month, u.day) };
+}

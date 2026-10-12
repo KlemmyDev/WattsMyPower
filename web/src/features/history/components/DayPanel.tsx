@@ -10,14 +10,13 @@ import { useNow } from "~/features/common/time/hooks";
 import { useFahrenheit, useForecast } from "~/features/common/weather/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { hhmm, longDate, weekdayLong } from "~/features/common/formatting/utils/date";
-import { energyParts, money, powerParts } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { addDays, dateKey } from "~/features/common/time/utils";
-import { COLOR } from "~/features/common/theme/utils/colors";
 import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
 import { DayChart } from "~/features/history/components/DayChart";
 import { DayWeather, DayWeatherChip } from "~/features/history/components/DayWeather";
-import { HCARD } from "~/features/history/components/parts";
-import { cn } from "~/features/common/ui/utils";
+import { Card, TitleBlock } from "~/features/common/ui/components/Card";
+import { HeroStat, HeroStats } from "~/features/common/ui/components/Hero";
 import { extremesOf } from "~/features/history/utils/day";
 import type { Day } from "~/features/history/utils/year";
 
@@ -40,53 +39,27 @@ function WeatherChip() {
   );
 }
 
-function Stat({ label, value, unit, color }: { label: string; value: string; unit?: string; color: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-xs text-ink-dim">
-        <i className="size-1.5 rounded-full" style={{ background: color }} />
-        {label}
-      </span>
-      <span className="text-[28px] leading-[30px] font-light tracking-[-1px] text-fg tabular-nums">
-        {value}
-        {unit && <small className="ml-1 text-[13px] font-normal tracking-normal text-ink-label">{unit}</small>}
-      </span>
-    </div>
-  );
-}
-
-/** A day's figure and unit: "26.6" kWh, or "395" Wh under one. */
-const energy = (v: number) => {
-  const [value, unit] = energyParts(v);
-  return { value, unit };
-};
-
+/** The day's figures, four across (two on phones): what it made and used, how it did, the grid, and its extremes. */
 function DayStats({ day, extremes }: { day: Day; extremes: ReturnType<typeof extremesOf> }) {
   if (day.kind === "none")
-    return <div className="col-span-full text-sm text-ink-dim">No readings were recorded on this day.</div>;
+    return <div className="text-[13px] text-ink-faint">No readings were recorded on this day.</div>;
   if (day.kind !== "data") return null;
   const { peak, low } = extremes;
-  const [peakValue, peakUnit] = peak ? powerParts(peak.w) : ["—", ""];
   return (
-    <>
-      <Stat label="Solar generated" {...energy(day.gen)} color={COLOR.solar} />
-      <Stat label="Home use" {...energy(day.home)} color={COLOR.ink} />
-      <Stat label="Self-sufficiency" value={String(Math.round(day.ss * 100))} unit="%" color={COLOR.good} />
-      <Stat label="Saved" value={money(day.saved)} color={COLOR.import} />
-      <Stat label="From the grid" {...energy(day.imp)} color={COLOR.fromGrid} />
-      <Stat label="Sent to the grid" {...energy(day.exp)} color={COLOR.export} />
-      <Stat
-        label="Peak solar"
-        value={peakValue}
-        unit={peak ? `${peakUnit} at ${hhmm(peak.t)}` : undefined}
-        color={COLOR.solar}
-      />
-      <Stat label="Lowest battery" value={low != null ? String(Math.round(low)) : "—"} unit="%" color={COLOR.battery} />
-    </>
+    <HeroStats>
+      <HeroStat label="Made" value={kWh(day.gen)} sub={peak ? `Peak ${kW(peak.w)} at ${hhmm(peak.t)}` : undefined} />
+      <HeroStat label="Used" value={kWh(day.home)} />
+      <HeroStat label="Self-sufficiency" value={pct(day.ss * 100)} />
+      <HeroStat label="Saved" value={money(day.saved)} />
+      <HeroStat label="Bought" value={kWh(day.imp)} sub={day.cost >= 0.005 ? money(day.cost) : undefined} />
+      <HeroStat label="Sold" value={kWh(day.exp)} sub={day.credit >= 0.005 ? `${money(day.credit)} back` : undefined} />
+      <HeroStat label="Lowest battery" value={low != null ? pct(low) : DASH} />
+      <HeroStat label="Power bill" value={money(day.net)} sub="With the supply charge" />
+    </HeroStats>
   );
 }
 
-/** The selected day in detail: its totals on the left, hour by hour on the right. */
+/** The chosen day in detail: its figures, hour by hour, and its weather; stepping a day either way. */
 export function DayPanel({
   day,
   isToday,
@@ -113,56 +86,40 @@ export function DayPanel({
   const series = q.isPlaceholderData ? undefined : q.data?.series;
   const extremes = useMemo(() => extremesOf(series), [series]);
   return (
-    <section
+    <Card
       ref={ref}
       id="day"
       aria-labelledby={dateId}
-      // Clear of the sticky top bar when it's scrolled to (History's "#day": the Overview's "Today in History").
-      className={cn(
-        HCARD,
-        "grid scroll-mt-28 grid-cols-[minmax(260px,340px)_minmax(0,1fr)] gap-10 max-lg:grid-cols-1 max-lg:gap-6",
-      )}
+      // Brought into view when a day's chosen, or at "#day" (the Overview's "Today in History").
+      className="scroll-mt-28"
     >
-      <div className="flex flex-col gap-6">
-        <div className="flex min-h-9 items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <TitleBlock
+          id={dateId}
+          title={longDate.format(dt)}
+          sub={`${partial ? "Today so far · " : ""}${weekdayLong.format(dt)}`}
+        />
+        <div className="flex items-center gap-2">
           {partial ? <WeatherChip /> : <DayWeatherChip date={dateKey(day.ts)} />}
-          <div className="ml-auto flex gap-1.5">
-            <Button variant="round" aria-label="Previous day" onClick={onPrev} disabled={!onPrev}>
-              <Icon name="chevL" size={18} />
-            </Button>
-            <Button variant="round" aria-label="Next day" onClick={onNext} disabled={!onNext}>
-              <Icon name="chevR" size={18} />
-            </Button>
-          </div>
+          <Button variant="round" aria-label="Previous day" onClick={onPrev} disabled={!onPrev}>
+            <Icon name="chevL" size={18} />
+          </Button>
+          <Button variant="round" aria-label="Next day" onClick={onNext} disabled={!onNext}>
+            <Icon name="chevR" size={18} />
+          </Button>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-[15px] text-ink-dim">
-            {partial && "Today so far · "}
-            {weekdayLong.format(dt)}
-          </span>
-          <span
-            id={dateId}
-            className="text-[36px] leading-10 font-light tracking-[-1.5px] text-balance text-fg max-sm:text-[30px] max-sm:leading-[34px]"
-          >
-            {longDate.format(dt)}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-          <DayStats day={day} extremes={extremes} />
-        </div>
-        <a
-          href={exportCsvUrl(day.ts, addDays(day.ts, 1))}
-          download
-          className="mt-auto inline-flex items-center gap-2 text-[13px] font-semibold text-ink-muted no-underline hover:text-ink"
-        >
-          <Icon name="download" size={16} />
-          Download this day as CSV
-        </a>
       </div>
-      <div className="flex min-w-0 flex-col gap-4">
-        <DayChart series={q.data?.series} placeholder={q.isPlaceholderData} reserve={reserve} />
-        <DayWeather date={dateKey(day.ts)} made={day.kind === "data" && !partial ? day.gen : null} />
-      </div>
-    </section>
+      <DayStats day={day} extremes={extremes} />
+      <DayChart series={q.data?.series} placeholder={q.isPlaceholderData} reserve={reserve} />
+      <DayWeather date={dateKey(day.ts)} made={day.kind === "data" && !partial ? day.gen : null} />
+      <a
+        href={exportCsvUrl(day.ts, addDays(day.ts, 1))}
+        download
+        className="inline-flex items-center gap-2 self-start text-[13px] font-medium text-ink-muted no-underline hover:text-ink"
+      >
+        <Icon name="download" size={16} />
+        Download this day as CSV
+      </a>
+    </Card>
   );
 }
