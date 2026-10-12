@@ -219,9 +219,16 @@ DASHBOARD: dict[str, Table] = {
     "home_devices": Table(
         "home",
         "Devices",
-        "Each appliance or plug from a connected account, with its name, what it's set as, and how far its readings go.",
+        "Each appliance or plug from a connected account, with its name, what it's set as, its colour and icon, and how "
+        "far its readings go.",
         "Kept until its account is disconnected",
         Spec("created_at"),
+    ),
+    "home_rooms": Table(
+        "home",
+        "Rooms",
+        "The colour and icon chosen for each room on the Home page.",
+        "Kept until changed back",
     ),
     "home_energy": Table(
         "home",

@@ -115,7 +115,7 @@ export function DevicePage({ id }: { id: number }) {
   const [open, setOpen] = useState<number | null>(null);
   const devices = overview.data?.devices ?? [];
   const device = devices.find((d) => d.id === id);
-  const color = deviceColors(devices).get(id) ?? "var(--color-brand)";
+  const color = deviceColors(devices, overview.data?.rooms).get(id) ?? "var(--color-brand)";
   const kind = overview.data?.kinds.find((k) => k.id === device?.kind);
   const used = usage.data?.devices.find((d) => d.id === id);
   const rate = used && used.total > 0.1 ? used.cost / used.total : null;

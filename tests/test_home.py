@@ -331,6 +331,34 @@ def test_devices_can_be_grouped_and_a_group_is_named_as_it_was_first(home: HomeS
             home.update_device(left.id, bad)
 
 
+def test_a_device_and_a_room_can_be_given_a_colour_and_icon_of_their_own(home: HomeService) -> None:
+    home.connect("fake", FORM)
+    Fake.script = [[Reading("l", "Study (Left)", "plug"), Reading("r", "Study (Right)", "plug")]]
+    home.poll_due()
+    left, right = home.repo.devices()
+    view = home.update_device(left.id, {"color": "sky", "icon": "monitor"})["devices"][0]
+    assert (view["color"], view["icon"]) == ("sky", "monitor")
+    # Left out, each stays; null gives back the one it's given.
+    assert home.update_device(left.id, {"icon": None})["devices"][0] == {**view, "icon": None}
+    for bad, message in [({"color": "tartan"}, "colour"), ({"icon": "<svg>"}, "icon"), ({"icon": 3}, "icon")]:
+        with pytest.raises(HomeSetupError, match=message):
+            home.update_device(left.id, bad)
+
+    with pytest.raises(HomeSetupError) as e:
+        home.set_room("Study", {"color": "rose"})  # no device is in it yet
+    assert e.value.status == 404
+    home.update_device(left.id, {"group": "Study"})
+    home.update_device(right.id, {"group": "Study"})
+    assert home.set_room(" study ", {"color": "rose", "icon": "sofa"})["rooms"] == [
+        {"name": "Study", "color": "rose", "icon": "sofa"}
+    ]
+    assert home.set_room("Study", {"icon": None})["rooms"] == [{"name": "Study", "color": "rose", "icon": None}]
+    with pytest.raises(HomeSetupError, match="colour"):
+        home.set_room("Study", {"color": "#ff0000"})
+    # With neither of its own, the room has no look saved.
+    assert home.set_room("Study", {"color": None})["rooms"] == []
+
+
 def test_the_demo_is_only_offered_in_mock_mode(db: Database, config: Config) -> None:
     live = Config(db_path=config.db_path, mock=False, auth=False)
     assert "demo" not in HomeService(live, db).available()

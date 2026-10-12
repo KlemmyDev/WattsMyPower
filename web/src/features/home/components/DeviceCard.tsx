@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { duration, hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, money } from "~/features/common/formatting/utils/number";
@@ -7,15 +7,25 @@ import { alpha } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
-import { Icon } from "~/features/common/ui/components/Icon";
-import { Pill } from "~/features/common/ui/components/Pill";
+import { hasIcon, Icon } from "~/features/common/ui/components/Icon";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { cn } from "~/features/common/ui/utils";
 import { useNow } from "~/features/common/time/hooks";
 import { addDays, midnight, nowS, sameDay } from "~/features/common/time/utils";
 import { useHomeChange } from "~/features/home/hooks";
-import type { BestTime, DevicePattern, HomeDevice, HomeUsage, Saving } from "~/features/home/types";
-import { ESTIMATED, habitLine, kindIcon, nowLine, watts, WEEKDAY_SHORT } from "~/features/home/utils";
+import { LookButton } from "~/features/home/components/LookPicker";
+import type { BestTime, DevicePattern, HomeDevice, HomeUsage, RoomLook, Saving } from "~/features/home/types";
+import {
+  defaultDeviceIcon,
+  defaultRoomIcon,
+  deviceIcon,
+  drawing,
+  ESTIMATED,
+  habitLine,
+  nowLine,
+  watts,
+  WEEKDAY_SHORT,
+} from "~/features/home/utils";
 
 type Used = HomeUsage["devices"][number];
 
@@ -148,8 +158,9 @@ function Use({
   const total = used?.total ?? 0;
   const change = compared(total, before);
   return (
-    <>
-      <dl className="m-0 grid grid-cols-3 gap-3 border-y border-line-subtle py-3 tabular-nums max-xs:grid-cols-2">
+    // At the foot of the card, so the figures line up with the cards beside it.
+    <div className="mt-auto flex flex-col gap-3.5">
+      <dl className="m-0 grid grid-cols-3 gap-3 border-t border-line-subtle pt-3.5 tabular-nums max-xs:grid-cols-2">
         <div className="flex flex-col gap-0.5">
           <dt className="text-xs text-ink-muted">Used {rangeLabel}</dt>
           <dd className="m-0 text-lg font-semibold">{kWh(total)}</dd>
@@ -199,7 +210,7 @@ function Use({
           </span>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -261,15 +272,52 @@ function RuleLine({ device }: { device: HomeDevice }) {
   );
 }
 
-/** One word for how devices are: running if any is; else offline, or off, if they all are; else idle. */
-function state(devices: HomeDevice[]) {
-  if (devices.some((d) => d.now?.running && !d.now.stale)) return "Running";
-  if (devices.every((d) => d.now?.online === false)) return "Offline";
-  if (devices.every((d) => d.now?.switched_on === false)) return "Off";
-  return "Idle";
+/** Whether devices are drawing power (or running), and whether they're all offline, for their icon. */
+function lights(devices: HomeDevice[]) {
+  const live = (d: HomeDevice) => !!d.now && d.now.online && !d.now.stale;
+  return {
+    lit: devices.some((d) => live(d) && (d.now!.running || drawing(d) != null)),
+    off: devices.every((d) => !live(d)),
+  };
 }
 
-/** One device: what it's doing now, what it used in the period shown, its habits, and its last run. */
+/** A card's head: its icon (which changes its look), its name, what it's doing, and what's on the right. */
+function Head({
+  look,
+  name,
+  status,
+  tone,
+  right,
+}: {
+  look: ReactNode;
+  name: ReactNode;
+  status: ReactNode;
+  tone: "good" | "ink" | "muted";
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3.5">
+      {look}
+      <div className="flex min-h-12 min-w-0 flex-1 flex-col justify-center gap-0.5">
+        <h3 className="m-0 truncate text-[17px] leading-6 font-semibold">{name}</h3>
+        <span
+          className={cn(
+            "truncate text-[13px] tabular-nums",
+            tone === "good" ? "font-medium text-good" : tone === "ink" ? "text-ink" : "text-ink-muted",
+          )}
+        >
+          {status}
+        </span>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+const CARD = "h-full gap-4 p-6 max-sm:p-5";
+
+/** One device: what it's doing now, what it used in the period shown, its habits, and its last run. Its icon changes
+ * its colour and icon. */
 export function DeviceCard({
   device,
   used,
@@ -278,6 +326,7 @@ export function DeviceCard({
   cycles,
   kindLabel,
   color,
+  givenColor,
   home,
   rangeLabel,
   beforeLabel,
@@ -291,47 +340,57 @@ export function DeviceCard({
   cycles: boolean;
   kindLabel: string;
   color: string;
+  /** Its colour without one chosen (its room's, or its slot's). */
+  givenColor: string;
   home: number | null;
   rangeLabel: string;
   beforeLabel: string;
   best: BestTime | undefined;
   saving?: Saving;
 }) {
+  const { deviceLook } = useHomeChange();
   const now = nowLine(device);
+  const { lit, off } = lights([device]);
   const details = Object.entries(device.now?.details ?? {});
+  const switchable = device.can_switch && device.now?.switched_on != null && !off;
+  const w = drawing(device);
   return (
-    <Card aria-label={device.name} className="col-span-6 gap-4 max-lg:col-span-12">
-      <div className="flex items-start gap-3">
-        <span
-          className="flex size-11 flex-none items-center justify-center rounded-full"
-          style={{ background: alpha(color, 0.16), color }}
-        >
-          <Icon name={kindIcon(device.kind)} size={22} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 truncate text-[17px] font-semibold">
-              <DeviceLink id={device.id}>{device.name}</DeviceLink>
-            </h3>
-            <Pill tone={now.running ? "good" : "neutral"} size="sm">
-              {state([device])}
-            </Pill>
-          </div>
-          <span className="truncate text-[13px] text-ink-muted">
-            {[kindLabel, device.model].filter(Boolean).join(" · ")}
+    <Card aria-label={device.name} className={CARD}>
+      <Head
+        look={
+          <LookButton
+            name={device.name}
+            icon={deviceIcon(device)}
+            color={color}
+            lit={lit}
+            off={off}
+            look={{ color: device.color ?? null, icon: device.icon ?? null }}
+            given={{ color: givenColor, icon: defaultDeviceIcon(device) }}
+            onPick={(change) => deviceLook.mutate({ id: device.id, ...change })}
+            pending={deviceLook.isPending}
+            error={deviceLook.error}
+          />
+        }
+        name={
+          <span title={[kindLabel, device.model].filter(Boolean).join(" · ")}>
+            <DeviceLink id={device.id}>{device.name}</DeviceLink>
           </span>
-        </div>
-        <Power device={device} kindLabel={kindLabel} />
-      </div>
-
-      {/* What it's doing, unless the pill has said it all ("Idle", "Offline"). */}
-      {now.text !== "Idle" && now.text !== "Offline" && (
-        <div className="flex items-center gap-2 text-sm">
-          {now.running && <Icon name="clock" size={16} className="text-good" />}
-          <span className={now.running ? "font-medium" : "text-ink-muted"}>{now.text}</span>
-          {device.now?.running && device.now.program && <span className="text-ink-muted">· {device.now.program}</span>}
-        </div>
-      )}
+        }
+        status={
+          <>
+            {now.text}
+            {device.now?.running && device.now.program ? ` · ${device.now.program}` : ""}
+          </>
+        }
+        tone={now.running ? "good" : w != null ? "ink" : "muted"}
+        right={
+          switchable ? (
+            <Power device={device} kindLabel={kindLabel} />
+          ) : w != null ? (
+            <Watts w={w} estimated={!!device.now?.estimated} />
+          ) : undefined
+        }
+      />
       {device.rule && <RuleLine device={device} />}
       {details.length > 0 && (
         <div className="-mt-1 flex flex-wrap gap-1.5">
@@ -360,9 +419,21 @@ export function DeviceCard({
   );
 }
 
+/** What it's drawing, big, in the card's top corner. */
+function Watts({ w, estimated }: { w: number; estimated: boolean }) {
+  return (
+    <span
+      className="pt-1 text-[22px] leading-7 font-light tracking-[-0.5px] whitespace-nowrap tabular-nums"
+      title={estimated ? ESTIMATED : undefined}
+    >
+      {watts(w, estimated)}
+    </span>
+  );
+}
+
 /**
- * A group of devices as one (the plugs in a room): what they used together, and their habits together; then each of
- * them with what it's doing now, and its switch.
+ * A room (a group of devices) as one: what they're drawing together now, each of them with what it's doing and its
+ * switch, then what they used together and their habits together. Its icon changes the room's colour and icon.
  */
 export function GroupCard({
   name,
@@ -373,6 +444,9 @@ export function GroupCard({
   cycles,
   kindLabels,
   color,
+  givenColor,
+  colors,
+  look,
   home,
   rangeLabel,
   beforeLabel,
@@ -385,73 +459,87 @@ export function GroupCard({
   cycles: boolean;
   kindLabels: Map<string, string>;
   color: string;
+  /** The room's colour without one chosen (its first device's). */
+  givenColor: string;
+  /** Each device's own colour, for its icon in the list. */
+  colors: Map<number, string>;
+  /** The room's own look, if it has one. */
+  look: RoomLook | undefined;
   home: number | null;
   rangeLabel: string;
   beforeLabel: string;
 }) {
-  const kinds = new Set(members.map((d) => d.kind));
-  const kind = kinds.size === 1 ? members[0].kind : null;
-  const word = state(members);
+  const { roomLook } = useHomeChange();
+  const { lit, off } = lights(members);
   const read = members.filter((d) => d.now && !d.now.stale && d.now.online && d.now.power_w != null);
   const power = read.reduce((a, d) => a + d.now!.power_w!, 0);
   const estimated = read.some((d) => d.now!.estimated);
+  const running = members.filter((d) => d.now?.running && !d.now.stale);
   const lastRun = members
     .map((d) => d.last_run)
     .filter((r) => r != null)
     .sort((a, b) => b.start - a.start)[0];
+  const count = members.length === 1 ? "1 device" : `${members.length} devices`;
+  const status = running.length
+    ? `${running.map((d) => d.name).join(" and ")} running`
+    : off
+      ? `${count}, offline`
+      : lit
+        ? `${count}, ${members.filter((d) => drawing(d) != null).length} on`
+        : `${count}, idle`;
   return (
-    <Card aria-label={name} className="col-span-6 gap-4 max-lg:col-span-12">
-      <div className="flex items-start gap-3">
-        <span
-          className="flex size-11 flex-none items-center justify-center rounded-full"
-          style={{ background: alpha(color, 0.16), color }}
-        >
-          <Icon name={kind ? kindIcon(kind) : "plug"} size={22} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 truncate text-[17px] font-semibold">
-              <Link
-                to="/home/rooms/$room"
-                params={{ room: name }}
-                className="text-inherit no-underline hover:underline"
-              >
-                {name}
-              </Link>
-            </h3>
-            <Pill tone={word === "Running" ? "good" : "neutral"} size="sm">
-              {word}
-            </Pill>
-          </div>
-          <span className="truncate text-[13px] text-ink-muted">
-            {[members.length === 1 ? "Group" : `Group of ${members.length}`, kind ? kindLabels.get(kind) : null]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </div>
-        {read.length > 0 && power >= 2 && (
-          <span
-            className="text-sm font-medium whitespace-nowrap tabular-nums"
-            title={estimated ? ESTIMATED : undefined}
-          >
-            Using {watts(power, estimated)}
-          </span>
-        )}
-      </div>
+    <Card aria-label={name} className={CARD}>
+      <Head
+        look={
+          <LookButton
+            name={name}
+            icon={hasIcon(look?.icon) ? look.icon : defaultRoomIcon(name, members)}
+            color={color}
+            lit={lit}
+            off={off}
+            look={{ color: look?.color ?? null, icon: look?.icon ?? null }}
+            given={{ color: givenColor, icon: defaultRoomIcon(name, members) }}
+            onPick={(change) => roomLook.mutate({ name, ...change })}
+            pending={roomLook.isPending}
+            error={roomLook.error}
+          />
+        }
+        name={
+          <Link to="/home/rooms/$room" params={{ room: name }} className="text-inherit no-underline hover:underline">
+            {name}
+          </Link>
+        }
+        status={status}
+        tone={running.length ? "good" : "muted"}
+        right={read.length > 0 && power >= 2 ? <Watts w={power} estimated={estimated} /> : undefined}
+      />
 
-      <ul className="m-0 flex list-none flex-col p-0">
+      <ul className="m-0 flex list-none flex-col rounded-2xl bg-fg/3 p-1 light:bg-fg/4">
         {members.map((d) => {
           const now = nowLine(d);
+          const mine = lights([d]);
+          const c = colors.get(d.id) ?? color;
           return (
-            <li
-              key={d.id}
-              className="flex items-start gap-3 border-t border-line-subtle py-2.5 first:border-t-0 first:pt-0"
-            >
-              <div className="flex min-h-6 min-w-0 flex-1 flex-col justify-center">
+            <li key={d.id} className="flex min-h-11 items-center gap-3 rounded-xl px-2.5 py-1.5">
+              <span
+                className="flex size-7 flex-none items-center justify-center rounded-lg transition-colors duration-500"
+                style={{
+                  background: mine.off ? "transparent" : mine.lit ? alpha(c, 0.22) : alpha(c, 0.1),
+                  color: mine.off ? "var(--color-ink-faint)" : c,
+                }}
+              >
+                <Icon name={deviceIcon(d)} size={15} />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-medium">
                   <DeviceLink id={d.id}>{d.name}</DeviceLink>
                 </span>
-                <span className={cn("truncate text-[13px]", now.running ? "text-good" : "text-ink-muted")}>
+                <span
+                  className={cn(
+                    "truncate text-xs tabular-nums",
+                    now.running ? "text-good" : mine.lit ? "text-ink-sub" : "text-ink-faint",
+                  )}
+                >
                   {now.text}
                   {d.now?.running && d.now.program ? ` · ${d.now.program}` : ""}
                 </span>

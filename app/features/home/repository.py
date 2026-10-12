@@ -44,17 +44,42 @@ class Device:
     group: str | None = None  # shown with the others in it as one on the Home page ("Study")
     rule: dict[str, Any] = field(default_factory=dict)  # running it on spare solar (app.features.home.rules)
     estimate: bool = False  # shows what its runs usually draw while it runs (app.features.home.estimate)
+    color: str | None = None  # its colour on the Home page, a palette key; None: the one it's given
+    icon: str | None = None  # its icon there, by name; None: its kind's
+
+
+@dataclass(frozen=True)
+class Room:
+    """A room's look, as chosen (see Device.color and .icon): `name` as it was first saved."""
+
+    name: str
+    color: str | None
+    icon: str | None
 
 
 _DEVICE = (
-    "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name, rule, estimate FROM home_devices"
+    "SELECT id, account, key, name, kind, model, hidden, position, meter, group_name, rule, estimate, color, icon"
+    " FROM home_devices"
 )
 
 
 def _device(row: tuple[Any, ...]) -> Device:
-    id, account, key, name, kind, model, hidden, position, meter, group, rule, estimate = row
+    id, account, key, name, kind, model, hidden, position, meter, group, rule, estimate, color, icon = row
     return Device(
-        id, account, key, name, kind, model, bool(hidden), position, _json(meter), group, _json(rule), bool(estimate)
+        id,
+        account,
+        key,
+        name,
+        kind,
+        model,
+        bool(hidden),
+        position,
+        _json(meter),
+        group,
+        _json(rule),
+        bool(estimate),
+        color,
+        icon,
     )
 
 
@@ -138,11 +163,33 @@ class HomeRepository:
             "model": "model",
             "group": "group_name",
             "estimate": "estimate",
+            "color": "color",
+            "icon": "icon",
         }
         allowed = {columns[k]: v for k, v in changes.items() if k in columns}
         if allowed:
             sets = ", ".join(f"{k} = ?" for k in allowed)
             conn.execute(f"UPDATE home_devices SET {sets} WHERE id = ?", (*allowed.values(), device_id))
+
+    # -- rooms ----------------------------------------------------------------
+    def rooms(self, conn: sqlite3.Connection | None = None) -> list[Room]:
+        """Every room with a look of its own, by name."""
+        sql = "SELECT name, color, icon FROM home_rooms ORDER BY name"
+        if conn is not None:
+            return [Room(*r) for r in conn.execute(sql)]
+        with self.db.reading() as c:
+            return [Room(*r) for r in c.execute(sql)]
+
+    def save_room(self, conn: sqlite3.Connection, name: str, color: str | None, icon: str | None) -> None:
+        """Set a room's look (by its name, any capitals); with neither a colour nor an icon, it has none of its own."""
+        if color is None and icon is None:
+            conn.execute("DELETE FROM home_rooms WHERE name = ?", (name,))
+            return
+        conn.execute(
+            "INSERT INTO home_rooms (name, color, icon) VALUES (?, ?, ?)"
+            " ON CONFLICT (name) DO UPDATE SET color = excluded.color, icon = excluded.icon",
+            (name, color, icon),
+        )
 
     def save_rule(self, conn: sqlite3.Connection, device_id: int, rule: dict[str, Any]) -> None:
         conn.execute("UPDATE home_devices SET rule = ? WHERE id = ?", (json.dumps(rule), device_id))

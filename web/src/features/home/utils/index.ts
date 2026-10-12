@@ -2,8 +2,15 @@ import { hhmm, hourLabel, shortDay } from "~/features/common/formatting/utils/da
 import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { COLOR, DEVICE_COLORS } from "~/features/common/theme/utils/colors";
 import { addDays, midnight } from "~/features/common/time/utils";
-import type { IconName } from "~/features/common/ui/components/Icon";
-import type { DeviceKind, DevicePattern, HomeDevice, HomeIntegration, HomeUsage } from "~/features/home/types";
+import { hasIcon, type IconName } from "~/features/common/ui/components/Icon";
+import type {
+  DeviceKind,
+  DevicePattern,
+  HomeDevice,
+  HomeIntegration,
+  HomeUsage,
+  RoomLook,
+} from "~/features/home/types";
 
 const KIND_ICONS: Record<DeviceKind, IconName> = {
   washer: "washer",
@@ -30,13 +37,171 @@ export const integrationIcon = (i: Pick<HomeIntegration, "icon">): IconName =>
 export const integrationReach = (i: Pick<HomeIntegration, "id" | "cloud">): "cloud" | "bluetooth" | "local" =>
   i.cloud ? "cloud" : i.id === "bluetti" ? "bluetooth" : "local";
 
+/** The colours a device or room can be given, by key, in the palette's order (--color-device-1…). */
+export const PALETTE = [
+  "jade",
+  "violet",
+  "rose",
+  "green",
+  "coral",
+  "sky",
+  "magenta",
+  "brown",
+  "cyan",
+  "olive",
+] as const;
+export type PaletteKey = (typeof PALETTE)[number];
+
+/** A palette key's colour; undefined for none, or one this version doesn't have. */
+export const paletteColor = (key: string | null | undefined): string | undefined =>
+  key ? DEVICE_COLORS[PALETTE.indexOf(key as PaletteKey)] : undefined;
+
+/** A room's own look, by its name (any capitals). */
+export const roomLook = (rooms: RoomLook[] | undefined, name: string | null | undefined): RoomLook | undefined =>
+  name ? rooms?.find((r) => r.name.toLowerCase() === name.toLowerCase()) : undefined;
+
 /**
- * Each device's colour: by its place among every device (hidden ones included), so hiding or adding one never
- * repaints the rest. Past the palette, devices share a quiet grey; "everything else" is the bar grey.
+ * Each device's colour: the one chosen for it, else its room's, else by its place among every device (hidden ones
+ * included), so hiding or adding one never repaints the rest. Past the palette, devices share a quiet grey;
+ * "everything else" is the bar grey. `byRoom`: where a room is shown as one (it stands in by its first visible
+ * member's id), that id takes the room's own colour, if it has one.
  */
-export function deviceColors(devices: Pick<HomeDevice, "id">[]): Map<number, string> {
-  return new Map(devices.map((d, i) => [d.id, DEVICE_COLORS[i] ?? COLOR.gridSoft]));
+export function deviceColors(
+  devices: Pick<HomeDevice, "id" | "group" | "color" | "hidden">[],
+  rooms: RoomLook[] = [],
+  { byRoom = false }: { byRoom?: boolean } = {},
+): Map<number, string> {
+  const room = (d: Pick<HomeDevice, "group">) => paletteColor(roomLook(rooms, d.group)?.color);
+  const colors = new Map(
+    devices.map((d, i) => [d.id, paletteColor(d.color) ?? room(d) ?? DEVICE_COLORS[i] ?? COLOR.gridSoft]),
+  );
+  if (byRoom) {
+    const seen = new Set<string>();
+    for (const d of devices) {
+      if (d.hidden || !d.group || seen.has(d.group.toLowerCase())) continue;
+      seen.add(d.group.toLowerCase());
+      const c = room(d);
+      if (c) colors.set(d.id, c);
+    }
+  }
+  return colors;
 }
+
+type Colored = Pick<HomeDevice, "id" | "group" | "color" | "hidden">;
+
+/** A device's colour were it not given its own: its room's, or its slot's. */
+export const givenDeviceColor = (devices: Colored[], rooms: RoomLook[], id: number): string =>
+  deviceColors(
+    devices.map((d) => (d.id === id ? { ...d, color: null } : d)),
+    rooms,
+  ).get(id) ?? COLOR.gridSoft;
+
+/** A room's colour were it not given its own: the one its first device stands in with. */
+export function givenRoomColor(devices: Colored[], rooms: RoomLook[], name: string): string {
+  const first = devices.find((d) => !d.hidden && d.group?.toLowerCase() === name.toLowerCase());
+  const others = rooms.filter((r) => r.name.toLowerCase() !== name.toLowerCase());
+  return (first && deviceColors(devices, others).get(first.id)) ?? COLOR.gridSoft;
+}
+
+/** The icons a device or room can be given, in the picker's order: rooms and furniture first, then appliances. */
+export const ICON_CHOICES: IconName[] = [
+  "home",
+  "sofa",
+  "bed",
+  "utensils",
+  "cookingPot",
+  "bath",
+  "monitor",
+  "laptop",
+  "briefcase",
+  "tv",
+  "gamepad",
+  "speaker",
+  "lamp",
+  "lightbulb",
+  "garage",
+  "sprout",
+  "dumbbell",
+  "shirt",
+  "washer",
+  "dryer",
+  "dishwasher",
+  "fridge",
+  "microwave",
+  "coffee",
+  "flame",
+  "snowflake",
+  "fan",
+  "thermometer",
+  "droplet",
+  "router",
+  "server",
+  "printer",
+  "car",
+  "battery",
+  "plug",
+  "bolt",
+];
+
+/** What a name suggests, for an icon: the first of these whose words it has. */
+const NAMED: [RegExp, IconName][] = [
+  [/\b(tv|television|telly)\b/i, "tv"],
+  [/\b(computer|pc|desk|monitor|imac)\b/i, "monitor"],
+  [/\blaptop\b/i, "laptop"],
+  [/\b(router|modem|nbn|wi-?fi|network)\b/i, "router"],
+  [/\b(nas|server|rack)\b/i, "server"],
+  [/\bprinter\b/i, "printer"],
+  [/\b(lamp|light)s?\b/i, "lamp"],
+  [/\b(kettle|coffee|espresso)\b/i, "coffee"],
+  [/\bmicrowave\b/i, "microwave"],
+  [/\b(heater|oven|stove)\b/i, "flame"],
+  [/\bfan\b/i, "fan"],
+  [/\b(aircon|air con|a\/c|ac)\b/i, "snowflake"],
+  [/\b(speaker|sonos|stereo|amp)\b/i, "speaker"],
+  [/\b(xbox|playstation|ps\d|console|gaming)\b/i, "gamepad"],
+  [/\b(fridge|freezer)\b/i, "fridge"],
+  [/\b(pump|pool|spa|aquarium)\b/i, "droplet"],
+];
+const ROOMS: [RegExp, IconName][] = [
+  [/\b(bed|bedroom|master|guest|kids|nursery)\b/i, "bed"],
+  [/\b(lounge|living|family|sitting|rumpus)\b/i, "sofa"],
+  [/\bkitchen\b/i, "cookingPot"],
+  [/\bdining\b/i, "utensils"],
+  [/\b(study|office)\b/i, "monitor"],
+  [/\blaundry\b/i, "washer"],
+  [/\b(bath|bathroom|ensuite|toilet|powder)\b/i, "bath"],
+  [/\b(garage|shed|workshop|carport)\b/i, "garage"],
+  [/\b(media|theatre|theater|cinema)\b/i, "tv"],
+  [/\b(garden|yard|outdoor|patio|deck|alfresco|pool)\b/i, "sprout"],
+  [/\bgym\b/i, "dumbbell"],
+  [/\b(games?|play)\b/i, "gamepad"],
+  [/\b(wardrobe|robe|closet)\b/i, "shirt"],
+];
+const named = (list: [RegExp, IconName][], name: string) => list.find(([re]) => re.test(name))?.[1];
+
+/** A device's icon: the one chosen for it, else (for a plug) what its name suggests, else its kind's. */
+export function deviceIcon(d: Pick<HomeDevice, "icon" | "kind" | "name">): IconName {
+  if (hasIcon(d.icon)) return d.icon;
+  return (d.kind === "plug" ? named(NAMED, d.name) : undefined) ?? kindIcon(d.kind);
+}
+
+/** The icon a device gets without one chosen (what the picker offers as its own). */
+export const defaultDeviceIcon = (d: Pick<HomeDevice, "kind" | "name">) => deviceIcon({ ...d, icon: null });
+
+/** A room's icon: the one chosen for it, else what its name suggests, else its devices' kind (if they're all one),
+ * else a house. */
+export function roomIcon(name: string, members: Pick<HomeDevice, "kind">[], rooms?: RoomLook[]): IconName {
+  const own = roomLook(rooms, name)?.icon;
+  if (hasIcon(own)) return own;
+  return defaultRoomIcon(name, members);
+}
+
+export function defaultRoomIcon(name: string, members: Pick<HomeDevice, "kind">[]): IconName {
+  const kinds = new Set(members.map((d) => d.kind));
+  const kind = kinds.size === 1 ? members[0].kind : null;
+  return named(ROOMS, name) ?? (kind && kind !== "plug" ? kindIcon(kind) : "home");
+}
+
 export const OTHER_COLOR = COLOR.bar;
 /** The car's charging, in the breakdown: its own colour, and an id no device has. */
 export const CAR_COLOR = COLOR.lilac;

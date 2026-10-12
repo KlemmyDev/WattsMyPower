@@ -82,9 +82,17 @@ async def disconnect(svc: ServicesDep, integration: str):
 @router.patch("/devices/{device_id}")
 async def update_device(svc: ServicesDep, device_id: int, body: JsonBody):
     """Rename a device ({"name"}), say what it is ({"kind"}), put it in a group shown as one on the Home page
-    ({"group"}: a name, or null for none), leave it out of the breakdown ({"hidden"}), or show what its runs usually
-    draw while it runs, for an appliance that doesn't report its power ({"estimate"})."""
+    ({"group"}: a name, or null for none), leave it out of the breakdown ({"hidden"}), show what its runs usually
+    draw while it runs, for an appliance that doesn't report its power ({"estimate"}), or give it a colour and an
+    icon of its own ({"color", "icon"}: null for the one it's given)."""
     return await _run(svc.home.update_device, device_id, body)
+
+
+@router.put("/rooms/{name}")
+async def set_room(svc: ServicesDep, name: str, body: JsonBody):
+    """Give a room (a group devices are in) a colour and an icon of its own: {"color", "icon"}, either null for the
+    one it's given."""
+    return await _run(svc.home.set_room, name, body)
 
 
 @router.post("/devices/{device_id}/switch")
