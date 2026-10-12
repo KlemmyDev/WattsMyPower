@@ -1,7 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { ForecastAccuracy } from "~/features/common/weather/types";
-import { ButtonLink } from "~/features/common/ui/components/Button";
-import { Card, CardHeader, Eyebrow, Muted } from "~/features/common/ui/components/Card";
+import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, plural } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -36,40 +35,47 @@ function missWords(d: Day): string {
 
 function Stat({ label, value, sub }: { label: string; value: ReactNode; sub: ReactNode }) {
   return (
-    // On a phone, a row: the label and its note on the left, the figure on the right.
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl bg-surface-inset px-4 py-3.5 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-center max-md:gap-x-4 max-md:gap-y-0.5 max-md:py-3">
-      <Eyebrow className="max-md:col-start-1 max-md:row-start-1">{label}</Eyebrow>
-      <span className="text-[26px] leading-8 font-light tracking-[-0.75px] whitespace-nowrap tabular-nums max-md:col-start-2 max-md:row-span-2 max-md:row-start-1 max-md:text-xl">
-        {value}
-      </span>
-      <span className="text-xs text-pretty text-ink-muted tabular-nums max-md:col-start-1 max-md:row-start-2">
-        {sub}
-      </span>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-[11.5px] text-ink-faint">{label}</dt>
+      <dd className="text-[17px] font-light whitespace-nowrap tabular-nums">{value}</dd>
+      <dd className="text-[11.5px] leading-4 text-pretty text-ink-faint">{sub}</dd>
     </div>
   );
 }
 
 /**
- * How close the day-ahead solar forecast has come lately. Three figures: how far out it usually is, which way it
- * leans, and how often days land in the likely range. Then each day: the forecast as a line, the likely range around
+ * How close the day-ahead solar forecast has come lately: how far out it usually is (in the corner), which way it
+ * leans and how often days land in the likely range. Then each day: the forecast as a line, the likely range around
  * it shaded, and what the panels made as a dot, joined to the forecast so the miss is the length of the stem.
  */
-export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null | undefined }) {
+export function AccuracyCard({
+  accuracy,
+  className,
+}: {
+  accuracy: ForecastAccuracy | null | undefined;
+  className?: string;
+}) {
   const [hover, setHover] = useState<string | null>(null);
   const days = accuracy?.days.slice(-SHOWN) ?? [];
   const r = accuracy?.range ?? null;
   const shown = days.find((d) => d.date === hover) ?? days[days.length - 1];
   return (
-    <Card aria-labelledby="h-acc">
-      <CardHeader
-        title="How close the forecast has been"
-        id="h-acc"
-        action={
-          <ButtonLink to="/integrations/weather" variant="link">
-            Forecast settings
-          </ButtonLink>
-        }
-      />
+    <Card aria-labelledby="h-acc" className={className}>
+      <div className="flex items-end justify-between gap-3">
+        <TitleBlock
+          title="How close the forecast has been"
+          id="h-acc"
+          sub={days.length ? `Solar forecast the day before, the last ${days.length} days` : undefined}
+        />
+        {accuracy?.mae_kwh != null && days.length > 0 && (
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-xs whitespace-nowrap text-ink-faint">Usually out by</span>
+            <span className="text-[28px] leading-8 font-light tracking-[-1px] whitespace-nowrap tabular-nums">
+              {kWh(accuracy.mae_kwh)}
+            </span>
+          </div>
+        )}
+      </div>
       {accuracy === undefined ? (
         <Muted>Loading</Muted>
       ) : accuracy === null ? (
@@ -116,7 +122,7 @@ export function AccuracyCard({ accuracy }: { accuracy: ForecastAccuracy | null |
   );
 }
 
-/** The three figures over every day compared (up to 30), not just the ones charted. */
+/** The figures over every day compared (up to 30), not just the ones charted. */
 function Stats({ accuracy }: { accuracy: ForecastAccuracy }) {
   const all = accuracy.days;
   const mae = accuracy.mae_kwh ?? 0;
@@ -126,39 +132,31 @@ function Stats({ accuracy }: { accuracy: ForecastAccuracy }) {
   const hits = r ? all.filter((d) => inside(d, r)).length : 0;
   const lean = Math.abs(bias) < 0.1 || (mean && Math.abs(bias) < mean * 0.03);
   return (
-    <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1 max-md:gap-2">
+    <dl className="grid grid-cols-3 gap-x-6 gap-y-3 max-sm:grid-cols-1">
       <Stat
-        label="Usually out by"
-        value={kWh(mae)}
+        label="Share of a usual day"
+        value={mean ? `${Math.round((mae / mean) * 100)}%` : kWh(mae)}
         sub={
           mean
-            ? `a day, ${Math.round((mae / mean) * 100)}% of an average ${kWh(mean)} day · over ${all.length} ${plural(all.length, "day")}`
-            : `a day, over ${all.length} ${plural(all.length, "day")}`
+            ? `Of ${kWh(mean)}, over ${all.length} ${plural(all.length, "day")}`
+            : `Over ${all.length} ${plural(all.length, "day")}`
         }
       />
       <Stat
         label="It tends to"
         value={lean ? "Be about right" : bias > 0 ? "Guess high" : "Guess low"}
-        sub={
-          lean
-            ? "Misses go both ways, with no lean either way."
-            : `By ${kWh(Math.abs(bias))} a day on average. Your panels made ${bias > 0 ? "less" : "more"} than forecast.`
-        }
+        sub={lean ? "Misses go both ways" : `By ${kWh(Math.abs(bias))} a day on average`}
       />
       {r ? (
         <Stat
           label="Inside the likely range"
           value={`${hits} of ${all.length}`}
-          sub={`Days that made ${Math.round(r.low * 100)}–${Math.round(r.high * 100)}% of their forecast, the likely range.`}
+          sub={`${Math.round(r.low * 100)}–${Math.round(r.high * 100)}% of their forecast`}
         />
       ) : (
-        <Stat
-          label="Likely range"
-          value="Soon"
-          sub={`Shows once there's a week of days to compare (${all.length} so far).`}
-        />
+        <Stat label="Likely range" value="Soon" sub={`After a week of days (${all.length} so far)`} />
       )}
-    </div>
+    </dl>
   );
 }
 
