@@ -146,7 +146,10 @@ function Scene({
   const dark = wx.mode === "night" || wx.mode === "storm";
 
   return (
-    <>
+    // The drawing and its readout together, as tall as the drawing: from 2xl up the readout floats over the drawing's
+    // bottom corners, so a widget taller than the drawing leaves its room under both rather than pulling the cards down
+    // past the drawing's edge.
+    <div className="relative flex flex-col gap-3">
       {/* No background under the scene: it covers the box, and a light one would show as a fringe
           around the rounded corners against a dark sky. The drawing is clipped to the corners on its own, so the
           weather card over it isn't. */}
@@ -196,7 +199,7 @@ function Scene({
       </div>
 
       <Readout p={p} s={s} now={now} soc={flows.soc} show={show} />
-    </>
+    </div>
   );
 }
 

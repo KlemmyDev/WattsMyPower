@@ -23,9 +23,9 @@ export const widgets: WidgetDef[] = [
     group: "overview",
     icon: "bolt",
     thumb: { kind: "flow" },
-    sizes: size([4, 4], [12, 10], [12, 8]),
+    sizes: size([4, 4], [12, 10], [12, 6]),
     phone: size([4, 4], [4, 8], [4, 5]),
-    sizesFor: (s) => (scene(s) ? size([8, 6], [12, 10], [12, 8]) : size([4, 4], [12, 8], [6, 5])),
+    sizesFor: (s) => (scene(s) ? size([8, 5], [12, 10], [12, 6]) : size([4, 4], [12, 8], [6, 5])),
     options: [
       { key: "style", label: "Style", kind: "style", choices: FLOW_STYLES, default: "scene" },
       ...FLOW_READINGS.map((r) => ({

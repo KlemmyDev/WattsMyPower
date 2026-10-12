@@ -32,7 +32,7 @@ export const PRESETS: Preset[] = [
     name: "Everything",
     sub: "The Overview as it's always been",
     specs: (ctx) => [
-      ["power-flow", 12, 8, { style: "scene" }],
+      ["power-flow", 12, 6, { style: "scene" }],
       ["grid", 12, 1],
       ...(ctx.noBattery
         ? ([["today-costs", 12, 7]] as Spec[])
