@@ -316,8 +316,9 @@ export function TimeLine({
   zoom?: boolean;
   /** What the chart shows, for a screen reader (the drawing itself is hidden from one): "Battery level". */
   label?: string;
-  /** A layer under the plot on the same time scale (the day's sun), given the stretch shown. */
-  under?: (start: number, end: number) => ReactNode;
+  /** A layer under the plot on the same time scale (the day's sun), given the stretch shown and the time under the
+   * pointer (null when there's none), so it can pick that time out too. */
+  under?: (start: number, end: number, hover: number | null) => ReactNode;
 }) {
   const H = height;
   const own = useZoom(whole, wholeEnd);
@@ -421,213 +422,222 @@ export function TimeLine({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {out}
+      {/* With a layer under it, the pointer reads the time anywhere over the plot and the layer, and the line runs
+          down through both. */}
       <div
-        className="relative cursor-crosshair touch-pan-y"
-        style={{ height }}
-        {...range.keys}
-        onPointerMove={(e) => {
-          onPoint(e);
-          range.handlers.onPointerMove?.(e);
-        }}
-        onPointerDown={(e) => {
-          onPoint(e);
-          range.handlers.onPointerDown?.(e);
-        }}
-        onPointerUp={range.handlers.onPointerUp}
-        onPointerCancel={range.handlers.onPointerCancel}
-        onPointerLeave={() => setHover(null)}
+        className={cn("relative flex flex-col gap-2", under && "cursor-crosshair")}
+        onPointerMove={under ? onPoint : undefined}
+        onPointerLeave={under ? () => setHover(null) : undefined}
       >
-        <DragBand band={range.band} />
-        <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
-        <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
-        {spans.map((s) =>
-          s.to > start && s.from < end ? (
+        <div
+          className="relative cursor-crosshair touch-pan-y"
+          style={{ height }}
+          {...range.keys}
+          onPointerMove={(e) => {
+            onPoint(e);
+            range.handlers.onPointerMove?.(e);
+          }}
+          onPointerDown={(e) => {
+            onPoint(e);
+            range.handlers.onPointerDown?.(e);
+          }}
+          onPointerUp={range.handlers.onPointerUp}
+          onPointerCancel={range.handlers.onPointerCancel}
+          onPointerLeave={under ? undefined : () => setHover(null)}
+        >
+          <DragBand band={range.band} />
+          <div className="absolute inset-x-0 top-0 border-t border-fg/5" />
+          <div className="absolute inset-x-0 top-1/2 border-t border-fg/5" />
+          {spans.map((s) =>
+            s.to > start && s.from < end ? (
+              <div
+                key={`${s.from}-${s.to}`}
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0"
+                style={{
+                  left: `${chart.leftOf(s.from)}%`,
+                  width: `${Math.max(0.3, chart.leftOf(s.to) - chart.leftOf(s.from))}%`,
+                  background: alpha(s.color, 0.12),
+                }}
+              />
+            ) : null,
+          )}
+          {events.map((e) =>
+            e.t >= start && e.t <= end ? (
+              <span
+                key={`e${e.t}`}
+                title={e.label}
+                className="absolute -top-1 z-1 size-2.5 -translate-x-1/2 cursor-help rounded-full ring-2 ring-surface"
+                style={{ left: `${chart.leftOf(e.t)}%`, background: e.color }}
+              />
+            ) : null,
+          )}
+          {band && (
             <div
-              key={`${s.from}-${s.to}`}
               aria-hidden
-              className="pointer-events-none absolute inset-y-0"
+              className="pointer-events-none absolute inset-x-0 rounded-[3px]"
               style={{
-                left: `${chart.leftOf(s.from)}%`,
-                width: `${Math.max(0.3, chart.leftOf(s.to) - chart.leftOf(s.from))}%`,
-                background: alpha(s.color, 0.12),
+                top: `${chart.topOf(band.to)}%`,
+                height: `${chart.topOf(band.from) - chart.topOf(band.to)}%`,
+                background: alpha(COLOR.good, 0.07),
               }}
             />
-          ) : null,
-        )}
-        {events.map((e) =>
-          e.t >= start && e.t <= end ? (
-            <span
-              key={`e${e.t}`}
-              title={e.label}
-              className="absolute -top-1 z-1 size-2.5 -translate-x-1/2 cursor-help rounded-full ring-2 ring-surface"
-              style={{ left: `${chart.leftOf(e.t)}%`, background: e.color }}
-            />
-          ) : null,
-        )}
-        {band && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 rounded-[3px]"
-            style={{
-              top: `${chart.topOf(band.to)}%`,
-              height: `${chart.topOf(band.from) - chart.topOf(band.to)}%`,
-              background: alpha(COLOR.good, 0.07),
-            }}
-          />
-        )}
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="none"
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
-        >
-          <defs>
-            <clipPath id={`${clip}-plot`}>
-              <rect x="0" y={-H} width={W} height={H * 3} />
-            </clipPath>
-          </defs>
-          {signed && (
+          )}
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 size-full animate-reveal-x overflow-visible"
+          >
             <defs>
-              <clipPath id={`${clip}-up`}>
-                <rect x="0" y="0" width={W} height={Math.max(0, chart.Y(0))} />
-              </clipPath>
-              <clipPath id={`${clip}-down`}>
-                <rect x="0" y={chart.Y(0)} width={W} height={Math.max(0, H - chart.Y(0))} />
+              <clipPath id={`${clip}-plot`}>
+                <rect x="0" y={-H} width={W} height={H * 3} />
               </clipPath>
             </defs>
+            {signed && (
+              <defs>
+                <clipPath id={`${clip}-up`}>
+                  <rect x="0" y="0" width={W} height={Math.max(0, chart.Y(0))} />
+                </clipPath>
+                <clipPath id={`${clip}-down`}>
+                  <rect x="0" y={chart.Y(0)} width={W} height={Math.max(0, H - chart.Y(0))} />
+                </clipPath>
+              </defs>
+            )}
+            <g clipPath={`url(#${clip}-plot)`}>
+              {signed &&
+                chart.areas.map((d, i) => (
+                  <g key={`a${i}`}>
+                    <path d={d} clipPath={`url(#${clip}-up)`} style={{ fill: alpha(signed.above, 0.22) }} />
+                    <path d={d} clipPath={`url(#${clip}-down)`} style={{ fill: alpha(signed.below, 0.22) }} />
+                  </g>
+                ))}
+              {chart.fills.map((d, i) => (
+                <path key={`f${i}`} d={d} style={{ fill: alpha(color, 0.14) }} />
+              ))}
+              {compare &&
+                chart.compared.map((d, i) => (
+                  <path
+                    key={`c${i}`}
+                    d={d}
+                    {...STROKE}
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                    style={{ stroke: compare.color }}
+                  />
+                ))}
+              {chart.zero != null && (
+                <line
+                  x1="0"
+                  x2={W}
+                  y1={chart.zero.toFixed(1)}
+                  y2={chart.zero.toFixed(1)}
+                  vectorEffect="non-scaling-stroke"
+                  style={{ stroke: alpha(COLOR.fg, 0.22) }}
+                />
+              )}
+              {marks.map((m) => (
+                <line
+                  key={m.label}
+                  x1="0"
+                  x2={W}
+                  y1={chart.Y(m.v).toFixed(1)}
+                  y2={chart.Y(m.v).toFixed(1)}
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="3 4"
+                  style={{ stroke: m.color ?? alpha(COLOR.fg, 0.3) }}
+                />
+              ))}
+              {chart.lines.map((l, i) =>
+                signed ? (
+                  <g key={i}>
+                    <path
+                      d={l.d}
+                      {...STROKE}
+                      strokeWidth="2"
+                      clipPath={`url(#${clip}-up)`}
+                      style={{ stroke: signed.above }}
+                    />
+                    <path
+                      d={l.d}
+                      {...STROKE}
+                      strokeWidth="2"
+                      clipPath={`url(#${clip}-down)`}
+                      style={{ stroke: signed.below }}
+                    />
+                  </g>
+                ) : (
+                  <path
+                    key={i}
+                    d={l.d}
+                    {...STROKE}
+                    strokeWidth="2"
+                    strokeDasharray={l.forecast ? "4 4" : undefined}
+                    strokeOpacity={l.forecast ? 0.75 : 1}
+                    style={{ stroke: color }}
+                  />
+                ),
+              )}
+            </g>
+          </svg>
+          {band?.label && (
+            <span
+              className="pointer-events-none absolute right-0 pt-0.5 text-[10.5px] text-ink-faint"
+              style={{ top: `${chart.topOf(band.to)}%` }}
+            >
+              {band.label}
+            </span>
           )}
-          <g clipPath={`url(#${clip}-plot)`}>
-            {signed &&
-              chart.areas.map((d, i) => (
-                <g key={`a${i}`}>
-                  <path d={d} clipPath={`url(#${clip}-up)`} style={{ fill: alpha(signed.above, 0.22) }} />
-                  <path d={d} clipPath={`url(#${clip}-down)`} style={{ fill: alpha(signed.below, 0.22) }} />
-                </g>
-              ))}
-            {chart.fills.map((d, i) => (
-              <path key={`f${i}`} d={d} style={{ fill: alpha(color, 0.14) }} />
-            ))}
-            {compare &&
-              chart.compared.map((d, i) => (
-                <path
-                  key={`c${i}`}
-                  d={d}
-                  {...STROKE}
-                  strokeWidth="1.5"
-                  strokeDasharray="4 4"
-                  style={{ stroke: compare.color }}
+          {marks.map((m) => (
+            <span
+              key={m.label}
+              className="pointer-events-none absolute left-0 -translate-y-full pb-0.5 text-[10.5px] text-ink-faint"
+              style={{ top: `${chart.topOf(m.v)}%` }}
+            >
+              {m.label}
+            </span>
+          ))}
+          {nowLeft != null && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 border-l border-dashed border-line-strong"
+              style={{ left: `${nowLeft.toFixed(2)}%` }}
+            >
+              <span className="absolute -top-0.5 left-1.5 font-mono text-[10px] text-ink-faint">Now</span>
+            </div>
+          )}
+          {hover && !range.dragging && (
+            <>
+              {!under && <HoverLine left={chart.leftOf(hover.p.t)} />}
+              {hover.p.v != null && (
+                <span
+                  className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+                  style={{
+                    left: `${chart.leftOf(hover.p.t)}%`,
+                    top: `${chart.topOf(hover.p.v)}%`,
+                    background: signed ? (hover.p.v >= 0 ? signed.above : signed.below) : color,
+                  }}
                 />
-              ))}
-            {chart.zero != null && (
-              <line
-                x1="0"
-                x2={W}
-                y1={chart.zero.toFixed(1)}
-                y2={chart.zero.toFixed(1)}
-                vectorEffect="non-scaling-stroke"
-                style={{ stroke: alpha(COLOR.fg, 0.22) }}
-              />
-            )}
-            {marks.map((m) => (
-              <line
-                key={m.label}
-                x1="0"
-                x2={W}
-                y1={chart.Y(m.v).toFixed(1)}
-                y2={chart.Y(m.v).toFixed(1)}
-                vectorEffect="non-scaling-stroke"
-                strokeDasharray="3 4"
-                style={{ stroke: m.color ?? alpha(COLOR.fg, 0.3) }}
-              />
-            ))}
-            {chart.lines.map((l, i) =>
-              signed ? (
-                <g key={i}>
-                  <path
-                    d={l.d}
-                    {...STROKE}
-                    strokeWidth="2"
-                    clipPath={`url(#${clip}-up)`}
-                    style={{ stroke: signed.above }}
-                  />
-                  <path
-                    d={l.d}
-                    {...STROKE}
-                    strokeWidth="2"
-                    clipPath={`url(#${clip}-down)`}
-                    style={{ stroke: signed.below }}
-                  />
-                </g>
-              ) : (
-                <path
-                  key={i}
-                  d={l.d}
-                  {...STROKE}
-                  strokeWidth="2"
-                  strokeDasharray={l.forecast ? "4 4" : undefined}
-                  strokeOpacity={l.forecast ? 0.75 : 1}
-                  style={{ stroke: color }}
+              )}
+              {compare && hover.other?.v != null && (
+                <span
+                  className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
+                  style={{
+                    left: `${chart.leftOf(hover.other.t)}%`,
+                    top: `${chart.topOf(hover.other.v)}%`,
+                    background: compare.color,
+                  }}
                 />
-              ),
-            )}
-          </g>
-        </svg>
-        {band?.label && (
-          <span
-            className="pointer-events-none absolute right-0 pt-0.5 text-[10.5px] text-ink-faint"
-            style={{ top: `${chart.topOf(band.to)}%` }}
-          >
-            {band.label}
-          </span>
-        )}
-        {marks.map((m) => (
-          <span
-            key={m.label}
-            className="pointer-events-none absolute left-0 -translate-y-full pb-0.5 text-[10.5px] text-ink-faint"
-            style={{ top: `${chart.topOf(m.v)}%` }}
-          >
-            {m.label}
-          </span>
-        ))}
-        {nowLeft != null && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 border-l border-dashed border-line-strong"
-            style={{ left: `${nowLeft.toFixed(2)}%` }}
-          >
-            <span className="absolute -top-0.5 left-1.5 font-mono text-[10px] text-ink-faint">Now</span>
-          </div>
-        )}
-        {hover && !range.dragging && (
-          <>
-            <HoverLine left={chart.leftOf(hover.p.t)} />
-            {hover.p.v != null && (
-              <span
-                className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
-                style={{
-                  left: `${chart.leftOf(hover.p.t)}%`,
-                  top: `${chart.topOf(hover.p.v)}%`,
-                  background: signed ? (hover.p.v >= 0 ? signed.above : signed.below) : color,
-                }}
-              />
-            )}
-            {compare && hover.other?.v != null && (
-              <span
-                className="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full shadow-[0_0_0_2px_var(--color-surface)]"
-                style={{
-                  left: `${chart.leftOf(hover.other.t)}%`,
-                  top: `${chart.topOf(hover.other.v)}%`,
-                  background: compare.color,
-                }}
-              />
-            )}
-            <ChartTooltip left={chart.leftOf(hover.p.t)} flip={chart.leftOf(hover.p.t) > 60} width={width}>
-              {tip(hover.p, hover.other)}
-            </ChartTooltip>
-          </>
-        )}
+              )}
+              <ChartTooltip left={chart.leftOf(hover.p.t)} flip={chart.leftOf(hover.p.t) > 60} width={width}>
+                {tip(hover.p, hover.other)}
+              </ChartTooltip>
+            </>
+          )}
+        </div>
+        {under?.(start, end, hover && !range.dragging ? hover.p.t : null)}
+        {under && hover && !range.dragging && <HoverLine left={chart.leftOf(hover.p.t)} />}
       </div>
-      {under?.(start, end)}
       <TimeTicks ticks={ticks} />
     </div>
   );

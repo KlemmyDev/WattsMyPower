@@ -15,12 +15,6 @@ export function place(s: SystemInfo | undefined): { lat: number; lon: number } |
   return lat != null && lon != null && (lat !== 0 || lon !== 0) ? { lat, lon } : null;
 }
 
-/** A signed share, "+8%" or "−12%" ("0%" when it rounds to nothing). */
-export function signedPct(v: number): string {
-  const r = Math.round(v * 100);
-  return r === 0 ? "0%" : `${r > 0 ? "+" : "−"}${Math.abs(r)}%`;
-}
-
 /** Solar now: what it's making, against the array and against what the forecast expected for this hour. */
 export function solarNow(p: Snapshot | null, s: SystemInfo | undefined, f: Forecast | null | undefined, now: number) {
   const pv = p?.pv_power ?? null;

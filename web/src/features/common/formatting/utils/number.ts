@@ -48,6 +48,11 @@ export function dollars(v: number | null | undefined) {
   return `${minus(v, shown)}$${shown}`;
 }
 export const pct = (v: number | null | undefined) => (missing(v) ? DASH : `${Math.round(v)}%`);
+/** A change as a share, signed: 0.08 → "+8%", −0.12 → "−12%" ("0%" when it rounds to nothing). */
+export function signedPct(v: number): string {
+  const r = Math.round(v * 100);
+  return r === 0 ? "0%" : `${r > 0 ? "+" : "−"}${Math.abs(r)}%`;
+}
 /** A $/kWh rate in cents, trimmed: 0.325 → "32.5c", 0.3 → "30c". */
 export const centsShort = (v: number) => `${+(v * 100).toFixed(1)}c`;
 /** A $/kWh rate in cents, always one decimal: "32.5c". */

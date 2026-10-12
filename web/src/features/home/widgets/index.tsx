@@ -4,28 +4,24 @@ import { addDays, midnight } from "~/features/common/time/utils";
 import { Quiet, WidgetCard } from "~/features/common/widgets/parts";
 import type { Choice, WidgetCtx, WidgetDef, WidgetProps } from "~/features/common/widgets/types";
 import { homeInsightsQuery, homePatternsQuery, homeUsageQuery } from "~/features/home/api";
-import { DeviceCard, GroupCard } from "~/features/home/components/DeviceCard";
-import {
-  HomeDaysCard,
-  HomeNow,
-  HomeSourcesCard,
-  HomeTodayCard,
-  useHomeDays,
-  useHomeToday,
-} from "~/features/home/components/HomeWhole";
+import { DeviceCard } from "~/features/home/components/DeviceCard";
+import { HomeHero } from "~/features/home/components/HomeHero";
+import { HomeUsing, USING_HOURS, usingRows, usingShow } from "~/features/home/components/HomeUsing";
+import { HomeDaysCard, HomeSourcesCard, useHomeDays, useHomeToday } from "~/features/home/components/HomeWhole";
 import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
-import { NowCard } from "~/features/home/components/NowCard";
+import { RateNow, rateRows, rateShow } from "~/features/home/components/RateNow";
+import { ItemTile, RoomsNow } from "~/features/home/components/RoomTiles";
 import { RunningNowCard } from "~/features/home/components/RunningNowCard";
 import { ChangesCard, GoalsCard } from "~/features/home/components/SummaryCards";
 import {
   deviceColors,
   givenDeviceColor,
-  givenRoomColor,
   groupPattern,
   groupUsage,
   homeItems,
-  roomLook,
+  OTHER_COLOR,
 } from "~/features/home/utils";
+import { todayLanes } from "~/features/home/utils/today";
 
 const size = (min: [number, number], max: [number, number], d: [number, number]) => ({ min, max, default: d });
 const DEVICE = "var(--color-device-3)";
@@ -50,11 +46,14 @@ function useToday(ctx: WidgetCtx) {
   return { usage: usage.data, patterns: patterns.data, found: found.data, devices, kinds };
 }
 
-function Room({ ctx, settings }: WidgetProps) {
-  const t = useToday(ctx);
-  const rooms = ctx.home?.rooms ?? [];
+function Room({ ctx, settings, w, h }: WidgetProps) {
+  const today = midnight(ctx.now);
+  const usage = useQuery(homeUsageQuery(today, addDays(today, 1), "hour"));
+  const patterns = useQuery(homePatternsQuery);
+  const devices = ctx.home?.devices ?? [];
+  const rooms = ctx.home?.rooms;
   const name = (settings.room as string) || roomChoices(ctx)[0]?.value;
-  const items = homeItems(t.devices);
+  const items = homeItems(devices);
   const item = items.find((i) => i.group?.toLowerCase() === name?.toLowerCase());
   if (!item)
     return (
@@ -62,23 +61,19 @@ function Room({ ctx, settings }: WidgetProps) {
         <Quiet>{ctx.home ? "Choose a room in this widget's settings." : "Loading…"}</Quiet>
       </WidgetCard>
     );
-  const used = t.usage && groupUsage(t.usage, items);
   return (
-    <GroupCard
-      name={item.group!}
-      members={item.members}
-      used={used?.devices.find((u) => u.id === item.id)}
-      before={undefined}
-      pattern={t.patterns && groupPattern(t.patterns, item)}
-      cycles={item.members.every((d) => t.kinds.get(d.kind)?.cycles)}
-      kindLabels={new Map([...t.kinds].map(([id, k]) => [id, k.label]))}
-      color={deviceColors(t.devices, rooms, { byRoom: true }).get(item.id)!}
-      givenColor={givenRoomColor(t.devices, rooms, item.group!)}
-      colors={deviceColors(t.devices, rooms)}
-      look={roomLook(rooms, item.group)}
-      home={t.usage?.total.home ?? null}
-      rangeLabel="today"
-      beforeLabel=""
+    <ItemTile
+      item={item}
+      devices={devices}
+      rooms={rooms}
+      kinds={new Map((ctx.home?.kinds ?? []).map((k) => [k.id, k]))}
+      pattern={patterns.data && groupPattern(patterns.data, item)}
+      color={deviceColors(devices, rooms, { byRoom: true }).get(item.id) ?? OTHER_COLOR}
+      homeW={ctx.p?.load_power ?? null}
+      today={usage.data && groupUsage(usage.data, items)}
+      now={ctx.now}
+      w={w}
+      h={h}
     />
   );
 }
@@ -113,12 +108,21 @@ function Device({ ctx, settings }: WidgetProps) {
   );
 }
 
-function Summary({ ctx }: WidgetProps) {
-  return <HomeNow p={ctx.p} f={ctx.f} series={useHomeToday(ctx.now).series} now={ctx.now} />;
-}
-function AgainstUsual({ ctx }: WidgetProps) {
+/** Home's top card: with the day's chart and a lane per room (Home today), or without (Home at a glance). */
+function Hero({ ctx, chart }: WidgetProps & { chart: boolean }) {
   const { today, series } = useHomeToday(ctx.now);
-  return <HomeTodayCard series={series} f={ctx.f} start={today} now={ctx.now} />;
+  const usage = useQuery({ ...homeUsageQuery(today, addDays(today, 1), "hour"), enabled: chart && !!ctx.home });
+  return (
+    <HomeHero
+      p={ctx.p}
+      f={ctx.f}
+      series={series}
+      start={today}
+      now={ctx.now}
+      chart={chart}
+      lanes={chart ? todayLanes(usage.data, ctx.home?.devices ?? [], ctx.home?.rooms) : []}
+    />
+  );
 }
 function Sources({ ctx }: WidgetProps) {
   return <HomeSourcesCard series={useHomeToday(ctx.now).series} p={ctx.p} days={useHomeDays(ctx.now)} />;
@@ -133,13 +137,15 @@ function Days({ ctx }: WidgetProps) {
     </WidgetCard>
   );
 }
-function RoomsNow({ ctx }: WidgetProps) {
-  const devices = ctx.home?.devices ?? [];
+function Rooms({ ctx }: WidgetProps) {
   return (
-    <NowCard
-      devices={devices}
-      colors={deviceColors(devices, ctx.home?.rooms, { byRoom: true })}
+    <RoomsNow
+      devices={ctx.home?.devices ?? []}
+      rooms={ctx.home?.rooms}
+      kinds={ctx.home?.kinds}
       load={ctx.p?.load_power}
+      now={ctx.now}
+      framed
     />
   );
 }
@@ -172,48 +178,124 @@ export const widgets: WidgetDef[] = [
   {
     type: "home-summary",
     name: "Home at a glance",
-    sub: "Using now, today so far, by midnight, the peak and the price",
+    sub: "Used today against a usual day, using now, the peak, the price and the grid's cost",
     group: "home",
     icon: "home",
     thumb: { kind: "number", value: "788 W", color: COLOR.teal },
-    sizes: size([6, 2], [12, 3], [12, 2]),
-    phone: size([4, 3], [4, 5], [4, 4]),
-    Component: Summary,
+    sizes: size([6, 3], [12, 4], [12, 3]),
+    phone: size([4, 5], [4, 7], [4, 6]),
+    Component: (props: WidgetProps) => <Hero {...props} chart={false} />,
+  },
+  {
+    type: "home-using",
+    name: "Using now",
+    sub: "What the house draws now, where from, and against a usual draw",
+    group: "home",
+    icon: "home",
+    thumb: { kind: "number", value: "2.8 kW", color: COLOR.teal },
+    sizes: size([2, 2], [8, 6], [3, 3]),
+    phone: size([2, 2], [4, 6], [2, 3]),
+    rowsFor: (st, _screen, w) => usingRows(usingShow(st), w),
+    options: [
+      {
+        key: "sources",
+        label: "Where it comes from",
+        sub: "Solar, the battery and the grid, as a bar",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "usual",
+        label: "Against a usual draw",
+        sub: "For this hour, from your recent days",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      { key: "chart", label: "Recent hours", sub: "As a filled line", kind: "toggle", default: true, section: "Chart" },
+      {
+        key: "hours",
+        label: "Going back",
+        kind: "select",
+        choices: USING_HOURS,
+        default: "3",
+        section: "Chart",
+        when: (st) => st.chart !== false,
+      },
+      { key: "today", label: "Used today", kind: "toggle", default: true, section: "Figures, given room" },
+      { key: "price", label: "What power costs now", kind: "toggle", default: true, section: "Figures, given room" },
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <HomeUsing p={ctx.p} f={ctx.f} now={ctx.now} w={w} h={h} show={usingShow(settings)} />
+    ),
+  },
+  {
+    type: "rate-now",
+    name: "Power costs now",
+    sub: "The rate now, when it changes, and the day's rates",
+    group: "money",
+    icon: "dollar",
+    thumb: { kind: "number", value: "45c", color: COLOR.import },
+    sizes: size([2, 2], [8, 4], [3, 3]),
+    phone: size([2, 2], [4, 4], [2, 2]),
+    rowsFor: (st, _screen, w) => rateRows(rateShow(st), w),
+    options: [
+      { key: "next", label: "When it changes", sub: "And to what", kind: "toggle", default: true, section: "Show" },
+      {
+        key: "day",
+        label: "The day's rates",
+        sub: "As steps, now marked",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "range",
+        label: "Cheapest and dearest left today",
+        kind: "toggle",
+        default: true,
+        section: "Figures, given room",
+      },
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <RateNow now={ctx.now} w={w} h={h} show={rateShow(settings)} />
+    ),
   },
   {
     type: "rooms-now",
-    name: "Right now",
-    sub: "What each room is drawing this minute",
+    name: "Rooms now",
+    sub: "Each room lit by what it draws this minute",
     group: "home",
     icon: "home",
-    thumb: { kind: "list", color: DEVICE },
-    sizes: size([4, 4], [8, 9], [5, 4]),
-    phone: size([4, 4], [4, 9], [4, 5]),
+    thumb: { kind: "tiles" },
+    sizes: size([4, 4], [12, 10], [12, 5]),
+    phone: size([4, 5], [4, 14], [4, 9]),
     needs: needsHome,
-    Component: RoomsNow,
+    Component: Rooms,
   },
   {
     type: "running-now",
     name: "Running now",
-    sub: "Appliances mid-run, and how long is left",
+    sub: "Appliances mid-run, how far through and how long is left",
     group: "home",
     icon: "clock",
-    thumb: { kind: "tile", color: "var(--color-device-1)" },
-    sizes: size([4, 2], [12, 4], [12, 2]),
-    phone: size([4, 2], [4, 4], [4, 2]),
+    thumb: { kind: "ring", color: "var(--color-device-2)" },
+    sizes: size([4, 2], [12, 5], [12, 2]),
+    phone: size([4, 2], [4, 6], [4, 3]),
     needs: needsHome,
-    Component: () => <RunningNowCard quiet />,
+    Component: ({ h }: WidgetProps) => <RunningNowCard quiet compact={h <= 2} className="p-5 max-sm:p-4" />,
   },
   {
     type: "home-vs-usual",
-    name: "Today against a usual day",
-    sub: "The house's use through the day, with your rates under it",
+    name: "Home today",
+    sub: "Used today and now, against a usual day, with your rates and a lane per room",
     group: "home",
     icon: "chart",
     thumb: { kind: "line", color: COLOR.teal },
-    sizes: size([6, 4], [12, 7], [7, 5]),
-    phone: size([4, 5], [4, 7], [4, 5]),
-    Component: AgainstUsual,
+    sizes: size([6, 8], [12, 14], [12, 9]),
+    phone: size([4, 10], [4, 16], [4, 12]),
+    Component: (props: WidgetProps) => <Hero {...props} chart />,
   },
   {
     type: "home-sources",
@@ -240,12 +322,12 @@ export const widgets: WidgetDef[] = [
   {
     type: "room",
     name: "A room",
-    sub: "One room, live, with its switches",
+    sub: "One room, live: what it draws, its day and what's running",
     group: "home",
     icon: "sofa",
     thumb: { kind: "tile", color: DEVICE },
-    sizes: size([4, 4], [8, 7], [4, 5]),
-    phone: size([4, 4], [4, 7], [4, 5]),
+    sizes: size([2, 2], [6, 5], [3, 3]),
+    phone: size([2, 2], [4, 5], [2, 3]),
     options: [
       {
         key: "room",

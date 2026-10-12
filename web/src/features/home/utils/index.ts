@@ -443,6 +443,13 @@ export function liveBreakdown(
 
 export type Range = "today" | "week" | "month";
 
+/** The periods a room's page shows: a day by the hour, or the last 7 or 30 days. */
+export const RANGES: { value: Range; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "7 days" },
+  { value: "month", label: "30 days" },
+];
+
 /** A period in words: "today", "in 7 days". */
 export const RANGE_WORDS: Record<Range, string> = { today: "today", week: "in 7 days", month: "in 30 days" };
 /** The period before the one shown, of the same length, in words (today isn't compared: it isn't over). */

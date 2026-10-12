@@ -2,7 +2,8 @@ import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
-import { Delta, Meter } from "~/features/solar/components/parts";
+import { Delta, Meter } from "~/features/common/ui/components/Live";
+import { SOLAR } from "~/features/solar/components/parts";
 import { invertersOf, stringsOf } from "~/features/solar/utils";
 
 /** Strings this far apart in the sun are worth a look. */
@@ -69,7 +70,7 @@ export function SolarStrings({ p, s }: { p: Snapshot | null; s: SystemInfo | und
                 </span>
                 <span className="w-16 text-right tabular-nums">{kW(x.w)}</span>
               </div>
-              <Meter share={(x.w ?? 0) / most} />
+              <Meter share={(x.w ?? 0) / most} color={SOLAR} />
             </li>
           ))}
         </ul>
