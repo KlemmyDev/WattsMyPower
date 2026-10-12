@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import type { BatteryMonth, Insights } from "~/features/battery/types/insights";
 import type { SystemInfo } from "~/features/common/live/types";
-import { BigNumber, Card, Eyebrow, Muted, TitleBlock } from "~/features/common/ui/components/Card";
+import { COLOR } from "~/features/common/theme/utils/colors";
+import { Card, Eyebrow, Muted, TitleBlock } from "~/features/common/ui/components/Card";
+import { Ring } from "~/features/common/widgets/parts";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { cn } from "~/features/common/ui/utils";
 import { duration, monthYear, parseYmd } from "~/features/common/formatting/utils/date";
@@ -43,24 +45,27 @@ export function BatteryHealth({
         title="Battery health"
         sub="Reported by your battery, with charge and discharge figures from your inverter"
       />
-      <div className="flex flex-wrap items-baseline gap-3">
-        <BigNumber>{pct(soh)}</BigNumber>
-        <Muted>
-          {soh != null && cap
-            ? `about ${((cap * soh) / 100).toFixed(1)} of ${cap} kWh usable`
-            : "Not reported by your battery yet"}
-        </Muted>
-      </div>
-      <div className="relative h-2.5 rounded-full bg-track">
-        <div
-          className="h-full origin-left animate-fill-x rounded-full bg-battery transition-[width] duration-[320ms] ease-out-soft"
-          style={{ width: `${soh ?? 0}%` }}
-        />
-        <i className="absolute -top-1 -bottom-1 left-[70%] w-0.5 bg-ink" />
-      </div>
-      <div className="flex justify-between gap-3 text-xs text-ink-faint">
-        <span>Warranty threshold 70%</span>
-        <span>100% when new</span>
+      {/* Its health as a ring out of what it held when new, as the Home and EV cards show theirs. */}
+      <div className="flex items-center gap-5">
+        <Ring share={(soh ?? 0) / 100} color={soh != null && soh < 80 ? COLOR.warn : COLOR.good} size={92}>
+          <span className="text-[22px] leading-none font-light tracking-[-0.5px] tabular-nums">{pct(soh)}</span>
+        </Ring>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-[15px] text-ink">
+            {soh == null
+              ? "Not reported by your battery yet"
+              : soh >= 95
+                ? "Like new"
+                : soh >= 80
+                  ? "Healthy"
+                  : "Wearing"}
+          </span>
+          <Muted>
+            {soh != null && cap
+              ? `About ${((cap * soh) / 100).toFixed(1)} of ${cap} kWh usable. Warranties usually cover it down to 70%.`
+              : "Its health shows once your battery reports it."}
+          </Muted>
+        </div>
       </div>
       <div>
         {rows.map(([label, value]) => (
