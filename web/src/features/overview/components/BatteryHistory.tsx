@@ -12,7 +12,6 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 
 const B6W = 600;
 const B6H = 150;
-const SPAN = 6 * 3600;
 const b6y = (soc: number) => B6H - 34 - (Math.max(0, Math.min(100, soc)) / 100) * (B6H - 62);
 
 type Point = { t: number; soc: number; w: number | null };
@@ -35,26 +34,31 @@ function chartOf(series: HistoryResponse["series"], start: number, end: number) 
 }
 
 /**
- * "Last 6 hours" strip along the bottom of the Battery card, with a hover readout and a live point at its end. Given
- * `className` (negative margins) it runs edge to edge, with its labels padded in by `inset`.
+ * "Last 6 hours" strip along the bottom of the Battery card (or the last `hours`), with a hover readout and a live
+ * point at its end. Given `className` (negative margins) it runs edge to edge, with its labels padded in by `inset`.
+ * Where it's narrow it keeps the times at its ends, and leaves out how much the charge changed.
  */
 export function BatteryHistory({
   end,
   s,
+  hours = 6,
   className,
   inset,
 }: {
   end: number | null;
   s: SystemInfo | undefined;
+  /** How far back it goes (a multiple of 3). */
+  hours?: number;
   className?: string;
   inset?: string;
 }) {
+  const span = hours * 3600;
   // `end` follows the latest reading, so the key (and the window) moves once per reading. That already
   // refetches, so the query isn't POLL-keyed: invalidating the outgoing key would only fetch it once more.
   const e = end ?? 0;
-  const start = e - SPAN;
+  const start = e - span;
   const { data } = useQuery({
-    ...historyQuery({ start, end: e, points: 72, fields: ["battery_soc", "battery_power"] }),
+    ...historyQuery({ start, end: e, points: hours * 12, fields: ["battery_soc", "battery_power"] }),
     enabled: end != null,
     placeholderData: keepPreviousData,
   });
@@ -64,7 +68,7 @@ export function BatteryHistory({
 
   const onMove = (ev: MouseEvent) => {
     const r = plot.current?.getBoundingClientRect();
-    if (r) setHoverAt(start + ((ev.clientX - r.left) / r.width) * SPAN);
+    if (r) setHoverAt(start + ((ev.clientX - r.left) / r.width) * span);
   };
 
   const have = chart?.have ?? [];
@@ -80,7 +84,7 @@ export function BatteryHistory({
       ref={plot}
       onMouseMove={onMove}
       onMouseLeave={() => setHoverAt(null)}
-      className={cn("relative mt-auto mb-0 h-[150px] cursor-crosshair compact:h-[110px]", className)}
+      className={cn("@container relative mt-auto mb-0 h-[150px] cursor-crosshair compact:h-[110px]", className)}
     >
       <svg
         viewBox={`0 0 ${B6W} ${B6H}`}
@@ -149,8 +153,8 @@ export function BatteryHistory({
           inset,
         )}
       >
-        <span className="text-[13px] leading-5 font-medium text-ink-muted">Last 6 hours</span>
-        <span className="text-[13px] leading-5 font-medium text-ink-sub tabular-nums">
+        <span className="text-[13px] leading-5 font-medium whitespace-nowrap text-ink-muted">Last {hours} hours</span>
+        <span className="truncate text-[13px] leading-5 font-medium text-ink-sub tabular-nums @max-[18rem]:hidden">
           {chart &&
             (last
               ? `${Math.round(first.soc)}% → ${Math.round(last.soc)}%` +
@@ -167,18 +171,20 @@ export function BatteryHistory({
       >
         <div className="relative size-full">
           {chart &&
-            [6, 4, 2, 0].map((o) => (
-              <span
-                key={o}
-                className={cn(
-                  "absolute whitespace-nowrap",
-                  o === 6 ? "" : o === 0 ? "-translate-x-full" : "-translate-x-1/2",
-                )}
-                style={{ left: `${(((6 - o) / 6) * 100).toFixed(2)}%` }}
-              >
-                {o ? hhmm(e - o * 3600) : "Now"}
-              </span>
-            ))}
+            [3, 2, 1, 0]
+              .map((o) => (hours / 3) * o)
+              .map((o) => (
+                <span
+                  key={o}
+                  className={cn(
+                    "absolute whitespace-nowrap",
+                    o === hours ? "" : o === 0 ? "-translate-x-full" : "-translate-x-1/2 @max-[16rem]:hidden",
+                  )}
+                  style={{ left: `${(((hours - o) / hours) * 100).toFixed(2)}%` }}
+                >
+                  {o ? hhmm(e - o * 3600) : "Now"}
+                </span>
+              ))}
         </div>
       </div>
       {chart && hover && <HoverReadout p={hover} left={(chart.X(hover.t) / B6W) * 100} />}

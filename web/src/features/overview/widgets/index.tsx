@@ -104,9 +104,9 @@ export const widgets: WidgetDef[] = [
     group: "battery",
     icon: "battery",
     thumb: { kind: "ring", color: COLOR.battery },
-    sizes: size([5, 6], [12, 9], [6, 7]),
-    phone: size([4, 7], [4, 10], [4, 8]),
+    sizes: size([2, 2], [12, 9], [6, 7]),
+    phone: size([2, 2], [4, 10], [4, 8]),
     needs: (ctx) => (ctx.noBattery ? "Needs a battery" : null),
-    Component: ({ ctx }: WidgetProps) => <BatteryCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} />,
+    Component: ({ ctx, w, h }: WidgetProps) => <BatteryCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} w={w} h={h} />,
   },
 ];

@@ -6,7 +6,11 @@ import { kw, when } from "~/features/battery/utils";
 import { addDays, midnight, sameDay } from "~/features/common/time/utils";
 import type { Forecast } from "~/features/common/weather/types";
 
-export type FullInfo = { eyebrow: string; headline: string; detail: string };
+/**
+ * What the battery card says: `eyebrow` over the `headline`, and a sentence on it. Where there's little room, `tag` is
+ * the eyebrow in a word or two and `brief` the headline (the same, unless it's long).
+ */
+export type FullInfo = { eyebrow: string; headline: string; detail: string; tag: string; brief: string };
 
 /** While the battery is charged at a set power (from the grid if need be), to `target` %. */
 function forcedCharge(
@@ -45,14 +49,18 @@ export function batteryOutlook(
   if (soc != null && (ours === "standby" || theirs === "stop"))
     return {
       eyebrow: "On standby",
+      tag: "Standby",
       headline: `Holding at ${pct(soc)}`,
+      brief: "Holding",
       detail: `${ours ? until : "Set from iSolarCloud."} Your home runs on solar and the grid while the battery keeps its charge.`,
     };
   if (soc != null && ours === "charge" && mode?.target != null) {
     const c = forcedCharge(soc, bat, cap, mode.target, now);
     return {
       eyebrow: "Charging from the grid",
+      tag: `To ${pct(mode.target)}`,
       headline: c.headline,
+      brief: c.headline,
       detail: `At ${kw(mode.power_w)}, reaching ${pct(mode.target)}${c.at}. Then back to normal${mode.until ? `, or at ${when(mode.until, now)} if that's sooner` : ""}.`,
     };
   }
@@ -60,7 +68,9 @@ export function batteryOutlook(
     const c = forcedCharge(soc, bat, cap, 100, now);
     return {
       eyebrow: "Force charging",
+      tag: "Force charge",
       headline: c.headline,
+      brief: c.headline,
       detail: `${mode?.owner === "isolarcloud" ? "iSolarCloud is" : "Something outside the dashboard is"} charging it at ${kw(mode?.power_w)}, using the grid when solar can't keep up. Full${c.at}.`,
     };
   }
@@ -78,9 +88,12 @@ export function batteryOutlook(
     ];
     if (next) parts.push(`Solar should start charging it again from about ${hhmm(next.ts)}.`);
     const above = secs != null && soc > reserve + 0.5;
+    const headline = secs == null ? "—" : above ? duration(secs) : ours === "floor" ? "At the floor" : "At reserve";
     return {
       eyebrow: ours === "floor" ? "Estimated time to floor" : "Estimated time to reserve",
-      headline: secs == null ? "—" : above ? duration(secs) : ours === "floor" ? "At the floor" : "At reserve",
+      tag: ours === "floor" ? "To floor" : "To reserve",
+      headline,
+      brief: headline,
       detail:
         (above ? `Reaches the ${pct(reserve)} ${word} at about ${hhmm(now + secs)} ${tzName()} at this rate. ` : "") +
         parts.join(" "),
@@ -89,13 +102,18 @@ export function batteryOutlook(
   if (soc != null && soc >= 99.5)
     return {
       eyebrow: "Battery status",
+      tag: "Status",
       headline: "Fully charged",
+      brief: "Full",
       detail: "Nice. The extra sun now goes to the grid.",
     };
   if (f?.summary.full_at && sameDay(f.summary.full_at, now)) {
+    const headline = duration(f.summary.full_at - now);
     return {
       eyebrow: "Estimated time to full",
-      headline: duration(f.summary.full_at - now),
+      tag: "To full",
+      headline,
+      brief: headline,
       detail: `Full at about ${hhmm(f.summary.full_at)} ${tzName()}, based on forecast solar and home use.`,
     };
   }
@@ -107,14 +125,17 @@ export function batteryOutlook(
       : f.summary.full_at
         ? `The forecast sun should fill it tomorrow at about ${hhmm(f.summary.full_at)} ${tzName()}.`
         : "Not enough sun forecast to fill it in the next day.";
-    return { eyebrow: "Estimated time to full", headline: "Not today", detail };
+    return { eyebrow: "Estimated time to full", tag: "To full", headline: "Not today", brief: "Not today", detail };
   }
   if (bat != null && bat < -ON && cap && soc != null) {
+    const headline = duration(((((100 - soc) / 100) * cap) / (-bat / 1000)) * 3600);
     return {
       eyebrow: "Estimated time to full",
-      headline: duration(((((100 - soc) / 100) * cap) / (-bat / 1000)) * 3600),
+      tag: "To full",
+      headline,
+      brief: headline,
       detail: "At the current charge rate.",
     };
   }
-  return { eyebrow: "Estimated time to full", headline: "—", detail: " " };
+  return { eyebrow: "Estimated time to full", tag: "To full", headline: "—", brief: "—", detail: " " };
 }
