@@ -1,6 +1,12 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Settings, WidgetCtx, WidgetDef, WidgetProps } from "~/features/common/widgets/types";
-import { BATTERY_FACTS, BATTERY_HOURS, BatteryCard, batteryShow } from "~/features/overview/components/BatteryCard";
+import {
+  BATTERY_FACTS,
+  BATTERY_HOURS,
+  BatteryCard,
+  batteryRows,
+  batteryShow,
+} from "~/features/overview/components/BatteryCard";
 import {
   FLOW_OPENS,
   FLOW_READINGS,
@@ -8,11 +14,20 @@ import {
   FLOW_UNITS,
   PowerFlowWidget,
 } from "~/features/overview/components/PowerFlowStyles";
-import { TODAY_LEADS, TodayCard, todayShow } from "~/features/overview/components/TodayCard";
-import { ENERGY_FIGURES, TodayEnergyCard, energyShow } from "~/features/overview/components/TodayEnergyCard";
+import { TODAY_LEADS, TodayCard, todayRows, todayShow } from "~/features/overview/components/TodayCard";
+import {
+  ENERGY_FIGURES,
+  TodayEnergyCard,
+  energyRows,
+  energyShow,
+  type EnergyShow,
+} from "~/features/overview/components/TodayEnergyCard";
 
 const size = (min: [number, number], max: [number, number], d: [number, number]) => ({ min, max, default: d });
 const scene = (s: Settings) => s.style === "scene" || s.style == null;
+/** With no battery, no battery level on the chart. */
+const withoutBattery = (show: EnergyShow, none: boolean): EnergyShow =>
+  none ? { ...show, parts: { ...show.parts, battery: false } } : show;
 
 /** The Overview's own cards (as it's always been laid out), as widgets. */
 export const widgets: WidgetDef[] = [
@@ -25,7 +40,15 @@ export const widgets: WidgetDef[] = [
     thumb: { kind: "flow" },
     sizes: size([4, 4], [12, 10], [12, 6]),
     phone: size([4, 4], [4, 8], [4, 5]),
-    sizesFor: (s) => (scene(s) ? size([8, 5], [12, 10], [12, 6]) : size([4, 4], [12, 8], [6, 5])),
+    // The house needs room: on a phone its readings are under it, so it's taller there.
+    sizesFor: (s, screen) =>
+      screen === "phone"
+        ? scene(s)
+          ? size([4, 6], [4, 10], [4, 7])
+          : undefined
+        : scene(s)
+          ? size([8, 5], [12, 10], [12, 6])
+          : size([4, 4], [12, 8], [6, 5]),
     options: [
       { key: "style", label: "Style", kind: "style", choices: FLOW_STYLES, default: "scene" },
       ...FLOW_READINGS.map((r) => ({
@@ -34,7 +57,12 @@ export const widgets: WidgetDef[] = [
         kind: "toggle" as const,
         default: r.key !== "car",
         section: "Readings",
-        offered: r.key === "car" ? (ctx: WidgetCtx) => ctx.cars.length > 0 : undefined,
+        offered:
+          r.key === "car"
+            ? (ctx: WidgetCtx) => ctx.cars.length > 0
+            : r.key === "battery"
+              ? (ctx: WidgetCtx) => !ctx.noBattery
+              : undefined,
       })),
       {
         key: "rooms",
@@ -82,6 +110,7 @@ export const widgets: WidgetDef[] = [
     thumb: { kind: "line", color: COLOR.solar },
     sizes: size([2, 2], [12, 10], [12, 8]),
     phone: size([2, 2], [4, 12], [4, 10]),
+    rowsFor: (st, _screen, w) => energyRows(energyShow(st), w),
     options: [
       {
         key: "lead",
@@ -154,6 +183,7 @@ export const widgets: WidgetDef[] = [
         default: true,
         section: "Chart, given room",
         when: (st: Settings) => st.chart !== false,
+        offered: key === "battery" ? (ctx: WidgetCtx) => !ctx.noBattery : undefined,
       })),
     ],
     Component: ({ ctx, settings, w, h }: WidgetProps) => (
@@ -165,7 +195,7 @@ export const widgets: WidgetDef[] = [
         prices={ctx.prices}
         w={w}
         h={h}
-        show={energyShow(settings)}
+        show={withoutBattery(energyShow(settings), ctx.noBattery)}
       />
     ),
   },
@@ -178,6 +208,7 @@ export const widgets: WidgetDef[] = [
     thumb: { kind: "table", color: COLOR.good },
     sizes: size([2, 2], [12, 9], [6, 7]),
     phone: size([2, 2], [4, 10], [4, 8]),
+    rowsFor: (st, _screen, w) => todayRows(todayShow(st), w),
     options: [
       { key: "lead", label: "First figure", kind: "select", choices: TODAY_LEADS, default: "cost", section: "Figures" },
       {
@@ -219,6 +250,7 @@ export const widgets: WidgetDef[] = [
     thumb: { kind: "ring", color: COLOR.battery },
     sizes: size([2, 2], [12, 9], [6, 7]),
     phone: size([2, 2], [4, 10], [4, 8]),
+    rowsFor: (st, _screen, w) => batteryRows(batteryShow(st), w),
     needs: (ctx) => (ctx.noBattery ? "Needs a battery" : null),
     options: [
       {

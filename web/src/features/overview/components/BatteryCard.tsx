@@ -12,7 +12,7 @@ import { BatteryPower } from "~/features/overview/components/BatteryPower";
 import { BatteryModeLine } from "~/features/battery/components/BatteryModeLine";
 import { useBatteryMode } from "~/features/battery/hooks";
 import { useTween } from "~/features/common/ui/hooks/useTween";
-import { roomOf } from "~/features/common/widgets/room";
+import { roomOf, rowsFor } from "~/features/common/widgets/room";
 import type { Settings } from "~/features/common/widgets/types";
 
 /** The ring at its largest (px). */
@@ -67,6 +67,15 @@ export function batteryShow(settings: Settings): BatteryShow {
 const ALL = batteryShow({});
 
 /**
+ * The most rows the card can use at `w` columns for what it shows: with its chart, any (the chart takes what's left);
+ * without, the header and ring, and the figures under them where they go under (5 to 7 columns).
+ */
+export function batteryRows(show: BatteryShow, w: number) {
+  if (show.chart) return undefined;
+  return rowsFor(HEAD + RING + (w <= 2 ? UNDER : 0) + (show.facts.length && w >= 3 && w <= 7 ? 12 + 58 : 0));
+}
+
+/**
  * The battery's state of charge ring, time to full (or to reserve), what it's set to do, and the last six hours, fitted
  * to its size on the grid (`w` columns by `h` rows) rather than stretched to it. At its smallest (2 × 2) it's the ring
  * alone, with the charge and what it's doing in it. Wider, the outlook comes in beside it; taller, a header with what
@@ -117,12 +126,12 @@ export function BatteryCard({
     (tall === "short"
       ? w >= 10 && { side: true, n: 2, cols: 2 }
       : tall === "mid"
-        ? w >= 10 && { side: true, n: 4, cols: 2 }
+        ? w >= (show.chart ? 10 : 8) && { side: true, n: 4, cols: 2 }
         : wide === "lg"
           ? { side: true, n: w >= 10 ? 6 : 4, cols: w >= 10 ? 3 : 2 }
           : wide === "md"
-            ? h >= 7 && { side: false, n: w >= 6 ? 4 : 3, cols: w >= 6 ? 4 : 3 }
-            : w === 4 && h >= 8 && { side: false, n: 2, cols: 2 });
+            ? h >= (show.chart ? 7 : 5) && { side: false, n: w >= 6 ? 4 : 3, cols: w >= 6 ? 4 : 3 }
+            : w === 4 && h >= (show.chart ? 8 : 5) && { side: false, n: 2, cols: 2 });
   const under = facts && !facts.side;
   // The height the ring has: the card's, less the header and the outlook under it; tall, it shares it with the chart.
   const room = inner - (header ? HEAD : 0) - (stacked && !alone ? UNDER : 0);
@@ -168,9 +177,9 @@ export function BatteryCard({
           "relative z-1 flex min-h-0 min-w-0",
           stacked ? "flex-col items-center justify-center gap-3" : "items-center gap-5",
           alone && "justify-center",
-          // with nothing under it, it takes the card's height, the ring and outlook in its middle; with only figures,
-          // they're in the middle together
-          chart === "under" ? "flex-none" : under ? "mt-auto flex-none" : "flex-1",
+          // under the header it stays at the top; with the chart beside it, or no header (a short row), it takes
+          // the card's height, the ring and outlook in its middle
+          chart === "side" || !header ? "flex-1" : "flex-none",
         )}
       >
         <Ring p={p} s={s} st={st} px={ring} cap={stacked ? 100 : 46} kwh={show.kwh} />
@@ -201,7 +210,7 @@ export function BatteryCard({
           />
         )}
       </div>
-      {under && <Facts items={figures} n={facts.n} cols={facts.cols} className={cn(!chart && "mb-auto")} />}
+      {under && <Facts items={figures} n={facts.n} cols={facts.cols} />}
       {chart === "under" && (
         // edge to edge along the bottom, its labels padded in, taking what height is left
         <BatteryHistory

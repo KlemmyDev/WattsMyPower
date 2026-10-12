@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "~/features/common/ui/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Quiet, WidgetCard } from "~/features/common/widgets/parts";
@@ -24,15 +25,15 @@ const loading = (title: string) => (
 );
 
 /** The grid's outlook as the Overview's banner (outages, warnings, a price spike); while all's normal, a quiet line. */
-function Status({ ctx }: WidgetProps) {
+function Status({ ctx, h }: WidgetProps) {
   const { data } = useQuery(gridQuery);
   const quiet =
     data &&
     data.outlook.level === "normal" &&
     !(data.outages?.now.some((o) => !o.planned) || data.outages?.planned.some((o) => o.affects));
-  if (!quiet) return <GridOverviewCard now={ctx.now} />;
+  if (!quiet) return <GridOverviewCard now={ctx.now} slim={h < 2} />;
   return (
-    <WidgetCard className="flex-row items-center gap-3 py-4">
+    <WidgetCard className={cn("flex-row items-center gap-3", h < 2 ? "py-2.5" : "py-4")}>
       <span className="flex size-10 flex-none items-center justify-center rounded-[13px] bg-fg/6 text-ink-muted">
         <Icon name="grid" size={18} />
       </span>

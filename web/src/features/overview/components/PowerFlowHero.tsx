@@ -43,9 +43,13 @@ import { HouseScene } from "~/features/overview/components/HouseScene";
 import { houseOptions } from "~/features/overview/utils/house/options";
 import { houseCars } from "~/features/overview/utils/houseCars";
 
-/** The drawing's frame: rounded, its own; what's over it (the weather card) can reach past it, onto the readout. */
+/**
+ * The drawing's frame: rounded, its own; what's over it (the weather card) can reach past it, onto the readout. It
+ * takes the widget's height (less the readout, where that's under it) rather than a shape of its own, so it never
+ * pushes its rows taller: the drawing covers it, trimming a little sky or ground where it's wider or taller.
+ */
 const FRAME =
-  "relative aspect-[1200/600] w-full rounded-[28px] max-md:aspect-[4/3] max-md:rounded-[22px] light:outline light:outline-line-subtle";
+  "relative min-h-0 w-full flex-1 rounded-[28px] max-md:rounded-[22px] light:outline light:outline-line-subtle";
 
 /** Where choosing one of power flow's readings goes: its own page, one page for them all, or nowhere. */
 export type FlowOpens = "each" | "home" | "solar" | "history" | "none";
@@ -110,7 +114,7 @@ export function PowerFlowHero({
   show?: FlowShow;
 }) {
   return (
-    <section aria-label="Power flow" className="relative col-span-12 flex flex-col gap-3">
+    <section aria-label="Power flow" className="relative col-span-12 flex h-full flex-col gap-3">
       {p ? <Scene p={p} s={s} f={f} now={now} show={show} /> : <div className={cn(FRAME, "bg-[#dcebff]")} />}
     </section>
   );
@@ -146,10 +150,9 @@ function Scene({
   const dark = wx.mode === "night" || wx.mode === "storm";
 
   return (
-    // The drawing and its readout together, as tall as the drawing: from 2xl up the readout floats over the drawing's
-    // bottom corners, so a widget taller than the drawing leaves its room under both rather than pulling the cards down
-    // past the drawing's edge.
-    <div className="relative flex flex-col gap-3">
+    // The drawing and its readout together, as tall as the widget: from 2xl up the readout floats over the drawing's
+    // bottom corners; narrower, it's under the drawing, which takes the rest.
+    <div className="relative flex min-h-0 flex-1 flex-col gap-3">
       {/* No background under the scene: it covers the box, and a light one would show as a fringe
           around the rounded corners against a dark sky. The drawing is clipped to the corners on its own, so the
           weather card over it isn't. */}

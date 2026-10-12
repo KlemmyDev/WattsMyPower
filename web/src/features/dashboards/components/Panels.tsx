@@ -6,7 +6,7 @@ import { Thumb } from "~/features/common/widgets/Thumb";
 import type { GroupId, Settings, WidgetCtx, WidgetDef, WidgetOption } from "~/features/common/widgets/types";
 import type { Screen, WidgetItem } from "~/features/dashboards/types";
 import { COLS } from "~/features/dashboards/utils/layout";
-import { GROUPS, namedSizes, sizesOf, WIDGETS, widgetDef } from "~/features/dashboards/widgets/registry";
+import { GROUPS, missing, namedSizes, sizesOf, WIDGETS, widgetDef } from "~/features/dashboards/widgets/registry";
 
 /** Widgets most worth suggesting, in order, when what they need is connected and they aren't on the page yet. */
 const SUGGESTED = [
@@ -76,7 +76,10 @@ export function AddWidgets({
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<GroupId | "all">("all");
   const words = q.trim().toLowerCase();
-  const shown = WIDGETS.filter(
+  // Those that need what isn't connected (a car, smart plugs, Amber) aren't offered until it is.
+  const offered = WIDGETS.filter((w) => !missing(w, ctx));
+  const held = WIDGETS.length - offered.length;
+  const shown = offered.filter(
     (w) => (group === "all" || w.group === group) && (!words || `${w.name} ${w.sub}`.toLowerCase().includes(words)),
   );
   const suggested =
@@ -100,7 +103,7 @@ export function AddWidgets({
         <div className="flex flex-col gap-1">
           <h2 className="m-0 font-display text-xl font-bold">Add widgets</h2>
           <span className="text-xs text-ink-sub">
-            {WIDGETS.length} to choose from. Each goes in the first space it fits; drag it from there.
+            {offered.length} to choose from. Each goes in the first space it fits; drag it from there.
           </span>
         </div>
       )}
@@ -119,7 +122,7 @@ export function AddWidgets({
         <button type="button" className={chip(group === "all")} onClick={() => setGroup("all")}>
           All
         </button>
-        {GROUPS.filter((g) => WIDGETS.some((w) => w.group === g.id)).map((g) => (
+        {GROUPS.filter((g) => offered.some((w) => w.group === g.id)).map((g) => (
           <button key={g.id} type="button" className={chip(group === g.id)} onClick={() => setGroup(g.id)}>
             {g.name}
           </button>
@@ -138,6 +141,11 @@ export function AddWidgets({
         </div>
       ))}
       {!shown.length && <div className="py-6 text-center text-[13px] text-ink-faint">No widget matches that.</div>}
+      {held > 0 && (
+        <p className="m-0 text-xs leading-[18px] text-pretty text-ink-faint">
+          {held} more show up here once there's something for them, like a car, smart plugs or a portable battery.
+        </p>
+      )}
     </div>
   );
 }
@@ -213,7 +221,7 @@ export function WidgetSettings({
   const def = widgetDef(item.type);
   if (!def) return null;
   const cols = COLS[screen];
-  const sizes = sizesOf(def, item.settings, screen);
+  const sizes = sizesOf(def, item.settings, screen, item.w);
   const named = namedSizes(sizes, cols);
   const set = (key: string, value: unknown) => onChange({ settings: { ...item.settings, [key]: value } });
   const style = def.options?.find((o) => o.kind === "style");

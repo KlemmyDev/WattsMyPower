@@ -12,9 +12,9 @@ import {
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import type { Screen, WidgetItem } from "~/features/dashboards/types";
-import { COLS, GAP, move, resize, ROW } from "~/features/dashboards/utils/layout";
+import { COLS, compact, GAP, move, resize, ROW } from "~/features/dashboards/utils/layout";
 import { Quiet, WidgetCard } from "~/features/common/widgets/parts";
-import { sizesOf, widgetDef } from "~/features/dashboards/widgets/registry";
+import { missing, sizesOf, widgetDef } from "~/features/dashboards/widgets/registry";
 import type { WidgetCtx } from "~/features/common/widgets/types";
 
 /** A widget that fails to draw shows that it couldn't, and the rest of the page carries on. */
@@ -34,7 +34,10 @@ class Guard extends Component<{ name: string; children: ReactNode }, { failed: b
   }
 }
 
-/** One widget as it's drawn: its own content, or why it can't be shown here yet. */
+/**
+ * One widget as it's drawn: its own content, or (being arranged) why it's hidden for now. Shown, one that needs what
+ * isn't connected is left out altogether (see DashboardGrid); until what's connected is known, it waits quietly.
+ */
 function Body({ item, ctx, screen }: { item: WidgetItem; ctx: WidgetCtx; screen: Screen }) {
   const def = widgetDef(item.type);
   if (!def)
@@ -43,11 +46,11 @@ function Body({ item, ctx, screen }: { item: WidgetItem; ctx: WidgetCtx; screen:
         <Quiet>This widget isn't in this version. Remove it, or update.</Quiet>
       </WidgetCard>
     );
-  const missing = def.needs?.(ctx);
-  if (missing)
+  const why = def.needs?.(ctx);
+  if (why)
     return (
       <WidgetCard title={def.name} icon={def.icon}>
-        <Quiet>{missing}.</Quiet>
+        <Quiet>{ctx.known ? `${why}. Until then it's hidden on your dashboard.` : "Loading…"}</Quiet>
       </WidgetCard>
     );
   return (
@@ -145,10 +148,10 @@ export function DashboardGrid({
   }, []);
 
   const unitX = (width + GAP) / cols;
-  const limits = (i: WidgetItem) => {
+  const limits = (i: WidgetItem, w = i.w) => {
     const def = widgetDef(i.type);
     return def
-      ? sizesOf(def, i.settings, screen)
+      ? sizesOf(def, i.settings, screen, w)
       : { min: [1, 1] as [number, number], max: [cols, 12] as [number, number] };
   };
 
@@ -164,26 +167,43 @@ export function DashboardGrid({
           it.w + Math.round(d.dx / unitX),
           it.h + rowsBy(d.rows, it.y + it.h, d.dy),
           cols,
-          limits(it),
+          limits(it, it.w + Math.round(d.dx / unitX)),
         );
   };
   const dragged = drag && items.find((i) => i.id === drag.id);
   const shown = layoutFor(drag);
 
-  if (!editing)
+  if (!editing) {
+    // Those that need what isn't connected are left out, none is taller than what it shows can use (one saved
+    // taller before it was switched off), and the rest close up the gaps either would leave.
+    let changed = false;
+    const kept = items.flatMap((i) => {
+      const def = widgetDef(i.type);
+      if (!def) return [i];
+      if (missing(def, ctx)) {
+        changed = true;
+        return [];
+      }
+      const most = sizesOf(def, i.settings, screen, i.w).max[1];
+      if (i.h <= most) return [i];
+      changed = true;
+      return [{ ...i, h: most }];
+    });
+    const laid = changed ? compact(kept) : items;
     return (
       <div
         ref={box}
         className="grid gap-5"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: `minmax(${ROW}px, auto)` }}
       >
-        {items.map((i) => (
+        {laid.map((i) => (
           <div key={i.id} style={place(i)} className="flex min-w-0 flex-col *:min-h-0 *:flex-1">
             <Body item={i} ctx={ctx} screen={screen} />
           </div>
         ))}
       </div>
     );
+  }
 
   const start = (e: PointerEvent<HTMLElement>, id: string, mode: "move" | "resize") => {
     if (e.button !== 0) return;
@@ -227,7 +247,7 @@ export function DashboardGrid({
       e.preventDefault();
       onChange?.(
         e.shiftKey
-          ? resize(items, i.id, i.w + d[0], i.h + d[1], cols, limits(i))
+          ? resize(items, i.id, i.w + d[0], i.h + d[1], cols, limits(i, i.w + d[0]))
           : move(items, i.id, i.x + d[0], i.y + d[1], cols),
       );
     } else if (e.key === "Delete" || e.key === "Backspace") {

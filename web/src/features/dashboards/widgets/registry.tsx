@@ -1,3 +1,4 @@
+import { capRows } from "~/features/common/widgets/room";
 import type { GroupId, Screen, Settings, Sizes, WidgetCtx, WidgetDef } from "~/features/common/widgets/types";
 
 /**
@@ -36,18 +37,23 @@ if (import.meta.env.DEV) {
 
 export const widgetDef = (type: string) => WIDGETS.find((w) => w.type === type);
 
-/** A widget's sizes on a screen, for its settings. */
-export function sizesOf(def: WidgetDef, settings: Settings, screen: Screen): Sizes {
-  if (screen === "phone")
-    return (
-      def.phone ?? {
-        min: [2, def.sizes.min[1]],
-        max: [4, def.sizes.max[1]],
-        default: [def.sizes.default[0] <= 3 ? 2 : 4, def.sizes.default[1]],
-      }
-    );
-  return def.sizesFor?.(settings) ?? def.sizes;
+/** A widget's sizes on a screen, for its settings (and at `w` columns, else its usual width). */
+export function sizesOf(def: WidgetDef, settings: Settings, screen: Screen, w?: number): Sizes {
+  const base =
+    def.sizesFor?.(settings, screen) ??
+    (screen === "phone"
+      ? (def.phone ?? {
+          min: [2, def.sizes.min[1]],
+          max: [4, def.sizes.max[1]],
+          default: [def.sizes.default[0] <= 3 ? 2 : 4, def.sizes.default[1]],
+        })
+      : def.sizes);
+  const rows = def.rowsFor?.(settings, screen, w ?? base.default[0]);
+  return rows == null ? base : capRows(base, rows);
 }
+
+/** Why a widget's left out here (it needs something that isn't connected), once that's known; else null. */
+export const missing = (def: WidgetDef, ctx: WidgetCtx) => (ctx.known ? (def.needs?.(ctx) ?? null) : null);
 
 /** A new widget's settings: each option's default. */
 export function defaultSettings(def: WidgetDef, ctx: WidgetCtx): Settings {

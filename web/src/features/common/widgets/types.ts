@@ -28,6 +28,9 @@ export type WidgetCtx = {
   /** Smart-home devices and rooms, once read. */
   home: HomeOverview | undefined;
   amber: boolean;
+  /** What's connected is known (the live readings have loaded): until then nothing's hidden for being missing, so
+   * nothing flashes away and back while the page loads. */
+  known: boolean;
 };
 
 export type Settings = Record<string, unknown>;
@@ -93,10 +96,16 @@ export type WidgetDef = {
   sizes: Sizes;
   /** On a phone (4 columns); else the narrow ones half the width, the rest all of it. */
   phone?: Sizes;
-  /** Sizes for its settings (a style that needs more room). */
-  sizesFor?: (settings: Settings) => Sizes;
+  /** Sizes for its settings (a style that needs more room) on a screen; undefined for its usual ones. */
+  sizesFor?: (settings: Settings, screen: Screen) => Sizes | undefined;
+  /**
+   * The most rows what it shows can use at `w` columns, for its settings: taller would only be empty room, so it
+   * can't be made taller (and switching a part off shrinks it to fit). Undefined for no limit.
+   */
+  rowsFor?: (settings: Settings, screen: Screen, w: number) => number | undefined;
   options?: WidgetOption[];
-  /** Why it can't be shown yet (nothing connected for it), or null. */
+  /** Why it can't be shown yet (nothing connected for it), or null: it's left off the dashboard and the list to add
+   * from until then. */
   needs?: (ctx: WidgetCtx) => string | null;
   Component: ComponentType<WidgetProps>;
 };
