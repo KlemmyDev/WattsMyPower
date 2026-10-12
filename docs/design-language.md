@@ -39,6 +39,9 @@ Bills) use the same card for their top figures. The parts, in this order:
 | Chart                    | The page's day chart (`TimeLine`), with context layers in its `under` slot on the same time scale (sky, rates, a lane per room, hourly in/out). Hover reads out the time across chart and layers.        |
 
 The hero has two widget forms: `chart={false}` ("X at a glance") and `chart` ("X today").
+On a dashboard, `HeroCard` names its page and links there (from the widget's group, via `WidgetFrame`), and it lays
+itself out by its own width (a container), so phone stacking inside a hero uses `@max-xl:` and two-across stats
+`@max-2xl:`, not viewport breakpoints.
 
 ## Cards below the hero
 

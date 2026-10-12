@@ -338,7 +338,7 @@ export function EvHero({
           asleep={asleep}
           expect={fullAt != null ? limit : null}
           legend={legend}
-          className="max-sm:-order-1"
+          className="@max-xl:-order-1"
         />
       )}
       {/* Where it is between asleep, awake and charging, what it's doing, and how fresh that is. */}

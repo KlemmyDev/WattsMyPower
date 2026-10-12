@@ -9,6 +9,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
+import { WidgetFrame } from "~/features/common/widgets/frame";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { cn } from "~/features/common/ui/utils";
@@ -58,7 +59,9 @@ function Body({ item, ctx, screen }: { item: WidgetItem; ctx: WidgetCtx; screen:
     );
   return (
     <Guard name={def.name}>
-      <def.Component ctx={ctx} settings={item.settings} w={item.w} h={item.h} screen={screen} />
+      <WidgetFrame.Provider value={{ group: def.group }}>
+        <def.Component ctx={ctx} settings={item.settings} w={item.w} h={item.h} screen={screen} />
+      </WidgetFrame.Provider>
     </Guard>
   );
 }

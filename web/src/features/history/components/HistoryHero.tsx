@@ -71,7 +71,7 @@ export function HistoryHero({
   const perDay = (v: number) => `${kWh(v / totals.days)} a day`;
   return (
     <HeroCard label={`History for ${year}`} tint={TINT}>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 max-sm:-order-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 @max-xl:-order-3">
         <span className="text-[13px] text-ink-muted tabular-nums">{span}</span>
         {years.length > 1 && (
           <div className="max-w-full [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden">
