@@ -1,8 +1,13 @@
+import { Link } from "@tanstack/react-router";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
+import { NAV } from "~/features/common/layout/utils";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { Card } from "~/features/common/ui/components/Card";
+import { Icon } from "~/features/common/ui/components/Icon";
 import { Figure, LiveDot } from "~/features/common/ui/components/Live";
 import { cn } from "~/features/common/ui/utils";
+import { useWidgetFrame } from "~/features/common/widgets/frame";
+import type { GroupId } from "~/features/common/widgets/types";
 
 /*
  * A page's top card, the same on every page (Solar, Home, Battery, and the rest after them): what matters most today
@@ -25,22 +30,53 @@ import { cn } from "~/features/common/ui/utils";
  *   </HeroCard>
  */
 
-/** The card, washed from the top in the page's colour (`tint`), `wash` strong. */
+/** Each widget group's page, for a hero shown on a dashboard to name and link to. */
+const PAGE_OF: Partial<Record<GroupId, string>> = {
+  solar: "/solar",
+  home: "/home",
+  battery: "/battery",
+  grid: "/grid",
+  car: "/ev",
+  money: "/bills",
+  weather: "/plan",
+};
+
+/**
+ * The card, washed from the top in the page's colour (`tint`), `wash` strong. It lays itself out by its own width
+ * (a container), so it fits a half-width widget as well as a page. On a dashboard it says which page it's from, with
+ * a link there, above its figures.
+ */
 export function HeroCard({
   tint,
   wash = 0.1,
   label,
   className,
   style,
+  children,
   ...rest
 }: Omit<ComponentProps<typeof Card>, "aria-label"> & { tint: string; wash?: number; label: string }) {
+  const frame = useWidgetFrame();
+  const to = frame ? PAGE_OF[frame.group] : undefined;
+  const page = to ? NAV.find((n) => n.to === to) : undefined;
   return (
     <Card
       aria-label={label}
-      className={cn("h-full gap-6", className)}
+      className={cn("@container h-full gap-6", className)}
       style={{ backgroundImage: `linear-gradient(180deg, ${alpha(tint, wash)}, transparent 45%)`, ...style }}
       {...rest}
-    />
+    >
+      {page && (
+        <Link
+          to={page.to}
+          className="relative z-2 -mb-3 flex items-center gap-1.5 self-start text-[13px] font-medium text-ink-muted no-underline hover:text-ink"
+        >
+          <Icon name={page.icon} size={14} style={{ color: page.color }} />
+          {page.label}
+          <Icon name="chevR" size={12} className="text-ink-faint" />
+        </Link>
+      )}
+      {children}
+    </Card>
   );
 }
 
@@ -49,12 +85,12 @@ export function HeroCard({
  * it comes apart (contents) so the bar can sit right under the lead figure.
  */
 export function HeroTop({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5 max-sm:contents">{children}</div>;
+  return <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5 @max-xl:contents">{children}</div>;
 }
 
 /** The lead figure and the live one, side by side. */
 export function HeroFigures({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-end gap-x-8 gap-y-5 max-sm:contents">{children}</div>;
+  return <div className="flex flex-wrap items-end gap-x-8 gap-y-5 @max-xl:contents">{children}</div>;
 }
 
 /** What matters most today, big: "Made today 18.4 kWh", with a line under it (where it's heading, a change chip). */
@@ -70,7 +106,7 @@ export function HeroLead({
   sub?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 max-sm:-order-2">
+    <div className="flex flex-col gap-1.5 @max-xl:-order-2">
       <span className="text-[13px] text-ink-muted">{label}</span>
       <Figure value={value} unit={unit} size="xl" />
       {sub && <span className="flex flex-wrap items-center gap-2 text-[13px] text-ink-muted tabular-nums">{sub}</span>}
@@ -95,7 +131,7 @@ export function HeroLive({
   sub?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 border-l border-line-subtle pl-6 max-sm:border-l-0 max-sm:pl-0">
+    <div className="flex flex-col gap-1.5 border-l border-line-subtle pl-6 @max-xl:border-l-0 @max-xl:pl-0">
       <span className="flex items-center gap-2 text-[13px] text-ink-muted">
         <LiveDot on={on} color={color} />
         {label}
@@ -110,7 +146,7 @@ export function HeroLive({
 
 /** Up to four figures that round the picture out, two across on narrower screens. */
 export function HeroStats({ children, className }: { children: ReactNode; className?: string }) {
-  return <dl className={cn("grid grid-cols-4 gap-x-8 gap-y-3 max-md:grid-cols-2", className)}>{children}</dl>;
+  return <dl className={cn("grid grid-cols-4 gap-x-8 gap-y-3 @max-2xl:grid-cols-2", className)}>{children}</dl>;
 }
 
 export function HeroStat({ label, value, sub }: { label: ReactNode; value: ReactNode; sub?: ReactNode }) {
@@ -138,7 +174,7 @@ export function HeroBar({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-2 max-sm:-order-1", className)}>
+    <div className={cn("flex flex-col gap-2 @max-xl:-order-1", className)}>
       <div className="relative h-2.5 rounded-full bg-track">{children}</div>
       {legend && (
         <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-ink-faint tabular-nums">
