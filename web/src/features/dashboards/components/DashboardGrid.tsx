@@ -333,8 +333,9 @@ function Frame({
   onRemove: () => void;
   children: ReactNode;
 }) {
+  // On hover they go a shade darker, solid, in either theme (not a light wash), and give a little when pressed.
   const tool =
-    "flex size-8 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised p-0 text-ink shadow-sm transition-colors hover:bg-fg/12";
+    "flex size-8 cursor-pointer items-center justify-center rounded-full border border-line bg-surface-raised p-0 text-ink shadow-sm transition-[background-color,border-color,color,scale] duration-150 hover:bg-[color-mix(in_srgb,var(--color-surface-raised),#000_45%)] active:scale-92 light:hover:bg-[color-mix(in_srgb,var(--color-surface-raised),#000_9%)]";
   return (
     <div
       role="group"
@@ -372,13 +373,22 @@ function Frame({
       <div className="absolute -top-3 right-3 z-10 flex gap-1.5">
         <button
           type="button"
-          className={cn(tool, on && "border-brand bg-brand text-ink-inverse hover:bg-brand")}
+          className={cn(
+            tool,
+            on &&
+              "border-brand bg-brand text-ink-inverse hover:bg-[color-mix(in_srgb,var(--color-brand),#000_18%)] light:hover:bg-[color-mix(in_srgb,var(--color-brand),#000_12%)]",
+          )}
           aria-label={`${name} settings`}
           onClick={onSettings}
         >
           <Icon name="settings" size={14} />
         </button>
-        <button type="button" className={tool} aria-label={`Remove ${name}`} onClick={onRemove}>
+        <button
+          type="button"
+          className={cn(tool, "hover:border-bad/50 hover:text-bad")}
+          aria-label={`Remove ${name}`}
+          onClick={onRemove}
+        >
           <Icon name="minus" size={14} />
         </button>
       </div>
