@@ -354,12 +354,17 @@ function PointTooltip({
   );
 }
 
+/** The parts of the chart under its main plot and over it, each of which can be left out. */
+export type PlanParts = { legend: boolean; weather: boolean; battery: boolean; flows: boolean };
+const ALL_PARTS: PlanParts = { legend: true, weather: true, battery: true, flows: true };
+
 /**
  * A day of the plan, midnight to midnight: solar and home use, the battery level, and the grid and battery as bars
  * every half hour. Today shows what's been recorded up to now and the forecast after it; solar's likely range is
  * shaded around its forecast, and the day's best times are marked across the top, with its key moments numbered above
  * them. The pointer reads out five minutes at a time, as History does, with a dot on each line. Dragging across it
- * picks a stretch of the day to look at more closely, all of it zoomed together.
+ * picks a stretch of the day to look at more closely, all of it zoomed together. Where it has less room (a widget),
+ * `parts` leaves out its legend, weather, battery level or bars, and `plot` sets the main plot's height.
  */
 export function PlanChart({
   day,
@@ -375,6 +380,9 @@ export function PlanChart({
   overlay = null,
   legendExtra,
   markerRow = false,
+  parts = ALL_PARTS,
+  plot: plotHeight,
+  every = 3,
 }: {
   day: PlanDay;
   series: HistorySeries | undefined;
@@ -394,6 +402,11 @@ export function PlanChart({
   /** Keep the row for the moments' numbers even on a day with none, so charts side by side (or one after another, as
    * the Overview steps through days) stay the same height. */
   markerRow?: boolean;
+  parts?: PlanParts;
+  /** The main plot's height (px); else as the page has it. */
+  plot?: number;
+  /** Hours between the times along the bottom. */
+  every?: number;
 }) {
   const zoom = useZoom(day.start, addDays(day.start, 1)); // a stretch of the day dragged across, shown on its own
   const { from, to } = zoom;
@@ -441,38 +454,45 @@ export function PlanChart({
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-dim">
-        {legend.map(([label, color, kind]) => (
-          <span key={label} className="flex items-center gap-1.5">
-            <i
-              className={kind === "box" ? "size-2.5 rounded-[2px]" : "h-[3px] w-3.5 rounded-[2px]"}
-              style={{ background: color }}
-            />
-            {label}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <i className="w-3.5 border-t-2 border-dashed border-ink-faint" />
-          Forecast
-        </span>
-        {c.band && (
-          <span className="flex items-center gap-1.5">
-            <i className="size-2.5 rounded-[2px]" style={{ background: alpha(COLOR.solar, 0.22) }} />
-            Likely solar range
-          </span>
-        )}
-        {(legendExtra || zoom.zoomed) && (
-          <span className="ml-auto flex items-center gap-2">
-            {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} />}
-            {legendExtra}
-          </span>
-        )}
-      </div>
-      <div className="overflow-x-clip">
-        <div style={{ marginLeft: `${c.skyAt.left}%`, width: `${c.skyAt.width}%` }}>
-          <WeatherRow sky={c.sky} />
+      {(parts.legend || legendExtra || zoom.zoomed) && (
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-dim">
+          {parts.legend &&
+            legend.map(([label, color, kind]) => (
+              <span key={label} className="flex items-center gap-1.5">
+                <i
+                  className={kind === "box" ? "size-2.5 rounded-[2px]" : "h-[3px] w-3.5 rounded-[2px]"}
+                  style={{ background: color }}
+                />
+                {label}
+              </span>
+            ))}
+          {parts.legend && (
+            <span className="flex items-center gap-1.5">
+              <i className="w-3.5 border-t-2 border-dashed border-ink-faint" />
+              Forecast
+            </span>
+          )}
+          {parts.legend && c.band && (
+            <span className="flex items-center gap-1.5">
+              <i className="size-2.5 rounded-[2px]" style={{ background: alpha(COLOR.solar, 0.22) }} />
+              Likely solar range
+            </span>
+          )}
+          {(legendExtra || zoom.zoomed) && (
+            <span className="ml-auto flex items-center gap-2">
+              {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} />}
+              {legendExtra}
+            </span>
+          )}
         </div>
-      </div>
+      )}
+      {parts.weather && (
+        <div className="overflow-x-clip">
+          <div style={{ marginLeft: `${c.skyAt.left}%`, width: `${c.skyAt.width}%` }}>
+            <WeatherRow sky={c.sky} />
+          </div>
+        </div>
+      )}
       <div
         className="relative flex cursor-crosshair touch-pan-y flex-col gap-1.5"
         style={{ paddingTop: top + 22 }}
@@ -531,7 +551,10 @@ export function PlanChart({
             }}
           />
         )}
-        <div className="relative h-[200px] max-sm:h-[160px] compact:h-[140px]">
+        <div
+          className="relative h-[200px] max-sm:h-[160px] compact:h-[140px]"
+          style={plotHeight ? { height: plotHeight } : undefined}
+        >
           {["0%", "33%", "66%"].map((top) => (
             <div key={top} className="absolute right-0 left-0 border-t border-fg/5" style={{ top }} />
           ))}
@@ -590,60 +613,66 @@ export function PlanChart({
             </>
           )}
         </div>
-        <div className="mt-1 flex items-center justify-end text-[11px] text-ink-dim tabular-nums">
-          Reserve {reserve}%
-        </div>
-        <div className="relative h-16 compact:h-12">
-          <svg
-            viewBox={`0 0 ${W} ${BH}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            className="absolute inset-0 size-full animate-reveal-x overflow-visible"
-          >
-            <line
-              x1="0"
-              x2={W}
-              y1={c.by(100)}
-              y2={c.by(100)}
-              vectorEffect="non-scaling-stroke"
-              style={{ stroke: alpha(COLOR.fg, 0.08) }}
-            />
-            <line
-              x1="0"
-              x2={W}
-              y1={c.by(reserve)}
-              y2={c.by(reserve)}
-              strokeDasharray="3 4"
-              vectorEffect="non-scaling-stroke"
-              style={{ stroke: alpha(COLOR.fg, 0.3) }}
-            />
-            {/* Cut by the plot above's clip: the same units across, and tall enough for this one too. */}
-            <g clipPath={clipped}>
-              <path d={c.socPast} {...STROKE} strokeWidth="2.25" style={{ stroke: COLOR.battery }} />
-              <path
-                d={c.socAhead}
-                {...STROKE}
-                strokeWidth="2.25"
-                strokeDasharray="6 5"
-                style={{ stroke: COLOR.battery }}
-              />
-            </g>
-            <line
-              x1="0"
-              x2={W}
-              y1={BH - 2}
-              y2={BH - 2}
-              vectorEffect="non-scaling-stroke"
-              style={{ stroke: alpha(COLOR.fg, 0.12) }}
-            />
-          </svg>
-          {shown && <Dot left={left(shown.t + STEP / 2)} top={shown.socTop} color={COLOR.battery} />}
-        </div>
-        <div className="relative mt-1 h-[64px] overflow-x-clip compact:h-12">
-          <div className="absolute inset-y-0" style={{ left: `${c.bars.left}%`, width: `${c.bars.width}%` }}>
-            <FlowBars slots={c.bars.slots} className="relative h-full" />
+        {parts.battery && (
+          <>
+            <div className="mt-1 flex items-center justify-end text-[11px] text-ink-dim tabular-nums">
+              Reserve {reserve}%
+            </div>
+            <div className="relative h-16 compact:h-12">
+              <svg
+                viewBox={`0 0 ${W} ${BH}`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+                className="absolute inset-0 size-full animate-reveal-x overflow-visible"
+              >
+                <line
+                  x1="0"
+                  x2={W}
+                  y1={c.by(100)}
+                  y2={c.by(100)}
+                  vectorEffect="non-scaling-stroke"
+                  style={{ stroke: alpha(COLOR.fg, 0.08) }}
+                />
+                <line
+                  x1="0"
+                  x2={W}
+                  y1={c.by(reserve)}
+                  y2={c.by(reserve)}
+                  strokeDasharray="3 4"
+                  vectorEffect="non-scaling-stroke"
+                  style={{ stroke: alpha(COLOR.fg, 0.3) }}
+                />
+                {/* Cut by the plot above's clip: the same units across, and tall enough for this one too. */}
+                <g clipPath={clipped}>
+                  <path d={c.socPast} {...STROKE} strokeWidth="2.25" style={{ stroke: COLOR.battery }} />
+                  <path
+                    d={c.socAhead}
+                    {...STROKE}
+                    strokeWidth="2.25"
+                    strokeDasharray="6 5"
+                    style={{ stroke: COLOR.battery }}
+                  />
+                </g>
+                <line
+                  x1="0"
+                  x2={W}
+                  y1={BH - 2}
+                  y2={BH - 2}
+                  vectorEffect="non-scaling-stroke"
+                  style={{ stroke: alpha(COLOR.fg, 0.12) }}
+                />
+              </svg>
+              {shown && <Dot left={left(shown.t + STEP / 2)} top={shown.socTop} color={COLOR.battery} />}
+            </div>
+          </>
+        )}
+        {parts.flows && (
+          <div className="relative mt-1 h-[64px] overflow-x-clip compact:h-12">
+            <div className="absolute inset-y-0" style={{ left: `${c.bars.left}%`, width: `${c.bars.width}%` }}>
+              <FlowBars slots={c.bars.slots} className="relative h-full" />
+            </div>
           </div>
-        </div>
+        )}
         {shown && (
           <PointTooltip
             p={shown}
@@ -660,7 +689,7 @@ export function PlanChart({
           />
         )}
       </div>
-      <TimeTicks ticks={timeTicks(from, to, 3)} />
+      <TimeTicks ticks={timeTicks(from, to, every)} />
     </div>
   );
 }

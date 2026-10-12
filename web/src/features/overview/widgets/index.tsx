@@ -9,7 +9,7 @@ import {
   PowerFlowWidget,
 } from "~/features/overview/components/PowerFlowStyles";
 import { TODAY_LEADS, TodayCard, todayShow } from "~/features/overview/components/TodayCard";
-import { TodayEnergyCard } from "~/features/overview/components/TodayEnergyCard";
+import { ENERGY_FIGURES, TodayEnergyCard, energyShow } from "~/features/overview/components/TodayEnergyCard";
 
 const size = (min: [number, number], max: [number, number], d: [number, number]) => ({ min, max, default: d });
 const scene = (s: Settings) => s.style === "scene" || s.style == null;
@@ -80,10 +80,93 @@ export const widgets: WidgetDef[] = [
     group: "overview",
     icon: "chart",
     thumb: { kind: "line", color: COLOR.solar },
-    sizes: size([8, 7], [12, 10], [12, 8]),
-    phone: size([4, 8], [4, 12], [4, 10]),
-    Component: ({ ctx }: WidgetProps) => (
-      <TodayEnergyCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} prices={ctx.prices} />
+    sizes: size([2, 2], [12, 10], [12, 8]),
+    phone: size([2, 2], [4, 12], [4, 10]),
+    options: [
+      {
+        key: "lead",
+        label: "First figure",
+        kind: "select",
+        choices: [...ENERGY_FIGURES],
+        default: "solar",
+        section: "Figures",
+      },
+      ...ENERGY_FIGURES.map((x) => ({
+        key: x.value,
+        label: x.label,
+        kind: "toggle" as const,
+        default: true,
+        section: "Figures",
+      })),
+      {
+        key: "notes",
+        label: "A line on each",
+        sub: "What it should come to by midnight, and when solar peaked",
+        kind: "toggle",
+        default: true,
+        section: "Figures",
+      },
+      {
+        key: "sources",
+        label: "Where your power came from",
+        sub: "As a bar",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "chart",
+        label: "The day's chart",
+        sub: "Recorded so far, then the forecast",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "days",
+        label: "Days ahead",
+        sub: "Arrows on to tomorrow and the day after",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "links",
+        label: "Links",
+        sub: "To History or the Plan, and comparing with the forecast",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      ...(
+        [
+          ["moments", "Best times and moments", "Across the top, numbered"],
+          ["weather", "Weather", "Hour by hour, over the chart"],
+          ["legend", "Legend", undefined],
+          ["battery", "Battery level", undefined],
+          ["flows", "Hourly bars", "Charging, discharging and the grid, every half hour"],
+        ] as const
+      ).map(([key, label, sub]) => ({
+        key,
+        label,
+        sub,
+        kind: "toggle" as const,
+        default: true,
+        section: "Chart, given room",
+        when: (st: Settings) => st.chart !== false,
+      })),
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <TodayEnergyCard
+        p={ctx.p}
+        s={ctx.s}
+        f={ctx.f}
+        now={ctx.now}
+        prices={ctx.prices}
+        w={w}
+        h={h}
+        show={energyShow(settings)}
+      />
     ),
   },
   {

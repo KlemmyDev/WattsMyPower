@@ -41,7 +41,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   the shortcuts, the chart and how far back it goes, and each figure. Today so far does the same: at 2 × 2 the
   cost big with the saving under it, then both side by side, then today rate by rate as tiles, a short list or the
   full table as room allows, with switches for the split, each figure's line, the rates and the kind of rates, and
-  a choice of which figure leads.
+  a choice of which figure leads. Today's energy too: at 2 × 2 one figure, then a row of them, then the grid of
+  figures, where your power came from and the day's chart, which gives up its bars, battery level, legend and
+  weather in turn where it has less height; each figure and each part of the chart can be switched off.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
   each string; where the home's power goes, from the inverter and from connected plugs and appliances; the battery's
   level, health, warranty and whether it's the right size; the grid's state, AEMO's wholesale prices and notices,
