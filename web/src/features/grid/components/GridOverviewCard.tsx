@@ -6,12 +6,14 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { gridQuery } from "~/features/grid/api";
 import { PLANNED, suburbsOf, UNPLANNED, when } from "~/features/grid/components/OutagesCard";
 import { LEVEL } from "~/features/grid/utils";
+import { cn } from "~/features/common/ui/utils";
 
 /**
  * The grid on the Overview, compact, and only when there's something to know: the outlook's most pressing reason,
- * the outages around the house now, and planned work at its street. Opens the Grid page.
+ * the outages around the house now, and planned work at its street. Opens the Grid page. `slim`, it fits one row of a
+ * dashboard: less padding, and a line each for the reason and the outages, cut short rather than wrapping.
  */
-export function GridOverviewCard({ now }: { now: number }) {
+export function GridOverviewCard({ now, slim = false }: { now: number; slim?: boolean }) {
   const { data: grid } = useQuery(gridQuery);
   if (!grid) return null;
   const { level, reasons } = grid.outlook;
@@ -40,7 +42,10 @@ export function GridOverviewCard({ now }: { now: number }) {
     <Link
       to="/grid"
       aria-label="Grid"
-      className="group glass col-span-12 flex items-center gap-4 rounded-3xl border border-line-subtle px-6 py-4 text-ink no-underline transition-colors hover:border-line-strong hover:text-ink max-sm:rounded-[20px] max-sm:px-5"
+      className={cn(
+        "group glass col-span-12 flex items-center gap-4 rounded-3xl border border-line-subtle px-6 text-ink no-underline transition-colors hover:border-line-strong hover:text-ink max-sm:rounded-[20px] max-sm:px-5",
+        slim ? "py-2.5" : "py-4",
+      )}
       style={{ backgroundImage: `linear-gradient(100deg, ${alpha(l.color, 0.09)}, transparent 45%)` }}
     >
       <span
@@ -50,12 +55,19 @@ export function GridOverviewCard({ now }: { now: number }) {
         <Icon name={level === "outage" ? "bolt" : level === "normal" ? "grid" : "shield"} size={18} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-          <span className="text-[15px] font-semibold">{top ? top.title : l.word}</span>
-          {top && <span className="line-clamp-1 min-w-0 text-[13px] text-ink-muted">{top.detail}</span>}
+        <span
+          className={cn("flex items-baseline gap-x-2.5 gap-y-0.5", slim ? "min-w-0 whitespace-nowrap" : "flex-wrap")}
+        >
+          <span className="flex-none text-[15px] leading-5 font-semibold">{top ? top.title : l.word}</span>
+          {top && <span className="line-clamp-1 min-w-0 truncate text-[13px] text-ink-muted">{top.detail}</span>}
         </span>
         {chips.length > 0 && (
-          <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+          <span
+            className={cn(
+              "flex gap-x-4 gap-y-1 text-xs leading-4 text-ink-muted",
+              slim ? "min-w-0 overflow-hidden whitespace-nowrap" : "flex-wrap",
+            )}
+          >
             {chips.map((c) => (
               <span key={c.key} className="flex items-center gap-1.5">
                 <i aria-hidden className="size-1.5 rounded-full" style={{ background: c.color }} />

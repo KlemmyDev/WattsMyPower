@@ -29,5 +29,6 @@ export function useWidgetCtx(): WidgetCtx {
     cars: live?.ev ?? [],
     home,
     amber: s?.tariff?.type === "amber",
+    known: live !== undefined,
   };
 }

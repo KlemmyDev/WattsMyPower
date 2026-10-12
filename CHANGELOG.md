@@ -43,7 +43,11 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   full table as room allows, with switches for the split, each figure's line, the rates and the kind of rates, and
   a choice of which figure leads. Today's energy too: at 2 × 2 one figure, then a row of them, then the grid of
   figures, where your power came from and the day's chart, which gives up its bars, battery level, legend and
-  weather in turn where it has less height; each figure and each part of the chart can be switched off.
+  weather in turn where it has less height; each figure and each part of the chart can be switched off. A widget
+  can't be made taller than what it has switched on can use, and switching a part off shrinks it to fit. Widgets for
+  things that aren't connected (a car, smart plugs, a portable battery, Amber) stay off the dashboard and out of the
+  list to add from until they are, and so do their options (the battery's, with no battery). On a phone, Customise
+  arranges the phone's layout only.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
   each string; where the home's power goes, from the inverter and from connected plugs and appliances; the battery's
   level, health, warranty and whether it's the right size; the grid's state, AEMO's wholesale prices and notices,

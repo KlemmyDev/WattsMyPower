@@ -89,7 +89,8 @@ export function DashboardPage() {
 
   const all = draft?.boards ?? boards;
   const board = all.find((b) => b.id === (draft?.id ?? current)) ?? all[0];
-  const screen: Screen = draft?.screen ?? (phone ? "phone" : "computer");
+  // On a phone only the phone's layout is arranged: the computer's is for a screen this one can't show.
+  const screen: Screen = phone ? "phone" : (draft?.screen ?? "computer");
   const items = layoutFor(board, screen);
   const cols = COLS[screen];
 
@@ -140,7 +141,8 @@ export function DashboardPage() {
     if (!item || !def) return;
     const settings = c.settings ?? item.settings;
     const next = items.map((i) => (i.id === id ? { ...i, settings } : i));
-    setItems(resize(next, id, c.w ?? item.w, c.h ?? item.h, cols, sizesOf(def, settings, screen)));
+    const w = c.w ?? item.w;
+    setItems(resize(next, id, w, c.h ?? item.h, cols, sizesOf(def, settings, screen, w)));
   };
   const newBoard = () => {
     const b: Dashboard = {
@@ -255,19 +257,21 @@ export function DashboardPage() {
             </span>
             <span className="text-[13px] text-ink-sub">
               Drag a widget to move it, pull its corner to resize it, or add more from the{" "}
-              {phone ? "button below" : "right"}.
+              {phone ? "button below. This is your phone's layout; your computer's stays as it is" : "right"}.
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Segmented
-              label="Layout for"
-              options={[
-                { value: "computer", label: "Computer" },
-                { value: "phone", label: "Phone" },
-              ]}
-              value={screen}
-              onChange={(sc) => setDraft((d) => d && { ...d, screen: sc, selected: null })}
-            />
+            {!phone && (
+              <Segmented
+                label="Layout for"
+                options={[
+                  { value: "computer", label: "Computer" },
+                  { value: "phone", label: "Phone" },
+                ]}
+                value={screen}
+                onChange={(sc) => setDraft((d) => d && { ...d, screen: sc, selected: null })}
+              />
+            )}
             <label className="relative flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-transparent px-3.5 text-[13px] font-medium text-ink hover:border-line-strong">
               Start from a layout
               <Icon name="chevD" size={13} />
@@ -277,9 +281,21 @@ export function DashboardPage() {
                 onChange={(e) => {
                   const preset = PRESETS.find((p) => p.id === e.target.value);
                   if (!preset) return;
+                  const laid = presetLayout(preset, ctx);
                   change((d) => ({
                     boards: d.boards.map((b) =>
-                      b.id === board.id ? { ...b, layouts: { computer: presetLayout(preset, ctx), phone: null } } : b,
+                      b.id !== board.id
+                        ? b
+                        : phone
+                          ? // on a phone, the phone's layout from it; the computer's stays as it is
+                            {
+                              ...b,
+                              layouts: {
+                                ...b.layouts,
+                                phone: layoutFor({ ...b, layouts: { computer: laid, phone: null } }, "phone"),
+                              },
+                            }
+                          : { ...b, layouts: { computer: laid, phone: null } },
                     ),
                     selected: null,
                   }));

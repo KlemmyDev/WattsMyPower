@@ -115,7 +115,14 @@ export const widgets: WidgetDef[] = [
     sizes: { min: [2, 2], max: [6, 3], default: [3, 2] },
     phone: { min: [2, 2], max: [4, 3], default: [2, 2] },
     options: [
-      { key: "metric", label: "Shows", kind: "select", choices: METRICS, default: "home" },
+      {
+        key: "metric",
+        label: "Shows",
+        kind: "select",
+        // the battery's readings only where there's a battery
+        choices: (ctx) => (ctx.noBattery ? METRICS.filter((m) => !m.value.startsWith("battery")) : METRICS),
+        default: "home",
+      },
       { key: "spark", label: "Last two hours", sub: "For a reading of power", kind: "toggle", default: true },
     ],
     Component: FigureWidget,

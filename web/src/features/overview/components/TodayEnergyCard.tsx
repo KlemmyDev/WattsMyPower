@@ -15,7 +15,7 @@ import { Card, CardHeader } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { useForecastAccuracy } from "~/features/common/weather/hooks";
-import { roomOf } from "~/features/common/widgets/room";
+import { roomOf, rowsFor } from "~/features/common/widgets/room";
 import type { Settings } from "~/features/common/widgets/types";
 import { DayChart } from "~/features/history/components/DayChart";
 import { extremesOf } from "~/features/history/utils/day";
@@ -84,6 +84,27 @@ export function energyShow(settings: Settings): EnergyShow {
   };
 }
 const ALL = energyShow({});
+
+/** How many figures go to a row at `w` columns, laid out under the header. */
+const colsAt = (w: number, n: number) =>
+  Math.max(1, Math.min(n, w <= 2 ? 1 : w <= 4 ? 2 : w <= 7 ? 3 : w >= 10 ? 6 : 3));
+
+/**
+ * The most rows the card can use at `w` columns for what it shows: with its chart, any (the chart takes what's
+ * left); without, the header, the figures, where the power came from and the links.
+ */
+export function energyRows(show: EnergyShow, w: number) {
+  if (show.chart && w >= 4) return undefined;
+  const rows = Math.ceil(show.figures.length / colsAt(w, show.figures.length));
+  const fig = show.notes ? FIGURE : FIGURE_BARE;
+  return rowsFor(
+    HEAD +
+      rows * fig +
+      Math.max(0, rows - 1) * GAP +
+      (show.sources && w > 2 ? GAP + SOURCES : 0) +
+      (show.links && w > 2 ? GAP + LINKS : 0),
+  );
+}
 
 /**
  * What of the chart fits in `room` px: its parts as asked for, the hourly bars, the battery level, the legend, the
@@ -259,13 +280,7 @@ export function TodayEnergyCard({
       ? 1
       : tall === "short"
         ? Math.min(figs.length, strip ? (w >= 10 ? 4 : 3) : w <= 4 ? 2 : w <= 5 ? 3 : w <= 7 ? 4 : 6)
-        : wide === "sm"
-          ? 2
-          : wide === "md"
-            ? 3
-            : w >= 10
-              ? 6
-              : 3;
+        : colsAt(w, 6);
   const need = Math.ceil(figs.length / Math.max(1, cols));
   let room = inner - (header ? HEAD : 0);
   let rows = 0;

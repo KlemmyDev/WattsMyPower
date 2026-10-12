@@ -12,7 +12,7 @@ import { priceLabel } from "~/features/amber/utils";
 import { bandColor, bandTable, tariffNumber, usedBands } from "~/features/common/tariffs/utils";
 import { dateKey, isWeekend, midnight, partsOf } from "~/features/common/time/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { roomOf } from "~/features/common/widgets/room";
+import { roomOf, rowsFor } from "~/features/common/widgets/room";
 import type { Settings } from "~/features/common/widgets/types";
 
 /** Heights (px) of the parts, for what fits: the header and the gap under it, the gap between parts, the split bar
@@ -57,6 +57,17 @@ export function todayShow(settings: Settings): TodayShow {
   };
 }
 const ALL = todayShow({});
+
+/**
+ * The most rows the card can use at `w` columns for what it shows: with today rate by rate, any (the rates take
+ * what's left); without, the header, the figures and the split.
+ */
+export function todayRows(show: TodayShow, w: number) {
+  if (show.rates) return undefined;
+  return w <= 2
+    ? rowsFor(HEAD + 2 * 58 + 8 + (show.split ? GAP + 8 : 0))
+    : rowsFor(HEAD + 20 + 2 + 48 + (show.subs ? SUB : 0) + (show.split ? GAP + SPLIT : 0));
+}
 
 /** One rate's line: what came from the grid at it, what that cost, and what solar and the battery saved. */
 type Line = {

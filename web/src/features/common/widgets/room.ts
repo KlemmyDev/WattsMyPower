@@ -1,3 +1,5 @@
+import type { Sizes } from "~/features/common/widgets/types";
+
 /** A dashboard row's least height, and the gap between rows and columns (px). */
 export const ROW = 64;
 export const GAP = 20;
@@ -15,6 +17,16 @@ export type Room = {
   tall: "short" | "mid" | "tall";
   inner: number;
 };
+
+/** The fewest rows whose card has `px` inside it (as `inner` counts it). */
+export const rowsFor = (px: number, pad = 20) => Math.max(1, Math.ceil((px + 2 * (pad + 1) + GAP) / (ROW + GAP)));
+
+/** Sizes no taller than `rows`. */
+export const capRows = (s: Sizes, rows: number): Sizes => ({
+  min: [s.min[0], Math.min(s.min[1], rows)],
+  max: [s.max[0], Math.min(s.max[1], rows)],
+  default: [s.default[0], Math.min(s.default[1], rows)],
+});
 
 export function roomOf(w: number, h: number, pad = 20): Room {
   return {
