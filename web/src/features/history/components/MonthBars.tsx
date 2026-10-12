@@ -10,7 +10,7 @@ import type { Month } from "~/features/history/utils/year";
 export const SOURCES = [
   { key: "direct", label: "Solar", color: COLOR.solar },
   { key: "battery", label: "Battery", color: COLOR.battery },
-  { key: "imp", label: "Grid", color: COLOR.import },
+  { key: "imp", label: "Grid", color: COLOR.fromGrid },
 ] as const;
 
 /** A round top for the chart: the next multiple of a step that suits the size. */

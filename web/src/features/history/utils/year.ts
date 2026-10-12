@@ -89,7 +89,7 @@ export const METRICS: Record<
 > = {
   gen: { label: "Solar", value: (d) => d.gen, format: kWh, color: COLOR.solar },
   ss: { label: "Self-sufficiency", value: (d) => d.ss, format: (v) => `${Math.round(v * 100)}%`, color: COLOR.good },
-  imp: { label: "From the grid", value: (d) => d.imp, format: kWh, color: COLOR.import },
+  imp: { label: "From the grid", value: (d) => d.imp, format: kWh, color: COLOR.fromGrid },
   saved: { label: "Saved", value: (d) => d.saved, format: money, color: COLOR.ink },
 };
 
@@ -256,7 +256,7 @@ export function standoutsOf(days: Day[]): Standout[] {
     { title: "Best solar day", color: COLOR.solar, day: top((d) => d.gen), value: "" },
     { title: "Most self-sufficient", color: COLOR.good, day: top((d) => d.ss), value: "" },
     { title: "Biggest saving", color: COLOR.ink, day: top((d) => d.saved), value: "" },
-    { title: "Highest use", color: COLOR.import, day: top((d) => d.home), value: "" },
+    { title: "Highest use", color: COLOR.fromGrid, day: top((d) => d.home), value: "" },
     { title: "Most from the grid", color: COLOR.fromGrid, day: top((d) => d.imp), value: "" },
   ];
   out[0].value = kWh(out[0].day.gen);
