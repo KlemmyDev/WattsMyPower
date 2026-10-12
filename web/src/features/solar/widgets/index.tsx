@@ -67,10 +67,10 @@ export const widgets: WidgetDef[] = [
   {
     type: "solar-summary",
     name: "Solar at a glance",
-    sub: "Making now, today's pace, the peak, tomorrow and the sky",
+    sub: "Made today and where it's heading, making now, the peak, tomorrow and the sky",
     group: "solar",
     icon: "sun",
-    thumb: { kind: "number", value: "4.7 kW", color: COLOR.solar },
+    thumb: { kind: "number", value: "18.4 kWh", color: COLOR.solar },
     sizes: size([6, 3], [12, 4], [12, 3]),
     phone: size([4, 5], [4, 7], [4, 6]),
     Component: (props: WidgetProps) => <Hero {...props} chart={false} />,
