@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { centsShort, DASH, kW, kWh, money, pct, signedPct } from "~/features/common/formatting/utils/number";
 import type { Snapshot } from "~/features/common/live/types";
@@ -7,9 +6,21 @@ import { costsQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
-import { Card } from "~/features/common/ui/components/Card";
 import { TooltipRow } from "~/features/common/ui/components/ChartHover";
-import { Delta, Figure, LiveDot } from "~/features/common/ui/components/Live";
+import {
+  HeroBar,
+  HeroCard,
+  HeroFigures,
+  HeroFill,
+  HeroKey,
+  HeroLead,
+  HeroLive,
+  HeroStat,
+  HeroStats,
+  HeroTick,
+  HeroTop,
+} from "~/features/common/ui/components/Hero";
+import { Delta } from "~/features/common/ui/components/Live";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
@@ -60,81 +71,81 @@ export function HomeHero({
   const usual: LinePoint[] =
     profile?.length === 24 ? profile.map((kw, h) => ({ t: start + h * 3600 + 1800, v: kw * 1000 })) : [];
   return (
-    <Card
-      aria-label="Home today and now"
-      className="h-full gap-6"
-      style={{ backgroundImage: `linear-gradient(180deg, ${alpha(HOME, 0.1)}, transparent 45%)` }}
-    >
-      {/* On a phone the rows below come apart (contents) so the pace bar can sit right under what's been used. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5 max-sm:contents">
-        <div className="flex flex-wrap items-end gap-x-8 gap-y-5 max-sm:contents">
-          <div className="flex flex-col gap-1.5 max-sm:-order-2">
-            <span className="text-[13px] text-ink-muted">Used today</span>
-            <Figure value={usedValue} unit={usedUnit} size="xl" />
-            <span className="flex flex-wrap items-center gap-2 text-[13px] text-ink-muted tabular-nums">
-              {today.used == null
-                ? "No reading yet"
-                : today.heading != null && `Heading for ${kWh(today.heading)} by midnight`}
-              {today.pace != null && (
-                <Delta value={today.pace} invert>
-                  {signedPct(today.pace)} on a usual day
-                </Delta>
-              )}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1.5 border-l border-line-subtle pl-6 max-sm:border-l-0 max-sm:pl-0">
-            <span className="flex items-center gap-2 text-[13px] text-ink-muted">
-              <LiveDot on={live.drawing} color={HOME} />
-              Using now
-            </span>
-            <Figure value={value} unit={unit} />
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted tabular-nums">
-              {from.length ? (
-                <span className="inline-flex items-center gap-1.5">
-                  From
-                  {from.map((x, i) => (
-                    <span key={x.key} className="inline-flex items-center gap-1" title={`${x.label}, ${kW(x.w)}`}>
-                      <i aria-hidden className="size-1.5 rounded-full" style={{ background: SOURCES[x.key] }} />
-                      {x.label.toLowerCase()}
-                      {i < from.length - 1 && <span aria-hidden>·</span>}
-                    </span>
-                  ))}
-                </span>
-              ) : (
-                live.load != null && "Next to nothing"
-              )}
-              {live.vsUsual != null && (
-                <Delta value={live.vsUsual} invert>
-                  {signedPct(live.vsUsual)} on usual
-                </Delta>
-              )}
-            </span>
-          </div>
-        </div>
-        <dl className="grid grid-cols-4 gap-x-8 gap-y-3 max-md:grid-cols-2">
-          <Stat
+    <HeroCard label="Home today and now" tint={HOME}>
+      <HeroTop>
+        <HeroFigures>
+          <HeroLead
+            label="Used today"
+            value={usedValue}
+            unit={usedUnit}
+            sub={
+              <>
+                {today.used == null
+                  ? "No reading yet"
+                  : today.heading != null && `Heading for ${kWh(today.heading)} by midnight`}
+                {today.pace != null && (
+                  <Delta value={today.pace} invert>
+                    {signedPct(today.pace)} on a usual day
+                  </Delta>
+                )}
+              </>
+            }
+          />
+          <HeroLive
+            label="Using now"
+            on={live.drawing}
+            color={HOME}
+            value={value}
+            unit={unit}
+            sub={
+              <>
+                {from.length ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    From
+                    {from.map((x, i) => (
+                      <span key={x.key} className="inline-flex items-center gap-1" title={`${x.label}, ${kW(x.w)}`}>
+                        <i aria-hidden className="size-1.5 rounded-full" style={{ background: SOURCES[x.key] }} />
+                        {x.label.toLowerCase()}
+                        {i < from.length - 1 && <span aria-hidden>·</span>}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  live.load != null && "Next to nothing"
+                )}
+                {live.vsUsual != null && (
+                  <Delta value={live.vsUsual} invert>
+                    {signedPct(live.vsUsual)} on usual
+                  </Delta>
+                )}
+              </>
+            }
+          />
+        </HeroFigures>
+        <HeroStats>
+          <HeroStat
             label="Peak today"
             value={today.peak ? kW(today.peak.w) : DASH}
             sub={today.peak ? `at ${hhmm(today.peak.t)}` : undefined}
           />
-          <Stat
+          <HeroStat
             label="Power costs now"
             value={rate ? `${centsShort(rate.rate)}/kWh` : DASH}
             sub={rate ? (rates!.length > 1 ? `${rate.name} until ${hhmm(rate.to)}` : rate.name) : undefined}
           />
-          <Stat
+          <HeroStat
             label="Grid power today"
             value={bill ? money(bill.import_cost) : DASH}
             sub={bill ? `${kWh(bill.import_kwh)}${bill.saved > 0 ? ` · ${money(bill.saved)} saved` : ""}` : undefined}
           />
-          <Stat
+          <HeroStat
             label="Made itself"
             value={today.self != null ? pct(today.self * 100) : DASH}
             sub="Solar and the battery"
           />
-        </dl>
-      </div>
-      <Pace today={today} className="max-sm:-order-1" />
+        </HeroStats>
+      </HeroTop>
+      <Pace today={today} />
       {chart &&
         (series ? (
           <TimeLine
@@ -173,17 +184,7 @@ export function HomeHero({
         ) : (
           <Skeleton className="h-[300px] rounded-2xl" />
         ))}
-    </Card>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className="text-[20px] leading-6 font-light tracking-[-0.3px] whitespace-nowrap tabular-nums">{value}</dd>
-      {sub && <dd className="truncate text-[11.5px] text-ink-faint">{sub}</dd>}
-    </div>
+    </HeroCard>
   );
 }
 
@@ -191,62 +192,35 @@ function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: Re
  * Today's pace along one bar out of where it's heading: used so far (the figure above it), the rest a usual pace
  * would add (dashed), a tick for what a usual day has used by now and a fainter one for a whole usual day.
  */
-function Pace({ today: t, className }: { today: Today; className?: string }) {
+function Pace({ today: t }: { today: Today }) {
   const whole = Math.max(t.heading ?? 0, t.usualDay ?? 0, t.used ?? 0, 0.1);
-  const at = (v: number) => `${Math.min(100, (v / whole) * 100)}%`;
+  const at = (v: number) => Math.min(100, (v / whole) * 100);
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <div className="relative h-2.5 rounded-full bg-track">
-        {t.heading != null && (
-          <span
-            className="absolute inset-y-0 left-0 rounded-full border border-dashed"
-            style={{ width: at(t.heading), borderColor: alpha(HOME, 0.7) }}
-          />
-        )}
-        <span
-          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out-soft"
-          style={{ width: at(t.used ?? 0), background: HOME }}
-        />
-        {t.usualNow != null && (
-          <span
-            title="A usual day by now"
-            className="absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full bg-ink"
-            style={{ left: at(t.usualNow) }}
-          />
-        )}
-        {t.usualDay != null && (
-          <span
-            title="A usual whole day"
-            className="absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full bg-fg/40"
-            style={{ left: at(t.usualDay) }}
-          />
-        )}
-      </div>
-      <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-ink-faint tabular-nums">
-        <span className="flex items-center gap-1.5">
-          <i className="size-2 rounded-full" style={{ background: HOME }} />
-          Used so far
-        </span>
-        {t.usualNow != null && (
-          <span className="flex items-center gap-1.5">
-            <i className="h-2.5 w-0.5 rounded-full bg-ink" />
-            {kWh(t.usualNow)} usual by now
-          </span>
-        )}
-        {t.usualDay != null && (
-          <span className="flex items-center gap-1.5">
-            <i className="h-2.5 w-0.5 rounded-full bg-fg/40" />
-            {kWh(t.usualDay)} on a usual day
-          </span>
-        )}
-        {t.heading != null && (
-          <span className="flex items-center gap-1.5">
-            <i className="size-2 rounded-full border border-dashed" style={{ borderColor: HOME }} />
-            {kWh(t.heading)} by midnight
-          </span>
-        )}
-      </div>
-    </div>
+    <HeroBar
+      legend={
+        <>
+          <HeroKey mark="dot" color={HOME}>
+            Used so far
+          </HeroKey>
+          {t.usualNow != null && <HeroKey mark="tick">{kWh(t.usualNow)} usual by now</HeroKey>}
+          {t.usualDay != null && (
+            <HeroKey mark="tick" color={alpha(COLOR.fg, 0.4)}>
+              {kWh(t.usualDay)} on a usual day
+            </HeroKey>
+          )}
+          {t.heading != null && (
+            <HeroKey mark="dashed" color={HOME}>
+              {kWh(t.heading)} by midnight
+            </HeroKey>
+          )}
+        </>
+      }
+    >
+      {t.heading != null && <HeroFill to={at(t.heading)} color={HOME} variant="dashed" />}
+      <HeroFill to={at(t.used ?? 0)} color={HOME} />
+      {t.usualNow != null && <HeroTick at={at(t.usualNow)} title="A usual day by now" />}
+      {t.usualDay != null && <HeroTick at={at(t.usualDay)} color={alpha(COLOR.fg, 0.4)} title="A usual whole day" />}
+    </HeroBar>
   );
 }
 

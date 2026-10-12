@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { BatteryDayChart } from "~/features/battery/components/BatteryDayChart";
 import { useBatteryChange } from "~/features/battery/hooks";
 import type { BatteryPlan, BatteryView, ControlRequest } from "~/features/battery/types";
@@ -13,9 +12,21 @@ import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
-import { Delta, Figure, LiveDot } from "~/features/common/ui/components/Live";
+import {
+  HeroBar,
+  HeroCard,
+  HeroFigures,
+  HeroFill,
+  HeroKey,
+  HeroLead,
+  HeroLive,
+  HeroStat,
+  HeroStats,
+  HeroTick,
+  HeroTop,
+} from "~/features/common/ui/components/Hero";
+import { Delta } from "~/features/common/ui/components/Live";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { useTween } from "~/features/common/ui/hooks/useTween";
@@ -84,37 +95,36 @@ export function BatteryHero({
   const etaText = eta != null && eta > 0 && eta < 48 ? duration(eta * 3600) : null;
 
   return (
-    <Card
-      aria-label="Battery today and now"
-      className="h-full gap-6"
-      style={{ backgroundImage: `linear-gradient(180deg, ${alpha(tint, 0.1)}, transparent 45%)` }}
-    >
-      {/* On a phone the rows below come apart (contents) so the level bar can sit right under the level. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5 max-sm:contents">
-        <div className="flex flex-wrap items-end gap-x-8 gap-y-5 max-sm:contents">
-          <div className="flex flex-col gap-1.5 max-sm:-order-2">
-            <span className="text-[13px] text-ink-muted">Level</span>
-            <Figure value={soc == null ? DASH : Math.round(soc)} unit={soc == null ? undefined : "%"} size="xl" />
-            <span className="flex flex-wrap items-center gap-2 text-[13px] text-ink-muted tabular-nums">
-              {soc != null && cap ? `${kWh((soc / 100) * cap)} of ${kWh(cap)}` : "No reading yet"}
-              {m && (
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium whitespace-nowrap",
-                    !m.special && "bg-fg/6 text-ink-muted",
-                  )}
-                  style={m.special ? { background: alpha(modeColor, 0.14), color: modeColor } : undefined}
-                >
-                  {m.label}
-                  {m.detail && ` · ${m.detail}`}
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1.5 border-l border-line-subtle pl-6 max-sm:border-l-0 max-sm:pl-0">
-            <span className="flex items-center gap-2 text-[13px] text-ink-muted">
-              <LiveDot on={st === "charge" || st === "discharge"} color={tint} />
-              {c?.kind === "standby"
+    <HeroCard label="Battery today and now" tint={tint}>
+      <HeroTop>
+        <HeroFigures>
+          <HeroLead
+            label="Level"
+            value={soc == null ? DASH : Math.round(soc)}
+            unit={soc == null ? undefined : "%"}
+            sub={
+              <>
+                {soc != null && cap ? `${kWh((soc / 100) * cap)} of ${kWh(cap)}` : "No reading yet"}
+                {m && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium whitespace-nowrap",
+                      !m.special && "bg-fg/6 text-ink-muted",
+                    )}
+                    style={m.special ? { background: alpha(modeColor, 0.14), color: modeColor } : undefined}
+                  >
+                    {m.label}
+                    {m.detail && ` · ${m.detail}`}
+                  </span>
+                )}
+              </>
+            }
+          />
+          <HeroLive
+            on={st === "charge" || st === "discharge"}
+            color={tint}
+            label={
+              c?.kind === "standby"
                 ? "On standby"
                 : full
                   ? "Full"
@@ -122,33 +132,31 @@ export function BatteryHero({
                     ? "Charging now"
                     : st === "discharge"
                       ? "Discharging now"
-                      : "Idle"}
-            </span>
-            {full ? (
-              <Figure value={pct(Math.round(soc ?? 100))} />
-            ) : (
-              <Figure {...split(power == null ? null : kW(Math.abs(power)))} />
-            )}
-            <span className="flex flex-wrap items-center gap-2 text-xs text-ink-muted tabular-nums">
-              {full
-                ? (p?.pv_power ?? 0) > ON
-                  ? "Solar's running your home"
-                  : "Topped up"
-                : st === "charge"
-                  ? `Into the battery${fullAt ? ` · full by ${when(fullAt, now)}` : etaText ? ` · full in ${etaText}` : ""}`
-                  : st === "discharge"
-                    ? `To your home${etaText ? ` · ${etaText} to its reserve` : ""}`
-                    : "Nothing in or out"}
-              {max && power != null && Math.abs(power) > ON && (
-                <Delta value={0}>
-                  {pct((Math.abs(power) / (max * 1000)) * 100)} of its {max} kW
-                </Delta>
-              )}
-            </span>
-          </div>
-        </div>
-        <dl className="grid grid-cols-4 gap-x-8 gap-y-3 max-md:grid-cols-2">
-          <Stat
+                      : "Idle"
+            }
+            {...(full ? { value: pct(Math.round(soc ?? 100)) } : split(power == null ? null : kW(Math.abs(power))))}
+            sub={
+              <>
+                {full
+                  ? (p?.pv_power ?? 0) > ON
+                    ? "Solar's running your home"
+                    : "Topped up"
+                  : st === "charge"
+                    ? `Into the battery${fullAt ? ` · full by ${when(fullAt, now)}` : etaText ? ` · full in ${etaText}` : ""}`
+                    : st === "discharge"
+                      ? `To your home${etaText ? ` · ${etaText} to its reserve` : ""}`
+                      : "Nothing in or out"}
+                {max && power != null && Math.abs(power) > ON && (
+                  <Delta value={0}>
+                    {pct((Math.abs(power) / (max * 1000)) * 100)} of its {max} kW
+                  </Delta>
+                )}
+              </>
+            }
+          />
+        </HeroFigures>
+        <HeroStats>
+          <HeroStat
             label="Charged today"
             value={p?.daily_charge != null || series ? kWh(io.charged) : DASH}
             sub={
@@ -161,23 +169,23 @@ export function BatteryHero({
                     : `${kWh(io.solar)} from solar`
             }
           />
-          <Stat
+          <HeroStat
             label="Discharged today"
             value={p?.daily_discharge != null || series ? kWh(io.discharged) : DASH}
             sub={io.discharged < 0.05 ? undefined : io.out < 0.05 ? "All to your home" : `${kWh(io.home)} to your home`}
           />
-          <Stat
+          <HeroStat
             label="Power costs now"
             value={rate ? `${centsShort(rate.rate)}/kWh` : DASH}
             sub={rate ? `${rate.name} until ${hhmm(rate.to)}` : undefined}
           />
-          <Stat
+          <HeroStat
             label="Reserve"
             value={pct(reserve)}
             sub={c?.kind === "floor" ? "Raised for now" : "For when the grid's down"}
           />
-        </dl>
-      </div>
+        </HeroStats>
+      </HeroTop>
       <LevelBar
         soc={soc}
         reserve={reserve}
@@ -189,7 +197,6 @@ export function BatteryHero({
         fullAt={fullAt}
         full={full}
         now={now}
-        className="max-sm:-order-1"
       />
       {(c || v?.blocked) && <Controlled v={v!} now={now} />}
       {chart && (
@@ -202,7 +209,7 @@ export function BatteryHero({
           draft={draft}
         />
       )}
-    </Card>
+    </HeroCard>
   );
 }
 
@@ -212,16 +219,6 @@ const split = (text: string | null) => {
   const [value, unit] = text.split(" ");
   return { value, unit };
 };
-
-function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className="text-[20px] leading-6 font-light tracking-[-0.3px] whitespace-nowrap tabular-nums">{value}</dd>
-      {sub && <dd className="truncate text-[11.5px] text-ink-faint">{sub}</dd>}
-    </div>
-  );
-}
 
 /**
  * The level along one bar out of 100%: the reserve it keeps hatched in and marked (lilac while it's raised), a tick
@@ -238,7 +235,6 @@ function LevelBar({
   fullAt,
   full,
   now,
-  className,
 }: {
   soc: number | null;
   reserve: number;
@@ -250,74 +246,53 @@ function LevelBar({
   fullAt: number | null;
   full: boolean;
   now: number;
-  className?: string;
 }) {
-  const at = (v: number) => `${Math.max(0, Math.min(100, v))}%`;
   const reserveColor = raised ? KIND_COLOR.floor : undefined;
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <div className="relative h-2.5 rounded-full bg-track">
-        <span
-          className={cn(
-            "absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out-soft",
-            paused && "opacity-60",
+    <HeroBar
+      legend={
+        <>
+          <HeroKey mark="tick" color={reserveColor}>
+            {pct(reserve)} reserve, {raised ? "raised for now" : "kept for a blackout"}
+          </HeroKey>
+          {low && (
+            <HeroKey mark="tick" color={COLOR.warn}>
+              Lowest {pct(Math.round(low.soc))} at {when(low.t, now)}, as things are set
+            </HeroKey>
           )}
-          style={{ width: at(soc ?? 0), background: `linear-gradient(90deg, ${alpha(tone, 0.55)}, ${tone})` }}
-        />
-        <span
-          aria-hidden
-          className="absolute inset-y-0 left-0 rounded-l-full"
-          style={{
-            width: at(reserve),
-            background: `repeating-linear-gradient(135deg, ${alpha(COLOR.fg, 0.16)} 0 3px, transparent 3px 6px)`,
-          }}
-        />
-        <span
-          title="The reserve it keeps"
-          className={cn("absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full", !reserveColor && "bg-ink")}
-          style={{ left: at(reserve), background: reserveColor }}
-        />
-        {low && (
-          <span
-            title="The lowest it's expected to get"
-            className="absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full"
-            style={{ left: at(low.soc), background: COLOR.warn }}
-          />
-        )}
-        {target != null && (
-          <span
-            title="What it's charging to"
-            className="absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full"
-            style={{ left: at(target), background: KIND_COLOR.charge }}
-          />
-        )}
-      </div>
-      <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-ink-faint tabular-nums">
-        <span className="flex items-center gap-1.5">
-          <i
-            className={cn("h-2.5 w-0.5 rounded-full", !reserveColor && "bg-ink")}
-            style={{ background: reserveColor }}
-          />
-          {pct(reserve)} reserve, {raised ? "raised for now" : "kept for a blackout"}
-        </span>
-        {low && (
-          <span className="flex items-center gap-1.5">
-            <i className="h-2.5 w-0.5 rounded-full" style={{ background: COLOR.warn }} />
-            Lowest {pct(Math.round(low.soc))} at {when(low.t, now)}, as things are set
-          </span>
-        )}
-        {target != null && (
-          <span className="flex items-center gap-1.5">
-            <i className="h-2.5 w-0.5 rounded-full" style={{ background: KIND_COLOR.charge }} />
-            Charging to {pct(target)}
-          </span>
-        )}
-        <span className="flex items-center gap-1.5">
-          <i className="size-2 rounded-full" style={{ background: COLOR.battery }} />
-          {full ? "Full now" : fullAt ? `Full again by ${when(fullAt, now)}` : "Not expected to fill by tomorrow night"}
-        </span>
-      </div>
-    </div>
+          {target != null && (
+            <HeroKey mark="tick" color={KIND_COLOR.charge}>
+              Charging to {pct(target)}
+            </HeroKey>
+          )}
+          <HeroKey mark="dot" color={COLOR.battery}>
+            {full
+              ? "Full now"
+              : fullAt
+                ? `Full again by ${when(fullAt, now)}`
+                : "Not expected to fill by tomorrow night"}
+          </HeroKey>
+        </>
+      }
+    >
+      <HeroFill
+        to={soc ?? 0}
+        color={tone}
+        className={cn(paused && "opacity-60")}
+        style={{ background: `linear-gradient(90deg, ${alpha(tone, 0.55)}, ${tone})` }}
+      />
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 rounded-l-full"
+        style={{
+          width: `${Math.max(0, Math.min(100, reserve))}%`,
+          background: `repeating-linear-gradient(135deg, ${alpha(COLOR.fg, 0.16)} 0 3px, transparent 3px 6px)`,
+        }}
+      />
+      <HeroTick at={reserve} color={reserveColor} title="The reserve it keeps" />
+      {low && <HeroTick at={low.soc} color={COLOR.warn} title="The lowest it's expected to get" />}
+      {target != null && <HeroTick at={target} color={KIND_COLOR.charge} title="What it's charging to" />}
+    </HeroBar>
   );
 }
 
