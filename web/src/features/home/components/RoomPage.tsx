@@ -19,6 +19,7 @@ import type { HomeDevice, HomeUsage } from "~/features/home/types";
 import {
   BEFORE_WORDS,
   deviceColors,
+  givenDeviceColor,
   drawing,
   homeItems,
   period,
@@ -50,13 +51,14 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
   const patterns = useQuery(homePatternsQuery);
   const found = useQuery(homeInsightsQuery);
   const devices = overview.data?.devices ?? [];
-  const colors = deviceColors(devices);
+  const rooms = overview.data?.rooms ?? [];
+  const colors = deviceColors(devices, rooms);
   const kinds = new Map((overview.data?.kinds ?? []).map((k) => [k.id, k]));
   const item = homeItems(devices).find((i) => i.group === room);
   const members = item?.members ?? [];
   const ids = members.map((d) => d.id);
   const profile = useQuery(homeProfileQuery(ids));
-  const color = (item && colors.get(item.id)) ?? COLOR.gridSoft;
+  const color = (item && deviceColors(devices, rooms, { byRoom: true }).get(item.id)) ?? COLOR.gridSoft;
   // What a kWh has cost the room over the last 30 days, to price what's ahead.
   const month = useQuery(homeUsageQuery(...period("month", now)));
   const spent = month.data?.devices.filter((u) => ids.includes(u.id)) ?? [];
@@ -129,23 +131,26 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
               <Skeleton className={cn("h-[300px] rounded-3xl", NARROW)} />
             </>
           )}
-          {members.map((d) => (
-            <DeviceCard
-              key={d.id}
-              device={d}
-              used={usage.data?.devices.find((u) => u.id === d.id)}
-              before={beforeOf(d.id)}
-              pattern={patterns.data?.find((p) => p.id === d.id)}
-              cycles={!!kinds.get(d.kind)?.cycles}
-              kindLabel={kinds.get(d.kind)?.label ?? "Device"}
-              color={colors.get(d.id) ?? COLOR.gridSoft}
-              home={usage.data?.total.home ?? null}
-              rangeLabel={RANGE_WORDS[range]}
-              beforeLabel={BEFORE_WORDS[range]}
-              best={found.data?.best_times.find((b) => b.id === d.id)}
-              saving={found.data?.savings.find((x) => x.id === d.id)}
-            />
-          ))}
+          <div className="col-span-12 grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-5">
+            {members.map((d) => (
+              <DeviceCard
+                key={d.id}
+                device={d}
+                used={usage.data?.devices.find((u) => u.id === d.id)}
+                before={beforeOf(d.id)}
+                pattern={patterns.data?.find((p) => p.id === d.id)}
+                cycles={!!kinds.get(d.kind)?.cycles}
+                kindLabel={kinds.get(d.kind)?.label ?? "Device"}
+                color={colors.get(d.id) ?? COLOR.gridSoft}
+                givenColor={givenDeviceColor(devices, rooms, d.id)}
+                home={usage.data?.total.home ?? null}
+                rangeLabel={RANGE_WORDS[range]}
+                beforeLabel={BEFORE_WORDS[range]}
+                best={found.data?.best_times.find((b) => b.id === d.id)}
+                saving={found.data?.savings.find((x) => x.id === d.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
     </>

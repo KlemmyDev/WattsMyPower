@@ -15,6 +15,7 @@ import {
   findHomeDevices,
   homeQuery,
   setDeviceRule,
+  setRoomLook,
   signInHomeAgain,
   switchDevice,
   updateDevice,
@@ -30,6 +31,16 @@ export function useHomeChange() {
     // What each device used, and so the breakdown, changes with what's connected and what's hidden.
     for (const key of ["usage", "patterns", "runs"]) void qc.invalidateQueries({ queryKey: ["home", key] });
   };
+  // A look changes nothing a breakdown or pattern shows, so only what's connected is brought up to date. It's shown
+  // at once, as picked, and put back if it couldn't be saved.
+  const looked = (overview: HomeOverview) => qc.setQueryData(homeQuery.queryKey, overview);
+  const pick = (change: (o: HomeOverview) => HomeOverview) => {
+    const was = qc.getQueryData<HomeOverview>(homeQuery.queryKey);
+    if (was) qc.setQueryData(homeQuery.queryKey, change(was));
+    return { was };
+  };
+  const undo = (_e: unknown, _v: unknown, ctx: { was?: HomeOverview } | undefined) =>
+    ctx?.was && qc.setQueryData(homeQuery.queryKey, ctx.was);
   return {
     connect: useMutation({ mutationFn: connectHome, onSuccess: done }),
     signIn: useMutation({ mutationFn: signInHomeAgain, onSuccess: done }),
@@ -39,6 +50,36 @@ export function useHomeChange() {
     switch: useMutation({ mutationFn: switchDevice, onSuccess: done }),
     setRule: useMutation({ mutationFn: setDeviceRule, onSuccess: done }),
     clearRule: useMutation({ mutationFn: clearDeviceRule, onSuccess: done }),
+    /** A device's own colour and icon. */
+    deviceLook: useMutation({
+      mutationFn: updateDevice,
+      onMutate: ({ id, color, icon }) =>
+        pick((o) => ({
+          ...o,
+          devices: o.devices.map((d) =>
+            d.id === id ? { ...d, ...(color !== undefined && { color }), ...(icon !== undefined && { icon }) } : d,
+          ),
+        })),
+      onError: undo,
+      onSuccess: looked,
+    }),
+    /** A room's own colour and icon. */
+    roomLook: useMutation({
+      mutationFn: setRoomLook,
+      onMutate: ({ name, color, icon }) =>
+        pick((o) => {
+          const rooms = o.rooms ?? [];
+          const was = rooms.find((r) => r.name.toLowerCase() === name.toLowerCase());
+          const next = {
+            name,
+            color: color !== undefined ? color : (was?.color ?? null),
+            icon: icon !== undefined ? icon : (was?.icon ?? null),
+          };
+          return { ...o, rooms: [...rooms.filter((r) => r !== was), next] };
+        }),
+      onError: undo,
+      onSuccess: looked,
+    }),
   };
 }
 
@@ -57,8 +98,8 @@ export function useHomeNavPages(enabled: boolean): NavPage[] {
     /* not encoded as expected: compare it as it is */
   }
   const items = homeItems(data?.devices ?? []);
-  // Each room in its first device's colour, as the Home page draws it.
-  const colors = deviceColors(data?.devices ?? []);
+  // Each room in its own colour (else its first device's), as the Home page draws it.
+  const colors = deviceColors(data?.devices ?? [], data?.rooms, { byRoom: true });
   const draws = (members: HomeDevice[]) => members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
   const top = Math.max(1, ...items.map((i) => draws(i.members)));
   return items.map((item): NavPage => {

@@ -575,7 +575,7 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
   const devices = home?.devices ?? [];
   const carW = useHomeCharging();
   const split = liveBreakdown(devices, l, { carW });
-  const colors = deviceColors(devices);
+  const colors = deviceColors(devices, home?.rooms, { byRoom: true });
 
   // The last two hours behind each figure. The window follows the latest reading, so it moves (and is fetched) once a
   // reading, and the line always ends at the figure in front of it.

@@ -6,7 +6,7 @@ import { alpha } from "~/features/common/theme/utils/colors";
 import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { homeQuery } from "~/features/home/api";
-import { deviceColors, ESTIMATED, kindIcon, watts } from "~/features/home/utils";
+import { deviceColors, deviceIcon, ESTIMATED, watts } from "~/features/home/utils";
 
 /**
  * On the Overview, while an appliance is running: each one with where its cycle is, how long is left (and when that
@@ -18,7 +18,7 @@ export function RunningNowCard() {
   const devices = data?.devices ?? [];
   const running = devices.filter((d) => !d.hidden && d.now?.running && !d.now.stale && d.now.online);
   if (!running.length) return null;
-  const colors = deviceColors(devices);
+  const colors = deviceColors(devices, data?.rooms);
   return (
     <Card aria-labelledby="h-running" className="col-span-12 gap-3">
       <div className="flex items-center justify-between gap-3">
@@ -39,7 +39,7 @@ export function RunningNowCard() {
                 className="flex size-10 flex-none items-center justify-center rounded-full"
                 style={{ background: alpha(color, 0.16), color }}
               >
-                <Icon name={kindIcon(d.kind)} size={20} />
+                <Icon name={deviceIcon(d)} size={20} />
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <Link

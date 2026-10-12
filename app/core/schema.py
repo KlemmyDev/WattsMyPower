@@ -393,6 +393,15 @@ def _home_estimate(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE home_devices ADD COLUMN estimate INTEGER NOT NULL DEFAULT 0")
 
 
+def _home_looks(conn: sqlite3.Connection) -> None:
+    """How a device or a room looks on the Home page, as chosen: `color` a key of the dashboard's palette ("jade",
+    "sky"…) and `icon` the name of one of its icons; null for the one it's given. A room (a group of devices, by its
+    name, any capitals) has its look in home_rooms; a room with neither set has no row."""
+    conn.execute("ALTER TABLE home_devices ADD COLUMN color TEXT")
+    conn.execute("ALTER TABLE home_devices ADD COLUMN icon TEXT")
+    conn.execute("CREATE TABLE IF NOT EXISTS home_rooms (name TEXT PRIMARY KEY COLLATE NOCASE, color TEXT, icon TEXT)")
+
+
 def _battery_controls(conn: sqlite3.Connection) -> None:
     """Each battery control as it ran: `kind` standby, floor or charge; `until` the end it was set for (null: until
     stopped); `ended_at` when it ended (null while it's in effect) and `ended_by` why (time, target, full, stopped,
@@ -502,6 +511,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _ev_events,
     _ev_levels,
     _drop_alerts,
+    _home_looks,
 ]
 
 

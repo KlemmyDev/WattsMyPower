@@ -32,11 +32,15 @@ import {
   beforeWords,
   dayWords,
   deviceColors,
+  drawing,
+  givenDeviceColor,
+  givenRoomColor,
   groupPattern,
   groupUsage,
   homeItems,
   period,
   RANGE_WORDS,
+  roomLook,
 } from "~/features/home/utils";
 
 /** Until something's connected: what the page will show, and where to connect it. */
@@ -97,9 +101,16 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
   const patterns = useQuery(homePatternsQuery);
   const found = useQuery(homeInsightsQuery);
   const devices = overview.data?.devices ?? [];
-  const colors = deviceColors(devices);
+  const rooms = overview.data?.rooms ?? [];
+  // Each device's colour; and where rooms are shown as one, each room's (its own, standing in by its first device).
+  const colors = deviceColors(devices, rooms);
+  const roomColors = deviceColors(devices, rooms, { byRoom: true });
   const visible = devices.filter((d) => !d.hidden);
-  for (const d of devices) if (d.hidden) colors.delete(d.id);
+  for (const d of devices)
+    if (d.hidden) {
+      colors.delete(d.id);
+      roomColors.delete(d.id);
+    }
   const kinds = new Map((overview.data?.kinds ?? []).map((k) => [k.id, k]));
   const kindLabels = new Map([...kinds].map(([id, k]) => [id, k.label]));
   // By room, grouped devices (the plugs in a room) are shown as one, in the breakdown and as a card; by device, each
@@ -108,7 +119,11 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
     store.get(STORE_HOME_VIEW) === "devices" ? "devices" : "rooms",
   );
   const hasRooms = devices.some((d) => d.group && !d.hidden);
-  const items = homeItems(devices, view === "rooms" || !hasRooms);
+  const byRoom = view === "rooms" || !hasRooms;
+  const items = homeItems(devices, byRoom);
+  const itemColors = byRoom ? roomColors : colors;
+  const on = items.filter((i) => i.members.some((d) => drawing(d) != null || (d.now?.running && !d.now.stale)));
+  const offline = items.filter((i) => i.members.every((d) => !d.now || !d.now.online || d.now.stale));
   const used = usage.data && groupUsage(usage.data, items);
   const previousUsed = compare && previous.data ? groupUsage(previous.data, items) : undefined;
   const earlier = before.data && range !== "today" ? groupUsage(before.data, items) : undefined;
@@ -146,14 +161,14 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
           </div>
           {/* One column, what's happening now comes first. */}
           <div className="flex min-w-0 flex-col gap-5 max-3xl:order-first">
-            {devices.length > 0 && <NowCard devices={devices} colors={colors} load={p?.load_power} />}
+            {devices.length > 0 && <NowCard devices={devices} colors={roomColors} load={p?.load_power} />}
             <HomeSourcesCard series={whole?.series} p={p} days={homeDays} />
           </div>
         </div>
         <div className="grid grid-cols-12 gap-5">
           <UsageCard
             usage={used}
-            colors={colors}
+            colors={itemColors}
             range={range}
             rangeWords={rangeWords}
             onRange={(r) => {
@@ -180,8 +195,19 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
           />
           {overview.data && !devices.length && <ConnectPrompt />}
           {devices.length > 0 && (
-            <div className="col-span-12 flex flex-wrap items-center justify-between gap-3 pt-2">
-              <h2>{view === "rooms" && hasRooms ? "Rooms and devices" : "Devices"}</h2>
+            <div className="col-span-12 flex flex-wrap items-end justify-between gap-3 pt-4">
+              <div className="flex flex-col gap-1">
+                <h2>{byRoom && hasRooms ? "Rooms and devices" : "Devices"}</h2>
+                <span className="text-[13px] text-ink-muted">
+                  {[
+                    on.length ? `${on.length} drawing power now` : "Nothing drawing power now",
+                    offline.length ? `${offline.length} offline` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                  . Choose an icon to change its look.
+                </span>
+              </div>
               {hasRooms && (
                 <Segmented
                   label="Show"
@@ -198,39 +224,47 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
               )}
             </div>
           )}
-          {items.map((item) =>
-            item.group ? (
-              <GroupCard
-                key={`group:${item.group}`}
-                name={item.group}
-                members={item.members}
-                used={used?.devices.find((u) => u.id === item.id)}
-                before={beforeOf(item.id)}
-                pattern={patterns.data && groupPattern(patterns.data, item)}
-                cycles={item.members.every((d) => kinds.get(d.kind)?.cycles)}
-                kindLabels={kindLabels}
-                color={colors.get(item.id)!}
-                home={usage.data?.total.home ?? null}
-                rangeLabel={rangeWords}
-                beforeLabel={BEFORE_WORDS[range]}
-              />
-            ) : (
-              <DeviceCard
-                key={item.id}
-                device={item.members[0]}
-                used={used?.devices.find((u) => u.id === item.id)}
-                before={beforeOf(item.id)}
-                pattern={patterns.data?.find((p) => p.id === item.id)}
-                cycles={!!kinds.get(item.members[0].kind)?.cycles}
-                kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
-                color={colors.get(item.id)!}
-                home={usage.data?.total.home ?? null}
-                rangeLabel={rangeWords}
-                beforeLabel={BEFORE_WORDS[range]}
-                best={found.data?.best_times.find((b) => b.id === item.id)}
-                saving={found.data?.savings.find((x) => x.id === item.id)}
-              />
-            ),
+          {items.length > 0 && (
+            <div className="col-span-12 grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-5">
+              {items.map((item) =>
+                item.group ? (
+                  <GroupCard
+                    key={`group:${item.group}`}
+                    name={item.group}
+                    members={item.members}
+                    used={used?.devices.find((u) => u.id === item.id)}
+                    before={beforeOf(item.id)}
+                    pattern={patterns.data && groupPattern(patterns.data, item)}
+                    cycles={item.members.every((d) => kinds.get(d.kind)?.cycles)}
+                    kindLabels={kindLabels}
+                    color={itemColors.get(item.id)!}
+                    givenColor={givenRoomColor(devices, rooms, item.group)}
+                    colors={colors}
+                    look={roomLook(rooms, item.group)}
+                    home={usage.data?.total.home ?? null}
+                    rangeLabel={rangeWords}
+                    beforeLabel={BEFORE_WORDS[range]}
+                  />
+                ) : (
+                  <DeviceCard
+                    key={item.id}
+                    device={item.members[0]}
+                    used={used?.devices.find((u) => u.id === item.id)}
+                    before={beforeOf(item.id)}
+                    pattern={patterns.data?.find((p) => p.id === item.id)}
+                    cycles={!!kinds.get(item.members[0].kind)?.cycles}
+                    kindLabel={kindLabels.get(item.members[0].kind) ?? "Device"}
+                    color={itemColors.get(item.id)!}
+                    givenColor={givenDeviceColor(devices, rooms, item.id)}
+                    home={usage.data?.total.home ?? null}
+                    rangeLabel={rangeWords}
+                    beforeLabel={BEFORE_WORDS[range]}
+                    best={found.data?.best_times.find((b) => b.id === item.id)}
+                    saving={found.data?.savings.find((x) => x.id === item.id)}
+                  />
+                ),
+              )}
+            </div>
           )}
           {devices.length > 0 && (
             <>

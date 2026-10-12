@@ -10,7 +10,7 @@ import { cn } from "~/features/common/ui/utils";
 import { homeHintsQuery, homeQuery } from "~/features/home/api";
 import { useHomeChange } from "~/features/home/hooks";
 import type { HomeIntegration } from "~/features/home/types";
-import { integrationIcon, integrationReach, kindIcon, nowLine } from "~/features/home/utils";
+import { deviceIcon, integrationIcon, integrationReach, nowLine } from "~/features/home/utils";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { ReachTag } from "~/features/integrations/components/ReachTag";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
@@ -269,7 +269,7 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
                     key={d.id}
                     to="/integrations/home/$integration/$device"
                     params={{ integration: id, device: String(d.id) }}
-                    icon={kindIcon(d.kind)}
+                    icon={deviceIcon(d)}
                     name={d.name}
                     status={
                       now.running

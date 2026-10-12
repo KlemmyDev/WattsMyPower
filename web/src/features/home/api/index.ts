@@ -11,6 +11,7 @@ import type {
   HomeUsage,
   RunCurve,
 } from "~/features/home/types";
+import type { PaletteKey } from "~/features/home/utils";
 
 const MIN = 60_000;
 
@@ -115,7 +116,14 @@ export const updateDevice = ({
   group?: string | null;
   /** Show what its runs usually draw while it runs (an appliance that doesn't report its power). */
   estimate?: boolean;
+  /** Its own colour (a palette key) and icon (by name); null for the one it's given. */
+  color?: PaletteKey | null;
+  icon?: string | null;
 }) => apiSend<HomeOverview>("PATCH", `home/devices/${id}`, changes);
+
+/** Give a room (a group devices are in) its own colour and icon; null for the one it's given, left out to keep it. */
+export const setRoomLook = ({ name, ...look }: { name: string; color?: PaletteKey | null; icon?: string | null }) =>
+  apiSend<HomeOverview>("PUT", `home/rooms/${encodeURIComponent(name)}`, look);
 
 /** Switch a device on or off. A fridge or freezer is only switched off with `confirm`. */
 export const switchDevice = ({ id, on, confirm }: { id: number; on: boolean; confirm?: boolean }) =>

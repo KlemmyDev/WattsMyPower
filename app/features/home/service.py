@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -40,6 +41,10 @@ log = logging.getLogger(__name__)
 BACKFILL_DAYS = 28  # how far back to ask an integration that can look back, when it's connected
 BACKOFF_MAX = 15 * 60  # the longest wait between tries after failed polls
 NAME_MAX = 60
+# The colours a device or room can be given on the Home page: the web app's palette, by key (--color-device-1… in order).
+COLORS = ("jade", "violet", "rose", "green", "coral", "sky", "magenta", "brown", "cyan", "olive")
+# An icon, by the web app's name for it ("sofa", "cookingPot"): one it doesn't have falls back to the usual one.
+ICON = re.compile(r"[a-zA-Z][a-zA-Z0-9]{0,31}")
 PROTECTED = {"fridge", "freezer"}  # only switched off when that's confirmed
 
 
@@ -105,6 +110,7 @@ class HomeService:
             "kinds": [{"id": k, "label": v.label, "cycles": v.cycles} for k, v in KINDS.items()],
             "categories": [{"id": k, "label": v.label, "about": v.about} for k, v in CATEGORIES.items()],
             "devices": [self._device_view(d, accounts, last.get(d.id), usual.get(d.id)) for d in devices],
+            "rooms": [{"name": r.name, "color": r.color, "icon": r.icon} for r in self.repo.rooms()],
         }
 
     def _integration_view(
@@ -180,6 +186,8 @@ class HomeService:
             "model": d.model,
             "hidden": d.hidden,
             "group": d.group,
+            "color": d.color,
+            "icon": d.icon,
             "now": now,
             "last_run": last_run,
             "can_switch": bool(cls and cls.can_switch),
@@ -356,6 +364,7 @@ class HomeService:
             if not isinstance(body["estimate"], bool):
                 raise HomeSetupError("Say whether to estimate what it draws while it runs.")
             changes["estimate"] = int(body["estimate"])
+        changes.update(_look(body))
         if "group" in body:
             if body["group"] is not None and not isinstance(body["group"], str):
                 raise HomeSetupError("Name the group, or leave it empty.")
@@ -370,6 +379,24 @@ class HomeService:
                 there = {d.group.casefold(): d.group for d in self.repo.devices(conn) if d.group}
                 changes["group"] = there.get(changes["group"].casefold(), changes["group"])
             self.repo.update_device(conn, device_id, **changes)
+        return self.overview()
+
+    def set_room(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Give a room (a group devices are in) a colour and an icon of its own ({"color", "icon"}; null for the one
+        it's given). Left out of the body, each stays as it is."""
+        look = _look(body)
+        with self._lock, self.db.writing() as conn:
+            there = {d.group.casefold(): d.group for d in self.repo.devices(conn) if d.group}
+            room = there.get(" ".join(name.split()).casefold())
+            if room is None:
+                raise HomeSetupError("There's no such room.", 404)
+            was = next((r for r in self.repo.rooms(conn) if r.name.casefold() == room.casefold()), None)
+            self.repo.save_room(
+                conn,
+                room,
+                look.get("color", was.color if was else None),
+                look.get("icon", was.icon if was else None),
+            )
         return self.overview()
 
     def set_rule(self, device_id: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -587,3 +614,17 @@ class HomeService:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._wake.wait(), timeout=wait)
             self._wake.clear()
+
+
+def _look(body: dict[str, Any]) -> dict[str, str | None]:
+    """The colour and icon a body sets (each null for the one it's given), checked; left out, not set."""
+    look: dict[str, str | None] = {}
+    if "color" in body:
+        if body["color"] is not None and body["color"] not in COLORS:
+            raise HomeSetupError("Choose one of the colours.")
+        look["color"] = body["color"]
+    if "icon" in body:
+        if body["icon"] is not None and not (isinstance(body["icon"], str) and ICON.fullmatch(body["icon"])):
+            raise HomeSetupError("Choose one of the icons.")
+        look["icon"] = body["icon"]
+    return look

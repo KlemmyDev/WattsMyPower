@@ -108,6 +108,9 @@ export type HomeDevice = {
   hidden: boolean;
   /** The group it's shown in on the Home page, with the others in it as one ("Study"); null: on its own. */
   group: string | null;
+  /** Its own colour (a palette key, see home/utils PALETTE) and icon (by name), as chosen; null: the one it's given. */
+  color: string | null;
+  icon: string | null;
   now: DeviceNow | null;
   last_run: HomeRun | null;
   /** It can be switched on and off from here. */
@@ -152,7 +155,12 @@ export type HomeOverview = {
   /** The sorts of device the integrations bring, in the order they're shown ("Smart plugs and meters"). */
   categories: HomeCategory[];
   devices: HomeDevice[];
+  /** The rooms (groups) given a colour or icon of their own. */
+  rooms: RoomLook[];
 };
+
+/** A room's own look: its colour (a palette key) and icon (by name), either null for the one it's given. */
+export type RoomLook = { name: string; color: string | null; icon: string | null };
 
 export type HomeCategory = { id: string; label: string; about: string };
 
