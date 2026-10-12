@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useNow } from "~/features/common/time/hooks";
 import { errorMessage } from "~/features/common/api/utils";
+import { alpha } from "~/features/common/theme/utils/colors";
 import { Button } from "~/features/common/ui/components/Button";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
@@ -16,11 +17,11 @@ const PENDING_FOR = 120; // s a limit sent is shown as being set, until the car'
 const clamp = (p: number, step = 1) => Math.max(LOWEST, Math.min(HIGHEST, Math.round(p / step) * step));
 
 /**
- * The car's charge up to its limit, with the limit as a handle: drag it (or tap the bar, or use the arrow keys) to
- * change the limit, and it's sent to the car when you let go. Sending wakes an asleep car, so then it asks first.
+ * The car's charge along the hero's bar, with its limit as a handle: drag it (or tap the bar, or use the arrow keys)
+ * to change the limit, and it's sent to the car when you let go. Sending wakes an asleep car, so then it asks first.
  * Until the car's next reading shows the new limit, the handle says it's being set. A Hyundai or Kia takes its
- * limit in tens (`brand` "bluelink"). While it `charging`, a light sweeps along the charge; while it's `asleep`, the
- * charge is dimmed.
+ * limit in tens (`brand` "bluelink"). While it `charging`, a light sweeps along the charge, and `expect` (dashed) is
+ * where it's heading; while it's `asleep`, the charge is dimmed. `legend` goes under it, as the hero bar's does.
  */
 export function EvChargeBar({
   v,
@@ -29,6 +30,9 @@ export function EvChargeBar({
   brand = "tesla",
   charging = false,
   asleep = false,
+  expect = null,
+  legend,
+  className,
 }: {
   v: EvVehicle;
   soc: number | null;
@@ -36,6 +40,10 @@ export function EvChargeBar({
   brand?: EvBrand;
   charging?: boolean;
   asleep?: boolean;
+  /** Where the charge is expected to get (%), dashed past it. */
+  expect?: number | null;
+  legend?: ReactNode;
+  className?: string;
 }) {
   const { command } = useEvChange(brand);
   const step = brand === "tesla" ? 1 : 10;
@@ -117,8 +125,9 @@ export function EvChargeBar({
           ? `Limit ${ask}%`
           : null;
 
+  const level = Math.max(0, Math.min(100, soc ?? 0));
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", className)}>
       <div
         ref={track}
         role="slider"
@@ -135,25 +144,33 @@ export function EvChargeBar({
         onPointerCancel={() => setDrag(null)}
         onKeyDown={key}
         className={cn(
-          "group relative py-2.5 outline-none select-none",
+          // A taller hit area than the bar itself, without the room it'd take.
+          "group relative -my-2 py-2 outline-none select-none",
           can ? "cursor-pointer touch-none" : "cursor-default",
         )}
       >
-        {/* The car's charge, the rest of the bar faded. */}
-        <div className="relative h-3 overflow-hidden rounded-full bg-track">
+        {/* The car's charge, and where it's heading dashed past it. */}
+        <div className="relative h-2.5 rounded-full bg-track">
+          {expect != null && expect > level && (
+            <span
+              aria-hidden
+              className="absolute inset-y-0 rounded-full border border-dashed"
+              style={{ left: `${level}%`, width: `${Math.min(100, expect) - level}%`, borderColor: alpha(fill, 0.7) }}
+            />
+          )}
           <div
             className={cn(
-              "absolute inset-y-0 left-0 overflow-hidden rounded-full transition-[width,opacity] duration-700 ease-out",
+              "absolute inset-y-0 left-0 overflow-hidden rounded-full transition-[width,opacity] duration-700 ease-out-soft",
               asleep && "opacity-45",
             )}
-            style={{ width: `${Math.min(100, soc ?? 0)}%`, background: fill }}
+            style={{ width: `${level}%`, background: `linear-gradient(90deg, ${alpha(fill, 0.55)}, ${fill})` }}
           >
             {charging && <span aria-hidden className="charge-flow absolute inset-0" />}
           </div>
         </div>
         {shown != null && (
           <>
-            {/* The handle: a line through the bar with a knob on it, the limit over it while it's being chosen. */}
+            {/* The handle: a knob on the bar at the limit, the limit over it while it's being chosen. */}
             <span
               aria-hidden
               className={cn(
@@ -164,7 +181,7 @@ export function EvChargeBar({
             >
               <span
                 className={cn(
-                  "size-[18px] rounded-full border-2 border-surface bg-ink shadow-sm transition-transform duration-150",
+                  "size-4 rounded-full border-2 border-surface bg-ink shadow-sm transition-transform duration-150",
                   can &&
                     "group-hover:scale-110 group-focus-visible:scale-110 group-focus-visible:ring-2 group-focus-visible:ring-brand",
                   drag != null && "scale-125",
@@ -175,7 +192,7 @@ export function EvChargeBar({
             {label && (
               <span
                 aria-hidden
-                className="absolute -top-6 -translate-x-1/2 rounded-full bg-ink px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap text-ink-inverse tabular-nums"
+                className="absolute -top-5 -translate-x-1/2 rounded-full bg-ink px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap text-ink-inverse tabular-nums"
                 style={{ left: `clamp(2.5rem, ${shown}%, calc(100% - 2.5rem))` }}
               >
                 {label}
@@ -184,6 +201,14 @@ export function EvChargeBar({
           </>
         )}
       </div>
+      {(legend || limit != null) && (
+        <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-ink-faint tabular-nums">
+          {legend}
+          {limit != null && ask == null && !command.isError && (
+            <span>Drag to change the limit{step > 1 ? ", in tens" : ""}</span>
+          )}
+        </div>
+      )}
       {ask != null && (
         <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1 text-pretty">
@@ -201,12 +226,6 @@ export function EvChargeBar({
         </Notice>
       )}
       {command.isError && <HelpText tone="bad">{errorMessage(command.error)}</HelpText>}
-      {limit != null && ask == null && !command.isError && (
-        <span className="text-xs text-ink-faint">
-          Drag the handle to change the limit ({LOWEST}–{HIGHEST}%{step > 1 ? ", in tens" : ""}). It's sent to the car
-          when you let go.
-        </span>
-      )}
     </div>
   );
 }
