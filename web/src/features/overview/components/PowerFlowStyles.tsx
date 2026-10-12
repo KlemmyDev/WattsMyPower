@@ -1,16 +1,24 @@
-import type { CSSProperties } from "react";
+import { Link } from "@tanstack/react-router";
+import type { CSSProperties, ReactNode } from "react";
 import { batteryTone, ON } from "~/features/common/energy/utils";
-import { kW, pct } from "~/features/common/formatting/utils/number";
+import { kW, pct, type PowerUnit } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
-import { liveWeather, liveWeatherIcon } from "~/features/common/weather/utils";
+import { liveWeather } from "~/features/common/weather/utils";
 import { Spark, parts } from "~/features/common/widgets/parts";
 import type { Settings, Thumb, WidgetCtx, WidgetProps } from "~/features/common/widgets/types";
 import { Card } from "~/features/common/ui/components/Card";
 import { useHomeCharging } from "~/features/ev/hooks";
 import { CAR_COLOR, deviceColors, liveBreakdown, OTHER_COLOR } from "~/features/home/utils";
-import { PowerFlowHero } from "~/features/overview/components/PowerFlowHero";
+import {
+  FLOW_ALL,
+  PAGE_NAME,
+  pageFor,
+  PowerFlowHero,
+  WeatherCapsule,
+  type FlowOpens,
+  type FlowShow,
+} from "~/features/overview/components/PowerFlowHero";
 
 export type FlowStyle = "scene" | "diagram" | "flow" | "ring" | "bars" | "numbers";
 
@@ -37,6 +45,35 @@ type ReadingKey = (typeof FLOW_READINGS)[number]["key"];
 export const shows = (settings: Settings, key: ReadingKey) =>
   key === "car" ? settings.car === true : settings[key] !== false;
 
+/** How power reads, and where choosing a reading goes, as the settings offer them. */
+export const FLOW_UNITS = [
+  { value: "auto", label: "W or kW" },
+  { value: "kW", label: "Always kW" },
+];
+export const FLOW_OPENS: { value: FlowOpens; label: string }[] = [
+  { value: "each", label: "Each reading's own page" },
+  { value: "home", label: "Home" },
+  { value: "solar", label: "Solar" },
+  { value: "history", label: "History" },
+  { value: "none", label: "Nothing" },
+];
+
+/** What a power flow widget shows, and how, from its settings (anything not set as it's always been). */
+export function flowShow(settings: Settings): FlowShow {
+  return {
+    solar: shows(settings, "solar"),
+    home: shows(settings, "home"),
+    grid: shows(settings, "grid"),
+    battery: shows(settings, "battery"),
+    car: shows(settings, "car"),
+    rooms: settings.rooms !== false,
+    weather: settings.weather !== false,
+    spark: settings.spark !== false,
+    unit: settings.unit === "kW" ? "kW" : FLOW_ALL.unit,
+    opens: FLOW_OPENS.some((o) => o.value === settings.opens) ? (settings.opens as FlowOpens) : FLOW_ALL.opens,
+  };
+}
+
 /** One reading, ready to draw: what it's called (in a word), its figure, how full its bar is, its colour, and its line. */
 type Reading = {
   key: ReadingKey;
@@ -49,6 +86,8 @@ type Reading = {
   on: boolean;
   field?: string;
   range?: [number, number];
+  /** Its own page. */
+  page: "/solar" | "/grid" | "/battery" | "/home" | "/ev";
 };
 
 /** The power as it moves now (W, all ≥ 0). */
@@ -67,7 +106,8 @@ function flows(p: WidgetCtx["p"]) {
 }
 type Flows = ReturnType<typeof flows>;
 
-function readings(f: Flows, carW: number, max: number, ctx: WidgetCtx, settings: Settings): Reading[] {
+function readings(f: Flows, carW: number, max: number, ctx: WidgetCtx, show: FlowShow): Reading[] {
+  const kW_ = (w: number) => kW(w, show.unit);
   const car = ctx.cars.find((c) => c.at_home !== false);
   const buying = f.gridIn > ON;
   const selling = f.gridOut > ON;
@@ -75,29 +115,32 @@ function readings(f: Flows, carW: number, max: number, ctx: WidgetCtx, settings:
     {
       key: "solar",
       label: "Solar",
-      value: kW(f.solar),
+      value: kW_(f.solar),
       share: f.solar / max,
       color: COLOR.solar,
       on: f.solar > ON,
       field: "pv_power",
+      page: "/solar",
     },
     {
       key: "home",
       label: "Home",
-      value: kW(f.home),
+      value: kW_(f.home),
       share: f.home / max,
       color: COLOR.ink,
       on: f.home > ON,
       field: "load_power",
+      page: "/home",
     },
     {
       key: "grid",
       label: buying ? "Buying" : selling ? "Selling" : "Grid",
-      value: kW(buying ? f.gridIn : f.gridOut),
+      value: kW_(buying ? f.gridIn : f.gridOut),
       share: (buying ? f.gridIn : f.gridOut) / max,
       color: buying ? COLOR.import : COLOR.export,
       on: buying || selling,
       field: "grid_power",
+      page: "/grid",
     },
     {
       key: "battery",
@@ -108,6 +151,7 @@ function readings(f: Flows, carW: number, max: number, ctx: WidgetCtx, settings:
       on: f.batIn > ON || f.batOut > ON,
       field: "battery_soc",
       range: [0, 100],
+      page: "/battery",
     },
     {
       key: "car",
@@ -116,11 +160,10 @@ function readings(f: Flows, carW: number, max: number, ctx: WidgetCtx, settings:
       share: (car?.soc ?? 0) / 100,
       color: CAR_COLOR,
       on: carW > 0,
+      page: "/ev",
     },
   ];
-  return all.filter(
-    (r) => shows(settings, r.key) && (r.key !== "battery" || f.soc != null) && (r.key !== "car" || !!car),
-  );
+  return all.filter((r) => show[r.key] && (r.key !== "battery" || f.soc != null) && (r.key !== "car" || !!car));
 }
 
 /**
@@ -131,19 +174,20 @@ function readings(f: Flows, carW: number, max: number, ctx: WidgetCtx, settings:
  */
 export function PowerFlowWidget({ ctx, settings, w, h }: WidgetProps) {
   const style = (settings.style as FlowStyle) ?? "scene";
-  if (style === "scene") return <PowerFlowHero p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} />;
-  return <Styled ctx={ctx} settings={settings} style={style} w={w} h={h} />;
+  const show = flowShow(settings);
+  if (style === "scene") return <PowerFlowHero p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} show={show} />;
+  return <Styled ctx={ctx} show={show} style={style} w={w} h={h} />;
 }
 
 function Styled({
   ctx,
-  settings,
+  show,
   style,
   w,
   h,
 }: {
   ctx: WidgetCtx;
-  settings: Settings;
+  show: FlowShow;
   style: Exclude<FlowStyle, "scene">;
   w: number;
   h: number;
@@ -159,9 +203,9 @@ function Styled({
     f.gridOut,
     1,
   );
-  const shown = readings(f, carW, max, ctx, settings);
+  const shown = readings(f, carW, max, ctx, show);
   const devices = ctx.home?.devices ?? [];
-  const split = settings.rooms === true ? liveBreakdown(devices, ctx.p?.load_power, { carW }) : null;
+  const split = show.rooms ? liveBreakdown(devices, ctx.p?.load_power, { carW }) : null;
   const colors = deviceColors(devices, ctx.home?.rooms, { byRoom: true });
   const rooms = split
     ? [
@@ -171,34 +215,41 @@ function Styled({
         { key: "other", name: "Everything else", w: split.other, color: OTHER_COLOR },
       ].filter((r) => r.w > 0)
     : [];
-  const wx = ctx.p && settings.weather === true ? liveWeather(ctx.p, ctx.f, ctx.now, !!ctx.s?.temp_unit_f) : null;
+  const wx = ctx.p && show.weather ? liveWeather(ctx.p, ctx.f, ctx.now, !!ctx.s?.temp_unit_f) : null;
   // Rooms beside the readings where it's wide, under them where it's tall, else left out.
   const roomsAt = !rooms.length ? null : w >= 8 ? "side" : h >= 6 ? "under" : null;
+  // Bars and figures open each reading's own page; the drawings, as a whole, the home's. Or one page for it all.
+  const each = show.opens === "each" && (style === "bars" || style === "numbers");
+  const whole = each ? undefined : pageFor(show.opens, "/home");
+  const go = (r: Reading) => (each ? pageFor(show.opens, r.page) : undefined);
   return (
-    <Card className="@container h-full gap-3 overflow-hidden p-5 max-sm:p-4">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-display text-base font-bold">Power flow</span>
-        {wx && (
-          <span className="flex flex-none items-center gap-1.5 text-xs whitespace-nowrap text-ink-sub">
-            <Icon name={liveWeatherIcon(wx)} size={14} className="text-solar" />
-            <span className="@max-3xs:hidden">{wx.temp ?? wx.name}</span>
-          </span>
-        )}
+    <Card className="@container relative h-full gap-3 p-5 max-sm:p-4">
+      {whole && (
+        <Link
+          to={whole}
+          aria-label={`Power flow. Open ${PAGE_NAME[whole]}`}
+          className="absolute inset-0 z-1 rounded-[inherit] transition-colors hover:bg-fg/3 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+        />
+      )}
+      {/* The weather opens over what's below it, as on the drawing; the heading holds its line's height. */}
+      <div className="flex h-[34px] min-w-0 items-start gap-2">
+        <span className="min-w-0 flex-1 truncate pt-1.5 font-display text-base font-bold">Power flow</span>
+        {wx && <WeatherCapsule wx={wx} f={ctx.f} s={ctx.s} now={ctx.now} />}
       </div>
-      <div className={cn("flex min-h-0 flex-1 gap-5", roomsAt === "side" ? "flex-row" : "flex-col")}>
+      <div className={cn("flex min-h-0 flex-1 gap-5 overflow-hidden", roomsAt === "side" ? "flex-row" : "flex-col")}>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!shown.length ? (
             <span className="m-auto text-xs text-ink-faint">Choose what it shows in its settings.</span>
           ) : style === "diagram" ? (
             <Diagram shown={shown} />
           ) : style === "flow" ? (
-            <Ribbons f={f} shown={shown} />
+            <Ribbons f={f} shown={shown} unit={show.unit} />
           ) : style === "ring" ? (
-            <Sources f={f} shown={shown} />
+            <Sources f={f} shown={shown} unit={show.unit} />
           ) : style === "bars" ? (
-            <Bars shown={shown} now={ctx.now} spark={settings.spark === true} />
+            <Bars shown={shown} now={ctx.now} spark={show.spark} go={go} />
           ) : (
-            <Numbers shown={shown} now={ctx.now} spark={settings.spark === true} />
+            <Numbers shown={shown} now={ctx.now} spark={show.spark} go={go} />
           )}
         </div>
         {roomsAt && (
@@ -214,13 +265,13 @@ function Styled({
               <li key={r.key} className="flex min-w-0 items-center gap-2">
                 <i className="size-2 flex-none rounded-full" style={{ background: r.color }} />
                 <span className="min-w-0 flex-1 truncate text-ink-sub">{r.name}</span>
-                <b className="font-semibold whitespace-nowrap tabular-nums">{kW(r.w)}</b>
+                <b className="font-semibold whitespace-nowrap tabular-nums">{kW(r.w, show.unit)}</b>
               </li>
             ))}
           </ul>
         )}
       </div>
-      {settings.spark === true && (style === "diagram" || style === "flow" || style === "ring") && (
+      {show.spark && (style === "diagram" || style === "flow" || style === "ring") && (
         <div className="relative h-7 flex-none" aria-hidden>
           <Spark field="pv_power" color={COLOR.solar} now={ctx.now} className="absolute inset-0" range={[0, max]} />
           <Spark field="load_power" color={COLOR.ink} now={ctx.now} className="absolute inset-0" range={[0, max]} />
@@ -300,7 +351,7 @@ function Diagram({ shown }: { shown: Reading[] }) {
 }
 
 /** Where each watt comes from (left) and goes (right), as ribbons as wide as the power. */
-function Ribbons({ f, shown }: { f: Flows; shown: Reading[] }) {
+function Ribbons({ f, shown, unit }: { f: Flows; shown: Reading[]; unit: PowerUnit }) {
   const want = new Set(shown.map((r) => r.key));
   const src = [
     { key: "solar", label: "Solar", v: f.solar, color: COLOR.solar },
@@ -344,32 +395,35 @@ function Ribbons({ f, shown }: { f: Flows; shown: Reading[] }) {
   const used = { l: new Map<string, number>(), r: new Map<string, number>() };
   return (
     <div className="flex min-h-0 flex-1 gap-3">
-      <Side items={[...L.values()]} align="start" />
-      <svg
-        role="img"
-        aria-label={links.map((l) => `${l.s} to ${l.d} ${kW(l.v)}`).join(", ")}
-        viewBox={`0 0 200 ${H}`}
-        preserveAspectRatio="none"
-        className="h-full min-w-0 flex-1"
-      >
-        {links.map((l) => {
-          const a = L.get(l.s)!;
-          const b = R.get(l.d)!;
-          const hh = l.v * scale;
-          const y0 = a.y + (used.l.get(l.s) ?? 0);
-          const y1 = b.y + (used.r.get(l.d) ?? 0);
-          used.l.set(l.s, (used.l.get(l.s) ?? 0) + hh);
-          used.r.set(l.d, (used.r.get(l.d) ?? 0) + hh);
-          return (
-            <path
-              key={`${l.s}-${l.d}`}
-              d={`M0 ${y0} C 100 ${y0} 100 ${y1} 200 ${y1} L 200 ${y1 + hh} C 100 ${y1 + hh} 100 ${y0 + hh} 0 ${y0 + hh} Z`}
-              fill={alpha(b.color, 0.32)}
-            />
-          );
-        })}
-      </svg>
-      <Side items={[...R.values()]} align="end" />
+      <Side items={[...L.values()]} align="start" unit={unit} />
+      {/* drawn into the room it has, so it never sets the card's height */}
+      <div className="relative min-w-0 flex-1">
+        <svg
+          role="img"
+          aria-label={links.map((l) => `${l.s} to ${l.d} ${kW(l.v)}`).join(", ")}
+          viewBox={`0 0 200 ${H}`}
+          preserveAspectRatio="none"
+          className="absolute inset-0 h-full w-full"
+        >
+          {links.map((l) => {
+            const a = L.get(l.s)!;
+            const b = R.get(l.d)!;
+            const hh = l.v * scale;
+            const y0 = a.y + (used.l.get(l.s) ?? 0);
+            const y1 = b.y + (used.r.get(l.d) ?? 0);
+            used.l.set(l.s, (used.l.get(l.s) ?? 0) + hh);
+            used.r.set(l.d, (used.r.get(l.d) ?? 0) + hh);
+            return (
+              <path
+                key={`${l.s}-${l.d}`}
+                d={`M0 ${y0} C 100 ${y0} 100 ${y1} 200 ${y1} L 200 ${y1 + hh} C 100 ${y1 + hh} 100 ${y0 + hh} 0 ${y0 + hh} Z`}
+                fill={alpha(b.color, 0.32)}
+              />
+            );
+          })}
+        </svg>
+      </div>
+      <Side items={[...R.values()]} align="end" unit={unit} />
     </div>
   );
 }
@@ -378,9 +432,11 @@ function Ribbons({ f, shown }: { f: Flows; shown: Reading[] }) {
 function Side({
   items,
   align,
+  unit,
 }: {
   items: { y: number; h: number; color: string; label: string; v: number }[];
   align: "start" | "end";
+  unit: PowerUnit;
 }) {
   const H = 240;
   return (
@@ -400,7 +456,7 @@ function Side({
             <span className="truncate text-[11px]" style={{ color: it.color }}>
               {it.label}
             </span>
-            <span className="text-xs font-medium whitespace-nowrap tabular-nums">{kW(it.v)}</span>
+            <span className="text-xs font-medium whitespace-nowrap tabular-nums">{kW(it.v, unit)}</span>
           </span>
         </div>
       ))}
@@ -409,7 +465,7 @@ function Side({
 }
 
 /** The home's use in the middle, ringed by where it's coming from. */
-function Sources({ f, shown }: { f: Flows; shown: Reading[] }) {
+function Sources({ f, shown, unit }: { f: Flows; shown: Reading[]; unit: PowerUnit }) {
   const fromSolar = Math.min(f.home, f.solar);
   const fromBat = Math.min(f.home - fromSolar, f.batOut);
   const fromGrid = Math.max(0, f.home - fromSolar - fromBat);
@@ -422,13 +478,13 @@ function Sources({ f, shown }: { f: Flows; shown: Reading[] }) {
   const r = 80;
   const c = 2 * Math.PI * r;
   let at = 0;
-  const [v, u] = parts(kW(f.home));
+  const [v, u] = parts(kW(f.home, unit));
   const others = shown.filter((x) => x.key !== "home");
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center gap-6">
       <svg
         role="img"
-        aria-label={`Home ${kW(f.home)}: ${segs.map((s) => `${s.label} ${Math.round((s.v / total) * 100)}%`).join(", ")}`}
+        aria-label={`Home ${kW(f.home, unit)}: ${segs.map((s) => `${s.label} ${Math.round((s.v / total) * 100)}%`).join(", ")}`}
         viewBox="0 0 200 200"
         className="aspect-square h-full max-h-[220px] min-h-0 flex-none"
       >
@@ -482,11 +538,26 @@ function Sources({ f, shown }: { f: Flows; shown: Reading[] }) {
 }
 
 /** A bar each, as a share of what the system can make (the battery and car, of full). */
-function Bars({ shown, now, spark }: { shown: Reading[]; now: number; spark: boolean }) {
+function Bars({
+  shown,
+  now,
+  spark,
+  go,
+}: {
+  shown: Reading[];
+  now: number;
+  spark: boolean;
+  go: (r: Reading) => Reading["page"] | "/history" | undefined;
+}) {
   return (
     <div className="flex flex-1 flex-col justify-center gap-3.5 @xs:gap-4">
       {shown.map((r) => (
-        <div key={r.key} className="flex min-w-0 flex-col gap-1.5">
+        <Go
+          key={r.key}
+          to={go(r)}
+          label={`${r.label} ${r.value}`}
+          className="-mx-2 -my-1 flex min-w-0 flex-col gap-1.5 rounded-xl px-2 py-1"
+        >
           <div className="flex min-w-0 items-baseline gap-3 text-[13px]">
             <span className="min-w-0 flex-1 truncate" style={{ color: r.key === "home" ? undefined : r.color }}>
               {r.label}
@@ -504,14 +575,24 @@ function Bars({ shown, now, spark }: { shown: Reading[]; now: number; spark: boo
               style={{ width: `${Math.max(0, Math.min(1, r.share)) * 100}%`, background: r.color }}
             />
           </div>
-        </div>
+        </Go>
       ))}
     </div>
   );
 }
 
 /** Big figures, one tile each, with their last two hours if asked for. */
-function Numbers({ shown, now, spark }: { shown: Reading[]; now: number; spark: boolean }) {
+function Numbers({
+  shown,
+  now,
+  spark,
+  go,
+}: {
+  shown: Reading[];
+  now: number;
+  spark: boolean;
+  go: (r: Reading) => Reading["page"] | "/history" | undefined;
+}) {
   return (
     <div
       className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 @2xl:grid-cols-[repeat(var(--n),minmax(0,1fr))] @2xl:gap-2.5"
@@ -520,8 +601,10 @@ function Numbers({ shown, now, spark }: { shown: Reading[]; now: number; spark: 
       {shown.map((r) => {
         const [v, u] = parts(r.value);
         return (
-          <div
+          <Go
             key={r.key}
+            to={go(r)}
+            label={`${r.label} ${r.value}`}
             className="flex min-w-0 flex-col justify-between gap-1 overflow-hidden rounded-2xl bg-surface-raised px-3 py-2.5 @md:px-3.5 @md:py-3"
           >
             <span className="truncate text-xs" style={{ color: r.key === "home" ? "var(--color-ink-sub)" : r.color }}>
@@ -532,9 +615,36 @@ function Numbers({ shown, now, spark }: { shown: Reading[]; now: number; spark: 
               {u && <span className="ml-1 text-xs tracking-normal text-ink-muted">{u}</span>}
             </span>
             {spark && r.field && <Spark field={r.field} color={r.color} now={now} range={r.range} className="h-5" />}
-          </div>
+          </Go>
         );
       })}
     </div>
+  );
+}
+
+/** A reading that opens its page when chosen (lighting a little under the pointer), or stays put. */
+function Go({
+  to,
+  label,
+  className,
+  children,
+}: {
+  to: Reading["page"] | "/history" | undefined;
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  if (!to) return <div className={className}>{children}</div>;
+  return (
+    <Link
+      to={to}
+      aria-label={label}
+      className={cn(
+        className,
+        "text-inherit no-underline transition-[background-color,scale] hover:bg-fg/4 focus-visible:outline-2 focus-visible:outline-brand active:scale-[0.985]",
+      )}
+    >
+      {children}
+    </Link>
   );
 }

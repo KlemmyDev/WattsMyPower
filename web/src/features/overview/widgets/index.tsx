@@ -1,7 +1,13 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Settings, WidgetCtx, WidgetDef, WidgetProps } from "~/features/common/widgets/types";
 import { BatteryCard } from "~/features/overview/components/BatteryCard";
-import { FLOW_READINGS, FLOW_STYLES, PowerFlowWidget } from "~/features/overview/components/PowerFlowStyles";
+import {
+  FLOW_OPENS,
+  FLOW_READINGS,
+  FLOW_STYLES,
+  FLOW_UNITS,
+  PowerFlowWidget,
+} from "~/features/overview/components/PowerFlowStyles";
 import { TodayCard } from "~/features/overview/components/TodayCard";
 import { TodayEnergyCard } from "~/features/overview/components/TodayEnergyCard";
 
@@ -28,7 +34,6 @@ export const widgets: WidgetDef[] = [
         kind: "toggle" as const,
         default: r.key !== "car",
         section: "Readings",
-        when: (s: Settings) => !scene(s),
         offered: r.key === "car" ? (ctx: WidgetCtx) => ctx.cars.length > 0 : undefined,
       })),
       {
@@ -38,26 +43,32 @@ export const widgets: WidgetDef[] = [
         kind: "toggle",
         default: true,
         section: "Also show",
-        when: (s) => !scene(s),
         offered: (ctx) => !!ctx.home?.devices.length,
       },
       {
         key: "weather",
         label: "Weather",
-        sub: "The sky and the temperature",
+        sub: "The sky now and the hours ahead",
         kind: "toggle",
         default: true,
         section: "Also show",
-        when: (s) => !scene(s),
       },
       {
         key: "spark",
         label: "Last two hours",
-        sub: "A line under the figures",
+        sub: "A line behind the figures",
         kind: "toggle",
-        default: false,
+        default: true,
         section: "Also show",
-        when: (s) => !scene(s),
+      },
+      { key: "unit", label: "Power in", kind: "select", choices: FLOW_UNITS, default: "auto", section: "Figures" },
+      {
+        key: "opens",
+        label: "Choosing it opens",
+        kind: "select",
+        choices: FLOW_OPENS,
+        default: "each",
+        section: "Figures",
       },
     ],
     Component: PowerFlowWidget,

@@ -3,7 +3,7 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { cn } from "~/features/common/ui/utils";
 import { Thumb } from "~/features/common/widgets/Thumb";
-import type { GroupId, Settings, WidgetCtx, WidgetDef } from "~/features/common/widgets/types";
+import type { GroupId, Settings, WidgetCtx, WidgetDef, WidgetOption } from "~/features/common/widgets/types";
 import type { Screen, WidgetItem } from "~/features/dashboards/types";
 import { COLS } from "~/features/dashboards/utils/layout";
 import { GROUPS, namedSizes, sizesOf, WIDGETS, widgetDef } from "~/features/dashboards/widgets/registry";
@@ -217,18 +217,17 @@ export function WidgetSettings({
   const named = namedSizes(sizes, cols);
   const set = (key: string, value: unknown) => onChange({ settings: { ...item.settings, [key]: value } });
   const style = def.options?.find((o) => o.kind === "style");
-  const toggles = (def.options ?? []).filter(
-    (o) => o.kind === "toggle" && (!o.when || o.when(item.settings)) && (!o.offered || o.offered(ctx)),
+  const listed = (def.options ?? []).flatMap((o) =>
+    o.kind !== "style" && (!o.when || o.when(item.settings)) && (!o.offered || o.offered(ctx)) ? [o] : [],
   );
-  // Switches under their headings, in the order they're first met ("Readings", then "Also show").
-  const sections: [string, typeof toggles][] = [];
-  for (const o of toggles) {
-    const title = (o.kind === "toggle" && o.section) || "Show";
+  // Switches and choices under their headings, in the order they're first met ("Readings", "Also show", "Figures").
+  const sections: [string, typeof listed][] = [];
+  for (const o of listed) {
+    const title = o.section || (o.kind === "toggle" ? "Show" : style ? "Readings" : "Shows");
     const at = sections.find(([t]) => t === title);
     if (at) at[1].push(o);
     else sections.push([title, [o]]);
   }
-  const selects = (def.options ?? []).filter((o) => o.kind === "select");
   return (
     <div className="flex flex-col gap-6">
       {!bare && (
@@ -338,42 +337,13 @@ export function WidgetSettings({
                     onChange={(v) => set(o.key, v)}
                   />
                 </div>
-              ) : null,
+              ) : (
+                <Pick key={o.key} option={o} ctx={ctx} settings={item.settings} onChange={(v) => set(o.key, v)} />
+              ),
             )}
           </div>
         </div>
       ))}
-
-      {selects.length > 0 && (
-        <div className={SECTION}>
-          <span className={HEAD}>{style || toggles.length ? "Readings" : "Shows"}</span>
-          <div className={LIST}>
-            {selects.map((o) => {
-              if (o.kind !== "select") return null;
-              const choices = typeof o.choices === "function" ? o.choices(ctx) : o.choices;
-              const value = String(
-                item.settings[o.key] ?? (typeof o.default === "function" ? o.default(ctx) : o.default),
-              );
-              return (
-                <label key={o.key} className="flex items-center justify-between gap-3 px-3.5 py-3 text-sm">
-                  {o.label}
-                  <select
-                    value={value}
-                    onChange={(e) => set(o.key, e.target.value)}
-                    className="h-8 max-w-[62%] rounded-[10px] border border-line bg-surface-raised px-2 font-sans text-[13px] text-ink"
-                  >
-                    {choices.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       <button
         type="button"
@@ -383,5 +353,63 @@ export function WidgetSettings({
         Remove this widget
       </button>
     </div>
+  );
+}
+
+/**
+ * A choice from a list: two or three short ones side by side (a segmented control), more as a menu. A list of what's
+ * there (cars, rooms) is read from the home.
+ */
+function Pick({
+  option: o,
+  ctx,
+  settings,
+  onChange,
+}: {
+  option: Extract<WidgetOption, { kind: "select" }>;
+  ctx: WidgetCtx;
+  settings: Settings;
+  onChange: (value: string) => void;
+}) {
+  const choices = typeof o.choices === "function" ? o.choices(ctx) : o.choices;
+  const value = String(settings[o.key] ?? (typeof o.default === "function" ? o.default(ctx) : o.default));
+  const few = choices.length <= 3 && choices.every((c) => c.label.length <= 10);
+  if (few)
+    return (
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
+        <span className="min-w-0 truncate">{o.label}</span>
+        <div role="group" aria-label={o.label} className="flex flex-none gap-0.5 rounded-full bg-fg/6 p-0.5">
+          {choices.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              aria-pressed={c.value === value}
+              onClick={() => onChange(c.value)}
+              className={cn(
+                "h-7 cursor-pointer rounded-full border-0 px-3 font-sans text-xs font-medium whitespace-nowrap transition-colors",
+                c.value === value ? "bg-ink text-ink-inverse" : "bg-transparent text-ink-sub hover:text-ink",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  return (
+    <label className="flex items-center justify-between gap-3 px-3.5 py-3 text-sm">
+      <span className="min-w-0 truncate">{o.label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 max-w-[62%] rounded-[10px] border border-line bg-surface-raised px-2 font-sans text-[13px] text-ink"
+      >
+        {choices.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

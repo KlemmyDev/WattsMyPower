@@ -43,29 +43,30 @@ export type Thumb =
 
 export type Choice = { value: string; label: string; thumb?: Thumb };
 
-/** Something about a widget that can be set: a style, a switch, or a choice from a list (fixed, or of what's there). */
+/** Where a switch or a choice is listed in a widget's settings, and when. */
+type Listed = {
+  /** Shown only for these settings (a style it applies to). */
+  when?: (settings: Settings) => boolean;
+  /** The heading it's listed under in the settings, with the others like it ("Readings", "Also show"). */
+  section?: string;
+  /** Shown only where this is so (a car connected). */
+  offered?: (ctx: WidgetCtx) => boolean;
+};
+
+/**
+ * Something about a widget that can be set: a style, a switch, or a choice from a list (fixed, or of what's there). A
+ * choice of two or three short ones shows as a segmented control, a longer list as a menu.
+ */
 export type WidgetOption =
   | { key: string; label: string; kind: "style"; choices: Choice[]; default: string }
-  | {
-      key: string;
-      label: string;
-      sub?: string;
-      kind: "toggle";
-      default: boolean;
-      /** Shown only for these settings (a style it applies to). */
-      when?: (settings: Settings) => boolean;
-      /** The heading it's listed under in the settings, with the others like it ("Readings", "Also show"). */
-      section?: string;
-      /** Shown only where this is so (a car connected). */
-      offered?: (ctx: WidgetCtx) => boolean;
-    }
-  | {
+  | ({ key: string; label: string; sub?: string; kind: "toggle"; default: boolean } & Listed)
+  | ({
       key: string;
       label: string;
       kind: "select";
       choices: Choice[] | ((ctx: WidgetCtx) => Choice[]);
       default: string | ((ctx: WidgetCtx) => string);
-    };
+    } & Listed);
 
 export type WidgetProps = {
   ctx: WidgetCtx;
