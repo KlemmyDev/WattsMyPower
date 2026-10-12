@@ -114,7 +114,7 @@ function FireRow({ f }: { f: FireWarning }) {
  * around it: the early signs the power may go. Shown whether or not there are any. Bureau warnings for elsewhere in
  * the district come after, muted and not counted.
  */
-export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
+export function HazardsCard({ view, now, className }: { view: HazardsView; now: number; className?: string }) {
   const count = view.weather.length + view.fires.filter((f) => f.level !== "Information").length;
   const bom = view.sources.bom;
   const qfd = view.sources.qfd;
@@ -136,7 +136,7 @@ export function HazardsCard({ view, now }: { view: HazardsView; now: number }) {
     view.fires_followed && asked(qfd) && !view.fires.length && `no fires within ${view.radius_km} km`,
   ].filter(Boolean);
   return (
-    <Card>
+    <Card className={className}>
       <TitleBlock title="Warnings" sub={sub} />
       {view.enabled && !view.location_set ? (
         <LocationPrompt>Set your location to see warnings for your area.</LocationPrompt>

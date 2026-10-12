@@ -410,10 +410,12 @@ export function OutagesCard({
   view,
   home,
   now,
+  className,
 }: {
   view: OutagesView;
   home: { lat: number; lon: number } | null;
   now: number;
+  className?: string;
 }) {
   const [tab, setTab] = useState<"now" | "planned">(() =>
     view.now.length || !view.planned.some((o) => o.affects) ? "now" : "planned",
@@ -483,7 +485,7 @@ export function OutagesCard({
         .filter(Boolean)
         .join(" · ");
   return (
-    <Card>
+    <Card className={className}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <TitleBlock title="Outages near you" sub={sub} />
         {net && (
