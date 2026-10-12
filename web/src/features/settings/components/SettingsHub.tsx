@@ -7,7 +7,7 @@ import { dollars, pct } from "~/features/common/formatting/utils/number";
 import { useLiveStatus } from "~/features/common/layout/hooks";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import type { SystemInfo } from "~/features/common/live/types";
-import { inverterName } from "~/features/common/live/utils";
+import { inverterName, secondName } from "~/features/common/live/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { cn } from "~/features/common/ui/utils";
@@ -25,7 +25,7 @@ const join = (parts: (string | false | null | undefined)[]) => parts.filter(Bool
 function inverters(s: SystemInfo | undefined): string {
   if (!s?.model) return "Your solar and battery system";
   const main = `${inverterName(s)} hybrid`;
-  return s.pv2?.model ? `${main} and ${s.pv2.model}` : main;
+  return s.pv2?.model ? `${main} and ${secondName(s, s.pv2)}` : main;
 }
 
 function solarBattery(s: SystemInfo | undefined) {

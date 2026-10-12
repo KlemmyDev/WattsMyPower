@@ -18,7 +18,7 @@ import random
 import time
 from contextlib import suppress
 
-from collector.devices import Device, RawReading, Words, WriteRefused
+from collector.devices import Device, RawReading, Values, Words, WriteRefused
 from collector.devices.sungrow.sg_d import RANGES
 from collector.devices.sungrow.sh_rs import BLOCKS, CONTROL_HOLDING, WRITABLE
 from collector.store import PollRow, Store
@@ -167,6 +167,33 @@ class MockSite:
         return {"hybrid": hybrid, "pv2": RawReading(input=p)}
 
 
+def as_growatt_cloud(site: MockSite, r: RawReading | None, ts: int) -> Values:
+    """The mock second inverter as Growatt's cloud would report it (app/features/inverters/growatt/cloud.py): its
+    figures by name, as strings like the real API's, so a Sungrow hybrid with a Growatt beside it can be tried out.
+    After dark (`r` None) the cloud still answers, with nothing made and its last report from before sunset."""
+    if r is None:
+        pac = ppv = volts = amps = temp = 0.0
+        reported = ts - 3600
+    else:
+        w = r.input
+        pac, ppv = float((w[5032] << 16) | w[5031]), float((w[5018] << 16) | w[5017])
+        volts, amps, temp, reported = w[5011] / 10, w[5012] / 10, w[5008] / 10, ts - 60
+    return {
+        "pac": f"{pac:.1f}", "ppv": f"{ppv:.1f}", "powerToday": f"{site.daily['pv2']:.1f}",
+        "powerTotal": f"{site.totals['pv2']:.1f}", "vpv1": f"{volts:.1f}", "ipv1": f"{amps:.1f}",
+        "temperature": f"{temp:.1f}", "fac": "50.0", "vacr": "240.1", "status": "1" if r else "0",
+        "nominalPower": "5000", "deviceModel": "Growatt 5000MTL-S",
+        "lastUpdateTime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(reported)),
+        "sn": "MOCKGRW001", "type": "inverter", "fetched_at": ts,
+    }  # fmt: skip
+
+
+def mock_cloud(site: MockSite, driver: str) -> Values | None:
+    """What a cloud reader's check finds in mock mode: the second inverter now, as the cloud reports it."""
+    ts = int(time.time())
+    return as_growatt_cloud(site, site.readings(ts)["pv2"], ts) if driver == "growatt.cloud" else None
+
+
 class MockDevice:
     def __init__(self, site: MockSite, name: str, driver: str, host: str = "mock"):
         self.site, self.name, self.driver, self.host = site, name, driver, host
@@ -176,6 +203,8 @@ class MockDevice:
 
     def at(self, ts: int, include_info: bool) -> RawReading:
         r = self.site.readings(ts)[self.name]
+        if self.driver == "growatt.cloud":  # the cloud answers after dark too
+            return RawReading(input=as_growatt_cloud(self.site, r, ts))
         if r is None:
             raise ConnectionError("mock inverter asleep (it's dark)")
         if not include_info:

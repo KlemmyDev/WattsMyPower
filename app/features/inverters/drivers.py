@@ -14,6 +14,9 @@ from app.features.inverters.fronius import inverter as fronius_inverter
 from app.features.inverters.fronius import site as fronius_site
 from app.features.inverters.goodwe import dt as goodwe_dt
 from app.features.inverters.goodwe import et as goodwe_et
+from app.features.inverters.growatt import cloud as growatt_cloud
+from app.features.inverters.growatt import tl as growatt_tl
+from app.features.inverters.growatt import tlx as growatt_tlx
 from app.features.inverters.sungrow import sg_d, sh_control, sh_rs
 from app.features.inverters.types import ControlDriver, HybridDriver, SolarDriver
 
@@ -27,6 +30,9 @@ SOLAR: dict[str, SolarDriver] = {
     "sungrow.sg_d": sg_d,
     "goodwe.dt": goodwe_dt,
     "fronius.inverter": fronius_inverter,
+    "growatt.cloud": growatt_cloud,
+    "growatt.tl": growatt_tl,
+    "growatt.tlx": growatt_tlx,
 }
 
 # Hybrids whose battery can be controlled from the dashboard (app.features.battery), by driver id.
@@ -52,6 +58,9 @@ class Kind:
     unit: int = 1  # its Modbus unit
     # Tried on a real one. False: read from what its maker (or a well-used library) documents, not yet tried here.
     verified: bool = True
+    # Read from the maker's cloud with the owner's sign-in, not found on the network: `servers` are where (host ->
+    # region, the first the usual one here), and connecting it asks for a username and password, not an address.
+    servers: tuple[tuple[str, str], ...] = ()
 
 
 KINDS: dict[str, Kind] = {
@@ -74,6 +83,22 @@ KINDS: dict[str, Kind] = {
         "hybrid", "Fronius", "GEN24, or an inverter with a Smart Meter",
         "Solar API on its network port (on a GEN24, turn it on under Communication → Solar API)", "Primo GEN24 5.0",
         80, 1, False,
+    ),
+    "growatt.cloud": Kind(
+        "pv2", "Growatt", "String inverter, from Growatt's cloud", "Your ShinePhone account (Growatt's cloud)",
+        "MIN 5000TL-X", 443, 1, False,
+        servers=(
+            ("openapi-au.growatt.com", "Australia and New Zealand"), ("openapi.growatt.com", "Other regions"),
+            ("openapi-us.growatt.com", "North America"), ("openapi-cn.growatt.com", "China"),
+        ),
+    ),
+    "growatt.tl": Kind(
+        "pv2", "Growatt", "Older TL string inverter, through an RS485 adapter",
+        "RS485 network adapter (Modbus TCP on 502, or RTU on its own port)", "5000MTL-S", 502, 1, False,
+    ),
+    "growatt.tlx": Kind(
+        "pv2", "Growatt", "Newer TL-X string inverter, through an RS485 adapter",
+        "RS485 network adapter (Modbus TCP on 502, or RTU on its own port)", "MIN 5000TL-X", 502, 1, False,
     ),
     "fronius.inverter": Kind(
         "pv2", "Fronius", "Primo, Symo or GEN24 string inverter", "Solar API on its network port", "Primo 5.0-1", 80,
@@ -99,7 +124,8 @@ def identify(driver: str | None, words: Mapping[str, Any]) -> dict[str, Any]:
     serial, nominal_kw, whether that model is one this driver supports, and whether it's one the driver reads
     but doesn't know by name yet (`untested`: a newer model of a family that shares its registers)."""
     decoder = HYBRIDS.get(driver or "") or SOLAR.get(driver or "")
-    info = decoder.decode_info({"input": words}) if decoder and words else {}
+    # A probe's words come as one set: given as both kinds, for a driver whose identity is in holding registers (Growatt).
+    info = decoder.decode_info({"input": words, "holding": words}) if decoder and words else {}
     model = info.get("model")
     return {
         "brand": info.get("brand"),

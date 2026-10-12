@@ -16,7 +16,7 @@ import shutil
 import socket
 import sqlite3
 import threading
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any, cast
 
@@ -28,7 +28,8 @@ from collector import backup as copying
 from collector.config import Config, ConfigError
 from collector.devices import ROLES, Device, DeviceConfig, Settable, Values, Words, WriteRefused
 from collector.devices.drivers import READERS, build_device, env_devices
-from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_probe
+from collector.devices.growatt.cloud import SERVERS as GROWATT_SERVERS
+from collector.devices.sungrow.mock import MOCK_HOSTS, MockSite, backfill, mock_cloud, mock_probe
 from collector.poller import DeviceStatus, Poller
 from collector.scan import Scanner, opener
 from collector.storage import SPECS, measure
@@ -151,6 +152,10 @@ _HOSTNAME = re.compile(
 )
 
 
+# The servers each cloud reader may be pointed at (and nothing else is asked).
+CLOUD_SERVERS: dict[str, Mapping[str, str]] = {"growatt.cloud": GROWATT_SERVERS}
+
+
 def _device_from(role: str, body: dict[str, Any]) -> DeviceConfig:
     """A device to connect, from a request body. Raises HTTPException(422) with what's wrong."""
     if role not in ROLES:
@@ -161,11 +166,15 @@ def _device_from(role: str, body: dict[str, Any]) -> DeviceConfig:
     if READERS[driver].role != role:
         raise HTTPException(422, f"{driver} reads a {READERS[driver].role} device, not a {role} one")
     host = str(body.get("host") or "").strip()
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        if not _HOSTNAME.match(host):
-            raise HTTPException(422, "Enter the inverter's IP address, e.g. 192.168.1.20.") from None
+    if READERS[driver].cloud:
+        if host not in CLOUD_SERVERS.get(driver, {}):
+            raise HTTPException(422, f"{host or 'That'} isn't one of the servers {driver} can be read from.")
+    else:
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            if not _HOSTNAME.match(host):
+                raise HTTPException(422, "Enter the inverter's IP address, e.g. 192.168.1.20.") from None
     port, unit, settings = body.get("port", 502), body.get("unit", 1), body.get("settings", {})
     if not isinstance(port, int) or not 1 <= port <= 65535:
         raise HTTPException(422, "The port must be between 1 and 65535.")
@@ -211,18 +220,24 @@ async def put_device(request: Request, role: str, body: Annotated[dict[str, Any]
     store: Store = request.app.state.store
     device = _device_from(role, body)
     config: Config = request.app.state.config
-    if not (config.allow_public_hosts or config.mock):  # mock mode connects to made-up hosts
+    cloud = READERS[device.driver].cloud
+    if not (config.allow_public_hosts or config.mock or cloud):  # mock mode connects to made-up hosts
         await asyncio.to_thread(_local_host, device.host, device.port)
     current = next((d for d in await asyncio.to_thread(store.devices) if d.role == role), None)
     same = current is not None and (current.driver, current.host, current.port, current.unit) == (
         device.driver, device.host, device.port, device.unit,
     )  # fmt: skip
+    if cloud and same and current is not None:  # a cloud sign-in that changed is checked again, like a new address
+        same = all(current.settings.get(k) == device.settings.get(k) for k in ("username", "password_hash", "serial"))
     words: Values = {}
     if body.get("check", True) and not same:  # only settings changed: no need to bother the inverter
         found = await asyncio.to_thread(request.app.state.check, device)
         if found is None:
             raise HTTPException(
-                422, f"Nothing at {device.host}:{device.port} answered like a {device.driver} inverter."
+                422,
+                f"Couldn't sign in to {device.host} and find a {device.driver} inverter."
+                if cloud
+                else f"Nothing at {device.host}:{device.port} answered like a {device.driver} inverter.",
             )
         words = found
     saved = await asyncio.to_thread(
@@ -362,17 +377,19 @@ def _probes(
             hit = mock_probe(site, d.host)
             if d.host == "mock":
                 return {}
+            if READERS[d.driver].cloud:  # any sign-in works: the mock's second inverter, as the cloud would tell it
+                return mock_cloud(site, d.driver)
             return hit[1] if hit and drivers[hit[0]] == d.driver else None
 
         return mock_scan, mock_check
 
     def scan(host: str, port: int) -> tuple[str, Values] | None:
         for driver, r in READERS.items():
-            if r.port == port and (words := r.probe(host, port, r.unit)) is not None:
+            if not r.cloud and r.port == port and (words := r.probe(host, port, r.unit, {})) is not None:
                 return driver, words
         return None
 
-    return scan, lambda d: READERS[d.driver].probe(d.host, d.port, d.unit)
+    return scan, lambda d: READERS[d.driver].probe(d.host, d.port, d.unit, d.settings)
 
 
 def create_app(
@@ -395,7 +412,7 @@ def create_app(
     build = build or (lambda d: build_device(d, site))
     scan_probe, device_check = _probes(site)
     if scanner is None:
-        ports = sorted({r.port for r in READERS.values()})
+        ports = sorted({r.port for r in READERS.values() if not r.cloud})
         hellos: dict[int, list[bytes]] = {}
         for r in READERS.values():
             if r.udp and r.hello:

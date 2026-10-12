@@ -119,10 +119,13 @@ def test_without_devices_nothing_is_read(client: TestClient) -> None:
         "devices": [],
         "drivers": {
             "sungrow.sh_rs": "hybrid",
+            "growatt.tlx": "pv2",
+            "growatt.tl": "pv2",
             "sungrow.sg_d": "pv2",
             "goodwe.et": "hybrid",
             "goodwe.dt": "pv2",
             "fronius.site": "hybrid",
+            "growatt.cloud": "pv2",
             "fronius.inverter": "pv2",
         },
     }

@@ -67,7 +67,7 @@ function InverterRow({ inverter: { device, name, status, on, reading, hybrid } }
         <>
           {ROLE_DETAIL[device.role]}
           <span className="block text-xs text-ink-faint tabular-nums">
-            At {deviceAddress(device)} · {reading}
+            {device.cloud ? "From" : "At"} {deviceAddress(device)} · {reading}
           </span>
         </>
       }
@@ -89,7 +89,7 @@ export function InverterSettings() {
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
         title="Inverters"
-        sub="Read every minute over your home network, straight from each inverter, with no cloud in between."
+        sub="Read every minute over your home network, straight from each inverter. Growatt's come from its cloud, every 5 minutes."
       />
       {error && <PageProblem>{errorMessage(error)}</PageProblem>}
       {data && !data.available && <PageProblem tone="plain">{data.error}</PageProblem>}
@@ -123,7 +123,7 @@ export function InverterSettings() {
                   }
                   tags={
                     <>
-                      <ReachTag reach="local" />
+                      <ReachTag reach={b.kinds.some((k) => k.cloud) ? "cloud" : "local"} />
                       {!b.verified && <UntestedTag />}
                     </>
                   }

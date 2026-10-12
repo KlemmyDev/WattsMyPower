@@ -18,7 +18,9 @@ function InverterRow({
 }) {
   const [confirming, setConfirming] = useState(false);
   const remove = useRemoveInverter(device.role);
-  const where = `${device.via ? `${device.via} at` : "At"} ${deviceAddress(device)}`;
+  const where = device.cloud
+    ? `From ${deviceAddress(device)}${device.account ? `, signed in as ${device.account}` : ""}`
+    : `${device.via ? `${device.via} at` : "At"} ${deviceAddress(device)}`;
 
   return (
     <IntegrationRow
