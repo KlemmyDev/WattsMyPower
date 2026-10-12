@@ -21,6 +21,9 @@ export type DataDay = DayBase & {
   ss: number; // 0–1
   saved: number;
   credit: number; // feed-in credit, AUD
+  /** What the grid power cost (AUD), and the day's power bill all up: that, the supply charge, less the credit. */
+  cost: number;
+  net: number;
   partial: boolean; // today, still filling in
 };
 /** "future": after today; "pending": still loading; "none": no readings that day. */
@@ -70,6 +73,8 @@ export function buildDays(start: number, end: number, today: number, rows?: Dail
       ss,
       saved: c?.saved || 0,
       credit: c?.feed_in_credit || 0,
+      cost: c?.import_cost || 0,
+      net: c?.net_cost || 0,
       partial: ts === today,
     };
   });
@@ -167,14 +172,19 @@ export type Totals = {
   imp: number;
   exp: number;
   home: number;
+  /** Home use met straight from the panels, and from the battery. */
+  direct: number;
+  battery: number;
   saved: number;
   credit: number;
+  cost: number;
+  net: number;
   /** Whole days that were at least 90% self-sufficient. */
   greatDays: number;
 };
 
 export function totalsOf(days: Day[]): Totals {
-  const t: Totals = { days: 0, months: 0, gen: 0, imp: 0, exp: 0, home: 0, saved: 0, credit: 0, greatDays: 0 };
+  const t: Totals = { days: 0, months: 0, gen: 0, imp: 0, exp: 0, home: 0, direct: 0, battery: 0, saved: 0, credit: 0, cost: 0, net: 0, greatDays: 0 }; // prettier-ignore
   const months = new Set<string>();
   for (const d of days.filter(hasData)) {
     t.days++;
@@ -182,8 +192,12 @@ export function totalsOf(days: Day[]): Totals {
     t.imp += d.imp;
     t.exp += d.exp;
     t.home += d.home;
+    t.direct += d.direct;
+    t.battery += d.battery;
     t.saved += d.saved;
     t.credit += d.credit;
+    t.cost += d.cost;
+    t.net += d.net;
     if (!d.partial && d.ss >= 0.9) t.greatDays++;
     months.add(d.key.slice(0, 7));
   }
@@ -196,7 +210,10 @@ export type Month = {
   name: string; // "October"
   short: string; // "Oct"
   year: number;
+  /** The month's first day with readings. */
+  first: number;
   days: number;
+  gen: number;
   home: number;
   direct: number;
   battery: number;
@@ -213,10 +230,11 @@ export function monthsOf(days: Day[]): Month[] {
     let m = out[out.length - 1];
     if (!m || m.key !== key) {
       const dt = new Date(d.ts * 1000);
-      m = { key, name: monthLong.format(dt), short: monthShort.format(dt), year: partsOf(dt).year, days: 0, home: 0, direct: 0, battery: 0, imp: 0, exp: 0, saved: 0 }; // prettier-ignore
+      m = { key, name: monthLong.format(dt), short: monthShort.format(dt), year: partsOf(dt).year, first: d.ts, days: 0, gen: 0, home: 0, direct: 0, battery: 0, imp: 0, exp: 0, saved: 0 }; // prettier-ignore
       out.push(m);
     }
     m.days++;
+    m.gen += d.gen;
     m.home += d.home;
     m.direct += d.direct;
     m.battery += d.battery;
