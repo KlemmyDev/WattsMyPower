@@ -101,7 +101,7 @@ export function HomeNow({
   const rates = useRates(midnight(now));
   const rate = rateAt(rates, now);
   return (
-    <SummaryCard icon="home" color={HOME} className="col-span-12">
+    <SummaryCard icon="home" color={HOME}>
       <SummaryStat
         label="Using now"
         value={load == null ? DASH : kW(Math.max(0, load))}
@@ -178,7 +178,7 @@ export function HomeTodayCard({
     profile?.length === 24 ? profile.map((kw, h) => ({ t: start + h * 3600 + 1800, v: kw * 1000 })) : [];
   const rates = useRates(start);
   return (
-    <Card className="col-span-7 max-xl:col-span-12">
+    <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <TitleBlock
           title="Today against a usual day"
@@ -265,7 +265,7 @@ export function HomeSourcesCard({
       )
     : null;
   return (
-    <Card className="col-span-5 max-xl:col-span-12">
+    <Card>
       <div className="flex items-end justify-between gap-3">
         <TitleBlock className="min-w-0 flex-1" title="Where it came from" sub="Today's home use so far" />
         {self != null && (
@@ -304,7 +304,7 @@ export function HomeDaysCard({ days }: { days: DataDay[] }) {
   const weekends = avg(whole.filter(weekend));
   const biggest = whole.reduce((a, d) => (d.home > a.home ? d : a), whole[0]);
   return (
-    <Card className="col-span-12">
+    <Card>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <TitleBlock
           className="min-w-0 flex-1"

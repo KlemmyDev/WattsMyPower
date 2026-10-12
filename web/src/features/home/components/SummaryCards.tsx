@@ -10,10 +10,8 @@ import { useSaveSettings } from "~/features/common/settings/hooks";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
 import { HelpText, Input } from "~/features/common/ui/components/Field";
-import { Swatch } from "~/features/common/ui/components/Swatch";
 import { cn } from "~/features/common/ui/utils";
-import type { Change, HomeInsights, HomeUsage } from "~/features/home/types";
-import { type HomeItem } from "~/features/home/utils";
+import type { Change, HomeInsights } from "~/features/home/types";
 
 /** How far along, as a bar: green on track, red not. */
 function Meter({ value, bad, label }: { value: number; bad: boolean; label: string }) {
@@ -240,71 +238,6 @@ export function GoalsCard({ standbyW }: { standbyW: number | null | undefined })
           </div>
         </div>
       )}
-    </Card>
-  );
-}
-
-/**
- * Each room (a group of devices) at a glance: what it used and cost in the period shown, its share of the home's use,
- * and against the period before.
- */
-export function RoomsCard({
-  items,
-  usage,
-  before,
-  colors,
-  rangeLabel,
-}: {
-  items: HomeItem[];
-  usage: HomeUsage | undefined;
-  /** What each room used in the period before (by its id); undefined: not compared. */
-  before: (id: number) => number | undefined;
-  colors: Map<number, string>;
-  rangeLabel: string;
-}) {
-  const rooms = items.filter((i) => i.group);
-  if (!rooms.length || !usage) return null;
-  const home = usage.total.home;
-  return (
-    <Card aria-labelledby="h-rooms" className="col-span-12 gap-3">
-      <div className="flex flex-col gap-0.5">
-        <h2 id="h-rooms">Rooms</h2>
-        <span className="text-[13px] text-ink-muted">What each room used and cost {rangeLabel}</span>
-      </div>
-      <div className="flex flex-col">
-        {rooms.map((r) => {
-          const u = usage.devices.find((d) => d.id === r.id);
-          const was = before(r.id);
-          const change = u && was != null && was > 0.05 ? (u.total - was) / was : null;
-          return (
-            <div
-              key={r.group}
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line-subtle py-2.5 text-sm tabular-nums first:border-t-0"
-            >
-              <Swatch color={colors.get(r.id) ?? "var(--color-bar)"} size={10} />
-              <Link
-                to="/home/rooms/$room"
-                params={{ room: r.group! }}
-                className="min-w-[120px] flex-1 font-medium text-ink no-underline hover:underline"
-              >
-                {r.group}
-              </Link>
-              <span className="w-20 text-right">{kWh(u?.total ?? 0)}</span>
-              <span className="w-16 text-right text-ink-muted">{money(u?.cost ?? 0)}</span>
-              <span className="w-12 text-right text-ink-faint">
-                {home && u ? `${Math.round((u.total / home) * 100)}%` : ""}
-              </span>
-              <span className={cn("w-24 text-right text-xs", change != null && change > 0 ? "text-ink" : "text-good")}>
-                {change == null
-                  ? ""
-                  : Math.abs(change) < 0.05
-                    ? "about the same"
-                    : `${change > 0 ? "↑" : "↓"} ${Math.round(Math.abs(change) * 100)}%`}
-              </span>
-            </div>
-          );
-        })}
-      </div>
     </Card>
   );
 }
