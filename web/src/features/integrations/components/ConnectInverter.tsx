@@ -15,6 +15,7 @@ import type {
   ConnectResult,
   FoundDevice,
   IntegrationsOverview,
+  InverterKind,
   InverterRole,
 } from "~/features/integrations/types";
 import { BRAND_ABOUT, brandSlug, deviceName, ROLE_NAME } from "~/features/integrations/utils";
@@ -289,7 +290,9 @@ function Manual({
   // Given as a name ("GoodWe") or as it's written in an address ("goodwe").
   const given = initialBrand ? brands.find((b) => brandSlug(b) === brandSlug(initialBrand)) : undefined;
   const [brand, setBrand] = useState(given ?? brands[0] ?? "");
-  const kinds = overview.kinds.filter((k) => k.brand === brand);
+  // A cloud kind is connected by signing in (CloudSignIn), not by address.
+  const kinds = overview.kinds.filter((k) => k.brand === brand && !k.cloud);
+  const signIn = overview.kinds.some((k) => k.brand === brand && k.cloud);
   const [driver, setDriver] = useState(kinds[0]?.driver ?? "");
   const [host, setHost] = useState("");
   const [tried, setTried] = useState<string | null>(null);
@@ -355,6 +358,15 @@ function Manual({
           />
         </Field>
       </div>
+      {signIn && !given && (
+        <HelpText>
+          Most {brand} inverters are read through your {brand} account instead, with no adapter.{" "}
+          <Link to="/integrations/inverters/$brand/connect" params={{ brand: brandSlug(brand) }} className="text-brand">
+            Sign in from {brand}
+          </Link>
+          .
+        </HelpText>
+      )}
       {replaces && (
         <HelpText>
           Replaces the {deviceName(replaces)} at {replaces.host} as your {ROLE_NAME[replaces.role]}.
@@ -383,6 +395,81 @@ function Manual({
 }
 
 /**
+ * Signing in to a maker's cloud, for an inverter whose Wi-Fi stick only talks to it (Growatt): the username and
+ * password from the maker's app, and the region's server. The password is sent once, to be scrambled the way the
+ * maker's sign-in takes it, and isn't kept.
+ */
+function CloudSignIn({
+  kind,
+  overview,
+  busy,
+  error,
+  onConnect,
+}: {
+  kind: InverterKind;
+  overview: IntegrationsOverview;
+  busy: boolean;
+  error: unknown;
+  onConnect: (role: InverterRole, body: ConnectRequest) => void;
+}) {
+  const servers = kind.servers ?? [];
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [server, setServer] = useState(servers[0]?.host ?? "");
+  const replaces = overview.devices.find((d) => d.role === kind.role);
+  const app = BRAND_ABOUT[kind.brand]?.app;
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onConnect(kind.role, { driver: kind.driver, host: server, server, username: username.trim(), password });
+      }}
+    >
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] items-start gap-4">
+        <Field label="Username" help={app ? `The one you use in the ${app} app` : undefined}>
+          <Input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            spellCheck={false}
+            autoCapitalize="off"
+          />
+        </Field>
+        <Field label="Password" help="Only a scrambled form of it is kept">
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+        </Field>
+        {servers.length > 1 && (
+          <Field label="Region">
+            <Select value={server} onChange={(e) => setServer(e.target.value)}>
+              {servers.map((s) => (
+                <option key={s.host} value={s.host}>
+                  {s.region}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+      </div>
+      {replaces && (
+        <HelpText>
+          Replaces the {deviceName(replaces)} as your {ROLE_NAME[replaces.role]}.
+        </HelpText>
+      )}
+      <Button type="submit" disabled={busy || !username.trim() || !password} className="self-start">
+        {busy ? "Signing in…" : "Sign in and connect"}
+      </Button>
+      {!!error && <HelpText tone="bad">{errorMessage(error)}</HelpText>}
+    </form>
+  );
+}
+
+/**
  * Connecting an inverter, by scanning the network or by address: in a card of its own, for any brand (the set-up
  * guide), or as two sections (`sections`: Manage → Integrations → Inverters → a brand → Connect). Given a `brand`, it's
  * that brand's inverters only.
@@ -401,8 +488,9 @@ export function ConnectInverter({
   className?: string;
 }) {
   const connect = useConnect(onConnected);
-  const [source, setSource] = useState<"scan" | "manual">();
+  const [source, setSource] = useState<"scan" | "manual" | "cloud">();
   const busy = connect.isPending;
+  const cloudKind = brand ? overview.kinds.find((k) => k.brand === brand && k.cloud) : undefined;
 
   const scan = (
     <>
@@ -434,6 +522,36 @@ export function ConnectInverter({
     />
   );
 
+  if (sections && cloudKind)
+    return (
+      <>
+        <SettingsSection
+          id="h-cloud"
+          title={`Sign in with your ${cloudKind.brand} account`}
+          sub={`Its Wi-Fi stick only sends readings to ${cloudKind.brand}'s cloud, so they're read from there, every 5 minutes.`}
+        >
+          <CloudSignIn
+            kind={cloudKind}
+            overview={overview}
+            busy={busy && source === "cloud"}
+            error={source === "cloud" ? connect.error : null}
+            onConnect={(role, body) => {
+              setSource("cloud");
+              connect.mutate({ role, body });
+            }}
+          />
+        </SettingsSection>
+        <SettingsSection
+          id="h-adapter"
+          title="Or through an RS485 adapter"
+          sub="Only if you've added one: a small box (not the Wi-Fi stick) wired to the inverter's RS485 port, which puts it on your network. It's then read every minute, without the cloud. Find the adapter with a scan, or enter its address."
+        >
+          {scan}
+          <div className="border-t border-line-subtle" />
+          {manual}
+        </SettingsSection>
+      </>
+    );
   if (sections)
     return (
       <>

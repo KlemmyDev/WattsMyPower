@@ -27,8 +27,8 @@ export const REMOVE_NOTE: Record<InverterRole, string> = {
 export const asRole = (role: string): InverterRole | null => (role === "hybrid" || role === "pv2" ? role : null);
 
 /** Its address, with the port when it isn't Modbus's usual 502: "192.168.0.244". */
-export const deviceAddress = (d: Pick<ConnectedInverter, "host" | "port">) =>
-  `${d.host}${d.port !== 502 ? `:${d.port}` : ""}`;
+export const deviceAddress = (d: Pick<ConnectedInverter, "host" | "port" | "cloud" | "brand">) =>
+  d.cloud ? `${d.brand ?? "Its maker"}'s cloud` : `${d.host}${d.port !== 502 ? `:${d.port}` : ""}`;
 
 /** A connected inverter with its live state from the stream. */
 export type InverterState = {
@@ -111,6 +111,12 @@ export const BRAND_ABOUT: Record<string, { about: string; setup: string; app: st
     setup:
       "Read through its Wi-Fi or LAN dongle over Modbus on UDP port 8899. Newer LAN dongles also take Modbus TCP on port 502. There's nothing to turn on.",
     app: "SEMS",
+  },
+  Growatt: {
+    about: "Growatt string inverters as a second solar inverter, through your Growatt account.",
+    setup:
+      "Growatt's Wi-Fi stick only sends its readings to Growatt's cloud, so sign in with the username and password you use in the ShinePhone app. Growatt refreshes them every 5 minutes. With an RS485 network adapter (a small extra box wired to the inverter) it can be read on your network instead.",
+    app: "ShinePhone",
   },
   Fronius: {
     about:

@@ -15,6 +15,10 @@ export type InverterKind = {
   port: number;
   /** Tried on a real one. False: read from what its maker documents, not yet tried. */
   verified: boolean;
+  /** Read from its maker's cloud with the owner's sign-in (Growatt), not found on the network. */
+  cloud?: boolean;
+  /** A cloud kind's servers, by region, the usual one here first. */
+  servers?: { host: string; region: string }[];
 };
 
 export type ConnectedInverter = {
@@ -37,6 +41,10 @@ export type ConnectedInverter = {
   behind_meter?: boolean;
   /** Its driver has been tried on a real inverter. */
   verified?: boolean;
+  /** Read from its maker's cloud: the account it's signed in as, and the server's region. */
+  cloud?: boolean;
+  account?: string | null;
+  region?: string | null;
 };
 
 /** Something a scan found answering on the Modbus port, and what it said it is. */
@@ -94,6 +102,10 @@ export type ConnectRequest = {
   behind_meter?: boolean;
   /** False connects it even if it doesn't answer now. */
   check?: boolean;
+  /** A cloud kind's sign-in: the maker's app's username and password, and the region's server. */
+  username?: string;
+  password?: string;
+  server?: string;
 };
 
 export type ConnectResult = ConnectedInverter & {

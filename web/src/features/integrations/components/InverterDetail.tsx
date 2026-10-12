@@ -69,8 +69,15 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
   const rows: [string, string | null][] = [
     ["Type", [device.brand, device.label].filter(Boolean).join(" ") || null],
     ["Model", device.model],
-    ["Address", deviceAddress(device)],
-    ["Connected through", device.via],
+    ...(device.cloud
+      ? ([
+          ["Signed in as", device.account ?? null],
+          ["Server", device.region ?? device.host],
+        ] as [string, string | null][])
+      : ([
+          ["Address", deviceAddress(device)],
+          ["Connected through", device.via],
+        ] as [string, string | null][])),
     ["Serial number", device.serial],
     ["Size", device.nominal_kw ? `${device.nominal_kw} kW` : null],
     ["Added", longDate.format(new Date(device.added_at * 1000))],
@@ -106,7 +113,7 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
             )}
           </OptionList>
           <span className="flex flex-wrap gap-3">
-            <ReachTag reach="local" />
+            <ReachTag reach={device.cloud ? "cloud" : "local"} />
             {device.verified === false && <UntestedTag />}
           </span>
           {readOnly && <ReadOnlyNote />}

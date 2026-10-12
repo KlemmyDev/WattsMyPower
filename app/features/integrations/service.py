@@ -18,6 +18,7 @@ from typing import Any
 
 from app.core.config import Config
 from app.features.inverters.drivers import KINDS, identify
+from app.features.inverters.growatt.cloud import hash_password
 from app.features.live.client import CollectorError, Devices
 from app.features.live.service import LiveService
 
@@ -44,8 +45,8 @@ class IntegrationError(ValueError):
 def _kind(driver: str | None) -> dict[str, Any]:
     k = KINDS.get(driver or "")
     if k is None:
-        return {"label": driver, "via": None, "brand": None, "verified": True}
-    return {"label": k.label, "via": k.via, "brand": k.brand, "verified": k.verified}
+        return {"label": driver, "via": None, "brand": None, "verified": True, "cloud": False}
+    return {"label": k.label, "via": k.via, "brand": k.brand, "verified": k.verified, "cloud": bool(k.servers)}
 
 
 HOME_NETWORKS = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
@@ -104,14 +105,21 @@ class IntegrationsService:
         else:
             info = self.live.pv2 or {}
             state = {"last_success": info.get("last_success"), "error": info.get("error")}
+        settings = dict(d.get("settings") or {})
+        if "password_hash" in settings:  # a cloud sign-in: say whose, never pass on the password (even hashed)
+            settings["password_hash"] = None
         out = {
             **d,
+            "settings": settings,
             **_kind(d.get("driver")),
             "model": info.get("model"),
             "serial": info.get("serial"),
             "nominal_kw": info.get("nominal_kw"),
             **state,
         }
+        if (kind := KINDS.get(d.get("driver") or "")) and kind.servers:  # read from the cloud: whose account, where
+            out["account"] = settings.get("username")
+            out["region"] = dict(kind.servers).get(d.get("host") or "")
         if role == "pv2":
             setting = (d.get("settings") or {}).get("behind_meter")
             out["behind_meter"] = setting if isinstance(setting, bool) else self.config.pv2_behind_meter
@@ -120,7 +128,8 @@ class IntegrationsService:
     def overview(self, client_host: str | None = None, server_host: str | None = None) -> dict[str, Any]:
         """The connected inverters, the kinds that can be connected, the last scan, and a network to scan."""
         kinds = [{"driver": k, "role": v.role, "brand": v.brand, "label": v.label, "via": v.via, "example": v.example,
-                  "port": v.port, "verified": v.verified}
+                  "port": v.port, "verified": v.verified, "cloud": bool(v.servers),
+                  "servers": [{"host": h, "region": r} for h, r in v.servers]}
                  for k, v in KINDS.items()]  # fmt: skip
         if self.collector is None:
             return {"available": False, "error": DEMO, "read_only": True, "devices": [], "kinds": kinds,
@@ -238,14 +247,17 @@ class IntegrationsService:
                 + ("the main inverter." if kind.role == "hybrid" else "a second solar inverter.")
             )
         settings: dict[str, Any] = {}
+        if kind.servers:
+            settings.update(self._sign_in(kind.servers, body))
         if role == "pv2":
             bm = body.get("behind_meter", (body.get("settings") or {}).get("behind_meter", True))
             if not isinstance(bm, bool):
                 raise IntegrationError("Choose whether it's on the house side of the main inverter's meter.")
             settings["behind_meter"] = bm
+        host = settings.pop("server", None) or str(body.get("host") or "").strip()
         request = {
             "driver": driver,
-            "host": str(body.get("host") or "").strip(),
+            "host": host,
             "port": body.get("port") or kind.port,
             "unit": body.get("unit", kind.unit),
             "settings": settings,
@@ -254,6 +266,11 @@ class IntegrationsService:
         try:
             result = collector.put_device(role, request)
         except CollectorError as e:
+            if e.status == 422 and kind.servers and "sign in" in e.detail:
+                raise IntegrationError(
+                    f"{kind.brand} didn't accept that username and password, or there's no inverter in the account. "
+                    f"Check them in the {kind.brand} app."
+                ) from e
             if e.status == 422 and "answered like" in e.detail:  # say which inverter in words, not its driver id
                 where = request["host"] + (f":{request['port']}" if request["port"] != kind.port else "")
                 raise IntegrationError(
@@ -262,6 +279,30 @@ class IntegrationsService:
             raise IntegrationError(e.detail, e.status if e.status in (404, 409, 422) else 502) from e
         device = self._device(result["device"])
         return {**device, "identified": identify(driver, result.get("input") or {})}
+
+    @staticmethod
+    def _sign_in(servers: tuple[tuple[str, str], ...], body: dict[str, Any]) -> dict[str, Any]:
+        """A cloud inverter's sign-in from a request: its server, username, the password hashed as the maker's sign-in
+        takes it (the password itself is never kept), and which inverter. A body from a connected device (changing
+        where it connects) carries its stored sign-in, which is kept as it is."""
+        stored = body.get("settings") or {}
+        server = str(body.get("server") or body.get("host") or servers[0][0]).strip()
+        if server not in dict(servers):
+            raise IntegrationError("Choose your region's server.")
+        username = str(body.get("username") or stored.get("username") or "").strip()
+        password = body.get("password")
+        password_hash = (
+            hash_password(password) if isinstance(password, str) and password else stored.get("password_hash")
+        )
+        if not username or not password_hash:
+            raise IntegrationError("Enter the username and password you use in the app.")
+        serial = str(body.get("serial") or stored.get("serial") or "").strip() or None
+        return {
+            "server": server,
+            "username": username,
+            "password_hash": password_hash,
+            **({"serial": serial} if serial else {}),
+        }
 
     def update(self, role: str, changes: dict[str, Any]) -> dict[str, Any]:
         """Change a connected inverter's settings (where a second inverter connects), without re-checking it."""

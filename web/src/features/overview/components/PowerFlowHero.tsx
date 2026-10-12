@@ -17,6 +17,7 @@ import { forecastQuery } from "~/features/common/weather/api";
 import type { Forecast, ForecastHour, WeatherTiming } from "~/features/common/weather/types";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { useLive } from "~/features/common/live/hooks/useLive";
+import { secondName } from "~/features/common/live/utils";
 import { clock, duration, hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { hourOf } from "~/features/common/time/utils";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
@@ -753,7 +754,7 @@ function Readout({
               unit={pv[1]}
               title={
                 p.pv2_power != null
-                  ? `Hybrid ${kW(p.pv1_power)} · ${s?.pv2?.model || "Second inverter"} ${kW(p.pv2_power)}`
+                  ? `Hybrid ${kW(p.pv1_power)} · ${secondName(s, s?.pv2) || "Second inverter"} ${kW(p.pv2_power)}`
                   : undefined
               }
             />

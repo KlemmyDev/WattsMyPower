@@ -19,6 +19,7 @@ export function InverterConnect({ slug }: { slug: string }) {
   const { data, isPending, error } = useQuery(integrationsQuery);
   const brand = data?.kinds.find((k) => brandSlug(k.brand) === slug)?.brand;
   const hasHybrid = !!data?.devices.some((d) => d.role === "hybrid");
+  const cloud = data?.kinds.some((k) => k.brand === brand && k.cloud);
   const setup = brand && BRAND_ABOUT[brand]?.setup;
 
   return (
@@ -35,9 +36,13 @@ export function InverterConnect({ slug }: { slug: string }) {
         sub={
           !brand
             ? ""
-            : hasHybrid
-              ? "A second solar inverter, or a new one to replace yours. Find it with a quick scan, or enter its address."
-              : "Nothing is recorded until your main inverter (with the battery and meter) is connected. Find it with a quick scan, or enter its address."
+            : cloud
+              ? hasHybrid
+                ? `A second solar inverter, beside your main one. Sign in with your ${brand} account and it's read from there.`
+                : `${brand} is read as a second solar inverter. Nothing is recorded until your main inverter (with the battery and meter) is connected, from its own brand's page.`
+              : hasHybrid
+                ? "A second solar inverter, or a new one to replace yours. Find it with a quick scan, or enter its address."
+                : "Nothing is recorded until your main inverter (with the battery and meter) is connected. Find it with a quick scan, or enter its address."
         }
       />
       {isPending && <PageLoading label="Checking what's connected" />}
@@ -55,7 +60,8 @@ export function InverterConnect({ slug }: { slug: string }) {
       )}
       {data?.available && !data.read_only && brand && (
         <>
-          {setup && <Notice tone="info">{setup}</Notice>}
+          {/* A cloud brand's sections say how it's read already. */}
+          {setup && !cloud && <Notice tone="info">{setup}</Notice>}
           <ConnectInverter
             key={brand}
             overview={data}

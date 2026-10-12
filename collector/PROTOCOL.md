@@ -25,12 +25,27 @@ longer read. Changes take effect from the next poll, without a restart.
 | `goodwe.et`     | `hybrid` | GoodWe ET/EH/BT/BH hybrids, Modbus over UDP 8899 (unit 0xF7) | (35100, 125), (36000, 45), (37000, 24) | (35000, 33)                                     |
 | `goodwe.dt`     | `pv2`    | GoodWe D-NS/XS/DT string inverters, Modbus over UDP 8899 (unit 0x7F) | (30001, 40), (30100, 73) | — (30001-30040 carry model, serial)                     |
 
+| `growatt.tl`    | `pv2`    | Growatt older TL string inverters (TL, MTL, MTL-S; protocol 3.x) through an RS485 adapter | (0, 45) | — (holding (0, 30), the identity, read every poll) |
+| `growatt.tlx`   | `pv2`    | Growatt newer TL-X string inverters (MIN, MIC, MAX, MOD; protocol 1.2x) through an RS485 adapter | (0, 45), (45, 45), (90, 35) | — (holding (0, 30), every poll) |
+| `growatt.cloud` | `pv2`    | any Growatt string inverter, from Growatt's cloud with the owner's ShinePhone sign-in | its details, asked at most every 5 minutes | — |
+
 | `fronius.site`     | `hybrid` | Fronius GEN24, or a Datamanager inverter with a Smart Meter: Solar API, HTTP port 80 | power flow, Smart Meter, the inverter (unit = its device id), the battery | GetInverterInfo |
 | `fronius.inverter` | `pv2`    | any one Fronius inverter: Solar API, HTTP port 80 | the inverter's CommonInverterData | — (GetInverterInfo every poll) |
 
 Fronius isn't Modbus: its rows hold the figures its Solar API reported, by name and as reported (no scaling or
 units changed), e.g. `{"flow.P_PV": 2163.4, "flow.P_Grid": -812.0, "meter.EnergyReal_WAC_Plus_Absolute": 1247204.0}`.
 See `collector/devices/fronius/solar_api.py` for which are kept.
+
+Growatt through an RS485 adapter is plain Modbus: Modbus TCP when the adapter's a gateway on port 502, Modbus RTU
+frames passed through as they are on any other port. Addresses start at 0, as in Growatt's documents.
+
+`growatt.cloud` reads the inverter from Growatt's cloud, as its Wi-Fi stick only reports there: like Fronius, its rows
+hold the figures Growatt reported, by name and as reported (mostly strings), e.g. `{"pac": "2412.5", "powerToday":
+"12.3", "lastUpdateTime": "2026-10-12 12:28:00", "sn": "AB12345678", "type": "inverter", "fetched_at": 1791790080}`.
+Growatt refreshes every 5 minutes and bans clients that ask much more, so it's asked at most that often; polls in
+between store the last answer again (`fetched_at` says when it was asked). Its host is one of Growatt's servers (never
+any other), its settings hold the sign-in (`username`, `password_hash`: the password as Growatt's sign-in takes it,
+never the password itself; `serial` when the account has more than one inverter), and a network scan never looks for it.
 
 GoodWe only has holding registers (function 0x03); as they hold its readings, they're stored under `input`. Its
 dongles answer Modbus RTU frames over UDP port 8899, or Modbus TCP when connected on port 502 (newer LAN dongles); a
