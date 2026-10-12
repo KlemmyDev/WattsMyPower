@@ -36,7 +36,9 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   when you want the whole dashboard. Layouts are kept on the server, so every browser in the house sees the same.
   The Battery widget fits itself to its size rather than stretching: from a 2 × 2 tile with just its ring, through
   its outlook, what it's set to do and its last six hours, up to the whole width with its last 12 hours and the
-  figures behind it (what it can still give, what went in and out today, its reserve, health and temperature).
+  figures behind it (what it can still give, what went in and out today, its reserve, health and temperature). As
+  with power flow, its settings switch each part on or off: the outlook, the kWh it holds, what it's set to do and
+  the shortcuts, the chart and how far back it goes, and each figure.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
   each string; where the home's power goes, from the inverter and from connected plugs and appliances; the battery's
   level, health, warranty and whether it's the right size; the grid's state, AEMO's wholesale prices and notices,

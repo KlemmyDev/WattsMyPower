@@ -13,6 +13,7 @@ import { BatteryModeLine } from "~/features/battery/components/BatteryModeLine";
 import { useBatteryMode } from "~/features/battery/hooks";
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import { roomOf } from "~/features/common/widgets/room";
+import type { Settings } from "~/features/common/widgets/types";
 
 /** The ring at its largest (px). */
 const RING = 168;
@@ -20,13 +21,58 @@ const RING = 168;
 const HEAD = 34 + 12;
 const UNDER = 52 + 12;
 
+/** The figures behind the ring, in the order they're shown (as many as there's room for). */
+export const BATTERY_FACTS = [
+  { key: "usable", label: "Usable now", sub: "What it can still give above its reserve" },
+  { key: "charged", label: "Charged today" },
+  { key: "used", label: "Used today" },
+  { key: "reserve", label: "Reserve", sub: "What it keeps for a blackout" },
+  { key: "health", label: "Health", sub: "Where the inverter reports it" },
+  { key: "temp", label: "Temperature", sub: "Where the inverter reports it" },
+] as const;
+export type BatteryFact = (typeof BATTERY_FACTS)[number]["key"];
+
+/** How far back its chart goes: as far as its size suits (6 hours, or 12 at the whole width), or set. */
+export const BATTERY_HOURS = [
+  { value: "auto", label: "To suit its size" },
+  { value: "6", label: "6 hours" },
+  { value: "12", label: "12 hours" },
+  { value: "24", label: "24 hours" },
+];
+
+/** What the card shows, given room for it. */
+export type BatteryShow = {
+  outlook: boolean;
+  mode: boolean;
+  shortcuts: boolean;
+  kwh: boolean;
+  chart: boolean;
+  hours: "auto" | "6" | "12" | "24";
+  facts: BatteryFact[];
+};
+
+/** A widget's settings as what it shows: everything on, unless switched off. */
+export function batteryShow(settings: Settings): BatteryShow {
+  const hours = BATTERY_HOURS.find((o) => o.value === settings.hours)?.value ?? "auto";
+  return {
+    outlook: settings.outlook !== false,
+    mode: settings.mode !== false,
+    shortcuts: settings.shortcuts !== false,
+    kwh: settings.kwh !== false,
+    chart: settings.chart !== false,
+    hours: hours as BatteryShow["hours"],
+    facts: BATTERY_FACTS.filter((x) => settings[x.key] !== false).map((x) => x.key),
+  };
+}
+const ALL = batteryShow({});
+
 /**
  * The battery's state of charge ring, time to full (or to reserve), what it's set to do, and the last six hours, fitted
  * to its size on the grid (`w` columns by `h` rows) rather than stretched to it. At its smallest (2 × 2) it's the ring
  * alone, with the charge and what it's doing in it. Wider, the outlook comes in beside it; taller, a header with what
  * it's set to do (and the shortcuts, given room), then the last six hours (beside it in a short wide one, under it in a
  * tall one). Larger still, the figures behind it: what it can still give, what went in and out today, its reserve,
- * health and temperature.
+ * health and temperature. `show` leaves any of it out (and what's left takes the room).
  */
 export function BatteryCard({
   p,
@@ -36,7 +82,7 @@ export function BatteryCard({
   w = 6,
   h = 7,
   title = "Battery",
-  shortcuts = true,
+  show = ALL,
   className,
 }: {
   p: Snapshot | null;
@@ -47,8 +93,7 @@ export function BatteryCard({
   w?: number;
   h?: number;
   title?: string;
-  /** Whether to offer the battery shortcuts, given room for them. */
-  shortcuts?: boolean;
+  show?: BatteryShow;
   className?: string;
 }) {
   const id = useId();
@@ -58,14 +103,18 @@ export function BatteryCard({
   const { wide, tall, inner } = roomOf(w, h);
   const xs = wide === "xs";
   // The ring alone at the smallest; over its outlook where it's narrow; beside it otherwise.
-  const alone = xs && tall === "short";
+  const alone = (xs && tall === "short") || !show.outlook;
   const stacked = xs || (w === 3 && h >= 4);
   const header = tall !== "short" && !(xs && tall === "mid");
   const big = tall === "tall" && (wide === "md" || wide === "lg");
-  const keys = shortcuts && w >= 5;
-  const chart = tall === "tall" ? "under" : w >= 7 ? "side" : null;
+  const pill = show.mode && !xs;
+  const keys = show.shortcuts && (big || w >= 5);
+  const chart = !show.chart ? null : tall === "tall" ? "under" : w >= 7 ? "side" : null;
+  const hours = show.hours === "auto" ? (wide === "lg" ? 12 : 6) : Number(show.hours);
+  const figures = figuresOf(p, s, show.facts);
   const facts =
-    tall === "short"
+    figures.length > 0 &&
+    (tall === "short"
       ? w >= 10 && { side: true, n: 2, cols: 2 }
       : tall === "mid"
         ? w >= 10 && { side: true, n: 4, cols: 2 }
@@ -73,10 +122,11 @@ export function BatteryCard({
           ? { side: true, n: w >= 10 ? 6 : 4, cols: w >= 10 ? 3 : 2 }
           : wide === "md"
             ? h >= 7 && { side: false, n: w >= 6 ? 4 : 3, cols: w >= 6 ? 4 : 3 }
-            : w === 4 && h >= 8 && { side: false, n: 2, cols: 2 };
+            : w === 4 && h >= 8 && { side: false, n: 2, cols: 2 });
+  const under = facts && !facts.side;
   // The height the ring has: the card's, less the header and the outlook under it; tall, it shares it with the chart.
   const room = inner - (header ? HEAD : 0) - (stacked && !alone ? UNDER : 0);
-  const ring = Math.max(72, Math.min(RING, tall === "tall" && stacked ? room / 2 : room));
+  const ring = Math.max(72, Math.min(RING, chart === "under" && stacked ? room / 2 : room));
   return (
     <Card
       aria-labelledby={id}
@@ -88,14 +138,18 @@ export function BatteryCard({
             title={title}
             id={id}
             className="h-[34px]"
-            action={<BatteryModeLine now={now} shortcuts={shortcuts} className="min-w-0 rounded-full" />}
+            action={
+              pill && (
+                <BatteryModeLine now={now} shortcuts={keys} className={cn("min-w-0 rounded-full", !keys && "pr-3.5")} />
+              )
+            }
           />
         ) : (
           <div className="flex h-[34px] min-w-0 items-center gap-3">
             <span id={id} className="flex-none truncate font-display text-base font-bold">
               {title}
             </span>
-            {!xs && (
+            {pill && (
               <BatteryModeLine
                 now={now}
                 shortcuts={keys}
@@ -113,11 +167,13 @@ export function BatteryCard({
         className={cn(
           "relative z-1 flex min-h-0 min-w-0",
           stacked ? "flex-col items-center justify-center gap-3" : "items-center gap-5",
-          // with nothing under it, it takes the card's height, the ring and outlook in its middle
-          chart === "under" || (facts && !facts.side) ? "flex-none" : "flex-1",
+          alone && "justify-center",
+          // with nothing under it, it takes the card's height, the ring and outlook in its middle; with only figures,
+          // they're in the middle together
+          chart === "under" ? "flex-none" : under ? "mt-auto flex-none" : "flex-1",
         )}
       >
-        <Ring p={p} s={s} st={st} px={ring} cap={stacked ? 100 : 46} />
+        <Ring p={p} s={s} st={st} px={ring} cap={stacked ? 100 : 46} kwh={show.kwh} />
         {!alone && fi && (
           <Outlook
             fi={fi}
@@ -130,8 +186,7 @@ export function BatteryCard({
         )}
         {facts && facts.side && (
           <Facts
-            p={p}
-            s={s}
+            items={figures}
             n={facts.n}
             cols={facts.cols}
             className={chart === "side" ? "w-[15rem] flex-none" : "ml-auto max-w-[30rem] min-w-[14rem] flex-1"}
@@ -141,18 +196,18 @@ export function BatteryCard({
           <BatteryHistory
             end={p ? p.ts + 1 : null}
             s={s}
-            hours={wide === "lg" ? 12 : 6}
+            hours={hours}
             className="mt-0 h-auto min-w-0 flex-1 self-stretch"
           />
         )}
       </div>
-      {facts && !facts.side && <Facts p={p} s={s} n={facts.n} cols={facts.cols} />}
+      {under && <Facts items={figures} n={facts.n} cols={facts.cols} className={cn(!chart && "mb-auto")} />}
       {chart === "under" && (
         // edge to edge along the bottom, its labels padded in, taking what height is left
         <BatteryHistory
           end={p ? p.ts + 1 : null}
           s={s}
-          hours={wide === "lg" ? 12 : 6}
+          hours={hours}
           className="-mx-5 -mb-5 h-auto min-h-0 flex-1 max-sm:-mx-4 max-sm:-mb-4"
           inset="px-5 max-sm:px-4"
         />
@@ -233,7 +288,7 @@ function Outlook({
 
 /**
  * The battery's ring (see BatteryArc), `px` across at most and no more than `cap` % of the card's width, with the
- * charge in the middle gliding to each reading, what it holds where there's room, and what it's doing; the dark dot
+ * charge in the middle gliding to each reading, what it holds (given room and `kwh`), and what it's doing; the dark dot
  * marks the backup reserve. What's in it scales with it.
  */
 function Ring({
@@ -242,12 +297,14 @@ function Ring({
   st,
   px,
   cap,
+  kwh: showKwh,
 }: {
   p: Snapshot | null;
   s: SystemInfo | undefined;
   st: BatteryState | null;
   px: number;
   cap: number;
+  kwh: boolean;
 }) {
   const kwh = s?.battery_kwh || 0;
   const soc = p?.battery_soc ?? null;
@@ -267,7 +324,7 @@ function Ring({
               {shown == null ? "—" : Math.round(shown)}
               <span className="ml-0.5 text-[13cqw] font-normal tracking-normal text-ink-muted">%</span>
             </div>
-            {kwh > 0 && soc != null && (
+            {showKwh && kwh > 0 && soc != null && (
               <div className="text-xs font-medium text-ink-muted tabular-nums @max-[8.5rem]:hidden">
                 {((soc / 100) * kwh).toFixed(1)} of {kwh} kWh
               </div>
@@ -281,39 +338,43 @@ function Ring({
 }
 
 /**
- * The figures behind the ring, as many as `n` (`cols` to a row): what it can still give above its reserve, what went
- * in and out today, the reserve, and its health and temperature where the inverter reports them.
+ * The figures `shown` that are known: what it can still give above its reserve, what went in and out today, the
+ * reserve, and its health and temperature where the inverter reports them.
  */
+function figuresOf(p: Snapshot | null, s: SystemInfo | undefined, shown: BatteryFact[]): [string, ReactNode][] {
+  const cap = s?.battery_kwh;
+  const soc = p?.battery_soc;
+  const reserve = reserveOf(s);
+  const value: Record<BatteryFact, ReactNode | null> = {
+    usable: soc != null && cap ? kWh(Math.max(0, ((soc - reserve) / 100) * cap)) : DASH,
+    charged: kWh(p?.daily_charge),
+    used: kWh(p?.daily_discharge),
+    reserve: pct(reserve),
+    health: p?.battery_soh != null ? pct(p.battery_soh) : null,
+    temp: p?.battery_temp != null ? `${Math.round(p.battery_temp)}°C` : null,
+  };
+  return BATTERY_FACTS.filter((x) => shown.includes(x.key) && value[x.key] != null).map((x) => [x.label, value[x.key]]);
+}
+
+/** Figures, as many as `n`, `cols` to a row (fewer, if there are fewer of them). */
 function Facts({
-  p,
-  s,
+  items,
   n,
   cols,
   className,
 }: {
-  p: Snapshot | null;
-  s: SystemInfo | undefined;
+  items: [string, ReactNode][];
   n: number;
   cols: number;
   className?: string;
 }) {
-  const cap = s?.battery_kwh;
-  const soc = p?.battery_soc;
-  const reserve = reserveOf(s);
-  const all: [string, ReactNode][] = [
-    ["Usable now", soc != null && cap ? kWh(Math.max(0, ((soc - reserve) / 100) * cap)) : DASH],
-    ["Charged today", kWh(p?.daily_charge)],
-    ["Used today", kWh(p?.daily_discharge)],
-    ["Reserve", pct(reserve)],
-  ];
-  if (p?.battery_soh != null) all.push(["Health", pct(p.battery_soh)]);
-  if (p?.battery_temp != null) all.push(["Temperature", `${Math.round(p.battery_temp)}°C`]);
+  const shown = items.slice(0, n);
   return (
     <div
       className={cn("grid min-w-0 gap-2", className)}
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      style={{ gridTemplateColumns: `repeat(${Math.min(cols, shown.length)}, minmax(0, 1fr))` }}
     >
-      {all.slice(0, n).map(([label, value]) => (
+      {shown.map(([label, value]) => (
         <div key={label} className="flex min-w-0 flex-col gap-0.5 rounded-2xl bg-fg/4 px-3 py-2">
           <span className="truncate text-[11.5px] leading-4 text-ink-muted">{label}</span>
           <span className="truncate text-[17px] leading-6 font-light tabular-nums">{value}</span>

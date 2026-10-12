@@ -1,6 +1,6 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Settings, WidgetCtx, WidgetDef, WidgetProps } from "~/features/common/widgets/types";
-import { BatteryCard } from "~/features/overview/components/BatteryCard";
+import { BATTERY_FACTS, BATTERY_HOURS, BatteryCard, batteryShow } from "~/features/overview/components/BatteryCard";
 import {
   FLOW_OPENS,
   FLOW_READINGS,
@@ -107,6 +107,74 @@ export const widgets: WidgetDef[] = [
     sizes: size([2, 2], [12, 9], [6, 7]),
     phone: size([2, 2], [4, 10], [4, 8]),
     needs: (ctx) => (ctx.noBattery ? "Needs a battery" : null),
-    Component: ({ ctx, w, h }: WidgetProps) => <BatteryCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} w={w} h={h} />,
+    options: [
+      {
+        key: "outlook",
+        label: "Time to full",
+        sub: "Or to its reserve, or what it's set to do",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "kwh",
+        label: "What it holds",
+        sub: "The kWh in the ring",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "mode",
+        label: "What it's set to do",
+        sub: "Normal, standby, a reserve…",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "shortcuts",
+        label: "Shortcuts",
+        sub: "Standby, keep a reserve or charge, in one tap",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+        when: (s) => s.mode !== false,
+      },
+      {
+        key: "chart",
+        label: "Recent hours",
+        sub: "Its charge, hour by hour",
+        kind: "toggle",
+        default: true,
+        section: "Chart",
+      },
+      {
+        key: "hours",
+        label: "Going back",
+        kind: "select",
+        choices: BATTERY_HOURS,
+        default: "auto",
+        section: "Chart",
+        when: (s) => s.chart !== false,
+      },
+      ...BATTERY_FACTS.map((x) => ({
+        key: x.key,
+        label: x.label,
+        sub: "sub" in x ? x.sub : undefined,
+        kind: "toggle" as const,
+        default: true,
+        section: "Figures, given room",
+        offered:
+          x.key === "health"
+            ? (ctx: WidgetCtx) => ctx.p?.battery_soh != null
+            : x.key === "temp"
+              ? (ctx: WidgetCtx) => ctx.p?.battery_temp != null
+              : undefined,
+      })),
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <BatteryCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} w={w} h={h} show={batteryShow(settings)} />
+    ),
   },
 ];
