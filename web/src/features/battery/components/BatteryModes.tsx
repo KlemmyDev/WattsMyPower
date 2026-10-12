@@ -286,7 +286,7 @@ export function BatteryModes({
               </span>
               {running && (
                 <span
-                  className="absolute top-3 right-3 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase"
+                  className="absolute top-3 right-3 rounded-full px-2 py-0.5 text-[11px] font-semibold"
                   style={{ background: color, color: "var(--color-canvas)" }}
                 >
                   On

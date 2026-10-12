@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { BatteryMonth, Insights } from "~/features/battery/types/insights";
 import type { SystemInfo } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { Card, Eyebrow, Muted, TitleBlock } from "~/features/common/ui/components/Card";
+import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { Ring } from "~/features/common/widgets/parts";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { cn } from "~/features/common/ui/utils";
@@ -86,7 +86,7 @@ function BatteryMonths({ months }: { months: BatteryMonth[] }) {
   if (shown.length < 2) return null;
   return (
     <div className="flex flex-col gap-2">
-      <Eyebrow>Month by month</Eyebrow>
+      <span className="text-[13px] font-medium text-ink-muted">Month by month</span>
       <table className="w-full border-collapse text-[13px] tabular-nums">
         <thead className="text-xs text-ink-muted">
           <tr>
@@ -136,7 +136,7 @@ function Warranty({ w }: { w: Insights["warranty"] }) {
     return <Muted>Add the battery's install date in Settings to see how many warranty years you've used.</Muted>;
   return (
     <div className="flex flex-col gap-3">
-      <Eyebrow>Warranty used</Eyebrow>
+      <span className="text-[13px] font-medium text-ink-muted">Warranty used</span>
       {bars.map(([label, used, note]) => (
         <div key={label} className="flex flex-col gap-1.5">
           <div className="flex justify-between gap-3 text-[13px]">

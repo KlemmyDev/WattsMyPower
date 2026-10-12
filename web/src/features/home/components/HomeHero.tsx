@@ -229,8 +229,8 @@ const HOUR = 3600;
 /** The hour of a lane's that holds `t`, by its index; -1 when none does. */
 const hourIndex = (l: Lane, t: number) => l.t.findIndex((x) => x <= t && t < x + HOUR);
 
-/** In the chart's tooltip: what each room used in the hour under the pointer, the most first. */
-function LaneRows({ lanes, t }: { lanes: Lane[]; t: number }) {
+/** In the chart's tooltip: what each room (or device) used in the hour under the pointer, the most first. */
+export function LaneRows({ lanes, t }: { lanes: Lane[]; t: number }) {
   const rows = lanes
     .map((l) => ({ l, v: l.kwh[hourIndex(l, t)] ?? 0 }))
     .filter((x) => x.v >= 0.005)
@@ -250,30 +250,33 @@ function LaneRows({ lanes, t }: { lanes: Lane[]; t: number }) {
 }
 
 /**
- * Today hour by hour under the chart, on its time scale (zoomed with it): a lane each for the rooms, the car and
- * everything else, its name and total above it, each hour lit by how much of the lane's busiest hour it used. The hour
- * under the chart's pointer stands out in every lane, the rest fade back, and each lane says what it used in it.
+ * Today hour by hour under the chart, on its time scale (zoomed with it): a lane each for the rooms (or a room's
+ * devices, `by`), the car and everything else, its name and total above it, each hour lit by how much of the lane's
+ * busiest hour it used. The hour under the chart's pointer stands out in every lane, the rest fade back, and each lane
+ * says what it used in it.
  */
-function Lanes({
+export function Lanes({
   lanes,
   from,
   to,
   now,
   hover,
+  by = "room",
 }: {
   lanes: Lane[];
   from: number;
   to: number;
   now: number;
   hover: number | null;
+  by?: "room" | "device";
 }) {
   const pc = (t: number) => ((Math.max(from, Math.min(to, t)) - from) / (to - from)) * 100;
   return (
     <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-3">
       <span className="text-[11.5px] text-ink-faint">
         {hover != null
-          ? `By room, ${hhmm(hover - (hover % HOUR))} to ${hhmm(hover - (hover % HOUR) + HOUR)}`
-          : "By room, hour by hour, each lit by its own busiest hour"}
+          ? `By ${by}, ${hhmm(hover - (hover % HOUR))} to ${hhmm(hover - (hover % HOUR) + HOUR)}`
+          : `By ${by}, hour by hour, each lit by its own busiest hour`}
       </span>
       {lanes.map((l) => {
         const top = Math.max(0.01, ...l.kwh.map((v) => v ?? 0));

@@ -85,9 +85,18 @@ function DeviceLink({ id, children }: { id: number; children: React.ReactNode })
 
 /**
  * Switching a device on and off. On is at once; off asks first (a fridge or freezer more firmly, as off it stops keeping
- * food cold). Shown only while the device can be reached and says whether it's on.
+ * food cold). Shown only while the device can be reached and says whether it's on. Lined up to the right, as in a
+ * card's corner, or to the left (`align`), as under a figure.
  */
-export function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: string }) {
+export function Power({
+  device,
+  kindLabel,
+  align = "end",
+}: {
+  device: HomeDevice;
+  kindLabel: string;
+  align?: "start" | "end";
+}) {
   const { switch: change } = useHomeChange();
   const [asking, setAsking] = useState(false);
   const now = device.now;
@@ -97,7 +106,7 @@ export function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: st
   const send = (next: boolean) =>
     change.mutate({ id: device.id, on: next, confirm: !next && guarded }, { onSuccess: () => setAsking(false) });
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className={cn("flex flex-col gap-2", align === "end" ? "items-end" : "items-start")}>
       <Switch
         on={on}
         label={on ? `Switch ${device.name} off` : `Switch ${device.name} on`}
@@ -105,7 +114,12 @@ export function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: st
         onChange={(next) => (next ? send(true) : setAsking(true))}
       />
       {asking && (
-        <div className="flex max-w-[260px] flex-col items-end gap-2 text-right">
+        <div
+          className={cn(
+            "flex max-w-[260px] flex-col gap-2",
+            align === "end" ? "items-end text-right" : "items-start text-left",
+          )}
+        >
           <span className="text-[13px] text-pretty text-ink-muted">
             {guarded
               ? `It's set as a ${kindLabel.toLowerCase()}. Switched off, it stops keeping food cold.`
@@ -246,7 +260,7 @@ function BestTimeLine({ best }: { best: BestTime }) {
     <span className="flex items-center gap-1.5">
       <Icon name={best.why === "cheapest" ? "clock" : "sun"} size={14} className="flex-none text-solar" />
       <span>
-        Best time to run: <b className="font-medium text-ink">{when}</b>, {how}
+        Best run <b className="font-medium text-ink">{when}</b>, {how}
       </span>
     </span>
   );

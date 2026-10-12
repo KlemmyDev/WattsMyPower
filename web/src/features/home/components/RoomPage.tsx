@@ -2,54 +2,64 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { kWh, money } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { STORE_HOME_RANGE, store } from "~/features/common/storage/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
-import { Card } from "~/features/common/ui/components/Card";
+import { addDays, midnight } from "~/features/common/time/utils";
+import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { Swatch } from "~/features/common/ui/components/Swatch";
-import { cn } from "~/features/common/ui/utils";
 import { homeInsightsQuery, homePatternsQuery, homeProfileQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
-import { AheadCard, SpikesCard, UsualDayCard, WeekCard } from "~/features/home/components/Analysis";
-import { DeviceCard } from "~/features/home/components/DeviceCard";
+import { AheadCard, SpikesCard, WeekCard } from "~/features/home/components/Analysis";
+import { ItemHero, itemStats } from "~/features/home/components/ItemHero";
+import { LookButton } from "~/features/home/components/LookPicker";
+import { ItemTile, runningOf } from "~/features/home/components/RoomTiles";
+import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeUsage } from "~/features/home/types";
 import {
   BEFORE_WORDS,
+  defaultRoomIcon,
   deviceColors,
-  givenDeviceColor,
   drawing,
+  givenRoomColor,
   homeItems,
+  OTHER_COLOR,
   period,
   RANGE_WORDS,
-  reading,
+  roomIcon,
+  roomLook as roomLookOf,
   type Range,
   watts,
   RANGES,
 } from "~/features/home/utils";
+import type { Lane } from "~/features/home/utils/today";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
 
-// The analysis cards, two to a row: the wider on the left.
-const WIDE = "col-span-7 max-xl:col-span-12";
-const NARROW = "col-span-5 max-xl:col-span-12";
-
 const pct = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`;
+const live = (d: HomeDevice) => !!d.now && d.now.online && !d.now.stale;
 
 /**
- * A room: the plugs and appliances grouped under its name. What the room used and cost in the period, split device by
- * device; today against a usual day and what's likely ahead; when in the week it uses power and its spikes; then each
- * device on its own: what it's doing, its switch, what it used and its habits.
+ * A room: the plugs and appliances grouped under its name. Its top card in its own colour (used today against its
+ * usual day, drawing now, what it's cost, its runs, what's always on and when best to run it, with its day and a lane
+ * per device); each device lit by what it draws now, opening its page; then what each used and cost over a period,
+ * when in the week it uses power, what's likely ahead and its spikes.
  */
 export function RoomPage({ room, range }: { room: string; range: Range }) {
   const navigate = useNavigate();
   const now = useNow(60_000);
+  const p = useSnapshot();
+  const today = midnight(now);
   const [start, end, bucket] = period(range, now);
   const overview = useQuery(homeQuery);
   const usage = useQuery(homeUsageQuery(start, end, bucket));
+  const todays = useQuery(homeUsageQuery(today, addDays(today, 1), "hour"));
   const before = useQuery({ ...homeUsageQuery(2 * start - end, start, "day"), enabled: range !== "today" });
   const patterns = useQuery(homePatternsQuery);
   const found = useQuery(homeInsightsQuery);
+  const { roomLook } = useHomeChange();
   const devices = overview.data?.devices ?? [];
   const rooms = overview.data?.rooms ?? [];
   const colors = deviceColors(devices, rooms);
@@ -64,92 +74,165 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
   const spent = month.data?.devices.filter((u) => ids.includes(u.id)) ?? [];
   const spentKwh = spent.reduce((a, u) => a + u.total, 0);
   const rate = spentKwh > 0.1 ? spent.reduce((a, u) => a + u.cost, 0) / spentKwh : null;
-  const standby = found.data?.standby.devices.filter((x) => ids.includes(x.id));
+
+  const many = members.length > 1;
+  const run = runningOf(members);
   const running = members.filter((d) => d.now?.running && !d.now.stale);
+  const reading = members.filter(live);
+  const on = members.filter((d) => drawing(d) != null || (live(d) && d.now!.running));
   const w = members.reduce((a, d) => a + (drawing(d) ?? 0), 0);
   const estimated = members.some((d) => drawing(d) != null && d.now?.estimated);
-  const beforeOf = (id: number) =>
-    before.data && range !== "today" ? (before.data.devices.find((u) => u.id === id)?.total ?? 0) : undefined;
+  const lanes: Lane[] = (todays.data?.devices ?? [])
+    .filter((u) => ids.includes(u.id) && u.total >= 0.01)
+    .sort((a, b) => b.total - a.total)
+    .map((u) => ({
+      key: String(u.id),
+      label: u.name,
+      color: colors.get(u.id) ?? OTHER_COLOR,
+      t: todays.data!.t,
+      kwh: u.kwh,
+      total: u.total,
+    }));
 
   const sub = !members.length
     ? " "
-    : [
-        `${members.length} ${members.length === 1 ? "device" : "devices"}`,
-        running.length
-          ? `${running.map((d) => d.name).join(" and ")} ${running.length === 1 ? "is" : "are"} running`
-          : w
-            ? `Using ${watts(w, estimated)} now`
-            : "Idle now",
-      ].join(" · ");
+    : running.length
+      ? `${running.map((d) => d.name).join(" and ")} ${running.length === 1 ? "is" : "are"} running now`
+      : [
+          `${members.length} ${members.length === 1 ? "device" : "devices"}`,
+          w ? `Using ${watts(w, estimated)} now` : "Idle now",
+        ].join(" · ");
 
   return (
     <>
       <div className="pt-2">
         <BackLink to="/home">Home</BackLink>
       </div>
-      <PageHeader title={room} sub={sub} />
+      <PageHeader
+        title={
+          members.length ? (
+            <span className="flex items-center gap-3">
+              <LookButton
+                name={room}
+                icon={roomIcon(room, members, rooms)}
+                color={color}
+                lit={on.length > 0}
+                off={!reading.length}
+                look={{ color: roomLookOf(rooms, room)?.color ?? null, icon: roomLookOf(rooms, room)?.icon ?? null }}
+                given={{ color: givenRoomColor(devices, rooms, room), icon: defaultRoomIcon(room, members) }}
+                onPick={(change) => roomLook.mutate({ name: room, ...change })}
+                pending={roomLook.isPending}
+                error={roomLook.error}
+                size={40}
+              />
+              <span className="min-w-0">{room}</span>
+            </span>
+          ) : (
+            room
+          )
+        }
+        sub={sub}
+      />
       {overview.data && !members.length && (
         <Notice>There's no room called {room}. It may have been renamed, or its devices moved out.</Notice>
       )}
       {members.length > 0 && (
-        <div className="grid grid-cols-12 gap-5">
-          <RoomUsageCard
-            room={room}
-            members={members}
-            usage={usage.data}
-            before={range === "today" ? undefined : before.data}
-            colors={colors}
-            range={range}
-            onRange={(r) => {
-              store.set(STORE_HOME_RANGE, r); // as on Home: opened again later, it shows this period
-              void navigate({ to: "/home/rooms/$room", params: { room }, search: { range: r }, replace: true });
+        <div className="flex flex-col gap-5">
+          <ItemHero
+            name={room}
+            color={color}
+            profile={profile.data}
+            now={now}
+            lanes={lanes}
+            live={{
+              w: w >= 2 ? w : null,
+              estimated,
+              running: !!run,
+              quiet: reading.length ? "Idle" : "Offline",
+              status: run
+                ? [many && run.device.name, run.phase, run.left != null && `${run.left} min left`]
+                    .filter(Boolean)
+                    .join(" · ")
+                : !reading.length
+                  ? "Not reading now"
+                  : many
+                    ? `${on.length} of ${members.length} on`
+                    : on.length
+                      ? "On"
+                      : "Nothing on",
             }}
+            stats={itemStats({
+              members,
+              today: todays.data,
+              profile: profile.data,
+              patterns: patterns.data,
+              found: found.data,
+              kinds,
+              now,
+            })}
           />
-          {profile.data ? (
-            <>
-              <UsualDayCard profile={profile.data} color={color} now={now} className={WIDE} />
-              <AheadCard profile={profile.data} color={color} rate={rate} className={NARROW} />
-              <WeekCard profile={profile.data} color={color} className={WIDE} />
-              <SpikesCard
-                profile={profile.data}
-                devices={members}
+
+          <section aria-label="Devices now" className="flex flex-col gap-4">
+            <TitleBlock
+              className="pt-2"
+              title="Devices now"
+              sub={[
+                on.length ? `${on.length} drawing power now` : "Nothing drawing power now",
+                members.length - reading.length ? `${members.length - reading.length} offline` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,232px),1fr))] gap-4 max-sm:grid-cols-2 max-sm:gap-3">
+              {[...members]
+                .sort((a, b) => (drawing(b) ?? 0) - (drawing(a) ?? 0))
+                .map((d) => (
+                  <ItemTile
+                    key={d.id}
+                    item={{ id: d.id, group: null, members: [d] }}
+                    devices={devices}
+                    rooms={rooms}
+                    color={colors.get(d.id) ?? OTHER_COLOR}
+                    kinds={kinds}
+                    homeW={p?.load_power != null ? Math.max(0, p.load_power) : null}
+                    today={todays.data}
+                    best={found.data?.best_times.find((b) => b.id === d.id)}
+                    pattern={patterns.data?.find((x) => x.id === d.id)}
+                    now={now}
+                  />
+                ))}
+            </div>
+          </section>
+
+          <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+            <div className="flex min-w-0 flex-col gap-5">
+              <RoomUsageCard
+                members={members}
+                usage={usage.data}
+                before={range === "today" ? undefined : before.data}
                 colors={colors}
-                standby={
-                  standby?.length
-                    ? {
-                        w: standby.reduce((a, x) => a + x.w, 0),
-                        yearly: standby.reduce((a, x) => a + x.yearly_cost, 0),
-                      }
-                    : null
-                }
-                className={NARROW}
+                range={range}
+                onRange={(r) => {
+                  store.set(STORE_HOME_RANGE, r); // as on Home: opened again later, it shows this period
+                  void navigate({ to: "/home/rooms/$room", params: { room }, search: { range: r }, replace: true });
+                }}
               />
-            </>
-          ) : (
-            <>
-              <Skeleton className={cn("h-[300px] rounded-3xl", WIDE)} />
-              <Skeleton className={cn("h-[300px] rounded-3xl", NARROW)} />
-            </>
-          )}
-          <div className="col-span-12 grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-5">
-            {members.map((d) => (
-              <DeviceCard
-                key={d.id}
-                device={d}
-                used={usage.data?.devices.find((u) => u.id === d.id)}
-                before={beforeOf(d.id)}
-                pattern={patterns.data?.find((p) => p.id === d.id)}
-                cycles={!!kinds.get(d.kind)?.cycles}
-                kindLabel={kinds.get(d.kind)?.label ?? "Device"}
-                color={colors.get(d.id) ?? COLOR.gridSoft}
-                givenColor={givenDeviceColor(devices, rooms, d.id)}
-                home={usage.data?.total.home ?? null}
-                rangeLabel={RANGE_WORDS[range]}
-                beforeLabel={BEFORE_WORDS[range]}
-                best={found.data?.best_times.find((b) => b.id === d.id)}
-                saving={found.data?.savings.find((x) => x.id === d.id)}
-              />
-            ))}
+              {profile.data ? (
+                <WeekCard profile={profile.data} color={color} />
+              ) : (
+                <Skeleton className="h-[300px] rounded-3xl" />
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-5">
+              {profile.data ? (
+                <>
+                  <AheadCard profile={profile.data} color={color} rate={rate} />
+                  <SpikesCard profile={profile.data} devices={members} colors={colors} />
+                </>
+              ) : (
+                <Skeleton className="h-[300px] rounded-3xl" />
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -158,11 +241,10 @@ export function RoomPage({ room, range }: { room: string; range: Range }) {
 }
 
 /**
- * What the room used and cost in the period, its share of the home's use and against the period before; then the
- * same split device by device, as one bar and a row each with what it's drawing now.
+ * What each of the room's devices used and cost over the period chosen, as one bar and a row each, with the room's
+ * total, its share of the home's use and against the period before in a line under the title.
  */
 function RoomUsageCard({
-  room,
   members,
   usage,
   before,
@@ -170,7 +252,6 @@ function RoomUsageCard({
   range,
   onRange,
 }: {
-  room: string;
   members: HomeDevice[];
   usage: HomeUsage | undefined;
   before: HomeUsage | undefined;
@@ -178,10 +259,12 @@ function RoomUsageCard({
   range: Range;
   onRange: (r: Range) => void;
 }) {
-  const parts = members.map((d) => {
-    const u = usage?.devices.find((x) => x.id === d.id);
-    return { d, kwh: u?.total ?? 0, cost: u?.cost ?? 0, color: colors.get(d.id) ?? COLOR.gridSoft };
-  });
+  const parts = members
+    .map((d) => {
+      const u = usage?.devices.find((x) => x.id === d.id);
+      return { d, kwh: u?.total ?? 0, cost: u?.cost ?? 0, color: colors.get(d.id) ?? COLOR.gridSoft };
+    })
+    .sort((a, b) => b.kwh - a.kwh);
   const total = parts.reduce((a, p) => a + p.kwh, 0);
   const cost = parts.reduce((a, p) => a + p.cost, 0);
   const home = usage?.total.home;
@@ -189,44 +272,34 @@ function RoomUsageCard({
   const change = was != null && was > 0.05 ? (total - was) / was : null;
 
   return (
-    <Card aria-labelledby="h-room-use" className="col-span-12 gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h2 id="h-room-use">What {room} used</h2>
-          <span className="text-[13px] text-ink-muted">Each device's share, {RANGE_WORDS[range]}</span>
-        </div>
+    <Card aria-labelledby="h-room-use" className="gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <TitleBlock
+          id="h-room-use"
+          title="What each device used"
+          sub={
+            usage
+              ? [
+                  `${kWh(total)} · ${money(cost)} ${RANGE_WORDS[range]}`,
+                  home ? `${pct(total, home)} of your home's use` : null,
+                  change == null
+                    ? null
+                    : Math.abs(change) < 0.05
+                      ? `about the same as ${BEFORE_WORDS[range]}`
+                      : `${Math.round(Math.abs(change) * 100)}% ${change > 0 ? "more" : "less"} than ${BEFORE_WORDS[range]}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "Each device's share"
+          }
+        />
         <Segmented label="Period" options={RANGES} value={range} onChange={onRange} />
       </div>
 
       {!usage ? (
-        <Skeleton className="h-[180px]" />
+        <Skeleton className="h-[140px]" />
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-[13px] text-ink-muted">Used</span>
-              <span className="text-[40px] leading-11 font-light tracking-[-1.5px] tabular-nums">{kWh(total)}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[13px] text-ink-muted">Cost</span>
-              <span className="text-[40px] leading-11 font-light tracking-[-1.5px] tabular-nums">{money(cost)}</span>
-            </div>
-            <div className="flex flex-col gap-1 pb-1.5 text-sm text-ink-muted tabular-nums">
-              {home ? (
-                <span>
-                  <b className="font-semibold text-ink">{pct(total, home)}</b> of what your home used
-                </span>
-              ) : null}
-              {change != null && (
-                <span>
-                  {Math.abs(change) < 0.05
-                    ? `About the same as ${BEFORE_WORDS[range]}`
-                    : `${Math.round(Math.abs(change) * 100)}% ${change > 0 ? "more" : "less"} than ${BEFORE_WORDS[range]}`}
-                </span>
-              )}
-            </div>
-          </div>
-
           {total > 0 && (
             <div
               className="flex h-3 gap-[2px] overflow-hidden rounded-full"
@@ -241,38 +314,33 @@ function RoomUsageCard({
             </div>
           )}
 
-          <div className="-mt-2 flex flex-col">
-            <div className="grid grid-cols-[minmax(0,1fr)_80px_88px_64px_52px] gap-x-4 pb-1.5 text-xs text-ink-faint max-sm:grid-cols-[minmax(0,1fr)_72px_64px]">
+          <div className="flex flex-col">
+            <div className="grid grid-cols-[minmax(0,1fr)_80px_64px_48px] gap-x-4 pb-1.5 text-xs text-ink-muted max-sm:grid-cols-[minmax(0,1fr)_72px_56px]">
               <span>Device</span>
-              <span className="text-right">Now</span>
               <span className="text-right">Used</span>
-              <span className="text-right max-sm:hidden">Cost</span>
+              <span className="text-right">Cost</span>
               <span className="text-right max-sm:hidden">Share</span>
             </div>
-            {parts.map((p) => {
-              const live = drawing(p.d);
-              return (
-                <div
-                  key={p.d.id}
-                  className="grid grid-cols-[minmax(0,1fr)_80px_88px_64px_52px] items-center gap-x-4 border-t border-line-subtle py-2.5 text-sm tabular-nums max-sm:grid-cols-[minmax(0,1fr)_72px_64px]"
-                >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <Swatch color={p.color} size={10} />
-                    <Link
-                      to="/home/$device"
-                      params={{ device: String(p.d.id) }}
-                      className="truncate font-medium text-ink no-underline hover:underline"
-                    >
-                      {p.d.name}
-                    </Link>
-                  </span>
-                  <span className={cn("text-right", live ? "text-ink" : "text-ink-faint")}>{reading(p.d)}</span>
-                  <span className="text-right">{kWh(p.kwh)}</span>
-                  <span className="text-right text-ink-muted max-sm:hidden">{money(p.cost)}</span>
-                  <span className="text-right text-ink-faint max-sm:hidden">{total > 0 ? pct(p.kwh, total) : ""}</span>
-                </div>
-              );
-            })}
+            {parts.map((p) => (
+              <div
+                key={p.d.id}
+                className="grid grid-cols-[minmax(0,1fr)_80px_64px_48px] items-center gap-x-4 border-t border-line-subtle py-2.5 text-sm tabular-nums max-sm:grid-cols-[minmax(0,1fr)_72px_56px]"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Swatch color={p.color} size={10} />
+                  <Link
+                    to="/home/$device"
+                    params={{ device: String(p.d.id) }}
+                    className="truncate font-medium text-ink no-underline hover:underline"
+                  >
+                    {p.d.name}
+                  </Link>
+                </span>
+                <span className="text-right">{kWh(p.kwh)}</span>
+                <span className="text-right text-ink-muted">{money(p.cost)}</span>
+                <span className="text-right text-ink-faint max-sm:hidden">{total > 0 ? pct(p.kwh, total) : ""}</span>
+              </div>
+            ))}
           </div>
         </>
       )}

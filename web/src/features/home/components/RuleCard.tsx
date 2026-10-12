@@ -6,6 +6,7 @@ import { Card } from "~/features/common/ui/components/Card";
 import { HelpText, Input } from "~/features/common/ui/components/Field";
 import { Switch } from "~/features/common/ui/components/Switch";
 import { useNow } from "~/features/common/time/hooks";
+import { cn } from "~/features/common/ui/utils";
 import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeRuleSettings } from "~/features/home/types";
 
@@ -27,7 +28,7 @@ const formOf = (d: HomeDevice): Form => ({
  * off once it's drawing from it, optionally only between two times and never while power costs more than a limit.
  * Switching it by hand pauses the rule for the rest of the day. Not for a fridge or freezer.
  */
-export function RuleCard({ device }: { device: HomeDevice }) {
+export function RuleCard({ device, className }: { device: HomeDevice; className?: string }) {
   const { setRule, clearRule } = useHomeChange();
   const [form, setForm] = useState(() => formOf(device));
   const [error, setError] = useState("");
@@ -59,13 +60,13 @@ export function RuleCard({ device }: { device: HomeDevice }) {
   const paused = r?.paused_until != null && r.paused_until > now;
   const failed = setRule.error ?? clearRule.error;
   return (
-    <Card aria-labelledby="h-rule" className="col-span-12 gap-4">
+    <Card aria-labelledby="h-rule" className={cn("gap-4", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex max-w-[620px] flex-col gap-0.5">
           <h2 id="h-rule">Run on spare solar</h2>
           <span className="text-[13px] text-pretty text-ink-muted">
-            Turns {device.name} on while you're sending solar to the grid, and off when the house starts drawing from
-            it. That way it runs on sun you'd otherwise export. Switch it yourself and this pauses until tomorrow.
+            Turns {device.name} on while you're sending solar to the grid, and off once the house draws from it, so it
+            runs on sun you'd otherwise export. Switch it yourself and this pauses until tomorrow.
           </span>
         </div>
         {r && (
