@@ -1,6 +1,6 @@
 import { COLOR } from "~/features/common/theme/utils/colors";
 import type { Settings, WidgetCtx, WidgetDef, WidgetProps } from "~/features/common/widgets/types";
-import { BatteryCard } from "~/features/overview/components/BatteryCard";
+import { BATTERY_FACTS, BATTERY_HOURS, BatteryCard, batteryShow } from "~/features/overview/components/BatteryCard";
 import {
   FLOW_OPENS,
   FLOW_READINGS,
@@ -8,8 +8,8 @@ import {
   FLOW_UNITS,
   PowerFlowWidget,
 } from "~/features/overview/components/PowerFlowStyles";
-import { TodayCard } from "~/features/overview/components/TodayCard";
-import { TodayEnergyCard } from "~/features/overview/components/TodayEnergyCard";
+import { TODAY_LEADS, TodayCard, todayShow } from "~/features/overview/components/TodayCard";
+import { ENERGY_FIGURES, TodayEnergyCard, energyShow } from "~/features/overview/components/TodayEnergyCard";
 
 const size = (min: [number, number], max: [number, number], d: [number, number]) => ({ min, max, default: d });
 const scene = (s: Settings) => s.style === "scene" || s.style == null;
@@ -80,10 +80,93 @@ export const widgets: WidgetDef[] = [
     group: "overview",
     icon: "chart",
     thumb: { kind: "line", color: COLOR.solar },
-    sizes: size([8, 7], [12, 10], [12, 8]),
-    phone: size([4, 8], [4, 12], [4, 10]),
-    Component: ({ ctx }: WidgetProps) => (
-      <TodayEnergyCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} prices={ctx.prices} />
+    sizes: size([2, 2], [12, 10], [12, 8]),
+    phone: size([2, 2], [4, 12], [4, 10]),
+    options: [
+      {
+        key: "lead",
+        label: "First figure",
+        kind: "select",
+        choices: [...ENERGY_FIGURES],
+        default: "solar",
+        section: "Figures",
+      },
+      ...ENERGY_FIGURES.map((x) => ({
+        key: x.value,
+        label: x.label,
+        kind: "toggle" as const,
+        default: true,
+        section: "Figures",
+      })),
+      {
+        key: "notes",
+        label: "A line on each",
+        sub: "What it should come to by midnight, and when solar peaked",
+        kind: "toggle",
+        default: true,
+        section: "Figures",
+      },
+      {
+        key: "sources",
+        label: "Where your power came from",
+        sub: "As a bar",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "chart",
+        label: "The day's chart",
+        sub: "Recorded so far, then the forecast",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "days",
+        label: "Days ahead",
+        sub: "Arrows on to tomorrow and the day after",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "links",
+        label: "Links",
+        sub: "To History or the Plan, and comparing with the forecast",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      ...(
+        [
+          ["moments", "Best times and moments", "Across the top, numbered"],
+          ["weather", "Weather", "Hour by hour, over the chart"],
+          ["legend", "Legend", undefined],
+          ["battery", "Battery level", undefined],
+          ["flows", "Hourly bars", "Charging, discharging and the grid, every half hour"],
+        ] as const
+      ).map(([key, label, sub]) => ({
+        key,
+        label,
+        sub,
+        kind: "toggle" as const,
+        default: true,
+        section: "Chart, given room",
+        when: (st: Settings) => st.chart !== false,
+      })),
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <TodayEnergyCard
+        p={ctx.p}
+        s={ctx.s}
+        f={ctx.f}
+        now={ctx.now}
+        prices={ctx.prices}
+        w={w}
+        h={h}
+        show={energyShow(settings)}
+      />
     ),
   },
   {
@@ -93,9 +176,39 @@ export const widgets: WidgetDef[] = [
     group: "money",
     icon: "dollar",
     thumb: { kind: "table", color: COLOR.good },
-    sizes: size([5, 6], [12, 9], [6, 7]),
-    phone: size([4, 7], [4, 10], [4, 8]),
-    Component: ({ ctx }: WidgetProps) => <TodayCard tariff={ctx.s?.tariff} now={ctx.now} wide />,
+    sizes: size([2, 2], [12, 9], [6, 7]),
+    phone: size([2, 2], [4, 10], [4, 8]),
+    options: [
+      { key: "lead", label: "First figure", kind: "select", choices: TODAY_LEADS, default: "cost", section: "Figures" },
+      {
+        key: "subs",
+        label: "A line on each",
+        sub: "The supply charge, and what you'd pay without solar",
+        kind: "toggle",
+        default: true,
+        section: "Figures",
+      },
+      {
+        key: "split",
+        label: "What you pay and what's covered",
+        sub: "As a bar",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      { key: "rates", label: "Rate by rate", sub: "Given room", kind: "toggle", default: true, section: "Show" },
+      {
+        key: "tariff",
+        label: "Your kind of rates",
+        sub: "Linking to them",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <TodayCard tariff={ctx.s?.tariff} now={ctx.now} w={w} h={h} show={todayShow(settings)} />
+    ),
   },
   {
     type: "battery",
@@ -104,9 +217,77 @@ export const widgets: WidgetDef[] = [
     group: "battery",
     icon: "battery",
     thumb: { kind: "ring", color: COLOR.battery },
-    sizes: size([5, 6], [12, 9], [6, 7]),
-    phone: size([4, 7], [4, 10], [4, 8]),
+    sizes: size([2, 2], [12, 9], [6, 7]),
+    phone: size([2, 2], [4, 10], [4, 8]),
     needs: (ctx) => (ctx.noBattery ? "Needs a battery" : null),
-    Component: ({ ctx }: WidgetProps) => <BatteryCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} />,
+    options: [
+      {
+        key: "outlook",
+        label: "Time to full",
+        sub: "Or to its reserve, or what it's set to do",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "kwh",
+        label: "What it holds",
+        sub: "The kWh in the ring",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "mode",
+        label: "What it's set to do",
+        sub: "Normal, standby, a reserve…",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      {
+        key: "shortcuts",
+        label: "Shortcuts",
+        sub: "Standby, keep a reserve or charge, in one tap",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+        when: (s) => s.mode !== false,
+      },
+      {
+        key: "chart",
+        label: "Recent hours",
+        sub: "Its charge, hour by hour",
+        kind: "toggle",
+        default: true,
+        section: "Chart",
+      },
+      {
+        key: "hours",
+        label: "Going back",
+        kind: "select",
+        choices: BATTERY_HOURS,
+        default: "auto",
+        section: "Chart",
+        when: (s) => s.chart !== false,
+      },
+      ...BATTERY_FACTS.map((x) => ({
+        key: x.key,
+        label: x.label,
+        sub: "sub" in x ? x.sub : undefined,
+        kind: "toggle" as const,
+        default: true,
+        section: "Figures, given room",
+        offered:
+          x.key === "health"
+            ? (ctx: WidgetCtx) => ctx.p?.battery_soh != null
+            : x.key === "temp"
+              ? (ctx: WidgetCtx) => ctx.p?.battery_temp != null
+              : undefined,
+      })),
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <BatteryCard p={ctx.p} s={ctx.s} f={ctx.f} now={ctx.now} w={w} h={h} show={batteryShow(settings)} />
+    ),
   },
 ];

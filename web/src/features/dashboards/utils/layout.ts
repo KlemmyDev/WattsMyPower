@@ -1,10 +1,10 @@
 import type { Screen, WidgetItem } from "~/features/dashboards/types";
+import { GAP, ROW } from "~/features/common/widgets/room";
+
+export { GAP, ROW };
 
 /** How many columns each screen's grid has. */
 export const COLS: Record<Screen, number> = { computer: 12, phone: 4 };
-/** A row's height and the gap between rows and columns (px). */
-export const ROW = 64;
-export const GAP = 20;
 
 type Box = Pick<WidgetItem, "id" | "x" | "y" | "w" | "h">;
 
