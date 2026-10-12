@@ -26,7 +26,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.features.grid.aemo import REGION_NAMES, REGIONS, AemoClient, AemoError
-from app.features.grid.outages.service import OutageService
+from app.features.grid.outages.service import OutageService, _clock, _day
 from app.features.grid.warnings.service import HazardService
 from app.features.inverters.sungrow.sh_rs import OFF_GRID
 from app.features.inverters.types import Snapshot
@@ -345,9 +345,9 @@ class GridService:
                     "kind": "storm",
                     "level": "watch",
                     "title": "Storms forecast",
-                    "detail": "Thunderstorms are forecast"
-                    + (" now" if first <= now else f" from {time.strftime('%-I %p', time.localtime(first))}")
-                    + ". Storms are the most common cause of blackouts.",
+                    "detail": "The weather forecast has thunderstorms "
+                    + ("now" if first <= now else f"from {_clock(first)} {_day(first, now)}")
+                    + ", but there's no warning from the Bureau. Storms are the most common cause of blackouts.",
                     "at": first,
                 }
             )

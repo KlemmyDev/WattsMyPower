@@ -9,6 +9,7 @@ import pytest
 from app.core.config import Config
 from app.core.database import Database
 from app.features.grid.aemo import AemoClient, AemoError, nem_time, notice
+from app.features.grid.outages.service import _day
 from app.features.grid.service import GridService, region_at
 from app.features.settings.store import SettingsStore
 
@@ -188,6 +189,7 @@ def test_the_inverter_and_the_weather_count_too(settings: SettingsStore) -> None
     snap = {"ts": NOW, "running_state": 0x1000, "grid_voltage": 0.0, "grid_freq": 0.0}
     out = _grid(settings, snap, Weather([storm])).outlook()
     assert out["level"] == "outage" and [r["kind"] for r in out["reasons"]] == ["off_grid", "storm"]
+    assert _day(storm["ts"] - 3600, NOW) in out["reasons"][1]["detail"]  # says which day, not just the hour
     high = _grid(settings, {"ts": NOW, "running_state": 0, "grid_voltage": 256.4, "grid_freq": 50.01}).outlook()
     assert high["level"] == "watch" and high["reasons"][0]["kind"] == "voltage_high"
     calm = _grid(settings, {"ts": NOW, "running_state": 0, "grid_voltage": 241.0, "grid_freq": 50.01}).outlook()
