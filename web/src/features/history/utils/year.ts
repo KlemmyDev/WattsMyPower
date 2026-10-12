@@ -256,7 +256,7 @@ export function standoutsOf(days: Day[]): Standout[] {
     { title: "Best solar day", color: COLOR.solar, day: top((d) => d.gen), value: "" },
     { title: "Most self-sufficient", color: COLOR.good, day: top((d) => d.ss), value: "" },
     { title: "Biggest saving", color: COLOR.ink, day: top((d) => d.saved), value: "" },
-    { title: "Highest use", color: COLOR.fromGrid, day: top((d) => d.home), value: "" },
+    { title: "Highest use", color: COLOR.import, day: top((d) => d.home), value: "" },
     { title: "Most from the grid", color: COLOR.fromGrid, day: top((d) => d.imp), value: "" },
   ];
   out[0].value = kWh(out[0].day.gen);
