@@ -35,25 +35,25 @@ function note(g: GridHours): string {
 }
 
 /** What grid power cost by hour of the day and month: where on the clock the bill comes from. */
-export function GridCostHeatmap() {
+export function GridCostHeatmap({ className }: { className?: string }) {
   const { data: g } = useQuery(gridHoursQuery);
   const cells = (g?.months ?? []).flatMap((m) => m.hours ?? []).filter((c) => c != null);
   // Scale to the costliest cell, but never below 20c so a near-zero month doesn't read as heavy use.
   const top = Math.max(0.2, ...cells.map((c) => c.cost));
   const peak = new Set(g?.dearest?.hours ?? []);
   return (
-    <Card aria-labelledby="h-hm">
+    <Card aria-labelledby="h-hm" className={className}>
       <TitleBlock
         id="h-hm"
         title="When grid power costs you"
-        sub={`What grid power cost by hour on an average day, each of the last 12 months.${g?.dearest ? ` ${g.dearest.name} hours are outlined.` : ""}`}
+        sub={`By the hour on an average day, the last 12 months${g?.dearest ? ` · ${g.dearest.name} outlined` : ""}`}
       />
       {!g ? (
         <Muted>Loading</Muted>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <div className="flex min-w-[760px] flex-col gap-[3px]">
+            <div className="flex min-w-[540px] flex-col gap-[3px]">
               {g.months.map((m) => (
                 <HeatRow key={m.month} month={m} top={top} peak={peak} />
               ))}

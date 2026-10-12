@@ -3,7 +3,7 @@ import type { BillDay, Bills } from "~/features/bills/types";
 import type { Tariff } from "~/features/common/tariffs/types";
 import { billCents } from "~/features/bills/utils";
 import { ButtonLink } from "~/features/common/ui/components/Button";
-import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
+import { Card, Footnote, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { cn } from "~/features/common/ui/utils";
@@ -74,7 +74,15 @@ type Cell =
  * This billing period as a calendar, a week to a row, each day coloured by what it cost (or its grid
  * use, feed-in, solar, or peak-rate use). Select a day to see what made up its cost.
  */
-export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff | undefined }) {
+export function PeriodCalendar({
+  bills,
+  tariff,
+  className,
+}: {
+  bills: Bills;
+  tariff: Tariff | undefined;
+  className?: string;
+}) {
   const peak = peakBand(tariff);
   const metrics = useMemo(() => metricsFor(bills, peak), [bills, peak]);
   const [metricKey, setMetricKey] = useState<MetricKey>("cost");
@@ -146,14 +154,14 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
     : [];
 
   return (
-    <Card aria-labelledby="h-period">
+    <Card aria-labelledby="h-period" className={className}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <TitleBlock
           id="h-period"
-          title="This billing period, day by day"
+          title="Day by day"
           sub={
             recorded.length
-              ? `${metric.label}: ${metric.format(total)} over ${days.length} ${plural(days.length, "day")}${before}${avg != null ? ` · ${metric.format(avg)} on an average day` : ""}`
+              ? `${metric.format(total)} over ${days.length} ${plural(days.length, "day")}${before}${avg != null ? ` · ${metric.format(avg)} a day` : ""}`
               : "Fills in from the first day of readings"
           }
         />
@@ -177,7 +185,7 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
       </div>
 
       <div className="flex flex-wrap items-start gap-x-8 gap-y-6">
-        <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-3">
+        <div className="flex min-w-0 flex-[3_1_320px] flex-col gap-3">
           <div className="grid grid-cols-[32px_repeat(7,minmax(0,1fr))] gap-1.5 max-sm:grid-cols-[24px_repeat(7,minmax(0,1fr))] max-sm:gap-1">
             <span />
             {WEEKDAYS.map((w, i) => (
@@ -209,7 +217,7 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
           <Legend metric={metric} />
         </div>
 
-        <div className="flex min-w-0 flex-[2_1_280px] flex-col gap-5">
+        <div className="flex min-w-0 flex-[2_1_240px] flex-col gap-4">
           {selected ? (
             <DayDetail day={selected} bills={bills} tariff={tariff} avgCost={avgCost} />
           ) : (
@@ -219,7 +227,7 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
       </div>
 
       {standouts.length > 0 && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
           {standouts.map((s) => (
             <button
               key={s.title}
@@ -227,19 +235,28 @@ export function PeriodCalendar({ bills, tariff }: { bills: Bills; tariff: Tariff
               onClick={() => setPicked(s.d.date)}
               aria-pressed={s.d.date === selectedKey}
               className={cn(
-                "flex min-w-0 flex-col gap-1 rounded-2xl border bg-canvas/40 px-4 py-3 text-left transition-colors duration-200 hover:border-fg/25",
+                "flex min-w-0 flex-col gap-0.5 rounded-xl border px-3 py-2 text-left transition-colors duration-200 hover:border-fg/25",
                 s.d.date === selectedKey ? "border-fg/30" : "border-line-subtle",
               )}
             >
-              <span className="flex items-center gap-2 text-xs text-ink-dim">
+              <span className="flex min-w-0 items-center gap-2 truncate text-xs text-ink-dim">
                 <i className="size-1.5 flex-none rounded-full" style={{ background: s.color }} />
                 {s.title}
               </span>
-              <span className="text-xl font-light tracking-[-0.5px] text-fg tabular-nums">{s.v(s.d)}</span>
-              <span className="text-xs text-ink-label">{dayMonth(fromDateKey(s.d.date))}</span>
+              <span className="text-[15px] font-light whitespace-nowrap text-fg tabular-nums">
+                {s.v(s.d)}
+                <span className="ml-1.5 text-[11px] text-ink-faint">{dayMonth(fromDateKey(s.d.date))}</span>
+              </span>
             </button>
           ))}
         </div>
+      )}
+      {bills.current.so_far.meter_days > 0 && (
+        <Footnote>
+          {bills.current.so_far.meter_days === bills.current.so_far.days
+            ? "Grid use and feed-in are from your smart meter."
+            : `Grid use and feed-in are from your smart meter for ${bills.current.so_far.meter_days} of ${bills.current.so_far.days} days, the inverter for the rest.`}
+        </Footnote>
       )}
     </Card>
   );
@@ -268,7 +285,7 @@ function DayCell({
   onSelect: (key: string) => void;
 }) {
   const base =
-    "relative flex h-11 items-start rounded-lg p-1.5 font-mono text-[11px] leading-none max-sm:h-10 max-sm:p-1";
+    "relative flex h-9 items-start rounded-lg p-1.5 font-mono text-[11px] leading-none max-sm:h-8 max-sm:p-1";
   if (cell.kind === "pad") return <span />;
   const label = dayMonth(cell.date);
   if (cell.kind === "ahead")
@@ -364,16 +381,16 @@ function DayDetail({
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <span className="font-mono text-[11px] tracking-[1.2px] text-ink-faint uppercase">
+        <span className="text-[13px] text-ink-muted">
           {fullDate.format(parseYmd(day.date))}
           {day.partial ? " · so far" : ""}
         </span>
-        <span className="text-[44px] leading-12 font-light tracking-[-1.8px] tabular-nums">
+        <span className="text-[28px] leading-8 font-light tracking-[-0.8px] tabular-nums">
           {billCents(day.net_cost)}
         </span>
         <Muted>
           {day.partial
-            ? "Today's bill so far. It fills in through the day."
+            ? "Fills in through the day."
             : diff == null
               ? "What this day added to the bill."
               : Math.abs(diff) < 0.05

@@ -1,29 +1,12 @@
 import type { ReactNode } from "react";
-import { cn } from "~/features/common/ui/utils";
 
-/** A row of small figures in hairline-separated cells. */
-export function StatGrid({
-  stats,
-  min = 160,
-  className,
-}: {
-  stats: { label: string; value: ReactNode; color?: string }[];
-  min?: number;
-  className?: string;
-}) {
+/** A card's headline figure, in its top right corner: a small label over it, and a faint line under it. */
+export function Corner({ label, value, sub }: { label: ReactNode; value: ReactNode; sub?: ReactNode }) {
   return (
-    <div
-      className={cn("grid gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle", className)}
-      style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))` }}
-    >
-      {stats.map((s) => (
-        <div key={s.label} className="flex flex-col gap-0.5 bg-surface px-4 py-3.5">
-          <span className="text-xs text-ink-muted">{s.label}</span>
-          <span className="text-lg font-semibold tabular-nums" style={{ color: s.color }}>
-            {s.value}
-          </span>
-        </div>
-      ))}
+    <div className="flex flex-none flex-col items-end gap-0.5 text-right">
+      <span className="text-xs text-ink-faint">{label}</span>
+      <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{value}</span>
+      {sub && <span className="text-[11.5px] text-ink-faint tabular-nums">{sub}</span>}
     </div>
   );
 }
@@ -37,16 +20,6 @@ export function ShareBar({ parts }: { parts: { value: number; color: string }[] 
         <div key={i} style={{ width: `${((Math.max(0, p.value) / total) * 100).toFixed(1)}%`, background: p.color }} />
       ))}
     </div>
-  );
-}
-
-/** A legend entry. */
-export function Key({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      {swatch}
-      {children}
-    </span>
   );
 }
 
@@ -65,7 +38,7 @@ export function ShareRow({
   value: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-line-subtle py-3 text-sm tabular-nums">
+    <div className="flex items-center justify-between gap-4 border-b border-line-subtle py-2.5 text-sm tabular-nums">
       <span className="flex min-w-0 items-center gap-2.5">
         <i className="size-2 flex-none rounded-full" style={{ background: color }} />
         {sub ? (

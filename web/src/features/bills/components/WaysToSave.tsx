@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { BillTip, Bills } from "~/features/bills/types";
 import type { Tariff } from "~/features/common/tariffs/types";
 import { ButtonLink } from "~/features/common/ui/components/Button";
+import { Corner } from "~/features/bills/components/BillParts";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { bandHours } from "~/features/common/tariffs/utils";
 import { centsShort, dollars, kWh, money } from "~/features/common/formatting/utils/number";
@@ -77,16 +78,24 @@ function say(tip: BillTip, bills: Bills, tariff: Tariff | undefined): Said {
 }
 
 /** Ways to lower this bill, from the household's own recent days, with what each is worth over a bill. */
-export function WaysToSave({ bills, tariff }: { bills: Bills; tariff: Tariff | undefined }) {
+export function WaysToSave({
+  bills,
+  tariff,
+  className,
+}: {
+  bills: Bills;
+  tariff: Tariff | undefined;
+  className?: string;
+}) {
   const tips = bills.tips;
   const days = bills.current.so_far.days;
+  const worth = tips.reduce((a, t) => a + (t.saving ?? 0), 0);
   return (
-    <Card aria-labelledby="h-ways">
-      <TitleBlock
-        id="h-ways"
-        title="Ways to lower this bill"
-        sub="From your last 30 days at your current rates. Savings are rough, for a whole bill."
-      />
+    <Card aria-labelledby="h-ways" className={className}>
+      <div className="flex items-end justify-between gap-4">
+        <TitleBlock id="h-ways" title="Ways to pay less" sub="From your last 30 days at today's rates" />
+        {worth >= 1 && <Corner label="Worth about" value={dollars(worth)} sub="a bill, roughly" />}
+      </div>
       {tips.length === 0 ? (
         <Muted>
           {days < 3
@@ -100,20 +109,20 @@ export function WaysToSave({ bills, tariff }: { bills: Bills; tariff: Tariff | u
             return (
               <li
                 key={tip.kind}
-                className="grid grid-cols-[28px_1fr_auto] items-start gap-x-4 gap-y-1 border-b border-line-subtle py-4 last:border-b-0 max-sm:grid-cols-[28px_1fr]"
+                className="grid grid-cols-[28px_1fr_auto] items-start gap-x-4 gap-y-1 border-b border-line-subtle py-3.5 first:pt-0 last:border-b-0 last:pb-0 max-sm:grid-cols-[28px_1fr]"
               >
                 <span className="flex size-7 items-center justify-center rounded-full bg-track text-xs font-semibold text-ink">
                   {i + 1}
                 </span>
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[15px] font-semibold text-ink">{title}</span>
+                  <span className="text-[15px] font-medium text-ink">{title}</span>
                   <span className="text-[13px] leading-5 text-pretty text-ink-muted">{body}</span>
                   {action && <span className="pt-1">{action}</span>}
                 </div>
                 <div className="flex flex-col items-end gap-0.5 text-right max-sm:col-start-2 max-sm:items-start max-sm:text-left">
                   {tip.saving != null ? (
                     <>
-                      <span className="text-lg font-semibold text-good tabular-nums">about {dollars(tip.saving)}</span>
+                      <span className="text-[17px] font-light text-good tabular-nums">{dollars(tip.saving)}</span>
                       <span className="text-xs text-ink-faint">a bill</span>
                     </>
                   ) : (
