@@ -268,7 +268,7 @@ function Outlook({
         key={fi.headline}
         title={fi.headline}
         className={cn(
-          "w-full animate-fade truncate font-semibold tracking-[-0.04em] tabular-nums",
+          "w-full animate-fade truncate font-light tracking-[-0.03em] tabular-nums",
           center
             ? "text-xl leading-7"
             : large
@@ -329,7 +329,7 @@ function Ring({
         <>
           <BatteryArc frac={(soc || 0) / 100} st={st} size={ARC_LARGE} reserve={reserve} />
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-[2.5cqw] pt-[1.5cqw]">
-            <div className="text-[31cqw] leading-none font-medium tracking-[-0.06em] tabular-nums">
+            <div className="text-[31cqw] leading-none font-light tracking-[-0.06em] tabular-nums">
               {shown == null ? "—" : Math.round(shown)}
               <span className="ml-0.5 text-[13cqw] font-normal tracking-normal text-ink-muted">%</span>
             </div>

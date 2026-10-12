@@ -11,23 +11,25 @@ import { GROUPS, missing, namedSizes, sizesOf, WIDGETS, widgetDef } from "~/feat
 /** Widgets most worth suggesting, in order, when what they need is connected and they aren't on the page yet. */
 const SUGGESTED = [
   "car",
-  "rooms-now",
   "amber-prices",
-  "solar-summary",
-  "battery-summary",
-  "home-summary",
+  "plan-summary",
+  "bill-summary",
+  "rooms-now",
+  "running-now",
   "weather",
   "figure",
 ];
 
-/** A section's label in the list, quiet, in capitals. */
+/** A section's heading in the list. */
 const Label = ({ children }: { children: string }) => (
-  <span className="pt-2 text-[11px] font-medium tracking-[1px] text-ink-faint uppercase">{children}</span>
+  <span className="pt-2 text-xs font-medium text-ink-muted">{children}</span>
 );
 
 /** One widget to add: its picture, what it is, the sizes it comes in (or that it's on the page), and the button. */
 function Row({ def, why, placed, onAdd }: { def: WidgetDef; why: string | null; placed: boolean; onAdd: () => void }) {
-  const sizes = namedSizes(def.sizes, COLS.computer).map((s) => s.label[0]);
+  // the sizes it comes in, smallest to largest: "Small to full width"
+  const named = namedSizes(def.sizes, COLS.computer);
+  const sizes = named.length > 1 ? `${named[0].label} to ${named[named.length - 1].label.toLowerCase()}` : "One size";
   return (
     <li
       className={cn(
@@ -39,8 +41,8 @@ function Row({ def, why, placed, onAdd }: { def: WidgetDef; why: string | null; 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <b className="truncate text-[13px] font-semibold">{def.name}</b>
         <span className="line-clamp-2 text-[11px] leading-[15px] text-ink-muted">{why ?? def.sub}</span>
-        <span className="font-mono text-[10px] text-ink-faint">
-          {placed ? <span className="text-brand">On this page</span> : sizes.join(" · ")}
+        <span className="text-[11px] leading-[15px] text-ink-faint">
+          {placed ? <span className="text-brand">On this dashboard</span> : sizes}
         </span>
       </span>
       <button

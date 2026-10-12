@@ -29,12 +29,12 @@ const scene = (s: Settings) => s.style === "scene" || s.style == null;
 const withoutBattery = (show: EnergyShow, none: boolean): EnergyShow =>
   none ? { ...show, parts: { ...show.parts, battery: false } } : show;
 
-/** The Overview's own cards (as it's always been laid out), as widgets. */
+/** The Overview's own cards (the power flow, and those the Classic layout has), as widgets. */
 export const widgets: WidgetDef[] = [
   {
     type: "power-flow",
     name: "Power flow",
-    sub: "Solar, home, grid and battery together, in six styles",
+    sub: "Solar, home, grid and battery live, in six styles",
     group: "overview",
     icon: "bolt",
     thumb: { kind: "flow" },
@@ -243,8 +243,8 @@ export const widgets: WidgetDef[] = [
   },
   {
     type: "battery",
-    name: "Battery",
-    sub: "Its level, status, shortcuts and the last six hours",
+    name: "Battery ring",
+    sub: "Its level as a ring, time to full or to its reserve, shortcuts and recent hours",
     group: "battery",
     icon: "battery",
     thumb: { kind: "ring", color: COLOR.battery },
