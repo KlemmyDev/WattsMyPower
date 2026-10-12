@@ -288,7 +288,7 @@ function TableDetails({ table: t, total }: { table: StorageTable; total: number 
 function Facts({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col">
-      <h4 className="text-xs font-semibold tracking-wide text-ink-label uppercase">{title}</h4>
+      <h4 className="text-[13px] font-semibold text-ink-muted">{title}</h4>
       {note && <p className="m-0 mt-1 text-xs text-ink-muted">{note}</p>}
       {children}
     </div>

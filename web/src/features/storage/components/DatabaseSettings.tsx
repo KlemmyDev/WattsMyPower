@@ -49,9 +49,7 @@ function Storage() {
       >
         <BackupCard report={report.data} />
       </SettingsSplit>
-      <h2 className="px-1 pt-3 text-[13px] leading-5 font-semibold tracking-[0.08em] text-ink-muted uppercase">
-        Table by table
-      </h2>
+      <h2 className="px-1 pt-3 text-[13px] leading-5 font-semibold text-ink-muted">Table by table</h2>
       {report.data.databases.map((db) => (
         <DatabaseCard key={db.id} db={db} />
       ))}

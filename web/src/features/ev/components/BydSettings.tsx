@@ -14,6 +14,7 @@ import { NextRead } from "~/features/ev/components/NextRead";
 import { useBydChange } from "~/features/ev/hooks";
 import type { BydCar, BydStatus } from "~/features/ev/types";
 import { STATUS_LABEL } from "~/features/ev/utils";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 /** A BYD: its name and charge, which it is, what it's doing, and opening it on the EV page. */
 function CarRow({ v }: { v: BydCar }) {
@@ -125,7 +126,6 @@ export function BydSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations/ev">Electric vehicles</BackLink>}
-        id="h-byd"
         title="BYD"
         sub="See each car's charge, range and charging on the EV page, beside the rest of your home's energy."
       />
@@ -133,8 +133,8 @@ export function BydSettings() {
         <ReachTag reach="cloud" />
         <UntestedTag />
       </div>
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {isPending && <PageLoading label="Checking the connection" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
       {status && !status.connected && (
         <SettingsSection
           id="h-byd-connect"
@@ -155,7 +155,7 @@ export function BydSettings() {
               <BydConnect status={status} />
             </SettingsSection>
           ) : (
-            status.error && <p className="m-0 text-sm text-bad">Not updating: {status.error}</p>
+            status.error && <PageProblem>Not updating. {status.error}</PageProblem>
           )}
           <SettingsSection
             id="h-byd-cars"

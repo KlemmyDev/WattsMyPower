@@ -70,7 +70,7 @@ export function WelcomePage({ page }: { page: GuidePage | undefined }) {
         <BrandLockup />
         {view !== "finish" && (
           <Button variant="muted-link" onClick={leave}>
-            {finished ? "Back to the dashboard" : "I'll do this later"}
+            {finished ? "Back to the dashboard" : "Do this later"}
           </Button>
         )}
       </header>

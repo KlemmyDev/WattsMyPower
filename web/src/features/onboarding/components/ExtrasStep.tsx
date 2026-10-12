@@ -34,7 +34,7 @@ export const EXTRAS: Extra[] = [
   {
     id: "ev",
     title: "An electric car",
-    sub: "A Tesla or BYD. See its charge and top it up from spare solar.",
+    sub: "A Tesla, Hyundai, Kia or BYD. See its charge, and top up most from spare solar.",
     icon: "car",
     color: COLOR.battery,
     href: "/integrations/ev",

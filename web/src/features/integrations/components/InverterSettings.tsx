@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { errorMessage } from "~/features/common/api/utils";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInverters";
 import { IntegrationLink } from "~/features/integrations/components/IntegrationLink";
 import { ReachTag, UntestedTag } from "~/features/integrations/components/ReachTag";
@@ -17,6 +18,7 @@ import {
 } from "~/features/integrations/utils";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 /** Each brand the collector reads: its families, whether they've been tried on a real one, and its inverters
  * connected now. */
@@ -56,6 +58,7 @@ function InverterRow({ inverter: { device, name, status, on, reading, hybrid } }
       to="/integrations/inverters/$brand/$role"
       params={{ brand: brandSlug(device.brand), role: device.role }}
       icon={hybrid ? "battery" : "sun"}
+      color={hybrid ? COLOR.battery : COLOR.solar}
       name={name}
       status={status}
       on={on}
@@ -85,18 +88,17 @@ export function InverterSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
-        id="h-inverters"
         title="Inverters"
         sub="Read every minute over your home network, straight from each inverter, with no cloud in between."
       />
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
-      {data && !data.available && <p className="m-0 text-sm leading-[22px] text-ink-muted">{data.error}</p>}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
+      {data && !data.available && <PageProblem tone="plain">{data.error}</PageProblem>}
       <SettingsSection
         id="h-brands"
         title="Brands"
         sub="Connect one main inverter (with the meter and any battery), plus an optional second, AC-coupled one. Any brand here works. Open yours to connect it."
       >
+        {isPending && <PageLoading label="Checking what's connected" className="h-40 rounded-2xl" />}
         {order.length > 0 && (
           <div className="overflow-hidden rounded-2xl bg-canvas/60 light:bg-canvas">
             {order.map((b) => {
@@ -107,6 +109,7 @@ export function InverterSettings() {
                   to="/integrations/inverters/$brand"
                   params={{ brand: b.slug }}
                   icon="sun"
+                  color={COLOR.solar}
                   name={b.name}
                   status={s.status || undefined}
                   on={s.on}
@@ -169,7 +172,6 @@ export function InverterBrand({ slug }: { slug: string }) {
     return (
       <SubPageHeader
         back={back}
-        id="h-brand"
         title="Inverters"
         sub={
           isPending || role || slug === "import"
@@ -183,9 +185,9 @@ export function InverterBrand({ slug }: { slug: string }) {
   const anyMain = inverters.some((i) => i.hybrid);
   return (
     <>
-      <SubPageHeader back={back} id="h-brand" title={brand.name} sub={about?.about ?? ""} />
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
-      {data && !data.available && <p className="m-0 text-sm leading-[22px] text-ink-muted">{data.error}</p>}
+      <SubPageHeader back={back} title={brand.name} sub={about?.about ?? ""} />
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
+      {data && !data.available && <PageProblem tone="plain">{data.error}</PageProblem>}
       <SettingsSection
         id="h-brand-connected"
         title="Connected"

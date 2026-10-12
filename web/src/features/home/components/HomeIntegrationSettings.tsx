@@ -16,6 +16,7 @@ import { ReachTag } from "~/features/integrations/components/ReachTag";
 import { IntegrationRow } from "~/features/settings/components/IntegrationRow";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 /** The integration's own form: whatever it asks for (an email and password, an address…). */
 function SignInForm({
@@ -204,13 +205,16 @@ export function HomeIntegrationSettings({ id }: { id: string }) {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations/home">Smart home</BackLink>}
-        id="h-home-integration"
         title={integration ? `${integration.name}` : "Smart home"}
         sub={integration?.about ?? ""}
       />
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
-      {data && !integration && <p className="m-0 text-sm text-bad">There's no such integration.</p>}
+      {isPending && <PageLoading label="Checking the connection" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
+      {data && !integration && (
+        <PageProblem tone="plain">
+          There's no integration at this address. Go back to Smart home to choose yours.
+        </PageProblem>
+      )}
       {integration && !integration.account && (
         <SettingsSection
           id="h-home-connect"

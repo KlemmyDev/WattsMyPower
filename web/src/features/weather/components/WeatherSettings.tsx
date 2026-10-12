@@ -19,7 +19,8 @@ import { retrain, weatherStatusQuery } from "~/features/weather/api";
 import type { WeatherStatus } from "~/features/weather/types";
 import { useFetchWeather, WeatherFetchProgress } from "~/features/weather/components/WeatherFetch";
 import { LocationForm } from "~/features/settings/components/LocationForm";
-import { SettingsSection } from "~/features/settings/components/SettingsSection";
+import { SaveBanner, SettingsSection } from "~/features/settings/components/SettingsSection";
+import { PageProblem } from "~/features/settings/components/PageStatus";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 const MODELS: { value: WeatherModel; label: string; help: string }[] = [
@@ -177,9 +178,9 @@ function Panels() {
     <SettingsSection
       id="h-panels"
       title="Your panels"
-      sub="How steep your panels are and which way they face. It's optional. The forecast learns your roof over time anyway, and this gives it a head start. Leave the tilt at 0 if you're not sure."
+      sub="How steep they are and which way they face. Optional, as the forecast learns your roof over time, but this gives it a head start. Leave the tilt at 0 if you're not sure."
     >
-      <div className="grid grid-cols-[minmax(0,200px)_minmax(0,240px)_auto] items-start justify-start gap-3 max-sm:grid-cols-1">
+      <div className="grid grid-cols-[minmax(0,200px)_minmax(0,240px)] items-start justify-start gap-3 max-sm:grid-cols-1">
         <Field label="Tilt" help="Degrees from flat. Most Australian roofs are 20 to 25.">
           <Input type="number" min="0" max="90" step="1" value={tilt} onChange={(e) => setTilt(e.target.value)} />
         </Field>
@@ -193,16 +194,18 @@ function Panels() {
             {!preset && <option value={bearing}>{bearing}°</option>}
           </Select>
         </Field>
-        <Button
-          size="sm"
-          className="mt-[26px] w-fit max-sm:mt-0"
-          onClick={submit}
-          disabled={!changed || save.isPending}
-        >
-          Save
-        </Button>
       </div>
-      <HelpText tone="bad">{error}</HelpText>
+      <SaveBanner
+        dirty={!!changed}
+        pending={save.isPending}
+        error={error}
+        onSave={submit}
+        onDiscard={() => {
+          setTilt(String(system?.panel_tilt ?? 0));
+          setBearing(String(system?.panel_bearing ?? 0));
+          setError("");
+        }}
+      />
     </SettingsSection>
   );
 }
@@ -397,7 +400,6 @@ export function WeatherSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
-        id="h-weather"
         title="Weather"
         sub={
           <>
@@ -407,7 +409,7 @@ export function WeatherSettings() {
         }
       />
       {status?.error && (
-        <p className="m-0 text-sm text-bad">{status.error}. Showing the last saved forecast until it's back.</p>
+        <PageProblem tone="warn">{status.error}. Showing the last saved forecast until it's back.</PageProblem>
       )}
       <WeatherLocation />
       <div className="grid gap-5 xl:grid-cols-2">

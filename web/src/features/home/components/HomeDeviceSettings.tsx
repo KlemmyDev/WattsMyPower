@@ -14,6 +14,7 @@ import { useHomeChange } from "~/features/home/hooks";
 import type { HomeDevice, HomeOverview } from "~/features/home/types";
 import { groupNames, nowLine, suggestedGroup } from "~/features/home/utils";
 import { OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /** What the integration last sent for a device, to check how its properties are read. */
@@ -158,12 +159,15 @@ export function HomeDeviceSettings({ integrationId, deviceId }: { integrationId:
   );
   if (!device || !data)
     return (
-      <SubPageHeader
-        back={back}
-        id="h-device"
-        title="Device"
-        sub={isPending ? "Loading…" : error ? errorMessage(error) : "There's no such device."}
-      />
+      <>
+        <SubPageHeader
+          back={back}
+          title="Device"
+          sub={isPending || error ? "What it's doing, and how it's read" : "There's no device at this address"}
+        />
+        {isPending && <PageLoading label="Loading the device" />}
+        {error && <PageProblem>{errorMessage(error)}</PageProblem>}
+      </>
     );
   const now = nowLine(device);
   const n = device.now;
@@ -173,7 +177,6 @@ export function HomeDeviceSettings({ integrationId, deviceId }: { integrationId:
     <>
       <SubPageHeader
         back={back}
-        id="h-device"
         title={device.name}
         sub={[device.model, integration?.name && `Through ${integration.name}`].filter(Boolean).join(" · ")}
       />

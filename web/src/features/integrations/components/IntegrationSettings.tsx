@@ -6,6 +6,7 @@ import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useLocationSet } from "~/features/common/settings/hooks";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { useForecast } from "~/features/common/weather/hooks";
 import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
@@ -19,6 +20,7 @@ import { ReachTag, UntestedTag, type Reach } from "~/features/integrations/compo
 import { useInverters } from "~/features/integrations/hooks";
 import type { InverterKind } from "~/features/integrations/types";
 import { brandSlug, type InverterState } from "~/features/integrations/utils";
+import { PageProblem } from "~/features/settings/components/PageStatus";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -111,6 +113,7 @@ function useInverterEntries(): Entry[] {
             card
             to="/integrations/inverters"
             icon="sun"
+            color={COLOR.solar}
             name="Inverters"
             status={summary.status}
             on={summary.on}
@@ -137,6 +140,7 @@ function useInverterEntries(): Entry[] {
             card
             to="/integrations/inverters"
             icon="sun"
+            color={COLOR.solar}
             name="Inverters"
             status="Unavailable"
             attention
@@ -183,6 +187,7 @@ function useWeatherEntry(): Entry {
         card
         to="/integrations/weather"
         icon="cloudSun"
+        color={COLOR.export}
         name="Weather"
         status={forecast ? "Connected" : forecast === undefined ? "Checking" : "Unavailable"}
         on={!!forecast}
@@ -234,6 +239,7 @@ function useAmberEntry(): Entry {
         card
         to="/integrations/amber"
         icon="dollar"
+        color={COLOR.good}
         name="Amber Electric"
         status={label}
         on={on}
@@ -285,6 +291,7 @@ function useGridEntry(): Entry {
         card
         to="/integrations/grid"
         icon="grid"
+        color={COLOR.import}
         name="Grid"
         status={status}
         on={networks.length > 0 && !out?.error}
@@ -332,6 +339,7 @@ function useEvEntry(): Entry {
         card
         to="/integrations/ev"
         icon="car"
+        color={COLOR.danger}
         name="Electric vehicles"
         status={off ? `${off.name}: ${off.status.toLowerCase()}` : "Connected"}
         on={!off}
@@ -382,6 +390,7 @@ function homeEntry(i: HomeIntegration, category?: string): Entry {
         to="/integrations/home/$integration"
         params={{ integration: i.id }}
         icon={integrationIcon(i)}
+        color={COLOR.teal}
         name={i.name}
         status={a ? label : undefined}
         on={!!a && !a.error && !!a.last_poll && !a.signed_out}
@@ -425,6 +434,7 @@ function smartHomeEntry(integrations: HomeIntegration[]): Entry | null {
         card
         to="/integrations/home"
         icon="plug"
+        color={COLOR.teal}
         name="Smart home"
         status={
           trouble ? `${trouble.name}: ${trouble.account?.signed_out ? "sign in again" : "not updating"}` : "Connected"
@@ -511,12 +521,12 @@ export function IntegrationSettings() {
           <p className="m-0 text-sm text-ink-muted">Nothing yet. Start with your inverter, below.</p>
         )}
         {connected.length > 0 && firstBrand && (
-          <p className="m-0 text-sm text-warn">
-            Connect your main inverter to start recording. It's first under Available to connect.
-          </p>
+          <PageProblem tone="warn">
+            Nothing is recorded until your main inverter is connected. It's first under Available to connect.
+          </PageProblem>
         )}
       </Section>
-      {homeError && <p className="m-0 text-sm text-bad">{errorMessage(homeError)}</p>}
+      {homeError && <PageProblem>{errorMessage(homeError)}</PageProblem>}
       {available.length > 0 && (
         <Section
           id="available"

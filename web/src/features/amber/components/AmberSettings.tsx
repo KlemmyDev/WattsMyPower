@@ -14,6 +14,7 @@ import { cn } from "~/features/common/ui/utils";
 import { ConfirmAction } from "~/features/integrations/components/ConfirmAction";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 const day = (ts: number) => longDate.format(new Date(ts * 1000));
 
@@ -165,12 +166,11 @@ export function AmberSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
-        id="h-amber"
         title="Amber Electric"
         sub="With Amber, your power price changes every 5 or 30 minutes. Connect your account so your costs use the price at the time."
       />
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {isPending && <PageLoading label="Checking the connection" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
       {status && !status.connected && (
         <SettingsSection
           id="h-amber-connect"
@@ -182,7 +182,7 @@ export function AmberSettings() {
       )}
       {status?.connected && (
         <>
-          {status.error && <p className="m-0 text-sm text-bad">Not updating: {status.error}</p>}
+          {status.error && <PageProblem>Not updating. {status.error}</PageProblem>}
           {(status.sites.length > 1 || !status.site_id) && (
             <SettingsSection id="h-amber-site" title="Site" sub="Which of your account's sites the prices are for.">
               <SitePicker status={status} />
