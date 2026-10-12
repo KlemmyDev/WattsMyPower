@@ -8,7 +8,7 @@ import {
   FLOW_UNITS,
   PowerFlowWidget,
 } from "~/features/overview/components/PowerFlowStyles";
-import { TodayCard } from "~/features/overview/components/TodayCard";
+import { TODAY_LEADS, TodayCard, todayShow } from "~/features/overview/components/TodayCard";
 import { TodayEnergyCard } from "~/features/overview/components/TodayEnergyCard";
 
 const size = (min: [number, number], max: [number, number], d: [number, number]) => ({ min, max, default: d });
@@ -93,9 +93,39 @@ export const widgets: WidgetDef[] = [
     group: "money",
     icon: "dollar",
     thumb: { kind: "table", color: COLOR.good },
-    sizes: size([5, 6], [12, 9], [6, 7]),
-    phone: size([4, 7], [4, 10], [4, 8]),
-    Component: ({ ctx }: WidgetProps) => <TodayCard tariff={ctx.s?.tariff} now={ctx.now} wide />,
+    sizes: size([2, 2], [12, 9], [6, 7]),
+    phone: size([2, 2], [4, 10], [4, 8]),
+    options: [
+      { key: "lead", label: "First figure", kind: "select", choices: TODAY_LEADS, default: "cost", section: "Figures" },
+      {
+        key: "subs",
+        label: "A line on each",
+        sub: "The supply charge, and what you'd pay without solar",
+        kind: "toggle",
+        default: true,
+        section: "Figures",
+      },
+      {
+        key: "split",
+        label: "What you pay and what's covered",
+        sub: "As a bar",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+      { key: "rates", label: "Rate by rate", sub: "Given room", kind: "toggle", default: true, section: "Show" },
+      {
+        key: "tariff",
+        label: "Your kind of rates",
+        sub: "Linking to them",
+        kind: "toggle",
+        default: true,
+        section: "Show",
+      },
+    ],
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <TodayCard tariff={ctx.s?.tariff} now={ctx.now} w={w} h={h} show={todayShow(settings)} />
+    ),
   },
   {
     type: "battery",

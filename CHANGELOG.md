@@ -38,7 +38,10 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   its outlook, what it's set to do and its last six hours, up to the whole width with its last 12 hours and the
   figures behind it (what it can still give, what went in and out today, its reserve, health and temperature). As
   with power flow, its settings switch each part on or off: the outlook, the kWh it holds, what it's set to do and
-  the shortcuts, the chart and how far back it goes, and each figure.
+  the shortcuts, the chart and how far back it goes, and each figure. Today so far does the same: at 2 × 2 the
+  cost big with the saving under it, then both side by side, then today rate by rate as tiles, a short list or the
+  full table as room allows, with switches for the split, each figure's line, the rates and the kind of rates, and
+  a choice of which figure leads.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
   each string; where the home's power goes, from the inverter and from connected plugs and appliances; the battery's
   level, health, warranty and whether it's the right size; the grid's state, AEMO's wholesale prices and notices,
