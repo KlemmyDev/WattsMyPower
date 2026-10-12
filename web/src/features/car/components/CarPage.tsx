@@ -10,10 +10,10 @@ import { lookOf } from "~/features/ev/utils/looks";
 import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { HelpText } from "~/features/common/ui/components/Field";
-import { Notice } from "~/features/common/ui/components/Notice";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { teslaQuery } from "~/features/ev/api";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
@@ -34,8 +34,14 @@ export function CarPage({ carId }: { carId: number }) {
   if (!view)
     return (
       <>
-        <SubPageHeader back={back} id="h-car" title="Car" sub={isPending ? "Loading…" : "Can't find this car."} />
-        {error && <Notice>{errorMessage(error)}</Notice>}
+        <SubPageHeader
+          back={back}
+          title="Car"
+          sub={isPending || error ? "How it charges, its range and its look" : "There's no car at this address"}
+        />
+        {isPending && <PageLoading label="Loading the car" />}
+        {error && <PageProblem>{errorMessage(error)}</PageProblem>}
+        {!isPending && !error && <PageProblem tone="plain">Go back to Tesla to choose one of your cars.</PageProblem>}
       </>
     );
   const c = view.car;
@@ -46,7 +52,6 @@ export function CarPage({ carId }: { carId: number }) {
     <>
       <SubPageHeader
         back={back}
-        id="h-car"
         title={carName(view)}
         sub="Its battery, home charging and how the Overview draws it."
       />

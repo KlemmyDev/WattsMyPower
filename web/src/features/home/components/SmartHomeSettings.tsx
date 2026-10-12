@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { homeQuery } from "~/features/home/api";
@@ -8,6 +9,7 @@ import { IntegrationLink } from "~/features/integrations/components/IntegrationL
 import { ReachTag } from "~/features/integrations/components/ReachTag";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -31,6 +33,7 @@ function BrandRow({ i }: { i: HomeIntegration }) {
       to="/integrations/home/$integration"
       params={{ integration: i.id }}
       icon={integrationIcon(i)}
+      color={COLOR.teal}
       name={i.name}
       status={pill.status}
       on={pill.on}
@@ -68,16 +71,16 @@ export function SmartHomeSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
-        id="h-smart-home"
         title="Smart home"
-        sub="Plugs, appliances and batteries that report what they use, so the Home page can break it down. Connect as many brands as you like. Each shows how it's reached."
+        sub="Plugs, appliances and batteries that report what they use, so the Home page can break it down. Connect as many brands as you like."
       />
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {isPending && <PageLoading label="Checking what's connected" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
       {attention.length > 0 && (
-        <p className="m-0 text-sm text-warn">
-          {attention.map((i) => i.name).join(", ")} {attention.length === 1 ? "needs" : "need"} a look.
-        </p>
+        <PageProblem tone="warn">
+          {attention.map((i) => i.name).join(", ")} {attention.length === 1 ? "needs" : "need"} a look. Open{" "}
+          {attention.length === 1 ? "it" : "each"} below to see why.
+        </PageProblem>
       )}
       {groups.map((c) => (
         <SettingsSection key={c.id} id={`h-smart-home-${c.id}`} title={c.label} sub={c.about}>

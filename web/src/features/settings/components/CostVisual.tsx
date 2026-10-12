@@ -45,10 +45,17 @@ function PaybackRing({ pct, children }: { pct: number | null; children: ReactNod
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[28px] leading-8 font-light tracking-[-0.6px] tabular-nums">
-            {pct == null ? "—" : `${Math.round(pct)}%`}
-          </span>
-          <span className="text-[11px] text-ink-muted">paid back</span>
+          {pct == null ? (
+            // Nothing to work it out from yet (no cost): say so rather than show a dash.
+            <span className="text-[13px] text-ink-muted">Not set</span>
+          ) : (
+            <>
+              <span className="text-[28px] leading-8 font-light tracking-[-0.6px] tabular-nums">
+                {Math.round(pct)}%
+              </span>
+              <span className="text-[11px] text-ink-muted">paid back</span>
+            </>
+          )}
         </div>
       </div>
       <div className="flex min-w-[180px] flex-1 flex-col gap-3">{children}</div>

@@ -392,7 +392,6 @@ export function GridSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations">Integrations</BackLink>}
-        id="h-grid"
         title="Grid"
         sub="Outages near your house, weather and fire warnings, and AEMO's wholesale prices, all for the Grid page."
       />

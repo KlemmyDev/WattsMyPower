@@ -8,6 +8,7 @@ import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInvert
 import { BRAND_ABOUT, brandSlug } from "~/features/integrations/utils";
 import { SettingsSection } from "~/features/settings/components/SettingsSection";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 /**
  * Manage → Integrations → Inverters → a brand → connecting one of that brand's inverters (scanning for it, or by its
@@ -28,7 +29,6 @@ export function InverterConnect({ slug }: { slug: string }) {
             {brand ?? "Inverters"}
           </BackLink>
         }
-        id="h-connect"
         title={
           brand ? (hasHybrid ? `Add a ${brand} inverter` : `Connect your ${brand} inverter`) : "Connect an inverter"
         }
@@ -40,10 +40,14 @@ export function InverterConnect({ slug }: { slug: string }) {
               : "Nothing is recorded until your main inverter (with the battery and meter) is connected. Find it with a quick scan, or enter its address."
         }
       />
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking what's connected…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
-      {data && !data.available && <p className="m-0 text-sm leading-[22px] text-ink-muted">{data.error}</p>}
-      {data?.available && !brand && <p className="m-0 text-sm text-bad">WattsMyPower doesn't read that brand.</p>}
+      {isPending && <PageLoading label="Checking what's connected" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
+      {data && !data.available && <PageProblem tone="plain">{data.error}</PageProblem>}
+      {data?.available && !brand && (
+        <PageProblem tone="plain">
+          WattsMyPower doesn't read that brand. Go back to Inverters to choose yours.
+        </PageProblem>
+      )}
       {data?.available && data.read_only && (
         <SettingsSection id="h-read-only" title="Read only">
           <ReadOnlyNote />

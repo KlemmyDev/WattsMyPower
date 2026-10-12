@@ -16,6 +16,7 @@ import { TeslaConnect } from "~/features/ev/components/TeslaConnect";
 import { useEvChange } from "~/features/ev/hooks";
 import type { EvVehicle, TeslaProvider, TeslaStatus } from "~/features/ev/types";
 import { carTitle, MODE_LABEL, PROVIDER_LABEL } from "~/features/ev/utils";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 const OTHER: Record<TeslaProvider, TeslaProvider> = { bluetooth: "tessie", tessie: "bluetooth" };
 
@@ -227,12 +228,11 @@ export function TeslaSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations/ev">Electric vehicles</BackLink>}
-        id="h-tesla"
         title="Tesla"
         sub="See each car's charge and charge it from spare solar on the EV page. It works the same over this server's Bluetooth or through Tessie."
       />
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {isPending && <PageLoading label="Checking the connection" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
       {status && !provider && (
         <SettingsSection
           id="h-tesla-connect"
@@ -244,7 +244,7 @@ export function TeslaSettings() {
       )}
       {status && provider && (
         <>
-          {status.error && <p className="m-0 text-sm text-bad">Not updating: {status.error}</p>}
+          {status.error && <PageProblem>Not updating. {status.error}</PageProblem>}
           <SettingsSection
             id="h-tesla-cars"
             title="Cars"

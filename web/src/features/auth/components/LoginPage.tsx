@@ -407,7 +407,7 @@ function Command({ text }: { text: string }) {
 /** Where the set-up code is, folded away until asked. */
 function WhereIsTheCode() {
   return (
-    <Disclosure label="Where do I find it?">
+    <Disclosure label="Where to find it">
       <span>The installer printed it when it finished. You'll also find it in the dashboard's logs.</span>
       <Command text={LOGS} />
       <span>

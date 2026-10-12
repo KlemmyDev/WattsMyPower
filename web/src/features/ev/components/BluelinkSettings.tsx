@@ -14,6 +14,7 @@ import { NextRead } from "~/features/ev/components/NextRead";
 import { useBluelinkChange } from "~/features/ev/hooks";
 import type { BluelinkCar, BluelinkStatus } from "~/features/ev/types";
 import { MODE_LABEL, STATUS_LABEL } from "~/features/ev/utils";
+import { PageLoading, PageProblem } from "~/features/settings/components/PageStatus";
 
 /** A car: its name and charge, which it is, what it's doing and how it charges, and opening it on the EV page. */
 function CarRow({ v }: { v: BluelinkCar }) {
@@ -164,7 +165,6 @@ export function BluelinkSettings() {
     <>
       <SubPageHeader
         back={<BackLink to="/integrations/ev">Electric vehicles</BackLink>}
-        id="h-bl"
         title="Hyundai and Kia"
         sub="See each car's charge on the EV page and charge it from spare solar."
       />
@@ -172,8 +172,8 @@ export function BluelinkSettings() {
         <ReachTag reach="cloud" />
         <UntestedTag />
       </div>
-      {isPending && <p className="m-0 text-sm text-ink-muted">Checking the connection…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
+      {isPending && <PageLoading label="Checking the connection" />}
+      {error && <PageProblem>{errorMessage(error)}</PageProblem>}
       {status && !status.connected && (
         <SettingsSection
           id="h-bl-connect"
@@ -194,7 +194,7 @@ export function BluelinkSettings() {
               <BluelinkConnect status={status} />
             </SettingsSection>
           ) : (
-            status.error && <p className="m-0 text-sm text-bad">Not updating: {status.error}</p>
+            status.error && <PageProblem>Not updating. {status.error}</PageProblem>
           )}
           <SettingsSection
             id="h-bl-cars"
@@ -217,14 +217,14 @@ export function BluelinkSettings() {
       <SettingsSection
         id="h-bl-about"
         title="What it can do"
-        sub="It reads each car's charge, range, plug and charging state, time to full, charge limit and where it's parked. On its EV page it can charge from spare solar, with the same choices and timing as a Tesla. It starts a charge once there's been enough spare sun for its charger for a while, and stops once there hasn't. Hyundai's and Kia's clouds can start and stop a charge and set the charge limit (in tens of percent), but can't set the charging speed. So the car always charges at what its charger gives. Choose your charger on its EV page, since solar charging only starts once that much is spare."
+        sub="Reads each car's charge, range, plug, charging state, time to full, charge limit and where it's parked. On its EV page it charges from spare solar, with the same choices and timing as a Tesla. The cloud can start and stop a charge and set the limit (in tens of percent), but not the speed, so the car charges at whatever its charger gives. Choose your charger on its EV page, as solar charging waits until that much is spare."
       >
         {null}
       </SettingsSection>
       <SettingsSection
         id="h-bl-limits"
         title="Worth knowing"
-        sub="Everything goes through Hyundai's or Kia's cloud, like their apps. There's no public API, so it could stop working if they change it, and an outage there pauses solar charging. The cloud only knows what the car last sent it, so by day the dashboard asks the car itself now and then. That wakes the car's modem and draws a little on its 12 V battery (choose how often, or never, on the car's EV page). Too many requests in a day and the cloud refuses more for a while. Genesis isn't supported yet, as in Australia it has its own app and servers. It hasn't been tried on a real Hyundai or Kia yet, so if anything looks off, open an issue and it'll get checked."
+        sub="Everything goes through Hyundai's or Kia's cloud, like their apps. There's no public API, so a change on their side could break it, and an outage there pauses solar charging. By day the dashboard asks the car itself now and then, which wakes its modem and draws a little on its 12 V battery (choose how often, or never, on its EV page). Too many requests in a day and the cloud refuses more for a while. Genesis isn't supported yet, as in Australia it has its own app and servers. It hasn't been tried on a real Hyundai or Kia, so if anything looks off, open an issue and it'll get checked."
       >
         {null}
       </SettingsSection>

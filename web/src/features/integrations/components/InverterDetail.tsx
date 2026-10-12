@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { longDate } from "~/features/common/formatting/utils/date";
 import { ButtonLink } from "~/features/common/ui/components/Button";
-import { cn } from "~/features/common/ui/utils";
 import { ConfirmAction } from "~/features/integrations/components/ConfirmAction";
 import { ReadOnlyNote } from "~/features/integrations/components/ConnectedInverters";
 import { InverterWiring } from "~/features/integrations/components/InverterWiring";
@@ -11,6 +10,7 @@ import { ReachTag, UntestedTag } from "~/features/integrations/components/ReachT
 import { useInverters, useRemoveInverter } from "~/features/integrations/hooks";
 import { asRole, brandSlug, deviceAddress, REMOVE_NOTE, ROLE_DETAIL, ROLE_NAME } from "~/features/integrations/utils";
 import { OptionList, SettingsSection } from "~/features/settings/components/SettingsSection";
+import { PageProblem } from "~/features/settings/components/PageStatus";
 import { BackLink, SubPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /**
@@ -45,7 +45,6 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
       <>
         <SubPageHeader
           back={back}
-          id="h-inverter"
           title={known ? `Your ${ROLE_NAME[known]}` : "Inverter"}
           sub={
             waiting
@@ -79,11 +78,16 @@ export function InverterDetail({ brand, role }: { brand: string; role: string })
 
   return (
     <>
-      <SubPageHeader back={back} id="h-inverter" title={name} sub={ROLE_DETAIL[device.role]} />
-      <p className={cn("m-0 text-sm", on ? "text-ink-muted" : "text-warn")}>
-        {status}: {reading}.
-      </p>
-      {!ok && problem && <p className="m-0 text-sm text-bad">{problem}</p>}
+      <SubPageHeader
+        back={back}
+        title={name}
+        sub={on ? `${ROLE_DETAIL[device.role]} · ${status}, ${reading}` : ROLE_DETAIL[device.role]}
+      />
+      {!on && (
+        <PageProblem tone={!ok && problem ? "bad" : "warn"}>
+          {status}, {reading}.{!ok && problem && ` ${problem}`}
+        </PageProblem>
+      )}
       <div className={hybrid ? "flex flex-col gap-5" : "grid gap-5 xl:grid-cols-2"}>
         <SettingsSection
           id="h-inverter-about"

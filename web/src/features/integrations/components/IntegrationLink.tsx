@@ -1,5 +1,6 @@
 import { createLink, type LinkComponent } from "@tanstack/react-router";
 import { forwardRef, type AnchorHTMLAttributes, type ReactNode } from "react";
+import { alpha } from "~/features/common/theme/utils/colors";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { cn } from "~/features/common/ui/utils";
@@ -20,6 +21,8 @@ type TileProps = {
   card?: boolean;
   /** Not set up yet: a flat tile, dashed, that says Connect rather than opening with a chevron. */
   connect?: boolean;
+  /** Its section's colour (COLOR.solar for inverters…): the icon is lit in it once it's connected (has a status). */
+  color?: string;
 };
 
 const ROW = "flex items-center gap-4 border-b border-line-subtle px-6 py-5 last:border-b-0 max-sm:px-5";
@@ -28,15 +31,19 @@ const CARD =
 const CONNECT =
   "flex items-center gap-4 rounded-2xl border border-dashed border-line bg-transparent px-5 py-4 transition-[border-color,background-color] duration-200 ease-out-soft hover:border-solid hover:border-line-strong";
 
-/** Icon, name with a status pill, and a line of detail. */
-function TileBody({ icon, name, status, on, attention, detail, tags, connect }: TileProps) {
+/** Icon (lit in its colour once connected), name with a status pill, and a line of detail. */
+function TileBody({ icon, name, status, on, attention, detail, tags, connect, color }: TileProps) {
+  const lit = !connect && !!status && !!color;
   return (
     <>
       <div
+        aria-hidden
         className={cn(
-          "flex flex-none items-center justify-center rounded-full bg-canvas",
-          connect ? "size-9 text-ink-muted" : "size-11 text-ink",
+          "flex flex-none items-center justify-center rounded-full",
+          !lit && "bg-canvas",
+          connect ? "size-9 text-ink-muted" : cn("size-11", !lit && "text-ink"),
         )}
+        style={lit ? { background: alpha(color, 0.16), color } : undefined}
       >
         <Icon name={icon} size={connect ? 18 : 22} />
       </div>
@@ -57,7 +64,10 @@ function TileBody({ icon, name, status, on, attention, detail, tags, connect }: 
 }
 
 const TileAnchor = forwardRef<HTMLAnchorElement, TileProps & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children">>(
-  function TileAnchor({ icon, name, status, on, attention, detail, tags, card, connect, className, ...rest }, ref) {
+  function TileAnchor(
+    { icon, name, status, on, attention, detail, tags, card, connect, color, className, ...rest },
+    ref,
+  ) {
     return (
       <a
         ref={ref}
@@ -81,6 +91,7 @@ const TileAnchor = forwardRef<HTMLAnchorElement, TileProps & Omit<AnchorHTMLAttr
           detail={detail}
           tags={tags}
           connect={connect}
+          color={color}
         />
         {connect ? (
           <span className="flex flex-none items-center gap-1 text-[13px] font-semibold text-brand">
