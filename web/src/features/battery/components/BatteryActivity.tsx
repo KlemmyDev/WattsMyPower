@@ -53,7 +53,7 @@ export function BatteryActivity({ now, className }: { now: number; className?: s
       )}
       {days.map(([name, list]) => (
         <div key={name} className="flex flex-col gap-2">
-          <span className="font-mono text-[11px] tracking-[1.5px] text-ink-faint uppercase">{name}</span>
+          <span className="text-xs font-medium text-ink-faint">{name}</span>
           <ol className="m-0 flex list-none flex-col p-0">
             {list.map((e, i) => (
               <li key={`${e.ts}-${e.text}`} className="relative flex gap-3 pb-3 last:pb-0">

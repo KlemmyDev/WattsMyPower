@@ -1,23 +1,21 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { hhmm, hourLabel, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, money } from "~/features/common/formatting/utils/number";
-import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { addDays, midnight, mondayFirst } from "~/features/common/time/utils";
+import { alpha } from "~/features/common/theme/utils/colors";
+import { mondayFirst } from "~/features/common/time/utils";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Pill } from "~/features/common/ui/components/Pill";
 import { Swatch } from "~/features/common/ui/components/Swatch";
-import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
 import type { HomeDevice, HomePeak, HomeProfile } from "~/features/home/types";
 import { WEEKDAY_SHORT } from "~/features/home/utils";
 
-const USUAL = alpha(COLOR.fg, 0.45);
-const WEEKDAY_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+export const WEEKDAY_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 /** A figure in a card's corner, with what it is above it and, optionally, below. */
-function Corner({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
+export function Corner({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex flex-none flex-col items-end gap-0.5">
       <span className="text-xs text-ink-faint">{label}</span>
@@ -38,88 +36,6 @@ function Head({ title, sub, children }: { title: string; sub: ReactNode; childre
 
 /** Before the first day's readings are in, there's no usual to show. */
 const LEARNING = "This starts after a day of readings, and gets sharper over eight weeks.";
-
-/**
- * Today's power through the day against a usual day (the same weekday's, once there are a few), with where today is
- * likely to end up: what's been used, plus the rest of a usual day.
- */
-export function UsualDayCard({
-  profile: p,
-  color,
-  now,
-  className,
-}: {
-  profile: HomeProfile;
-  color: string;
-  now: number;
-  className?: string;
-}) {
-  const start = midnight(now);
-  const { today: t } = p;
-  const u = t.usual;
-  const day = u.same_weekday ? `a usual ${WEEKDAY_LONG[mondayFirst(start)]}` : "a usual day";
-  const points: LinePoint[] = t.t.map((ts, i) => ({ t: ts + 150, v: t.w[i] }));
-  const usual: LinePoint[] = u.w.map((w, i) => ({ t: start + i * u.slot + u.slot / 2, v: w }));
-  const ahead = u.by_now > 0.01 ? (t.kwh - u.by_now) / u.by_now : null;
-  return (
-    <Card className={className}>
-      <Head
-        title={`Today against ${day}`}
-        sub={
-          p.days
-            ? `${kWh(t.kwh)} so far${
-                ahead == null
-                  ? ""
-                  : Math.abs(ahead) < 0.1
-                    ? ", about as usual by now"
-                    : `, ${Math.round(Math.abs(ahead) * 100)}% ${ahead > 0 ? "more" : "less"} than usual by now`
-              }`
-            : "Power through today"
-        }
-      >
-        {t.by_midnight != null && (
-          <Corner label="By midnight" sub={`usually ${kWh(u.kwh)}`}>
-            {kWh(t.by_midnight)}
-          </Corner>
-        )}
-      </Head>
-      <div className="flex gap-4 text-xs text-ink-dim">
-        <span className="flex items-center gap-1.5">
-          <i className="h-[3px] w-3.5 rounded-[2px]" style={{ background: color }} />
-          Today
-        </span>
-        {p.days > 0 && (
-          <span className="flex items-center gap-1.5">
-            <i className="w-3.5 border-t-2 border-dashed" style={{ borderColor: USUAL }} />
-            Usual, from {u.days} {u.days === 1 ? "day" : "days"}
-          </span>
-        )}
-      </div>
-      <TimeLine
-        label={`Power through today, against ${day}`}
-        points={points}
-        compare={p.days ? { points: usual, color: USUAL } : undefined}
-        start={start}
-        end={addDays(start, 1)}
-        now={now}
-        color={color}
-        fill
-        height={180}
-        domain={[0, 100]}
-        every={3}
-        empty="No readings yet today."
-        tip={(pt, other) => (
-          <>
-            <span className="font-medium text-ink">{hhmm(pt.t)}</span>
-            {pt.v != null && <TooltipRow label="Today" value={kW(pt.v)} color={color} />}
-            {other?.v != null && <TooltipRow label="Usual" value={kW(other.v)} color={USUAL} />}
-          </>
-        )}
-      />
-      {!p.days && <Muted>{LEARNING}</Muted>}
-    </Card>
-  );
-}
 
 /**
  * The next seven days: each one's usual use (its weekday's), with the range 8 in 10 of those days came within, and

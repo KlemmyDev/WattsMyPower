@@ -631,9 +631,7 @@ function DaySummary({
   };
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-canvas/60 px-4 py-3 light:bg-canvas">
-      <span className="font-mono text-[11px] tracking-[1.5px] text-ink-faint uppercase">
-        {title}, from the forecast
-      </span>
+      <span className="text-[13px] font-medium text-ink-muted">{title}, from the forecast</span>
       {row(
         "Expected",
         expected,
