@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useMedia } from "~/features/common/layout/hooks";
@@ -397,24 +398,28 @@ export function DashboardPage() {
             </div>
           </div>
         </div>
-        {!phone && (
-          <aside
-            aria-label={selected ? "Widget settings" : "Add widgets"}
-            className="fixed inset-y-0 right-0 z-40 flex w-[380px] animate-[wmpTrayIn_320ms_var(--ease-out-soft)] flex-col gap-4 overflow-y-auto border-l border-line-subtle bg-surface-inset px-6 py-7 shadow-[-24px_0_60px_-30px_rgb(0_0_0/0.6)] light:bg-surface"
-          >
-            {selected && (
-              <button
-                type="button"
-                onClick={() => setDraft((d) => d && { ...d, selected: null })}
-                className="flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 font-sans text-[13px] text-brand hover:underline"
-              >
-                <Icon name="chevL" size={14} />
-                All widgets
-              </button>
-            )}
-            {panel()}
-          </aside>
-        )}
+        {/* In the body, not the page: the page's sections rise in on a transform, which would hold a fixed tray
+            inside the page's padding until it ends. */}
+        {!phone &&
+          createPortal(
+            <aside
+              aria-label={selected ? "Widget settings" : "Add widgets"}
+              className="fixed inset-y-0 right-0 z-40 flex w-[380px] animate-[wmpTrayIn_320ms_var(--ease-out-soft)] flex-col gap-4 overflow-y-auto border-l border-line-subtle bg-surface-inset px-6 py-7 shadow-[-24px_0_60px_-30px_rgb(0_0_0/0.6)] light:bg-surface"
+            >
+              {selected && (
+                <button
+                  type="button"
+                  onClick={() => setDraft((d) => d && { ...d, selected: null })}
+                  className="flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 font-sans text-[13px] text-brand hover:underline"
+                >
+                  <Icon name="chevL" size={14} />
+                  All widgets
+                </button>
+              )}
+              {panel()}
+            </aside>,
+            document.body,
+          )}
       </div>
 
       {phone && (
