@@ -751,7 +751,8 @@ class TeslaService:
             self._woke(vin, str(row["woke"]))
         if row.get("wake_failed"):
             self._no_wake[vin] = int(row["wake_failed"])
-            self._note(vin, "The car didn't wake up for the dashboard's key. It's left asleep for half an hour, and its "
+            wait = max(1, round((int(row["wake_failed"]) - self.clock()) / 60))
+            self._note(vin, f"The car didn't wake up for the dashboard's key. It's tried again in {wait} min, and its "
                             "charge is read once it wakes (charging, in use, or woken from the Tesla app)"
                             + (". A charging-only key can't wake it, so pair it again as a driver if you'd like it to"
                                if self._key_role() == "charging_manager" else ""), "error")  # fmt: skip

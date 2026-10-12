@@ -25,9 +25,12 @@ closely the service follows the car (app.features.tesla.control.readiness):
 
 Asleep, its last charge reading stands, and a closed charge port says it's unplugged. A car with no charge reading
 yet (the dashboard has just started) is woken once to be read, unless its port is closed. A command wakes the car
-first. A car that doesn't wake (a charging manager's key may not be allowed to wake it) isn't woken again for
-WAKE_BACKOFF seconds: until then it's only checked without waking it, and its charge is read once it's awake anyway
-(charging, in use, or woken from the Tesla app). A car that isn't heard is out of range: not at home, or too far from the server.
+first, and it's given WAKE_SECONDS to wake. A car that doesn't wake isn't woken again for a while, longer each time
+it misses in a row (WAKE_BACKOFF): a driver's key can miss once (the car slow to come up after a long sleep), so it's
+tried again within a minute; a charging manager's key may not be allowed to wake it at all, so it soon settles at half
+an hour. Until then it's only checked without waking it, and its charge is read once it's awake anyway (charging, in
+use, or woken from the Tesla app). A link held open is let go after a wake that failed over it, so the next try
+starts afresh. A car that isn't heard is out of range: not at home, or too far from the server.
 
 Each read or command is one conversation: find the car, connect, talk, disconnect; one at a time with anything else
 on the radio (app.core.bluetooth). One whose link couldn't be made, or dropped before anything reached the car, is had
@@ -83,7 +86,9 @@ BUSY_MESSAGE = (
     "with its key uses one while it's nearby. Once one moves out of range, the dashboard can connect."
 )
 HANG_UP_SECONDS = 5.0  # to disconnect once done: what was read stands whether or not it went cleanly
-WAKE_BACKOFF = 1800  # seconds the car isn't woken again after it didn't wake (the key may not be allowed to wake it)
+# Seconds the car isn't woken again after it didn't wake, by how many times in a row it hasn't (the last for any more).
+WAKE_BACKOFF = (60, 180, 600, 1800)
+WAKE_SECONDS = 60.0  # for the car to wake: its infotainment computer can take a while to come up after a long sleep
 WEAK_RSSI = -85  # dBm: a signal below this is weak (the car at the edge of range)
 FAIR_RSSI = -72
 PAIR_SECONDS = 150  # to get in the car and tap the key card
@@ -208,6 +213,7 @@ class BluetoothClient:
         self._refused: dict[str, dict[str, tuple[int, str]]] = {}  # vin -> group -> (when, why)
         self._gone: set[str] = set()  # cars not heard last time: back in range, their charge is read at once
         self._no_wake: dict[str, float] = {}  # vin -> until when it isn't woken (it didn't wake last time)
+        self._missed: dict[str, int] = {}  # vin -> how many times in a row it didn't wake (WAKE_BACKOFF)
         self._stale: set[str] = set()  # cars sent a command since their charge was read: read it at the next read
         self._linked: set[str] = set()  # cars whose link was held open after their last read
 
@@ -252,9 +258,11 @@ class BluetoothClient:
         else:
             self._linked.discard(vin)
         if r.get("wake_failed"):
-            self._no_wake[vin] = now + WAKE_BACKOFF
+            missed = self._missed[vin] = self._missed.get(vin, 0) + 1
+            self._no_wake[vin] = now + WAKE_BACKOFF[min(missed, len(WAKE_BACKOFF)) - 1]
         elif r.get("charge_state") is not None:
             self._no_wake.pop(vin, None)
+            self._missed.pop(vin, None)
         return self._row(vin, r, "ready" if want == "ready" else "first")
 
     def _row(self, vin: str, r: dict[str, Any], why: str | None = None) -> dict[str, Any]:
@@ -432,8 +440,9 @@ def _explain(e: BaseException, talk: dict[str, Any] | None = None) -> TeslaError
     waking = str((talk or {}).get("step") or "").startswith("waking")
     if waking and (named("BluetoothTimeout", "BluetoothCommandFailed") or isinstance(e, TimeoutError)):
         return TeslaError(
-            "The car is asleep and didn't wake up for the dashboard's key. A charging-only key can't wake it. Pair it "
-            "again as a driver (Manage → Integrations → Tesla), or wake it in the Tesla app and try again."
+            "The car is asleep and didn't wake up in time for the dashboard's key. It's tried again shortly. If it "
+            "keeps happening with a charging-only key (which can't wake it), pair it again as a driver (Manage → "
+            "Integrations → Tesla)."
         )
     if named("BluetoothTransportError") and _busy(talk):
         return TeslaError(BUSY_MESSAGE, busy=True)
@@ -579,6 +588,7 @@ async def _talk(
             wake_if_asleep=wake,
         )
         car._default_timeout, car._actuation_timeout = REPLY_SECONDS, ACK_SECONDS
+        car._wake_timeout = WAKE_SECONDS  # a command or read that wakes it waits this long for it
         with _connect_tries(talk):
             await car.connect()
         keep = False
@@ -773,8 +783,13 @@ def _read_now(
             out["extras"], out["refused"] = await _extras(car, extras)
         return out
 
-    # Held only while it's plugged in (its port not closed): unplugged, it's let go to sleep in peace.
-    keep = None if hold is None else (lambda out: bool(hold) and out.get("port_open") is not False)
+    # Held only while it's plugged in (its port not closed): unplugged, it's let go to sleep in peace. Nor after a wake
+    # that failed over it: the next try starts afresh, in case the link's the trouble.
+    keep = (
+        None
+        if hold is None
+        else (lambda out: bool(hold) and out.get("port_open") is not False and not out.get("wake_failed"))
+    )
     return _converse(lambda: _talk(vin, key, then, wake=wake, hold=keep)) or {"heard": False}
 
 
