@@ -51,7 +51,6 @@ const FRAME =
 export type FlowOpens = "each" | "home" | "solar" | "history" | "none";
 type Page = "/solar" | "/grid" | "/battery" | "/home" | "/ev" | "/history";
 const OPENS: Record<"home" | "solar" | "history", Page> = { home: "/home", solar: "/solar", history: "/history" };
-/** The page a reading opens, as `opens` has it (its own, `own`), or none. */
 /** Each page by name, for what a link to it says. */
 export const PAGE_NAME: Record<Page, string> = {
   "/solar": "Solar",
@@ -61,6 +60,7 @@ export const PAGE_NAME: Record<Page, string> = {
   "/ev": "your car",
   "/history": "History",
 };
+/** The page a reading opens, as `opens` has it (its own, `own`), or none. */
 export const pageFor = (opens: FlowOpens, own: Page): Page | undefined =>
   opens === "none" ? undefined : opens === "each" ? own : OPENS[opens];
 
@@ -263,9 +263,6 @@ export function WeatherCapsule({
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
-  const icon = liveWeatherIcon(wx);
-  const tint = WEATHER_TINT[icon];
-  const hours = (f?.hours ?? []).filter((h) => h.ts + 3600 > now).slice(0, AHEAD + 1);
   const timing = f?.weather;
   return (
     <div
@@ -287,9 +284,7 @@ export function WeatherCapsule({
       >
         {/* keyed by the weather, so a change fades in rather than snapping */}
         <span ref={line} key={wx.label} className="flex w-max flex-none animate-fade items-center gap-1.5">
-          <Icon name={icon} size={16} style={tint ? { color: tint } : { opacity: 0.75 }} />
-          {wx.temp && <span className="font-semibold tabular-nums">{wx.temp}</span>}
-          <span className="text-ink-muted">{wx.name}</span>
+          <WeatherLine wx={wx} />
           {timing?.next_at != null && (
             // the open card's footer says it in full, so this fades as it opens
             <WeatherDueShort
@@ -319,30 +314,62 @@ export function WeatherCapsule({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="flex w-[min(312px,calc(100vw-84px))] flex-col gap-3.5 px-3.5 pt-2 pb-3.5">
-            {hours.length > 0 && (
-              <Ahead
-                key={String(open)}
-                hours={hours}
-                now={now}
-                fahrenheit={!!s?.temp_unit_f}
-                pvKw={s?.pv_kw}
-                source={`Open-Meteo${s && s.weather_model !== "best_match" ? ` · ${MODEL_NAMES[s.weather_model]}` : ""}`}
-              />
-            )}
-            {timing?.next_at != null && (
-              <div
-                className={cn(
-                  "flex items-center border-t pt-3 text-xs leading-4 font-medium",
-                  "border-line text-ink-muted",
-                )}
-              >
-                <WeatherDue timing={timing} next={timing.next_at} />
-              </div>
-            )}
+            {/* keyed, so the hours rise in again each time it opens */}
+            <WeatherAhead key={String(open)} f={f} s={s} now={now} />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** The weather now, in a line: its icon in colour, the temperature and what it's doing. */
+export function WeatherLine({ wx, size = 16 }: { wx: LiveWeather; size?: number }) {
+  const icon = liveWeatherIcon(wx);
+  const tint = WEATHER_TINT[icon];
+  return (
+    <>
+      <Icon name={icon} size={size} style={tint ? { color: tint } : { opacity: 0.75 }} />
+      {wx.temp && <span className="font-semibold tabular-nums">{wx.temp}</span>}
+      <span className="text-ink-muted">{wx.name}</span>
+    </>
+  );
+}
+
+/**
+ * The hours ahead (`count` of them after this one) and when the weather was fetched and is next due: what the weather
+ * capsule opens to, and the Weather widget.
+ */
+export function WeatherAhead({
+  f,
+  s,
+  now,
+  count = AHEAD,
+}: {
+  f: Forecast | null | undefined;
+  s: SystemInfo | undefined;
+  now: number;
+  count?: number;
+}) {
+  const hours = (f?.hours ?? []).filter((h) => h.ts + 3600 > now).slice(0, count + 1);
+  const timing = f?.weather;
+  return (
+    <>
+      {hours.length > 0 && (
+        <Ahead
+          hours={hours}
+          now={now}
+          fahrenheit={!!s?.temp_unit_f}
+          pvKw={s?.pv_kw}
+          source={`Open-Meteo${s && s.weather_model !== "best_match" ? ` · ${MODEL_NAMES[s.weather_model]}` : ""}`}
+        />
+      )}
+      {timing?.next_at != null && (
+        <div className="flex items-center border-t border-line pt-3 text-xs leading-4 font-medium text-ink-muted">
+          <WeatherDue timing={timing} next={timing.next_at} />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -382,14 +409,17 @@ function Ahead({
     <>
       <div className={cn("flex items-center justify-between text-xs leading-4 font-medium", quiet)}>
         <span>
-          Next {AHEAD} hours · {source}
+          Next {hours.length - 1} hours · {source}
         </span>
         <span className="flex items-center gap-1">
           <span className="size-2 rounded-full" style={{ background: COLOR.solar }} />
           Solar kW
         </span>
       </div>
-      <ol className="m-0 grid list-none grid-cols-5 gap-x-2 p-0">
+      <ol
+        className="m-0 grid list-none gap-x-2 p-0"
+        style={{ gridTemplateColumns: `repeat(${hours.length}, minmax(0, 1fr))` }}
+      >
         {hours.map((h, i) => {
           const icon = hourIcon(h);
           const tint = WEATHER_TINT[icon];

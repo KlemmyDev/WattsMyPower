@@ -1,5 +1,6 @@
 import {
   Component,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -124,6 +125,11 @@ export function DashboardGrid({
   const [drag, setDragState] = useState<Drag | null>(null);
   // The drag as it is this moment, for the pointer's next move and its letting go, which can come before a redraw.
   const live = useRef<Drag | null>(null);
+  // The widgets there were when arranging began, and since: one that's new fades in, the rest just stay put.
+  const [known] = useState(() => new Set(items.map((i) => i.id)));
+  useEffect(() => {
+    for (const i of items) known.add(i.id);
+  }, [items, known]);
   const setDrag = (d: Drag | null) => {
     live.current = d;
     setDragState(d);
@@ -234,8 +240,11 @@ export function DashboardGrid({
   };
 
   return (
+    // data-arranging: the widgets' own entrances (rising, fading, filling) keep still here (app.css), as they'd replay
+    // each time one's moved or set up.
     <div
       ref={box}
+      data-arranging
       className="relative grid gap-5"
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: `minmax(${ROW}px, auto)` }}
       onPointerDown={(e) => e.target === e.currentTarget && onSelect?.(null)}
@@ -249,14 +258,17 @@ export function DashboardGrid({
             key={i.id}
             data-widget={i.id}
             style={place(i)}
-            className={cn("relative flex min-w-0 flex-col *:flex-1", !drag && "animate-fade")}
+            className={cn(
+              "relative flex min-w-0 flex-col *:flex-1",
+              !known.has(i.id) && "animate-[wmpFade_280ms_ease_backwards]",
+            )}
           >
             {/* Kept while it's dragged (it holds the pointer), showing where it'll land. */}
             <Frame
               item={i}
               name={def?.name ?? "Widget"}
               on={on}
-              ghost={moving ? drag.box.height : 0}
+              ghost={moving}
               onDown={(e) => start(e, i.id, "move")}
               onResize={(e) => start(e, i.id, "resize")}
               onMove={follow}
@@ -310,8 +322,8 @@ function Frame({
   item: WidgetItem;
   name: string;
   on: boolean;
-  /** It's being dragged (this tall): in its place, only where it'll land, holding its room. */
-  ghost: number;
+  /** It's being dragged: in its place, only where it'll land (its content kept, unseen, holding its room). */
+  ghost: boolean;
   onDown: (e: PointerEvent<HTMLElement>) => void;
   onResize: (e: PointerEvent<HTMLElement>) => void;
   onMove: (e: PointerEvent<HTMLElement>) => void;
@@ -340,16 +352,16 @@ function Frame({
           : "outline-[1.5px] outline-offset-2 outline-brand/40 outline-dashed focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-solid",
       )}
     >
-      {ghost ? (
-        <div
-          className="flex-1 rounded-3xl border-2 border-dashed border-brand/60 bg-brand/8"
-          style={{ minHeight: ghost }}
-        />
-      ) : (
-        <div inert className="pointer-events-none flex flex-1 flex-col rounded-3xl select-none *:min-h-0 *:flex-1">
-          {children}
-        </div>
-      )}
+      <div
+        inert
+        className={cn(
+          "pointer-events-none flex flex-1 flex-col rounded-3xl select-none *:min-h-0 *:flex-1",
+          ghost && "invisible",
+        )}
+      >
+        {children}
+      </div>
+      {ghost && <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-brand/60 bg-brand/8" />}
       <span
         data-grip
         aria-hidden
