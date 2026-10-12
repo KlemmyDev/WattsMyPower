@@ -143,11 +143,10 @@ export function TodayCard({
       )}
       <div className={cn("flex min-h-0 min-w-0 flex-1 gap-6", beside ? "flex-row" : "flex-col")}>
         <div
+          // anchored to the top, with the rates beside them starting level
           className={cn(
             "flex min-w-0 flex-col gap-3",
-            beside ? (rates ? "w-[26rem] max-w-[45%] flex-none justify-center" : "flex-1 justify-center") : "",
-            // with nothing under them, the figures sit in the middle
-            !beside && !rates && "flex-1 justify-center",
+            beside && (rates ? "w-[26rem] max-w-[45%] flex-none" : "flex-1"),
           )}
         >
           {xs ? (
@@ -168,11 +167,11 @@ export function TodayCard({
           <div className="relative min-h-0 min-w-0 flex-1">
             <div className="absolute inset-0 flex flex-col overflow-hidden">
               {rates === "table" ? (
-                <Table rows={lines.rows} c={c!} note={note} className={cn(beside && "my-auto")} />
+                <Table rows={lines.rows} c={c!} note={note} />
               ) : rates === "list" ? (
-                <List rows={lines.rows} c={c!} className={cn(beside && "my-auto")} />
+                <List rows={lines.rows} c={c!} />
               ) : (
-                <Strip rows={lines.rows} className="my-auto" />
+                <Strip rows={lines.rows} />
               )}
             </div>
           </div>
@@ -423,9 +422,9 @@ const COLS =
   "grid grid-cols-[minmax(0,1.6fr)_minmax(64px,0.8fr)_minmax(64px,0.8fr)_minmax(64px,0.8fr)] items-center gap-3 tabular-nums max-xs:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(52px,0.8fr))] max-xs:gap-2";
 
 /** Today rate by rate in full: what came from the grid, the cost and the saving, with the day's total. */
-function Table({ rows, c, note, className }: { rows: Line[]; c: CostDay; note: string | null; className?: string }) {
+function Table({ rows, c, note }: { rows: Line[]; c: CostDay; note: string | null }) {
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className="flex flex-col">
       <div className={cn(COLS, "pb-2 font-mono text-[10px] tracking-[1px] text-ink-faint uppercase")}>
         <span>Period</span>
         <span className="text-right">From grid</span>
@@ -467,10 +466,10 @@ function Row({ r }: { r: Line }) {
 }
 
 /** Today rate by rate, a line each: the cost and the saving, with the day's total. */
-function List({ rows, c, className }: { rows: Line[]; c: CostDay; className?: string }) {
+function List({ rows, c }: { rows: Line[]; c: CostDay }) {
   const line = "flex h-7 min-w-0 items-center gap-2 text-[13px] tabular-nums";
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className="flex flex-col">
       {rows.map((r) => (
         <div key={r.key} className={line} title={r.sub}>
           <i className="size-2 flex-none rounded-full" style={{ background: r.dot }} />
@@ -491,9 +490,9 @@ function List({ rows, c, className }: { rows: Line[]; c: CostDay; className?: st
 }
 
 /** Today rate by rate as tiles side by side: each one's cost, and its saving. */
-function Strip({ rows, className }: { rows: Line[]; className?: string }) {
+function Strip({ rows }: { rows: Line[] }) {
   return (
-    <div className={cn("grid auto-cols-fr grid-flow-col gap-2", className)}>
+    <div className="grid auto-cols-fr grid-flow-col gap-2">
       {rows.map((r) => (
         <div
           key={r.key}
