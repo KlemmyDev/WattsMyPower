@@ -23,9 +23,9 @@ import type { WeatherDay, WeatherHour } from "~/features/weather/types";
 type Today = ReturnType<typeof solarToday>;
 
 /**
- * Solar now and through today, in one card: what the panels are making (against the array and against what the
- * forecast expected for this hour), the day's peak, tomorrow, the daylight and the sky; today's pace against this
- * morning's forecast; and, unless `chart` is off, the day's solar against what was expected, with the sky hour by
+ * Solar today and now, in one card: what the panels have made today and where it's heading (against this morning's
+ * forecast), what they're making now (against the array and what the forecast expected for this hour), the day's
+ * peak, tomorrow, the daylight and the sky; and, unless `chart` is off, the day's solar against what was expected, with the sky hour by
  * hour and the sun under it.
  */
 export function SolarHero({
@@ -57,29 +57,51 @@ export function SolarHero({
   // The sun's orange while the panels make power; resting, the moon's blue.
   const tint = live.producing ? SOLAR : COLOR.moon;
   const [value, unit] = kW(live.pv).split(" ");
+  const [madeValue, madeUnit] = today.made != null ? kWh(today.made).split(" ") : [DASH];
+  // Nothing more expected today: the sun's down, or the forecast has no more to come.
+  const done = today.made != null && today.heading != null && today.heading - today.made < 0.05;
   return (
     <Card
-      aria-label="Solar now and today"
+      aria-label="Solar today and now"
       className="h-full gap-6"
       style={{
         backgroundImage: `linear-gradient(180deg, ${alpha(tint, live.producing ? 0.1 : 0.06)}, transparent 45%)`,
       }}
     >
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
-        <div className="flex flex-col gap-1.5">
-          <span className="flex items-center gap-2 text-[13px] text-ink-muted">
-            <LiveDot on={live.producing} color={tint} />
-            {live.producing ? "Generating now" : "Panels resting"}
-          </span>
-          <Figure value={value} unit={unit} size="xl" />
-          <span className="flex flex-wrap items-center gap-2 text-[13px] text-ink-muted tabular-nums">
-            {live.array
-              ? live.producing && live.share != null
-                ? `${pct(live.share * 100)} of your ${live.array} kW array`
-                : `${live.array} kW array`
-              : null}
-            {live.vsExpected != null && <Delta value={live.vsExpected}>{signedPct(live.vsExpected)} on expected</Delta>}
-          </span>
+      {/* On a phone the rows below come apart (contents) so the pace bar can sit right under what's been made. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5 max-sm:contents">
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-5 max-sm:contents">
+          <div className="flex flex-col gap-1.5 max-sm:-order-2">
+            <span className="text-[13px] text-ink-muted">Made today</span>
+            <Figure value={madeValue} unit={madeUnit} size="xl" />
+            <span className="flex flex-wrap items-center gap-2 text-[13px] text-ink-muted tabular-nums">
+              {today.made == null
+                ? "No reading yet"
+                : done
+                  ? "Done for the day"
+                  : today.heading != null && `Heading for ${kWh(today.heading)} by midnight`}
+              {today.pace != null && (
+                <Delta value={today.pace}>{signedPct(today.pace)} on this morning's forecast</Delta>
+              )}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5 border-l border-line-subtle pl-6 max-sm:border-l-0 max-sm:pl-0">
+            <span className="flex items-center gap-2 text-[13px] text-ink-muted">
+              <LiveDot on={live.producing} color={tint} />
+              {live.producing ? "Generating now" : "Panels resting"}
+            </span>
+            <Figure value={value} unit={unit} />
+            <span className="flex flex-wrap items-center gap-2 text-xs text-ink-muted tabular-nums">
+              {live.array
+                ? live.producing && live.share != null
+                  ? `${pct(live.share * 100)} of your ${live.array} kW array`
+                  : `${live.array} kW array`
+                : null}
+              {live.vsExpected != null && (
+                <Delta value={live.vsExpected}>{signedPct(live.vsExpected)} on expected</Delta>
+              )}
+            </span>
+          </div>
         </div>
         <dl className="grid grid-cols-4 gap-x-8 gap-y-3 max-md:grid-cols-2">
           <Stat
@@ -96,13 +118,7 @@ export function SolarHero({
           />
         </dl>
       </div>
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[13px] font-medium text-ink">Today's pace</span>
-          {today.pace != null && <Delta value={today.pace}>{signedPct(today.pace)} on this morning's forecast</Delta>}
-        </div>
-        <Pace today={today} />
-      </div>
+      <Pace today={today} done={done} className="max-sm:-order-1" />
       {chart &&
         (series ? (
           <TimeLine
@@ -161,14 +177,14 @@ function Daylight({ sun, now }: { sun: Today["sun"]; now: number }) {
 }
 
 /**
- * Today's pace along one bar out of where it's heading: made so far, the rest the forecast expects (dashed), the range
- * it likely lands in, and a tick for this morning's forecast.
+ * Today's pace along one bar out of where it's heading: made so far (the figure above it), the rest the forecast
+ * expects (dashed), the range it likely lands in, and a tick for this morning's forecast.
  */
-function Pace({ today: t }: { today: Today }) {
+function Pace({ today: t, done, className }: { today: Today; done: boolean; className?: string }) {
   const whole = Math.max(t.heading ?? 0, t.planned ?? 0, t.likely?.high ?? 0, t.made ?? 0, 0.1);
   const at = (v: number) => `${Math.min(100, (v / whole) * 100)}%`;
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", className)}>
       <div className="relative h-2.5 rounded-full bg-track">
         {t.likely && (
           <span
@@ -180,7 +196,7 @@ function Pace({ today: t }: { today: Today }) {
             }}
           />
         )}
-        {t.heading != null && (
+        {t.heading != null && !done && (
           <span
             className="absolute inset-y-0 left-0 rounded-full border border-dashed"
             style={{ width: at(t.heading), borderColor: alpha(SOLAR, 0.7) }}
@@ -201,7 +217,7 @@ function Pace({ today: t }: { today: Today }) {
       <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-ink-faint tabular-nums">
         <span className="flex items-center gap-1.5">
           <i className="size-2 rounded-full" style={{ background: SOLAR }} />
-          <span className="text-ink">{kWh(t.made)}</span> made
+          Made so far
         </span>
         {t.planned != null && (
           <span className="flex items-center gap-1.5">
@@ -209,11 +225,12 @@ function Pace({ today: t }: { today: Today }) {
             {kWh(t.planned)} forecast this morning
           </span>
         )}
-        {t.heading != null && (
+        {t.heading != null && !done && (
           <span className="flex items-center gap-1.5">
             <i className="size-2 rounded-full border border-dashed" style={{ borderColor: SOLAR }} />
-            <span className="text-ink">{kWh(t.heading)}</span>
-            {t.likely ? `by midnight, likely ${t.likely.low.toFixed(1)} to ${kWh(t.likely.high)}` : "by midnight"}
+            {t.likely
+              ? `Likely ${t.likely.low.toFixed(1)} to ${kWh(t.likely.high)} by midnight`
+              : `${kWh(t.heading)} by midnight`}
           </span>
         )}
       </div>

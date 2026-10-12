@@ -77,7 +77,7 @@ export function SolarDays({
               left={((h + 0.5) / days.length) * 100}
               flip={h > days.length / 2}
               width={width}
-              className="top-12 max-sm:top-9"
+              className="top-auto bottom-full mb-2"
             >
               <span className="font-medium text-ink">{shortDay.format(parseYmd(days[h].date))}</span>
               <TooltipRow label="Made" value={kWh(days[h].kwh)} color={SOLAR} />
