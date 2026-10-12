@@ -892,6 +892,14 @@
     transform: translateY(10px);
   }
 }
+/* The customising tray, sliding in from the right edge. */
+@keyframes wmpTrayIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
 @keyframes wmpFade {
   from {
     opacity: 0;
@@ -1187,4 +1195,21 @@
   to {
     transform: translateX(300%);
   }
+}
+
+/*
+ * Arranging a dashboard, its widgets keep still: what each does as it first appears (rising, fading, filling) would
+ * replay every time one's moved or set up. Outside any layer, so it wins over the utilities.
+ */
+[data-arranging]
+  :is(
+    .animate-rise,
+    .animate-fade,
+    .animate-pop,
+    .animate-grow-y,
+    .animate-fill-x,
+    .animate-reveal-x,
+    .animate-spring-in
+  ) {
+  animation: none;
 }

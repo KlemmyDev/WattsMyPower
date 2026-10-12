@@ -87,7 +87,7 @@ function DeviceLink({ id, children }: { id: number; children: React.ReactNode })
  * Switching a device on and off. On is at once; off asks first (a fridge or freezer more firmly, as off it stops keeping
  * food cold). Shown only while the device can be reached and says whether it's on.
  */
-function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: string }) {
+export function Power({ device, kindLabel }: { device: HomeDevice; kindLabel: string }) {
   const { switch: change } = useHomeChange();
   const [asking, setAsking] = useState(false);
   const now = device.now;

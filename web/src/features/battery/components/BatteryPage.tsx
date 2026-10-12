@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { batteryQuery, insightsQuery } from "~/features/battery/api";
 import { AllBatteries, roomBatteries } from "~/features/battery/components/AllBatteries";
 import { BatteryActivity } from "~/features/battery/components/BatteryActivity";
 import { BatteryDayChart } from "~/features/battery/components/BatteryDayChart";
@@ -9,20 +8,22 @@ import { BatteryModes } from "~/features/battery/components/BatteryModes";
 import { BatteryBackup, BatteryDays, BatteryReadings, BatteryToday } from "~/features/battery/components/BatteryMore";
 import { BatteryPanel } from "~/features/battery/components/BatteryPanel";
 import { BatterySize } from "~/features/battery/components/BatterySize";
-import { useBatteryMode, useHasBattery, useNoBattery } from "~/features/battery/hooks";
+import {
+  useBatteryDay,
+  useBatteryInsights,
+  useBatteryMode,
+  useBatteryView,
+  useNoBattery,
+} from "~/features/battery/hooks";
 import type { BatteryPlan, ControlRequest } from "~/features/battery/types";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
-import { historyQuery } from "~/features/common/readings/api";
 import { useNow } from "~/features/common/time/hooks";
-import { addDays, midnight } from "~/features/common/time/utils";
 import { useForecast } from "~/features/common/weather/hooks";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { homeQuery } from "~/features/home/api";
-
-const FIELDS = ["battery_power", "grid_power", "pv_power", "load_power", "battery_temp"];
 
 /**
  * The home battery: big and simple at the top (its level, what it's doing, what it's set to do), the controls beside
@@ -36,20 +37,13 @@ export function BatteryPage() {
   const p = useSnapshot();
   const s = useSystem();
   const mode = useBatteryMode();
-  const has = useHasBattery();
   const none = useNoBattery();
-  const { data: view } = useQuery({ ...batteryQuery, enabled: has });
-  const { data, isError } = useQuery({ ...insightsQuery, enabled: has });
+  const v = useBatteryView();
+  const { data, isError } = useBatteryInsights();
   const [preview, setPreview] = useState<BatteryPlan | null>(null);
   const [draft, setDraft] = useState<ControlRequest | null>(null);
-  const v = view?.supported ? view : undefined;
   const f = useForecast();
-  const start = midnight(now);
-  const { data: day } = useQuery({
-    ...historyQuery({ start, end: addDays(start, 1), points: 288, fields: FIELDS, live: true }),
-    enabled: has,
-  });
-  const series = day?.series;
+  const { start, series } = useBatteryDay(now);
   const { data: home } = useQuery(homeQuery);
   const rooms = roomBatteries(home?.devices);
   const header = <PageHeader title="Battery" sub="See what your battery is doing, and tell it what to do" />;

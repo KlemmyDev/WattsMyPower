@@ -4,12 +4,16 @@ const missing = (v: number | null | undefined): v is null | undefined => v == nu
 export const DASH = "—";
 
 /** Power from watts, as value and unit: watts below 1 kW ("395", "W"), else kW ("1.2", "kW"). Magnitude only. */
-export function powerParts(w: number): [value: string, unit: "W" | "kW"] {
+export function powerParts(w: number, unit: PowerUnit = "auto"): [value: string, unit: "W" | "kW"] {
   const a = Math.abs(w);
+  if (unit === "kW") return [(a / 1000).toFixed(a < 9995 ? 2 : 1), "kW"];
   return Math.round(a) < 1000 ? [String(Math.round(a)), "W"] : [(a / 1000).toFixed(1), "kW"];
 }
+/** How power reads: in W or kW, whichever fits ("auto"), or always in kW ("0.79 kW"). */
+export type PowerUnit = "auto" | "kW";
 /** Watts as "395 W" or "1.2 kW" (magnitude only; direction is shown separately). */
-export const kW = (w: number | null | undefined) => (missing(w) ? DASH : powerParts(w).join(" "));
+export const kW = (w: number | null | undefined, unit?: PowerUnit) =>
+  missing(w) ? DASH : powerParts(w, unit).join(" ");
 
 /**
  * Energy from kWh, as value and unit: Wh below 1 kWh ("395", "Wh"), else kWh ("1.2", "kWh"). `whole`

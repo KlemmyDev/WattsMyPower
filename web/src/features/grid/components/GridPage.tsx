@@ -9,7 +9,7 @@ import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
-import { costsQuery, historyQuery } from "~/features/common/readings/api";
+import { costsQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -26,13 +26,12 @@ import { SummaryCard, SummaryStat } from "~/features/common/ui/components/Summar
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
+import { useGridDay } from "~/features/grid/hooks";
 import { HazardsCard } from "~/features/grid/components/HazardsCard";
 import { OutagesCard } from "~/features/grid/components/OutagesCard";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import type { GridView, MarketNotice, OutlookReason } from "~/features/grid/types";
 import { EXPORT, IMPORT, LEVEL, NOTICE_HELP, perMWh, REGIONS, wholesaleCents } from "~/features/grid/utils";
-
-const FIELDS = ["grid_power", "grid_voltage", "grid_freq"];
 
 /**
  * The grid: whether it's holding up (and what to do if it isn't) first, then what the house is buying and selling now
@@ -44,11 +43,7 @@ export function GridPage() {
   const p = useSnapshot();
   const s = useSystem();
   const { data: grid, isError } = useQuery(gridQuery);
-  const start = midnight(now);
-  const { data: day } = useQuery(
-    historyQuery({ start, end: addDays(start, 1), points: 288, fields: FIELDS, live: true }),
-  );
-  const series = day?.series;
+  const { start, series } = useGridDay(now);
   return (
     <>
       <PageHeader title="Grid" sub="What you buy and sell, what power costs right now, and how the grid's holding up" />
@@ -63,7 +58,7 @@ export function GridPage() {
         )}
         <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
           <div className="flex min-w-0 flex-col gap-5">
-            <TodayCard series={series} p={p} start={start} now={now} />
+            <GridTodayCard series={series} p={p} start={start} now={now} />
             {grid ? <WholesaleCard grid={grid} now={now} /> : <Skeleton className="h-[300px] rounded-3xl" />}
           </div>
           <div className="flex min-w-0 flex-col gap-5">
@@ -96,7 +91,7 @@ const STATUS: Record<GridView["outlook"]["level"], string> = {
  * normal, what to do and why under them: how long the battery would last, a way to top it up from the grid while it's
  * there, and each reason.
  */
-function GridSummary({
+export function GridSummary({
   grid,
   p,
   s,
@@ -239,7 +234,7 @@ function points(series: HistorySeries | undefined, field: string): LinePoint[] {
 }
 
 /** Power to and from the grid through today: from it above the line, to it below. */
-function TodayCard({
+export function GridTodayCard({
   series,
   p,
   start,
@@ -309,7 +304,7 @@ function TodayCard({
  * The region's wholesale price from AEMO through today and ahead to the early hours (pre-dispatch, dashed), in cents a
  * kWh, with where a spike starts marked when prices get near it. The region can be changed, or AEMO not followed.
  */
-function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
+export function WholesaleCard({ grid, now }: { grid: GridView; now: number }) {
   const save = useSaveSettings();
   const qc = useQueryClient();
   const toast = useToast();
@@ -443,7 +438,7 @@ function stats(pts: LinePoint[]) {
  * The grid at the house, as the inverter measures it: its voltage through today against the range the standard allows
  * (high voltage makes the inverter hold back exports), and its frequency.
  */
-function QualityCard({
+export function QualityCard({
   series,
   p,
   grid,
@@ -531,7 +526,7 @@ function Reading({ label, value, sub, bad }: { label: string; value: string; sub
 // ---------------------------------------------------------------------------------------------- notices
 
 /** AEMO's notices about the region over the last two days that matter to a household, current ones first. */
-function NoticesCard({ grid }: { grid: GridView }) {
+export function NoticesCard({ grid }: { grid: GridView }) {
   if (!grid.enabled) return null;
   const list = [...grid.notices].sort((a, b) => Number(b.active) - Number(a.active) || b.at - a.at);
   return (

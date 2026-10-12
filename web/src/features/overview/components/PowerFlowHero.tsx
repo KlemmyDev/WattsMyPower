@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { carsQuery } from "~/features/car/api";
 import { homeQuery } from "~/features/home/api";
 import {
@@ -26,7 +26,7 @@ import { historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { ModeBadge } from "~/features/battery/components/ModeBadge";
 import { noBattery } from "~/features/battery/utils";
-import { DASH, kW, powerParts } from "~/features/common/formatting/utils/number";
+import { DASH, kW, pct, powerParts, type PowerUnit } from "~/features/common/formatting/utils/number";
 import { useTween } from "~/features/common/ui/hooks/useTween";
 import {
   codeName,
@@ -47,21 +47,71 @@ import { houseCars } from "~/features/overview/utils/houseCars";
 const FRAME =
   "relative aspect-[1200/600] w-full rounded-[28px] max-md:aspect-[4/3] max-md:rounded-[22px] light:outline light:outline-line-subtle";
 
+/** Where choosing one of power flow's readings goes: its own page, one page for them all, or nowhere. */
+export type FlowOpens = "each" | "home" | "solar" | "history" | "none";
+type Page = "/solar" | "/grid" | "/battery" | "/home" | "/ev" | "/history";
+const OPENS: Record<"home" | "solar" | "history", Page> = { home: "/home", solar: "/solar", history: "/history" };
+/** Each page by name, for what a link to it says. */
+export const PAGE_NAME: Record<Page, string> = {
+  "/solar": "Solar",
+  "/grid": "Grid",
+  "/battery": "Battery",
+  "/home": "Home",
+  "/ev": "your car",
+  "/history": "History",
+};
+/** The page a reading opens, as `opens` has it (its own, `own`), or none. */
+export const pageFor = (opens: FlowOpens, own: Page): Page | undefined =>
+  opens === "none" ? undefined : opens === "each" ? own : OPENS[opens];
+
+/** What power flow shows and how, as a widget's settings have it; the drawing always shows the whole house. */
+export type FlowShow = {
+  solar: boolean;
+  home: boolean;
+  grid: boolean;
+  battery: boolean;
+  /** The car's charge, while it's home. */
+  car: boolean;
+  /** What each room's drawing, in the home's card. */
+  rooms: boolean;
+  /** The weather capsule, with the hours ahead. */
+  weather: boolean;
+  /** The last two hours, behind each figure. */
+  spark: boolean;
+  unit: PowerUnit;
+  opens: FlowOpens;
+};
+/** All of it, as it's always been shown. */
+export const FLOW_ALL: FlowShow = {
+  solar: true,
+  home: true,
+  grid: true,
+  battery: true,
+  car: false,
+  rooms: true,
+  weather: true,
+  spark: true,
+  unit: "auto",
+  opens: "each",
+};
+
 /** The power flow drawing with live values, drawn under the current weather. */
 export function PowerFlowHero({
   p,
   s,
   f,
   now,
+  show = FLOW_ALL,
 }: {
   p: Snapshot | null;
   s: SystemInfo | undefined;
   f: Forecast | null | undefined;
   now: number;
+  show?: FlowShow;
 }) {
   return (
     <section aria-label="Power flow" className="relative col-span-12 flex flex-col gap-3">
-      {p ? <Scene p={p} s={s} f={f} now={now} /> : <div className={cn(FRAME, "bg-[#dcebff]")} />}
+      {p ? <Scene p={p} s={s} f={f} now={now} show={show} /> : <div className={cn(FRAME, "bg-[#dcebff]")} />}
     </section>
   );
 }
@@ -71,11 +121,13 @@ function Scene({
   s,
   f,
   now,
+  show,
 }: {
   p: Snapshot;
   s: SystemInfo | undefined;
   f: Forecast | null | undefined;
   now: number;
+  show: FlowShow;
 }) {
   const wx = liveWeather(p, f, now, !!s?.temp_unit_f);
   const { data: records } = useQuery(carsQuery);
@@ -94,7 +146,10 @@ function Scene({
   const dark = wx.mode === "night" || wx.mode === "storm";
 
   return (
-    <>
+    // The drawing and its readout together, as tall as the drawing: from 2xl up the readout floats over the drawing's
+    // bottom corners, so a widget taller than the drawing leaves its room under both rather than pulling the cards down
+    // past the drawing's edge.
+    <div className="relative flex flex-col gap-3">
       {/* No background under the scene: it covers the box, and a light one would show as a fringe
           around the rounded corners against a dark sky. The drawing is clipped to the corners on its own, so the
           weather card over it isn't. */}
@@ -136,13 +191,15 @@ function Scene({
           <Timing ts={p.ts} className={cn(OVER, "rounded-full px-3 py-1.5 text-ink-sub max-md:hidden")} />
         </div>
         {/* the weather in the top right corner, opening down and to the left from it */}
-        <div className="absolute top-7 right-8 z-1 whitespace-normal max-md:top-3 max-md:right-3">
-          <Weather wx={wx} f={f} s={s} now={now} />
-        </div>
+        {show.weather && (
+          <div className="absolute top-7 right-8 z-1 whitespace-normal max-md:top-3 max-md:right-3">
+            <WeatherCapsule wx={wx} f={f} s={s} now={now} />
+          </div>
+        )}
       </div>
 
-      <Readout p={p} s={s} now={now} soc={flows.soc} />
-    </>
+      <Readout p={p} s={s} now={now} soc={flows.soc} show={show} />
+    </div>
   );
 }
 
@@ -170,7 +227,7 @@ const WEATHER_TINT: Partial<Record<IconName, string>> = {
  * unfolds is laid out at the card's full width from the start, so nothing reflows as it grows; it stays mounted while
  * closed, so it eases out as well as in, and keeps fetching the weather on time.
  */
-function Weather({
+export function WeatherCapsule({
   wx,
   f,
   s,
@@ -182,6 +239,7 @@ function Weather({
   now: number;
 }) {
   const [open, setOpen] = useState(false);
+  const ahead = useId();
   const box = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLSpanElement>(null);
   // The capsule's width when closed, measured from its line, so the card can grow from it (widths can't ease from auto).
@@ -208,9 +266,6 @@ function Weather({
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
-  const icon = liveWeatherIcon(wx);
-  const tint = WEATHER_TINT[icon];
-  const hours = (f?.hours ?? []).filter((h) => h.ts + 3600 > now).slice(0, AHEAD + 1);
   const timing = f?.weather;
   return (
     <div
@@ -225,16 +280,14 @@ function Weather({
       <button
         type="button"
         aria-expanded={open}
-        aria-controls="weather-ahead"
+        aria-controls={ahead}
         aria-label={`${wx.label}. Show the hours ahead`}
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-center border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] leading-5 font-medium text-inherit"
       >
         {/* keyed by the weather, so a change fades in rather than snapping */}
         <span ref={line} key={wx.label} className="flex w-max flex-none animate-fade items-center gap-1.5">
-          <Icon name={icon} size={16} style={tint ? { color: tint } : { opacity: 0.75 }} />
-          {wx.temp && <span className="font-semibold tabular-nums">{wx.temp}</span>}
-          <span className="text-ink-muted">{wx.name}</span>
+          <WeatherLine wx={wx} />
           {timing?.next_at != null && (
             // the open card's footer says it in full, so this fades as it opens
             <WeatherDueShort
@@ -255,7 +308,7 @@ function Weather({
         />
       </button>
       <div
-        id="weather-ahead"
+        id={ahead}
         inert={!open}
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-350 ease-(--ease-out-soft)",
@@ -264,30 +317,62 @@ function Weather({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="flex w-[min(312px,calc(100vw-84px))] flex-col gap-3.5 px-3.5 pt-2 pb-3.5">
-            {hours.length > 0 && (
-              <Ahead
-                key={String(open)}
-                hours={hours}
-                now={now}
-                fahrenheit={!!s?.temp_unit_f}
-                pvKw={s?.pv_kw}
-                source={`Open-Meteo${s && s.weather_model !== "best_match" ? ` · ${MODEL_NAMES[s.weather_model]}` : ""}`}
-              />
-            )}
-            {timing?.next_at != null && (
-              <div
-                className={cn(
-                  "flex items-center border-t pt-3 text-xs leading-4 font-medium",
-                  "border-line text-ink-muted",
-                )}
-              >
-                <WeatherDue timing={timing} next={timing.next_at} />
-              </div>
-            )}
+            {/* keyed, so the hours rise in again each time it opens */}
+            <WeatherAhead key={String(open)} f={f} s={s} now={now} />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** The weather now, in a line: its icon in colour, the temperature and what it's doing. */
+export function WeatherLine({ wx, size = 16 }: { wx: LiveWeather; size?: number }) {
+  const icon = liveWeatherIcon(wx);
+  const tint = WEATHER_TINT[icon];
+  return (
+    <>
+      <Icon name={icon} size={size} style={tint ? { color: tint } : { opacity: 0.75 }} />
+      {wx.temp && <span className="font-semibold tabular-nums">{wx.temp}</span>}
+      <span className="text-ink-muted">{wx.name}</span>
+    </>
+  );
+}
+
+/**
+ * The hours ahead (`count` of them after this one) and when the weather was fetched and is next due: what the weather
+ * capsule opens to, and the Weather widget.
+ */
+export function WeatherAhead({
+  f,
+  s,
+  now,
+  count = AHEAD,
+}: {
+  f: Forecast | null | undefined;
+  s: SystemInfo | undefined;
+  now: number;
+  count?: number;
+}) {
+  const hours = (f?.hours ?? []).filter((h) => h.ts + 3600 > now).slice(0, count + 1);
+  const timing = f?.weather;
+  return (
+    <>
+      {hours.length > 0 && (
+        <Ahead
+          hours={hours}
+          now={now}
+          fahrenheit={!!s?.temp_unit_f}
+          pvKw={s?.pv_kw}
+          source={`Open-Meteo${s && s.weather_model !== "best_match" ? ` · ${MODEL_NAMES[s.weather_model]}` : ""}`}
+        />
+      )}
+      {timing?.next_at != null && (
+        <div className="flex items-center border-t border-line pt-3 text-xs leading-4 font-medium text-ink-muted">
+          <WeatherDue timing={timing} next={timing.next_at} />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -327,14 +412,17 @@ function Ahead({
     <>
       <div className={cn("flex items-center justify-between text-xs leading-4 font-medium", quiet)}>
         <span>
-          Next {AHEAD} hours · {source}
+          Next {hours.length - 1} hours · {source}
         </span>
         <span className="flex items-center gap-1">
           <span className="size-2 rounded-full" style={{ background: COLOR.solar }} />
           Solar kW
         </span>
       </div>
-      <ol className="m-0 grid list-none grid-cols-5 gap-x-2 p-0">
+      <ol
+        className="m-0 grid list-none gap-x-2 p-0"
+        style={{ gridTemplateColumns: `repeat(${hours.length}, minmax(0, 1fr))` }}
+      >
         {hours.map((h, i) => {
           const icon = hourIcon(h);
           const tint = WEATHER_TINT[icon];
@@ -563,15 +651,35 @@ function Drain({ left, interval }: { left: number; interval: number }) {
  * appliances say what they're drawing, the home's card shows it: a bar of them and everything else, then each by
  * name, with the home's own line under them.
  */
-function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; now: number; soc: number }) {
+function Readout({
+  p,
+  s,
+  now,
+  soc,
+  show,
+}: {
+  p: Snapshot;
+  s: SystemInfo | undefined;
+  now: number;
+  soc: number;
+  show: FlowShow;
+}) {
   const { data: home } = useQuery(homeQuery);
   const { grid_power: g, battery_power: b, load_power: l } = p;
   // The figures glide to each minute's reading; the scene's flows and states follow the reading itself.
   const tween = { pv: useTween(p.pv_power), g: useTween(g), l: useTween(l), b: useTween(b) };
-  const parts = (w: number | null | undefined) => (w == null ? [DASH, "kW"] : powerParts(w));
+  const parts = (w: number | null | undefined) => (w == null ? [DASH, "kW"] : powerParts(w, show.unit));
   const [pv, grid, use] = [parts(tween.pv), parts(tween.g), parts(tween.l)];
   const st = batteryState(b);
   const solarOnly = noBattery(s); // no battery card: solar and the grid share the row
+  const car = useLive()?.ev?.find((c) => c.at_home !== false);
+  const small = {
+    solar: show.solar,
+    grid: show.grid,
+    battery: show.battery && !solarOnly,
+    car: show.car && !!car,
+  };
+  const across = Object.values(small).filter(Boolean).length;
   const devices = home?.devices ?? [];
   const carW = useHomeCharging();
   const split = liveBreakdown(devices, l, { carW });
@@ -590,7 +698,7 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
     range?: [number, number],
     tone?: SparkTone,
   ) =>
-    hist ? (
+    hist && show.spark ? (
       <Spark
         series={hist.series}
         field={field}
@@ -617,55 +725,56 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
       <div className="flex w-[212px] flex-col gap-2 max-2xl:contents 2xl:pointer-events-auto">
         {/* on phones, where the drawing has no heading to put it under */}
         <Timing ts={p.ts} className="justify-between px-1.5 text-ink-muted md:hidden" />
-        <div className={cn("grid gap-2 max-2xl:order-last 2xl:grid-cols-1", solarOnly ? "grid-cols-2" : "grid-cols-3")}>
-          <Cell
-            {...cell}
-            i={0}
-            to="/solar"
-            go="Solar"
-            tint={COLOR.solar}
-            spark={spark("pv_power", COLOR.solar, p.pv_power, [0, (s?.pv_kw ?? 0) * 1000])}
-            icon={
-              // turning slowly while the panels make power; dimmed at night
-              <Icon
-                name="sun"
-                size={18}
-                className={cn(
-                  "transition-opacity duration-700",
-                  sun ? "animate-[wmpSpin_24s_linear_infinite]" : "opacity-50",
-                )}
-              />
-            }
-            iconStyle={{ background: alpha(COLOR.solar, sun ? 0.18 : 0.08), color: COLOR.solar }}
-            k="Solar"
-            v={pv[0]}
-            unit={pv[1]}
-            title={
-              p.pv2_power != null
-                ? `Hybrid ${kW(p.pv1_power)} · ${s?.pv2?.model || "Second inverter"} ${kW(p.pv2_power)}`
-                : undefined
-            }
-          />
-          <Cell
-            {...cell}
-            i={1}
-            to="/grid"
-            go="Grid"
-            tint={dir ? gridColor : COLOR.fg}
-            spark={spark("grid_power", dir === "out" ? COLOR.export : COLOR.import, g)}
-            icon={<Icon name="grid" size={18} />}
-            // tinted by which way the power's going: in from the grid, or out to it
-            iconStyle={{ background: dir ? alpha(gridColor, 0.18) : alpha(COLOR.fg, 0.08), color: gridColor }}
-            k={gridVerb(g)}
-            v={grid[0]}
-            unit={grid[1]}
-          />
-          {!solarOnly && (
+        <div className={cn("grid gap-2 max-2xl:order-last 2xl:grid-cols-1", ACROSS[across])}>
+          {small.solar && (
+            <Cell
+              {...cell}
+              i={0}
+              to={pageFor(show.opens, "/solar")}
+              tint={COLOR.solar}
+              spark={spark("pv_power", COLOR.solar, p.pv_power, [0, (s?.pv_kw ?? 0) * 1000])}
+              icon={
+                // turning slowly while the panels make power; dimmed at night
+                <Icon
+                  name="sun"
+                  size={18}
+                  className={cn(
+                    "transition-opacity duration-700",
+                    sun ? "animate-[wmpSpin_24s_linear_infinite]" : "opacity-50",
+                  )}
+                />
+              }
+              iconStyle={{ background: alpha(COLOR.solar, sun ? 0.18 : 0.08), color: COLOR.solar }}
+              k="Solar"
+              v={pv[0]}
+              unit={pv[1]}
+              title={
+                p.pv2_power != null
+                  ? `Hybrid ${kW(p.pv1_power)} · ${s?.pv2?.model || "Second inverter"} ${kW(p.pv2_power)}`
+                  : undefined
+              }
+            />
+          )}
+          {small.grid && (
+            <Cell
+              {...cell}
+              i={1}
+              to={pageFor(show.opens, "/grid")}
+              tint={dir ? gridColor : COLOR.fg}
+              spark={spark("grid_power", dir === "out" ? COLOR.export : COLOR.import, g)}
+              icon={<Icon name="grid" size={18} />}
+              // tinted by which way the power's going: in from the grid, or out to it
+              iconStyle={{ background: dir ? alpha(gridColor, 0.18) : alpha(COLOR.fg, 0.08), color: gridColor }}
+              k={gridVerb(g)}
+              v={grid[0]}
+              unit={grid[1]}
+            />
+          )}
+          {small.battery && (
             <Cell
               {...cell}
               i={2}
-              to="/battery"
-              go="Battery"
+              to={pageFor(show.opens, "/battery")}
               tint={batColor}
               spark={spark("battery_soc", COLOR.battery, p.battery_soc, [0, 100], {
                 field: "battery_power",
@@ -700,32 +809,51 @@ function Readout({ p, s, now, soc }: { p: Snapshot; s: SystemInfo | undefined; n
               }
             />
           )}
+          {small.car && car && (
+            <Cell
+              {...cell}
+              i={3}
+              to={pageFor(show.opens, "/ev")}
+              tint={CAR_COLOR}
+              icon={<Icon name="car" size={18} />}
+              iconStyle={{ background: alpha(CAR_COLOR, carW > 0 ? 0.2 : 0.1), color: CAR_COLOR }}
+              k={carW > 0 ? "Charging" : car.name || "Car"}
+              v={car.soc == null ? DASH : pct(car.soc).replace("%", "")}
+              unit="%"
+            />
+          )}
         </div>
       </div>
-      <Cell
-        {...cell}
-        i={3}
-        to="/home"
-        go="Home"
-        tint={COLOR.fg}
-        className="2xl:pointer-events-auto 2xl:w-[320px]"
-        wide
-        icon={<Icon name="home" size={18} />}
-        iconStyle={{ background: COLOR.ink, color: COLOR.canvas }}
-        k="Home"
-        v={`${l != null && l < 0 ? "−" : ""}${use[0]}`}
-        unit={use[1]}
-      >
-        {split && <HomeSplit split={split} colors={colors} />}
-        {/* the home's line under the rooms, edge to edge, in the room they leave: it shrinks as the list grows,
+      {show.home && (
+        <Cell
+          {...cell}
+          i={4}
+          to={pageFor(show.opens, "/home")}
+          tint={COLOR.fg}
+          className="2xl:pointer-events-auto 2xl:w-[320px]"
+          wide
+          icon={<Icon name="home" size={18} />}
+          iconStyle={{ background: COLOR.ink, color: COLOR.canvas }}
+          k="Home"
+          v={`${l != null && l < 0 ? "−" : ""}${use[0]}`}
+          unit={use[1]}
+        >
+          {show.rooms && split && <HomeSplit split={split} colors={colors} />}
+          {/* the home's line under the rooms, edge to edge, in the room they leave: it shrinks as the list grows,
               rather than running through their names */}
-        <div className="relative -mx-4 -mb-4 min-h-14 flex-1 max-md:-mx-3 max-md:-mb-3.5">
-          {spark("load_power", COLOR.ink, l)}
-        </div>
-      </Cell>
+          {show.spark && (
+            <div className="relative -mx-4 -mb-4 min-h-14 flex-1 max-md:-mx-3 max-md:-mb-3.5">
+              {spark("load_power", COLOR.ink, l)}
+            </div>
+          )}
+        </Cell>
+      )}
     </div>
   );
 }
+
+/** The small cards' row, by how many there are (Tailwind needs each class written out in full). */
+const ACROSS = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3", "grid-cols-4"];
 
 /** OVER, from 2xl up, where the readout floats over the drawing (Tailwind needs each class written out in full). */
 const FLOAT = cn(
@@ -870,7 +998,6 @@ function Cell({
   i,
   ts,
   to,
-  go,
   tint,
   spark,
   icon,
@@ -887,12 +1014,10 @@ function Cell({
   className?: string;
   i: number;
   ts: number;
-  /** Its live page: Solar, Grid, Battery or Home. */
-  to: "/solar" | "/grid" | "/battery" | "/home";
+  /** The page it opens (its own, or the one chosen for them all), or none. */
+  to?: Page;
   /** Its colour, for the wash and edge it takes on under the pointer (solar's yellow, the battery's blue…). */
   tint: string;
-  /** Where it links, in a word, for screen readers: "Solar". */
-  go: string;
   spark?: ReactNode;
   icon: ReactNode;
   iconClassName?: string;
@@ -925,11 +1050,13 @@ function Cell({
       }
     >
       {/* the cell as a link: under everything, so the home's own links and button still take their clicks */}
-      <Link
-        to={to}
-        aria-label={`${k} ${v} ${unit}. Open ${go}`}
-        className="absolute inset-0 rounded-[inherit] transition-colors duration-200 hover:bg-(--wash) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand active:bg-(--press)"
-      />
+      {to && (
+        <Link
+          to={to}
+          aria-label={`${k} ${v} ${unit}. Open ${PAGE_NAME[to]}`}
+          className="absolute inset-0 rounded-[inherit] transition-colors duration-200 hover:bg-(--wash) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand active:bg-(--press)"
+        />
+      )}
       {/* edge to edge along the bottom, under the padded content */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 max-md:h-2/5">{spark}</div>
       {/* the sheen, across the card on each fresh reading */}

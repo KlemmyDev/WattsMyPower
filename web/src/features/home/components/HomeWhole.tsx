@@ -4,7 +4,7 @@ import { energyToday, ON } from "~/features/common/energy/utils";
 import { hhmm, parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { centsShort, DASH, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot } from "~/features/common/live/types";
-import { costsQuery } from "~/features/common/readings/api";
+import { costsQuery, historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, dateKey, isWeekend, midnight } from "~/features/common/time/utils";
@@ -402,4 +402,15 @@ export function useHomeDays(now: number): DataDay[] {
   const start = addDays(today, -30);
   const { data } = useQuery(dailyQuery(start, addDays(today, 1)));
   return buildDays(start, addDays(today, 1), today, data, data ? [] : undefined).filter(hasData);
+}
+
+const WHOLE_FIELDS = ["load_power", "pv_power", "battery_power"];
+
+/** The whole house through today, every 5 minutes, from the inverter: what Home's cards about it draw from. */
+export function useHomeToday(now: number) {
+  const today = midnight(now);
+  const { data } = useQuery(
+    historyQuery({ start: today, end: addDays(today, 1), points: 288, fields: WHOLE_FIELDS, live: true }),
+  );
+  return { today, series: data?.series };
 }

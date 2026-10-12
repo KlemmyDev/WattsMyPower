@@ -28,7 +28,7 @@ export function SideNav({ onMenu }: { onMenu: () => void }) {
     <nav
       aria-label="Main"
       data-full={docked}
-      className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-nav data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
+      className="fixed inset-y-0 left-0 z-30 w-[72px] border-r border-line-subtle bg-nav in-data-customising:hidden data-[full=true]:w-[236px] data-[full=true]:overflow-hidden max-md:hidden"
     >
       {docked ? (
         <div className="h-full w-[236px]">

@@ -26,6 +26,14 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   counter and power.
 - **Overview:** the live power flow as an animated house that follows the weather (and can be made to look like
   yours), today's cost and savings at your rates, the battery's last six hours and the next 24 hours.
+- **Your own Overview.** It's built from widgets: the cards from the Solar, Home, Battery, Grid and EV pages (50 to
+  start with, each feature cataloguing its own), plus any single reading you choose. Drag and resize them on a grid,
+  set each one up, keep several dashboards as tabs, start from a ready-made layout, and arrange a phone's layout apart
+  from the computer's. Power flow comes in six styles (the house, a diagram, ribbons, a ring, bars or big figures),
+  with which readings it shows (solar, home, grid, battery, the car), whether rooms, the weather and its hours ahead,
+  and the last two hours go with them, power in W or always in kW, and what choosing it opens all yours to choose.
+  Customising shows each widget at the size it will be, with the side nav out of the way and the tray tucked away
+  when you want the whole dashboard. Layouts are kept on the server, so every browser in the house sees the same.
 - **Solar, Home, Battery and Grid pages**, each opening on a summary: what the panels are making against the forecast,
   each string; where the home's power goes, from the inverter and from connected plugs and appliances; the battery's
   level, health, warranty and whether it's the right size; the grid's state, AEMO's wholesale prices and notices,
