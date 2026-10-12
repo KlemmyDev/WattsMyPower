@@ -69,7 +69,7 @@ export function moments(
     const until = k1 < 0 ? hourEnd(hrs[hrs.length - 1]) : hrs[k1].ts;
     out.push({
       t: hrs[k0].start,
-      title: `Showers until ${hhmm(until)}`,
+      title: until >= end ? "Showers for the rest of the day" : `Showers until ${hhmm(until)}`,
       sub: hourOf(hrs[k0].start) < 12 ? "Lower solar early in the day" : "Lower solar while it rains",
       color: COLOR.link,
     });
