@@ -14,7 +14,6 @@ import { cn } from "~/features/common/ui/utils";
 import { homeInsightsQuery, homePatternsQuery, homeProfileQuery, homeQuery, homeUsageQuery } from "~/features/home/api";
 import { AheadCard, SpikesCard, UsualDayCard, WeekCard } from "~/features/home/components/Analysis";
 import { DeviceCard } from "~/features/home/components/DeviceCard";
-import { RANGES } from "~/features/home/components/UsageCard";
 import type { HomeDevice, HomeUsage } from "~/features/home/types";
 import {
   BEFORE_WORDS,
@@ -27,6 +26,7 @@ import {
   reading,
   type Range,
   watts,
+  RANGES,
 } from "~/features/home/utils";
 import { BackLink } from "~/features/settings/components/SubPageHeader";
 

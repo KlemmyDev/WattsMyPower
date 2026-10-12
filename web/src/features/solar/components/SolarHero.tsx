@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -16,8 +16,9 @@ import { useFahrenheit } from "~/features/common/weather/hooks";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { hourIcon, liveWeather } from "~/features/common/weather/utils";
 import { DaylightStrip, sunAt } from "~/features/solar/components/DaylightStrip";
-import { Delta, EXPECTED, Figure, LiveDot, SOLAR } from "~/features/solar/components/parts";
-import { expectedToday, place, signedPct, solarNow, solarToday } from "~/features/solar/utils";
+import { Delta, Figure, LiveDot } from "~/features/common/ui/components/Live";
+import { EXPECTED, SOLAR } from "~/features/solar/components/parts";
+import { expectedToday, place, solarNow, solarToday } from "~/features/solar/utils";
 import type { WeatherDay, WeatherHour } from "~/features/weather/types";
 
 type Today = ReturnType<typeof solarToday>;

@@ -7,6 +7,7 @@ import { BydPanel } from "~/features/ev/components/BydPanel";
 import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvDayChart } from "~/features/ev/components/EvDayChart";
 import { EvInOut } from "~/features/ev/components/EvInOut";
+import { EvNow, evRows, evShow } from "~/features/ev/components/EvNow";
 import { EvPanel } from "~/features/ev/components/EvPanel";
 import { carTitle } from "~/features/ev/utils";
 
@@ -71,6 +72,40 @@ function InOut({ ctx, settings }: WidgetProps) {
 
 /** The EV page's cards, as widgets, each for the car chosen. */
 export const widgets: WidgetDef[] = [
+  {
+    type: "ev-now",
+    name: "EV",
+    sub: "Any connected car: its charge, what it's doing, and what it charged today",
+    group: "car",
+    icon: "car",
+    thumb: { kind: "number", value: "64%", color: COLOR.lilac },
+    sizes: size([2, 2], [8, 6], [4, 4]),
+    phone: size([2, 2], [4, 6], [4, 4]),
+    rowsFor: (st, _screen, w) => evRows(evShow(st), w),
+    options: [
+      pick,
+      { key: "doing", label: "What it's doing", sub: "In a sentence", kind: "toggle", default: true, section: "Show" },
+      {
+        key: "today",
+        label: "Charged today",
+        sub: "And how it's set to charge",
+        kind: "toggle",
+        default: true,
+        section: "Figures, given room",
+      },
+    ],
+    needs: needsCar,
+    Component: ({ ctx, settings, w, h }: WidgetProps) => (
+      <EvNow
+        car={ctx.cars.find((c) => c.vin === settings.car) ?? ctx.cars[0]}
+        cars={ctx.cars.length}
+        now={ctx.now}
+        w={w}
+        h={h}
+        show={evShow(settings)}
+      />
+    ),
+  },
   {
     type: "car",
     name: "Car",

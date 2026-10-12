@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useId } from "react";
-import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kW, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import { historyQuery } from "~/features/common/readings/api";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -12,8 +12,9 @@ import type { Forecast } from "~/features/common/weather/types";
 import { parts } from "~/features/common/widgets/parts";
 import { roomOf, rowsFor } from "~/features/common/widgets/room";
 import type { Settings } from "~/features/common/widgets/types";
-import { Delta, LiveDot, Meter, SOLAR } from "~/features/solar/components/parts";
-import { signedPct, solarNow } from "~/features/solar/utils";
+import { Delta, LiveDot, Meter } from "~/features/common/ui/components/Live";
+import { SOLAR } from "~/features/solar/components/parts";
+import { solarNow } from "~/features/solar/utils";
 
 /** How far back its chart goes. */
 export const GENERATING_HOURS = [
