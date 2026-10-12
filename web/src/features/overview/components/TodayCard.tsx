@@ -436,7 +436,7 @@ const COLS =
 function Table({ rows, c, note }: { rows: Line[]; c: CostDay; note: string | null }) {
   return (
     <div className="flex flex-col">
-      <div className={cn(COLS, "pb-2 font-mono text-[10px] tracking-[1px] text-ink-faint uppercase")}>
+      <div className={cn(COLS, "pb-2 text-xs text-ink-muted")}>
         <span>Period</span>
         <span className="text-right">From grid</span>
         <span className="text-right">Cost</span>

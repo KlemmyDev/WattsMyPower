@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { cn } from "~/features/common/ui/utils";
 import type { Screen, WidgetItem } from "~/features/dashboards/types";
 import { COLS, compact, GAP, move, resize, ROW } from "~/features/dashboards/utils/layout";
@@ -47,10 +48,12 @@ function Body({ item, ctx, screen }: { item: WidgetItem; ctx: WidgetCtx; screen:
       </WidgetCard>
     );
   const why = def.needs?.(ctx);
+  // Until what's connected is known, a placeholder in its place; once it is, why it's hidden (seen only arranging).
+  if (why && !ctx.known) return <Skeleton className="h-full rounded-3xl" />;
   if (why)
     return (
       <WidgetCard title={def.name} icon={def.icon}>
-        <Quiet>{ctx.known ? `${why}. Until then it's hidden on your dashboard.` : "Loading…"}</Quiet>
+        <Quiet>{why}. Until then it's hidden on your dashboard.</Quiet>
       </WidgetCard>
     );
   return (

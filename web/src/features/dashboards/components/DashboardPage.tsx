@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { errorMessage } from "~/features/common/api/utils";
+import { ON } from "~/features/common/energy/utils";
+import { kW, pct } from "~/features/common/formatting/utils/number";
+import type { Snapshot } from "~/features/common/live/types";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useMedia } from "~/features/common/layout/hooks";
 import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
@@ -20,7 +23,7 @@ import { AddWidgets, WidgetSettings } from "~/features/dashboards/components/Pan
 import { useWidgetCtx } from "~/features/dashboards/hooks";
 import type { Dashboard, Screen, WidgetItem } from "~/features/dashboards/types";
 import { COLS, compact, firstFit, forPhone, newId, resize } from "~/features/dashboards/utils/layout";
-import { defaultDashboards, presetLayout, PRESETS } from "~/features/dashboards/utils/presets";
+import { defaultDashboards, preset, presetLayout, PRESETS } from "~/features/dashboards/utils/presets";
 import { defaultSettings, sizesOf, widgetDef } from "~/features/dashboards/widgets/registry";
 import type { Settings } from "~/features/common/widgets/types";
 
@@ -34,6 +37,42 @@ function layoutFor(board: Dashboard, screen: Screen): WidgetItem[] {
       return def ? sizesOf(def, item.settings, "phone").default : [4, item.h];
     })
   );
+}
+
+/**
+ * What the house is running on now, in a few words, for under the page's title: what it's using and where most of that
+ * comes from, then where spare power's going ("Using 2.2 kW · 96% from the battery", "Using 640 W · all from solar ·
+ * selling 3.1 kW").
+ */
+function doing(p: Snapshot | null): string {
+  if (!p || p.load_power == null) return "How your home's running right now";
+  const home = Math.max(0, p.load_power);
+  const g = p.grid_power ?? 0;
+  const b = p.battery_power ?? 0;
+  const from: [string, number][] = [
+    ["solar", Math.min(Math.max(0, p.pv_power ?? 0), home)],
+    ["the battery", Math.max(0, b)],
+    ["the grid", Math.max(0, g)],
+  ];
+  const total = from.reduce((a, [, w]) => a + w, 0);
+  const [name, most] = from.reduce((a, x) => (x[1] > a[1] ? x : a));
+  const share = total > 0 ? most / total : 0;
+  const source =
+    home < ON || total <= 0
+      ? null
+      : share >= 0.99
+        ? `all from ${name}`
+        : share >= 0.5
+          ? `${pct(share * 100)} from ${name}`
+          : `from ${from
+              .filter(([, w]) => w >= ON)
+              .map(([n]) => n)
+              .join(", ")
+              .replace(/, ([^,]*)$/, " and $1")}`;
+  const spare = g < -ON && -g >= -b ? `selling ${kW(-g)}` : b < -ON ? `charging the battery at ${kW(-b)}` : null;
+  return [home < ON ? "Hardly using anything right now" : `Using ${kW(home)}`, source, spare]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 type Draft = {
@@ -148,7 +187,7 @@ export function DashboardPage() {
     const b: Dashboard = {
       id: newId(),
       name: `Dashboard ${boards.length + 1}`,
-      layouts: { computer: presetLayout(PRESETS[1], ctx), phone: null },
+      layouts: { computer: presetLayout(preset("glance"), ctx), phone: null },
     };
     begin([...boards, b], b.id);
   };
@@ -175,7 +214,7 @@ export function DashboardPage() {
       <>
         <PageHeader
           title={greeting(ctx.now)}
-          sub="How your home's running right now"
+          sub={doing(ctx.p)}
           action={
             <div className="flex flex-wrap items-center gap-2">
               <div
@@ -279,9 +318,9 @@ export function DashboardPage() {
                 value=""
                 aria-label="Start from a layout"
                 onChange={(e) => {
-                  const preset = PRESETS.find((p) => p.id === e.target.value);
-                  if (!preset) return;
-                  const laid = presetLayout(preset, ctx);
+                  const chosen = PRESETS.find((p) => p.id === e.target.value);
+                  if (!chosen) return;
+                  const laid = presetLayout(chosen, ctx);
                   change((d) => ({
                     boards: d.boards.map((b) =>
                       b.id !== board.id
@@ -305,7 +344,7 @@ export function DashboardPage() {
                 <option value="">Start from a layout</option>
                 {PRESETS.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}: {p.sub}
+                    {p.name} · {p.sub}
                   </option>
                 ))}
               </select>
