@@ -2,11 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { AllBatteries, roomBatteries } from "~/features/battery/components/AllBatteries";
 import { BatteryActivity } from "~/features/battery/components/BatteryActivity";
-import { BatteryDayChart } from "~/features/battery/components/BatteryDayChart";
 import { BatteryHealth } from "~/features/battery/components/BatteryHealth";
 import { BatteryModes } from "~/features/battery/components/BatteryModes";
 import { BatteryBackup, BatteryDays, BatteryReadings, BatteryToday } from "~/features/battery/components/BatteryMore";
-import { BatteryPanel } from "~/features/battery/components/BatteryPanel";
+import { BatteryHero } from "~/features/battery/components/BatteryHero";
 import { BatterySize } from "~/features/battery/components/BatterySize";
 import {
   useBatteryDay,
@@ -15,7 +14,9 @@ import {
   useBatteryView,
   useNoBattery,
 } from "~/features/battery/hooks";
-import type { BatteryPlan, ControlRequest } from "~/features/battery/types";
+import type { BatteryPlan, BatteryView, ControlRequest } from "~/features/battery/types";
+import { batteryState, ON } from "~/features/common/energy/utils";
+import type { BatteryMode, Snapshot } from "~/features/common/live/types";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -25,12 +26,27 @@ import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { homeQuery } from "~/features/home/api";
 
+/** What the battery's up to, in a few words, for under the page's title. */
+function doing(p: Snapshot | null, mode: BatteryMode | null, v: BatteryView | undefined): string {
+  const c = v?.supported && v.control && !v.control.ending ? v.control : null;
+  if (c?.kind === "standby") return "On standby, holding its charge";
+  if (c?.kind === "floor") return `Keeping ${c.floor}% in reserve for now`;
+  if (c?.kind === "charge") return `Charging from the grid to ${c.target ?? 100}%`;
+  if (mode?.owner === "isolarcloud") return "iSolarCloud has the battery for now";
+  if (mode?.owner === "external" || mode?.owner === "elsewhere") return "Something else has the battery for now";
+  const st = batteryState(p?.battery_power);
+  if (st === "charge") return (p?.pv_power ?? 0) > ON ? "Charging from solar" : "Charging";
+  if (st === "discharge") return "Running your home";
+  return "See what your battery is doing, and tell it what to do";
+}
+
 /**
- * The home battery: big and simple at the top (its level, what it's doing, what it's set to do), the controls beside
- * a day of its level with what it was set to do shaded in (and, while choosing a control, what that would do), where
- * today's charge came from and went, how long it would keep the house going without the grid, its readings, then how
- * it's holding up, the last 30 days, and whether its size suits the house. With portable batteries in rooms (Home's
- * devices), all of them together under the panel. Only in the navigation when there's a battery.
+ * The home battery, as Solar and Home have theirs: today and now in one card (its level, what it's doing and set to
+ * do, what went in and out, the level along a bar, and the day's chart with what it was set to do shaded in and, while
+ * choosing a control, what that would do), then the controls, where today's charge came from and went, how long it
+ * would keep the house going without the grid, what it did, its readings, the last 30 days, how it's holding up, and
+ * whether its size suits the house. With portable batteries in rooms (Home's devices), all of them together under the
+ * card. Only in the navigation when there's a battery.
  */
 export function BatteryPage() {
   const now = useNow(30_000);
@@ -46,7 +62,7 @@ export function BatteryPage() {
   const { start, series } = useBatteryDay(now);
   const { data: home } = useQuery(homeQuery);
   const rooms = roomBatteries(home?.devices);
-  const header = <PageHeader title="Battery" sub="See what your battery is doing, and tell it what to do" />;
+  const header = <PageHeader title="Battery" sub={doing(p, mode, v)} />;
   // Still reachable by its address on a solar-only system (it's left out of the navigation): say why it's empty.
   if (s && none)
     return (
@@ -71,29 +87,20 @@ export function BatteryPage() {
     <>
       {header}
       <div className="flex flex-col gap-5">
-        <BatteryPanel v={v} p={p} s={s} mode={mode} now={now} />
+        <BatteryHero v={v} p={p} s={s} mode={mode} series={series} now={now} preview={preview} draft={draft} />
         {rooms.length > 0 && <AllBatteries p={p} s={s} devices={rooms} />}
-        {/* Two columns that grow on their own (the controls opening doesn't stretch the chart): the day and the
-            battery's health on the left; the controls, what they did, and its size on the right. Narrower, one
-            column: the controls first. */}
+        {/* Two columns that grow on their own (the controls opening doesn't stretch the other side): what went in and
+            out, the last 30 days and its health on the left; the controls, backup, what they did, its readings and
+            size on the right. Narrower, one column: the controls first. */}
         <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
           <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
-            <BatteryDayChart
-              s={s}
-              now={now}
-              plan={v?.plan ?? null}
-              outlook={v?.outlook ?? null}
-              preview={preview}
-              draft={draft}
-              className="max-3xl:order-2"
-            />
-            <BatteryToday series={series} p={p} s={s} className="max-3xl:order-3" />
+            <BatteryToday series={series} p={p} s={s} className="max-3xl:order-2" />
+            <BatteryDays s={s} now={now} className="max-3xl:order-6" />
             {data ? (
               <BatteryHealth insights={data} system={s} className="max-3xl:order-7" />
             ) : (
               !isError && <Skeleton className="h-[420px] rounded-3xl max-3xl:order-7" />
             )}
-            <BatteryDays s={s} now={now} className="max-3xl:order-8" />
           </div>
           <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
             {v ? (
@@ -108,13 +115,13 @@ export function BatteryPage() {
             ) : (
               <Skeleton className="h-[260px] rounded-3xl max-3xl:order-1" />
             )}
-            <BatteryBackup p={p} s={s} f={f} now={now} className="max-3xl:order-4" />
-            <BatteryActivity now={now} className="max-3xl:order-5" />
-            <BatteryReadings series={series} p={p} s={s} start={start} now={now} className="max-3xl:order-6" />
+            <BatteryBackup p={p} s={s} f={f} now={now} className="max-3xl:order-3" />
+            <BatteryActivity now={now} className="max-3xl:order-4" />
+            <BatteryReadings series={series} p={p} s={s} start={start} now={now} className="max-3xl:order-5" />
             {data ? (
-              <BatterySize sizing={data.sizing} className="max-3xl:order-9" />
+              <BatterySize sizing={data.sizing} className="max-3xl:order-8" />
             ) : (
-              !isError && <Skeleton className="h-[300px] rounded-3xl max-3xl:order-9" />
+              !isError && <Skeleton className="h-[300px] rounded-3xl max-3xl:order-8" />
             )}
           </div>
           {isError && !data && (

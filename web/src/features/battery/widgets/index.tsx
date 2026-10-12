@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { AllBatteries, roomBatteries } from "~/features/battery/components/AllBatteries";
 import { BatteryActivity } from "~/features/battery/components/BatteryActivity";
-import { BatteryDayChart } from "~/features/battery/components/BatteryDayChart";
 import { BatteryHealth } from "~/features/battery/components/BatteryHealth";
 import { BatteryModes } from "~/features/battery/components/BatteryModes";
 import { BatteryBackup, BatteryDays, BatteryReadings, BatteryToday } from "~/features/battery/components/BatteryMore";
-import { BatteryPanel } from "~/features/battery/components/BatteryPanel";
+import { BatteryHero } from "~/features/battery/components/BatteryHero";
 import { BatterySize } from "~/features/battery/components/BatterySize";
 import { useBatteryDay, useBatteryInsights, useBatteryMode, useBatteryView } from "~/features/battery/hooks";
 import { COLOR } from "~/features/common/theme/utils/colors";
@@ -21,19 +20,18 @@ const waiting = (name: string) => (
   </WidgetCard>
 );
 
-function Panel({ ctx }: WidgetProps) {
-  return <BatteryPanel v={useBatteryView()} p={ctx.p} s={ctx.s} mode={useBatteryMode()} now={ctx.now} />;
-}
-function Day({ ctx }: WidgetProps) {
-  const v = useBatteryView();
+/** The Battery page's top card: with the day's chart (Battery today) or without it (Battery at a glance). */
+function Hero({ ctx, chart }: WidgetProps & { chart: boolean }) {
+  const { series } = useBatteryDay(ctx.now);
   return (
-    <BatteryDayChart
+    <BatteryHero
+      v={useBatteryView()}
+      p={ctx.p}
       s={ctx.s}
+      mode={useBatteryMode()}
+      series={series}
       now={ctx.now}
-      plan={v?.plan ?? null}
-      outlook={v?.outlook ?? null}
-      preview={null}
-      draft={null}
+      chart={chart}
     />
   );
 }
@@ -79,26 +77,26 @@ export const widgets: WidgetDef[] = [
   {
     type: "battery-summary",
     name: "Battery at a glance",
-    sub: "Its level, what it's doing and what it's set to do",
+    sub: "Its level and what it's set to do, in or out now, today's charge and discharge, and the price",
     group: "battery",
     icon: "battery",
     thumb: { kind: "number", value: "57%", color: COLOR.battery },
-    sizes: size([6, 2], [12, 3], [12, 2]),
-    phone: size([4, 3], [4, 5], [4, 4]),
+    sizes: size([6, 3], [12, 4], [12, 3]),
+    phone: size([4, 5], [4, 7], [4, 6]),
     needs: needsBattery,
-    Component: Panel,
+    Component: (props: WidgetProps) => <Hero {...props} chart={false} />,
   },
   {
     type: "battery-day",
     name: "Battery today",
-    sub: "Its level through the day, and what it was set to do",
+    sub: "Its level and now, through the day and tomorrow, with each hour in and out and your rates",
     group: "battery",
     icon: "chart",
     thumb: { kind: "line", color: COLOR.battery },
-    sizes: size([6, 5], [12, 9], [7, 7]),
-    phone: size([4, 6], [4, 9], [4, 7]),
+    sizes: size([6, 9], [12, 12], [12, 10]),
+    phone: size([4, 11], [4, 14], [4, 12]),
     needs: needsBattery,
-    Component: Day,
+    Component: (props: WidgetProps) => <Hero {...props} chart />,
   },
   {
     type: "battery-control",
@@ -175,7 +173,7 @@ export const widgets: WidgetDef[] = [
   {
     type: "battery-days",
     name: "Battery, last 30 days",
-    sub: "Each day's charge and use",
+    sub: "Each day by how much it cycled, with what went in and out",
     group: "battery",
     icon: "chart",
     thumb: { kind: "bars", color: COLOR.battery },

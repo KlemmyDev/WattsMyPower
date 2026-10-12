@@ -11,21 +11,25 @@ import type {
   OutsideKind,
 } from "~/features/battery/types";
 import { KIND_COLOR, KIND_LABEL, recordLabel } from "~/features/battery/utils";
-import { batteryState, reserveOf } from "~/features/common/energy/utils";
+import { levelOn } from "~/features/battery/utils/today";
+import { batteryState, batteryTone, ON, reserveOf } from "~/features/common/energy/utils";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
-import { kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
+import { centsShort, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import type { SystemInfo } from "~/features/common/live/types";
 import { historyQuery } from "~/features/common/readings/api";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { DragBand, timeTicks, useDragRange, useZoom, ZoomOut } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
+import { rateAt, RateStrip } from "~/features/home/components/RateStrip";
+import { useRates } from "~/features/home/hooks";
 
 const W = 1000;
 const H = 260;
+const HOUR = 3600;
+const DISCHARGE = batteryTone(ON + 1);
 const TOP = 26; // room for the controls' labels
 const BOTTOM = 8;
 const y = (soc: number) => TOP + (1 - Math.max(0, Math.min(100, soc)) / 100) * (H - TOP - BOTTOM);
@@ -103,8 +107,9 @@ function levelAt(line: Line, t: number): number | null {
  * A day of the battery: its level through the day, the controls that ran shaded behind it (a raised reserve drawn
  * as a line), and from now on, through tomorrow, what's expected as things are set (`outlook`), what the control
  * being set up would make of it (`preview`), and while a control runs, what running as normal would (`without`).
- * The arrows step back through earlier days, and on to tomorrow; under the chart, the day's lowest level, grid
- * energy and cost, each way.
+ * The arrows step back through earlier days, and on to tomorrow; under the chart, each hour in and out and the rates
+ * on its time scale, then the day's lowest level, grid energy and cost, each way. Part of the Battery card (BatteryHero),
+ * so it has no card of its own.
  */
 export function BatteryDayChart({
   s,
@@ -193,6 +198,8 @@ export function BatteryDayChart({
       preview.target !== (draft.target ?? null) ||
       preview.kind !== draft.kind);
   const reserve = reserveOf(s);
+  const rates = useRates(day);
+  const hours = hourly(points, expected, s?.battery_kwh ?? 0, start, end, now);
 
   const [hoverAt, setHoverAt] = useState<number | null>(null);
   const range = useDragRange(from, to, zoom.zoom, {
@@ -223,11 +230,13 @@ export function BatteryDayChart({
   const title = isToday ? "Today" : day === tomorrow ? "Tomorrow" : shortDay.format(new Date(day * 1000));
 
   return (
-    <Card aria-labelledby="h-bday" className={cn("gap-4", className)}>
+    <div role="group" aria-labelledby="h-bday" className={cn("flex flex-col gap-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <h2 id="h-bday">{title}</h2>
-          <span className="text-[13px] text-ink-muted">
+          <span id="h-bday" className="text-[13px] font-medium text-ink">
+            {title}
+          </span>
+          <span className="text-xs text-ink-faint">
             {future
               ? "What the battery is expected to do, from the forecast"
               : isToday
@@ -461,6 +470,7 @@ export function BatteryDayChart({
             without={levelAt(without, hoverAt)}
             band={hoverBand}
             dot={hover ? (y(hover.soc) / H) * 100 : null}
+            rate={rateAt(rates, hover?.t ?? hoverAt)}
           />
         )}
       </div>
@@ -480,6 +490,13 @@ export function BatteryDayChart({
         ))}
       </div>
 
+      {(hours.some((h) => Math.abs(h.kwh) >= 0.01) || !!rates?.length) && (
+        <div className="flex flex-col gap-3 border-t border-line-subtle pt-3">
+          <Hours hours={hours} from={from} to={to} hover={hoverAt} />
+          {rates?.length ? <RateStrip runs={rates} start={from} end={to} now={isToday ? now : undefined} /> : null}
+        </div>
+      )}
+
       {day >= today && day <= tomorrow && outlook?.days[key] && (
         <DaySummary
           title={isToday ? "Rest of today" : "Tomorrow"}
@@ -488,7 +505,90 @@ export function BatteryDayChart({
           without={plan?.ahead_normal.days[key] ?? null}
         />
       )}
-    </Card>
+    </div>
+  );
+}
+
+type Hour = { t: number; to: number; kwh: number; ahead: boolean };
+
+/**
+ * Each hour of the day in and out of the battery (kWh, charging positive): from the readings so far, and from now on
+ * from how the expected level rises and falls.
+ */
+function hourly(points: Point[], expected: Line, cap: number, start: number, end: number, now: number): Hour[] {
+  const out: Hour[] = [];
+  for (let t = start; t < end; t += HOUR) {
+    let kwh = 0;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (p.t < t || p.t >= t + HOUR || p.w == null) continue;
+      const step = Math.min(900, (points[i + 1]?.t ?? p.t + 300) - p.t);
+      kwh -= (p.w * step) / 3.6e6;
+    }
+    out.push({ t, to: now > t ? Math.min(t + HOUR, now) : t + HOUR, kwh, ahead: false });
+    if (t + HOUR > now && cap) {
+      const a = levelOn(expected, Math.max(t, now));
+      const b = levelOn(expected, t + HOUR);
+      if (a != null && b != null)
+        out.push({ t: Math.max(t, now), to: t + HOUR, kwh: ((b - a) / 100) * cap, ahead: true });
+    }
+  }
+  return out;
+}
+
+/**
+ * Each hour in and out under the chart, on its time scale (zoomed with it): charging up from the middle, discharging
+ * down, what's still to come fainter; the hour under the chart's pointer said above them.
+ */
+function Hours({ hours, from, to, hover }: { hours: Hour[]; from: number; to: number; hover: number | null }) {
+  const top = Math.max(0.5, ...hours.map((h) => Math.abs(h.kwh)));
+  const pc = (t: number) => ((Math.max(from, Math.min(to, t)) - from) / (to - from)) * 100;
+  const hourOf = (t: number) => t - (t % HOUR);
+  const lit = hover == null ? null : hours.filter((h) => hourOf(h.t) === hourOf(hover));
+  const net = lit?.reduce((a, h) => a + h.kwh, 0) ?? 0;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11.5px] text-ink-faint">
+        {lit?.length ? (
+          <>
+            {hhmm(hourOf(lit[0].t))} to {hhmm(hourOf(lit[0].t) + HOUR)}:{" "}
+            <span className="text-ink tabular-nums">
+              {Math.abs(net) < 0.01 ? "nothing in or out" : `${kWh(Math.abs(net))} ${net > 0 ? "in" : "out"}`}
+            </span>
+          </>
+        ) : (
+          <>
+            Each hour in and out, <span style={{ color: COLOR.battery }}>charging up</span>,{" "}
+            <span style={{ color: DISCHARGE }}>discharging down</span>
+          </>
+        )}
+      </span>
+      <div className="relative h-12" role="img" aria-label="Each hour in and out of the battery">
+        <span aria-hidden className="absolute inset-x-0 top-1/2 border-t border-line-subtle" />
+        {hours.map((h) => {
+          if (h.to <= from || h.t >= to || Math.abs(h.kwh) < 0.01) return null;
+          const tall = `${(Math.abs(h.kwh) / top) * 50}%`;
+          const on = lit?.includes(h);
+          return (
+            <span
+              key={`${h.t}${h.ahead}`}
+              aria-hidden
+              className={cn(
+                "absolute transition-opacity duration-150",
+                h.kwh > 0 ? "bottom-1/2 rounded-t-[2px]" : "top-1/2 rounded-b-[2px]",
+                !!lit?.length && !on && "opacity-40",
+              )}
+              style={{
+                left: `calc(${pc(h.t)}% + 1px)`,
+                width: `max(1px, calc(${pc(h.to) - pc(h.t)}% - 2px))`,
+                height: tall,
+                background: alpha(h.kwh > 0 ? COLOR.battery : DISCHARGE, h.ahead ? 0.4 : 1),
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -582,6 +682,7 @@ function Readout({
   without,
   band,
   dot,
+  rate,
 }: {
   at: number;
   left: number;
@@ -591,6 +692,7 @@ function Readout({
   without: number | null;
   band: Band | null;
   dot: number | null;
+  rate: ReturnType<typeof rateAt>;
 }) {
   if (!reading && expected == null && preview == null && without == null) return null;
   const st = batteryState(reading?.w);
@@ -626,6 +728,11 @@ function Readout({
         {preview != null && <span>If you start it {pct(preview)}</span>}
         {without != null && <span className="opacity-75">Without it {pct(without)}</span>}
         {band && <span className="opacity-75">{band.label || KIND_LABEL[band.kind]}</span>}
+        {rate && (
+          <span className="opacity-75">
+            {rate.name} · {centsShort(rate.rate)}/kWh
+          </span>
+        )}
       </div>
     </>
   );

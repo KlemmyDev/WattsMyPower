@@ -6,13 +6,14 @@ import { duration, hhmm, parseYmd, shortDay } from "~/features/common/formatting
 import { DASH, kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
-import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR, heatColor } from "~/features/common/theme/utils/colors";
 import { addDays, midnight, partsOf } from "~/features/common/time/utils";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { TimeLine } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
 import type { Forecast } from "~/features/common/weather/types";
+import { inOutToday } from "~/features/battery/utils/today";
 import { gridQuery } from "~/features/grid/api";
 import { LEVEL } from "~/features/grid/utils";
 import { dailyQuery } from "~/features/history/api";
@@ -90,9 +91,8 @@ function Split({
 }
 
 /**
- * Where today's charge came from and where the discharge went, from the 5-minute readings: while charging, solar goes
- * to the house first and the grid makes up the rest; while discharging, the house comes first and the rest is
- * exported. Plus the time to full or to the reserve at the rate it's going now.
+ * Where today's charge came from and where the discharge went (inOutToday), and the time to full or to the reserve
+ * at the rate it's going now.
  */
 export function BatteryToday({
   series,
@@ -105,35 +105,7 @@ export function BatteryToday({
   s: SystemInfo | undefined;
   className?: string;
 }) {
-  const f = { solar: 0, grid: 0, home: 0, out: 0 };
-  if (series) {
-    const t = series.t;
-    for (let i = 0; i < t.length; i++) {
-      const bat = series.battery_power?.[i];
-      if (bat == null) continue;
-      const step = ((t[i + 1] ?? t[i] + 300) - t[i]) / 3600;
-      const pv = Math.max(0, series.pv_power?.[i] ?? 0);
-      const load = Math.max(0, series.load_power?.[i] ?? 0);
-      const grid = series.grid_power?.[i] ?? 0;
-      if (bat < -ON) {
-        const charge = -bat / 1000;
-        const fromGrid = Math.max(0, Math.min(charge, (Math.max(0, grid) - Math.max(0, load - pv)) / 1000));
-        f.grid += fromGrid * step;
-        f.solar += (charge - fromGrid) * step;
-      } else if (bat > ON) {
-        const dis = bat / 1000;
-        const toGrid = Math.max(0, Math.min(dis, (Math.max(0, -grid) - Math.max(0, pv - load)) / 1000));
-        f.out += toGrid * step;
-        f.home += (dis - toGrid) * step;
-      }
-    }
-  }
-  const charged = p?.daily_charge ?? f.solar + f.grid;
-  const discharged = p?.daily_discharge ?? f.home + f.out;
-  // The counters are what the inverter counted; the split is from readings, scaled to them.
-  const scale = (a: number, b: number, to: number) => (a + b > 0 ? [(a / (a + b)) * to, (b / (a + b)) * to] : [0, 0]);
-  const [solar, grid] = scale(f.solar, f.grid, charged);
-  const [home, out] = scale(f.home, f.out, discharged);
+  const { charged, discharged, solar, grid, home, out } = inOutToday(series, p);
   const cap = s?.battery_kwh ?? 0;
   const soc = p?.battery_soc;
   const st = batteryState(p?.battery_power);
@@ -379,28 +351,53 @@ function Reading({ label, value, children }: { label: string; value: string; chi
   );
 }
 
-/** The last 30 days: what went in and came out each day, with the average cycles a day. */
+/**
+ * The last 30 days as a strip of cells, as Solar's, the brighter the more the battery cycled, with the figures that sum
+ * them up beside it: cycles a day, what went in and came out, the round trip and the busiest day.
+ */
 export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; now: number; className?: string }) {
   const end = midnight(now);
   const { data } = useQuery(dailyQuery(addDays(end, -30), end));
   const days = (data ?? []).filter((d) => d.daily_charge != null || d.daily_discharge != null);
   const { hover: h, width, plot, bar } = useBarHover();
   if (!days.length) return null;
-  const top = Math.max(0.5, ...days.flatMap((d) => [d.daily_charge ?? 0, d.daily_discharge ?? 0]));
-  const out = days.reduce((a, d) => a + (d.daily_discharge ?? 0), 0);
   const cap = s?.battery_kwh;
+  const outs = days.map((d) => d.daily_discharge ?? 0);
+  const max = Math.max(...outs);
+  const min = Math.min(...outs);
+  const out = outs.reduce((a, v) => a + v, 0);
+  const into = days.reduce((a, d) => a + (d.daily_charge ?? 0), 0);
+  const busiest = days[outs.indexOf(max)];
+  const figures: [string, string][] = [
+    ["Cycles a day", cap ? (out / days.length / cap).toFixed(2) : DASH],
+    ["In", kWh(into)],
+    ["Out", kWh(out)],
+    ["Round trip", into > 0 ? pct(Math.min(100, (out / into) * 100)) : DASH],
+    ["Busiest", cap ? `${(max / cap).toFixed(2)} cycles` : kWh(max)],
+  ];
   return (
     <Card className={className}>
-      <div className="flex items-end justify-between gap-3">
-        <TitleBlock
-          className="min-w-0 flex-1"
-          title={`Last ${days.length} days`}
-          sub={`${kWh(out)} delivered · ${kWh(out / days.length)} a day`}
-        />
-        {cap ? <Corner label="Cycles a day">{(out / days.length / cap).toFixed(2)}</Corner> : null}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <TitleBlock title={`Last ${days.length} days`} sub={`${kWh(out)} delivered, ${kWh(out / days.length)} a day`} />
+        <dl className="flex flex-wrap gap-x-7 gap-y-2">
+          {figures.map(([k, v]) => (
+            <div
+              key={k}
+              className="flex flex-col"
+              title={k === "Busiest" ? shortDay.format(parseYmd(busiest.date)) : undefined}
+            >
+              <dt className="text-[11.5px] text-ink-faint">{k}</dt>
+              <dd className="text-[17px] font-light tabular-nums">{v}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="relative flex h-28 items-end gap-[3px] max-sm:gap-px" {...plot}>
+        <div
+          className="relative grid gap-1 max-sm:gap-0.5"
+          style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
+          {...plot}
+        >
           {days.map((d, i) => (
             <button
               key={d.date}
@@ -408,30 +405,20 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
               {...bar(i)}
               aria-label={`${shortDay.format(parseYmd(d.date))}: charged ${kWh(d.daily_charge)}, discharged ${kWh(d.daily_discharge)}`}
               className={cn(
-                "flex h-full min-w-0 flex-1 cursor-pointer items-end gap-px border-0 bg-transparent p-0 transition-opacity duration-200",
-                h != null && h !== i && "opacity-45",
+                "h-11 rounded-md border-0 p-0 transition-[scale,opacity] duration-200 max-sm:h-8 max-sm:rounded-[3px]",
+                h === i && "scale-y-110",
+                h != null && h !== i && "opacity-60",
               )}
-            >
-              {[
-                [d.daily_charge ?? 0, CHARGE],
-                [d.daily_discharge ?? 0, DISCHARGE],
-              ].map(([v, c], k) => (
-                <i
-                  key={k}
-                  className="bar-grow block min-w-0 flex-1 rounded-[3px_3px_1px_1px] transition-[background-color] duration-200"
-                  style={
-                    {
-                      height: `${((v as number) / top) * 100}%`,
-                      background: alpha(c as string, h === i ? 1 : 0.8),
-                      "--i": i,
-                    } as CSSProperties
-                  }
-                />
-              ))}
-            </button>
+              style={{ background: heatColor(COLOR.battery, max > min ? (outs[i] - min) / (max - min) : 1) }}
+            />
           ))}
           {h != null && (
-            <ChartTooltip left={((h + 0.5) / days.length) * 100} flip={h > days.length / 2} width={width}>
+            <ChartTooltip
+              left={((h + 0.5) / days.length) * 100}
+              flip={h > days.length / 2}
+              width={width}
+              className="top-auto bottom-full mb-2"
+            >
               <span className="font-medium text-ink">{shortDay.format(parseYmd(days[h].date))}</span>
               <TooltipRow label="Charged" value={kWh(days[h].daily_charge)} color={CHARGE} />
               <TooltipRow label="Discharged" value={kWh(days[h].daily_discharge)} color={DISCHARGE} />
@@ -441,21 +428,17 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
             </ChartTooltip>
           )}
         </div>
-        <div className="flex justify-between font-mono text-[11px] text-ink-faint">
-          {[days[0], days[days.length - 1]].map((d) => (
-            <span key={d.date}>{shortDay.format(parseYmd(d.date))}</span>
-          ))}
+        <div className="flex items-center justify-between gap-3 font-mono text-[11px] text-ink-faint">
+          <span>{shortDay.format(parseYmd(days[0].date))}</span>
+          <span className="flex items-center gap-1.5">
+            Fewer
+            {[0, 0.33, 0.66, 1].map((k) => (
+              <i key={k} className="size-2.5 rounded-[3px]" style={{ background: heatColor(COLOR.battery, k) }} />
+            ))}
+            More
+          </span>
+          <span>{shortDay.format(parseYmd(days[days.length - 1].date))}</span>
         </div>
-      </div>
-      <div className="flex gap-4 text-xs text-ink-dim">
-        <span className="flex items-center gap-1.5">
-          <i className="size-2 rounded-xs" style={{ background: CHARGE }} />
-          Charged
-        </span>
-        <span className="flex items-center gap-1.5">
-          <i className="size-2 rounded-xs" style={{ background: DISCHARGE }} />
-          Discharged
-        </span>
       </div>
     </Card>
   );
