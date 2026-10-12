@@ -1,68 +1,53 @@
 import type { Bills } from "~/features/bills/types";
 import type { Tariff } from "~/features/common/tariffs/types";
-import { billAmount, billCents, centsPerKwh } from "~/features/bills/utils";
-import { ShareBar, ShareRow, StatGrid } from "~/features/bills/components/BillParts";
+import { centsPerKwh } from "~/features/bills/utils";
+import { Corner, ShareBar, ShareRow } from "~/features/bills/components/BillParts";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
-import { DASH, dollars, kWhInt, money, plural } from "~/features/common/formatting/utils/number";
+import { kWhInt, money } from "~/features/common/formatting/utils/number";
 import { bandColor, bandHours, usedBands } from "~/features/common/tariffs/utils";
 import { COLOR } from "~/features/common/theme/utils/colors";
 
 const pctOf = (v: number, total: number) => `${Math.round((v / (total || 1)) * 100)}%`;
-const PACE_DAYS = 3; // full days of this period before judging its pace
-const bigFigure = "font-display text-[44px] leading-12 font-light tracking-[-1.8px] tabular-nums";
 
-/** Your cost per kWh against the grid-only cost: "38% less than grid only", or "12% more" when it's dearer. */
-function againstGrid(yours: number, grid: number) {
-  const by = Math.round((1 - yours / grid) * 100);
-  if (by === 0) return "about the same as grid only";
-  return by > 0 ? `${by}% less than grid only` : `${-by}% more than grid only`;
-}
-
-/** This period's bill so far, split into home use from the grid, supply, and feed-in credit. */
-export function PaidFor({ bills }: { bills: Bills }) {
+/**
+ * The card's corner: what each kWh the house used cost on average this bill, after solar, the battery and feed-in,
+ * against what it would from the grid alone.
+ */
+function PerKwh({ bills }: { bills: Bills }) {
   const s = bills.current.so_far;
-  const gross = s.import_cost + s.supply;
+  if (s.home_kwh <= 0) return null;
+  const yours = s.net_cost / s.home_kwh;
+  const grid = s.without_solar / s.home_kwh;
   return (
-    <Card aria-labelledby="h-paid">
-      <TitleBlock
-        id="h-paid"
-        title="What you paid for"
-        sub={`This period so far · ${billCents(s.net_cost)} in total`}
-      />
-      <ShareBar
-        parts={[
-          { value: s.import_cost, color: COLOR.ink },
-          { value: s.supply, color: COLOR.bar },
-        ]}
-      />
-      <div>
-        <ShareRow
-          color={COLOR.ink}
-          label="Home use from the grid"
-          share={pctOf(s.import_cost, gross)}
-          value={money(s.import_cost)}
-        />
-        <ShareRow
-          color={COLOR.bar}
-          label={`Supply charge · ${s.days} ${plural(s.days, "day")}`}
-          share={pctOf(s.supply, gross)}
-          value={money(s.supply)}
-        />
-        <ShareRow
-          color={COLOR.solar}
-          label="Feed-in credit"
-          value={money(s.feed_in_credit ? -s.feed_in_credit : 0)} // on Amber, a negative feed-in price costs money
-        />
-        {s.discount > 0 && <ShareRow color={COLOR.good} label="Discount" value={money(-s.discount)} />}
-        {s.credits > 0 && <ShareRow color={COLOR.good} label="Credits" value={money(-s.credits)} />}
-      </div>
-    </Card>
+    <Corner
+      label="Each kWh used"
+      value={centsPerKwh(yours)}
+      sub={grid > 0 ? `${centsPerKwh(grid)} from the grid alone` : undefined}
+    />
   );
 }
 
-/** Grid spend this period by tariff rate, and where cutting use would help most. */
-export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | undefined }) {
-  if (tariff?.type === "amber") return <CostOnAmber bills={bills} />;
+/** The card's header: the title on the left, what each kWh cost in the corner. */
+function Header({ bills, title, sub }: { bills: Bills; title: string; sub: string }) {
+  return (
+    <div className="flex items-end justify-between gap-4">
+      <TitleBlock id="h-tod" title={title} sub={sub} />
+      <PerKwh bills={bills} />
+    </div>
+  );
+}
+
+/** Grid spend this bill by rate, where cutting use would help most, and what each kWh used cost in the corner. */
+export function CostByRate({
+  bills,
+  tariff,
+  className,
+}: {
+  bills: Bills;
+  tariff: Tariff | undefined;
+  className?: string;
+}) {
+  if (tariff?.type === "amber") return <CostOnAmber bills={bills} className={className} />;
   const tou = tariff?.type === "tou" ? tariff : null;
   const used = tariff ? usedBands(tariff) : null;
   const parts = bills.bands
@@ -73,8 +58,8 @@ export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | u
   const rate = (i: number) => Number(tou?.bands[i]?.rate) || 0;
   const priciest = tou && parts.length ? parts.reduce((a, b) => (rate(b.i) > rate(a.i) ? b : a)) : null;
   return (
-    <Card aria-labelledby="h-tod">
-      <TitleBlock id="h-tod" title="Cost by time of day" sub="Grid spend this period so far, by rate" />
+    <Card aria-labelledby="h-tod" className={className}>
+      <Header bills={bills} title="What power costs you" sub="Grid spend this bill so far, by rate" />
       <ShareBar parts={parts.map((b) => ({ value: b.cost, color: bandColor(b.i) }))} />
       <div>
         {parts.map((b) => (
@@ -90,17 +75,19 @@ export function CostByTime({ bills, tariff }: { bills: Bills; tariff: Tariff | u
       </div>
       <Muted>
         {kwh <= 0
-          ? "No power from the grid this period yet."
-          : priciest
-            ? `${priciest.name} hours are ${pctOf(priciest.import_kwh, kwh)} of your grid use and ${pctOf(priciest.cost, cost)} of your grid spend. Using less power ${priciest.hours === "All other times" ? "at those times" : `from ${priciest.hours}`} lowers your bill the most.`
-            : "You're on a flat rate, so grid power costs the same all day."}
+          ? "No power from the grid this bill yet."
+          : priciest && priciest.import_kwh < 0.05
+            ? `None of it at ${priciest.name.toLowerCase()} rates so far, the dearest.`
+            : priciest
+              ? `${priciest.name} is ${pctOf(priciest.import_kwh, kwh)} of your grid use and ${pctOf(priciest.cost, cost)} of the spend. Using less ${priciest.hours === "All other times" ? "then" : `from ${priciest.hours}`} saves the most.`
+              : "You're on a flat rate, so grid power costs the same all day."}
       </Muted>
     </Card>
   );
 }
 
 /** On Amber prices: grid spend at Amber's prices, and anything costed at the fallback rate. */
-function CostOnAmber({ bills }: { bills: Bills }) {
+function CostOnAmber({ bills, className }: { bills: Bills; className?: string }) {
   const [priced, fallback] = bills.bands;
   const parts = [
     { ...priced, color: COLOR.ink, sub: "Priced every 5 or 30 minutes" },
@@ -109,8 +96,8 @@ function CostOnAmber({ bills }: { bills: Bills }) {
   const kwh = parts.reduce((a, b) => a + b.import_kwh, 0);
   const cost = parts.reduce((a, b) => a + b.cost, 0);
   return (
-    <Card aria-labelledby="h-tod">
-      <TitleBlock id="h-tod" title="Cost of grid power" sub="Grid spend this period so far, at Amber's prices" />
+    <Card aria-labelledby="h-tod" className={className}>
+      <Header bills={bills} title="What power costs you" sub="Grid spend this bill so far, at Amber's prices" />
       <ShareBar parts={parts.map((b) => ({ value: b.cost, color: b.color }))} />
       <div>
         {parts.map((b) => (
@@ -126,99 +113,9 @@ function CostOnAmber({ bills }: { bills: Bills }) {
       </div>
       <Muted>
         {kwh <= 0
-          ? "No power from the grid this period yet."
-          : "Your price changes through the day. Using grid power when it's cheap (often the middle of the day) saves the most."}
+          ? "No power from the grid this bill yet."
+          : "Your price changes through the day. Grid power when it's cheap (often midday) saves the most."}
       </Muted>
-    </Card>
-  );
-}
-
-/** Whether spending so far is heading above or below the expected total. */
-export function BillPace({ bills }: { bills: Bills }) {
-  const exp = bills.current.expected;
-  const whole = bills.days.filter((d) => !d.partial);
-  // Days are at the rates alone; the bill has its discount and credits off. Take the same off the run rate.
-  const off = exp ? exp.discount + exp.credits : 0;
-  const run =
-    whole.length >= PACE_DAYS
-      ? (whole.reduce((a, d) => a + d.net_cost, 0) / whole.length) * bills.period.days - off
-      : null;
-  const diff = exp && run != null ? run - exp.net_cost : null;
-  const tol = exp ? Math.max(5, Math.abs(exp.net_cost) * 0.05) : 0;
-  const [status, color, note] =
-    diff == null
-      ? [DASH, COLOR.ink, `Shows up after the first ${PACE_DAYS} full days of this period.`]
-      : Math.abs(diff) <= tol
-        ? ["On track", COLOR.ink, "Your spending so far is in line with the expected total."]
-        : diff > 0
-          ? ["Above expected", COLOR.solar, `At this pace, the bill will be about ${dollars(diff)} more than expected.`]
-          : [
-              "Below expected",
-              COLOR.good,
-              `At this pace, the bill will be about ${dollars(-diff)} less than expected.`,
-            ];
-  return (
-    <Card aria-labelledby="h-pace">
-      <TitleBlock id="h-pace" title="Bill pace" sub="Your daily spend so far compared with the expected total" />
-      <div className="flex flex-col gap-1.5">
-        <div className={bigFigure} style={{ color }}>
-          {status}
-        </div>
-        <Muted>{note}</Muted>
-      </div>
-      <StatGrid
-        min={150}
-        className="mt-auto"
-        stats={[
-          { label: "At your current daily rate", value: run != null ? billAmount(run) : DASH },
-          { label: "Expected total", value: exp ? billAmount(exp.net_cost) : DASH },
-        ]}
-      />
-    </Card>
-  );
-}
-
-/** What each kWh the home used cost after solar, battery and feed-in, against buying it all from the grid. */
-export function CostPerKwh({ bills }: { bills: Bills }) {
-  const s = bills.current.so_far;
-  const yours = s.home_kwh > 0 ? s.net_cost / s.home_kwh : null;
-  const grid = s.home_kwh > 0 ? s.without_solar / s.home_kwh : null;
-  const rows: [string, number | null, string][] = [
-    ["Your cost", yours, COLOR.ink],
-    ["Grid only, no solar", grid, COLOR.bar],
-  ];
-  return (
-    <Card aria-labelledby="h-per-kwh">
-      <TitleBlock
-        id="h-per-kwh"
-        title="Cost per kWh used"
-        sub="Average cost of every kWh your home used this period, after solar, battery, and feed-in credit"
-      />
-      <div className="flex flex-wrap items-baseline gap-2.5">
-        <span className={bigFigure}>{yours != null ? centsPerKwh(yours) : DASH}</span>
-        {yours != null && grid != null && grid > 0 && (
-          <span className="text-sm text-ink-muted">per kWh · {againstGrid(yours, grid)}</span>
-        )}
-      </div>
-      <div className="mt-auto flex flex-col gap-3.5">
-        {rows.map(([label, v, color]) => (
-          <div key={label} className="grid grid-cols-[minmax(120px,160px)_1fr_52px] items-center gap-3.5">
-            <span className="text-[13px] text-ink-muted">{label}</span>
-            <div className="h-3 rounded-full bg-popover light:bg-track">
-              <div
-                className="h-full min-w-3 rounded-full"
-                style={{
-                  width: `${v != null && grid ? ((Math.max(0, v) / grid) * 100).toFixed(1) : 0}%`,
-                  background: color,
-                }}
-              />
-            </div>
-            <span className="text-right text-sm font-semibold text-ink tabular-nums">
-              {v != null ? centsPerKwh(v) : DASH}
-            </span>
-          </div>
-        ))}
-      </div>
     </Card>
   );
 }

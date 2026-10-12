@@ -54,5 +54,3 @@ function useHoldAnchor(hash: string) {
     return stop;
   }, [hash]);
 }
-
-/** A part of the page: a quiet heading over its cards, as the navigation's groups have. */
