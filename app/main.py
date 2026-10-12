@@ -27,6 +27,7 @@ from app.features.bills.router import router as bills_router
 from app.features.bluelink.router import router as bluelink_router
 from app.features.byd.router import router as byd_router
 from app.features.car.router import router as car_router
+from app.features.dashboards.router import router as dashboards_router
 from app.features.forecast.router import router as forecast_router
 from app.features.grid.router import router as grid_router
 from app.features.home.router import router as home_router
@@ -61,6 +62,7 @@ ROUTERS = [
     insights_router,
     integrations_router,
     onboarding_router,
+    dashboards_router,
     bills_router,
     meter_router,
     imports_router,

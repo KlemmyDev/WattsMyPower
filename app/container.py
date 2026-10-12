@@ -19,6 +19,7 @@ from app.features.bills.service import BillsService
 from app.features.bluelink.service import BluelinkService
 from app.features.byd.service import BydService
 from app.features.car.service import CarService
+from app.features.dashboards.service import DashboardService
 from app.features.forecast.service import ForecastService
 from app.features.grid.outages.service import OutageService
 from app.features.grid.service import GridService
@@ -66,6 +67,7 @@ class Services:
     integrations: IntegrationsService
     storage: StorageService
     onboarding: OnboardingService
+    dashboards: DashboardService
     live: LiveService
     battery: BatteryService
     updates: UpdateService
@@ -121,6 +123,7 @@ def build_services(config: Config) -> Services:
         integrations=integrations,
         storage=StorageService(config, db, collector),
         onboarding=OnboardingService(config, db, integrations),
+        dashboards=DashboardService(db),
         live=live,
         battery=BatteryService(
             db,

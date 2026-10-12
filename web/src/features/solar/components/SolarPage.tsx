@@ -9,7 +9,6 @@ import { useLocationSet } from "~/features/common/settings/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
-import { historyQuery } from "~/features/common/readings/api";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
@@ -29,15 +28,14 @@ import { codeIcon, codeName, degrees, liveWeather } from "~/features/common/weat
 import { solarInsightsQuery } from "~/features/solar/api";
 import { DaylightStrip, sunAt } from "~/features/solar/components/DaylightStrip";
 import { SolarPerformance, SolarTrend } from "~/features/solar/components/SolarHealth";
-import { weatherDayQuery } from "~/features/weather/api";
+import { useSolarDay } from "~/features/solar/hooks";
 import type { WeatherDay } from "~/features/weather/types";
 
 const SOLAR = COLOR.solar;
 const EXPECTED = alpha(COLOR.fg, 0.45);
-const FIELDS = ["pv_power", "pv1_power", "pv2_power", "mppt1_v", "mppt1_a", "mppt2_v", "mppt2_a"];
 
 /** Where the system is, once it's been set (not the 0, 0 it starts at). */
-function place(s: SystemInfo | undefined): { lat: number; lon: number } | null {
+export function place(s: SystemInfo | undefined): { lat: number; lon: number } | null {
   const lat = s?.latitude;
   const lon = s?.longitude;
   return lat != null && lon != null && (lat !== 0 || lon !== 0) ? { lat, lon } : null;
@@ -53,13 +51,8 @@ export function SolarPage() {
   const s = useSystem();
   const f = useForecast();
   const acc = useForecastAccuracy();
-  const start = midnight(now);
-  const { data: day } = useQuery(
-    historyQuery({ start, end: addDays(start, 1), points: 288, fields: FIELDS, live: true }),
-  );
-  const { data: weather } = useQuery(weatherDayQuery(dateKey(now)));
+  const { start, series, weather } = useSolarDay(now);
   const { data: insights } = useQuery(solarInsightsQuery);
-  const series = day?.series;
   return (
     <>
       <PageHeader title="Solar" sub="What your panels are making against the forecast, and how they're holding up" />
@@ -67,7 +60,7 @@ export function SolarPage() {
         <SolarNow p={p} s={s} f={f} acc={acc} series={series} now={now} />
         <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
           <div className="flex min-w-0 flex-col gap-5">
-            <TodayCard series={series} f={f} weather={weather} start={start} now={now} at={place(s)} />
+            <SolarTodayCard series={series} f={f} weather={weather} start={start} now={now} at={place(s)} />
             <LastDays acc={acc} />
             {insights ? (
               <SolarPerformance performance={insights.performance} />
@@ -93,7 +86,7 @@ export function SolarPage() {
  * Solar now, big: how much of the array it is, then today so far, where it should end up, its peak, today's daylight
  * and the sky.
  */
-function SolarNow({
+export function SolarNow({
   p,
   s,
   f,
@@ -191,7 +184,7 @@ function expectedToday(weather: WeatherDay | undefined, f: Forecast | null | und
   return [...gone, ...ahead].sort((a, b) => a.t - b.t);
 }
 
-function TodayCard({
+export function SolarTodayCard({
   series,
   f,
   weather,
@@ -271,7 +264,7 @@ function TodayCard({
  * Where today's solar went: into the house, into the battery, or out to the grid. Export and charging can come from
  * elsewhere too (the battery to the grid, the grid to the battery), so each is capped at what solar could have given.
  */
-function WhereItWent({ p }: { p: Snapshot | null }) {
+export function WhereItWent({ p }: { p: Snapshot | null }) {
   const pv = p?.daily_pv ?? 0;
   const toGrid = Math.min(p?.daily_export ?? 0, pv);
   const toBattery = Math.min(p?.daily_charge ?? 0, pv - toGrid);
@@ -319,7 +312,7 @@ function Bar({ share, color }: { share: number; color: string }) {
  * Each inverter's solar (with a second, AC-coupled one), and the hybrid's strings: each MPPT's voltage and current,
  * and the power that makes. A string well behind the other on a sunny day is shade, a fault or dirt on its panels.
  */
-function Strings({ p, s }: { p: Snapshot | null; s: SystemInfo | undefined }) {
+export function Strings({ p, s }: { p: Snapshot | null; s: SystemInfo | undefined }) {
   const strings = [1, 2]
     .map((n) => {
       const v = p?.[`mppt${n}_v`] ?? null;
@@ -395,7 +388,7 @@ function Strings({ p, s }: { p: Snapshot | null; s: SystemInfo | undefined }) {
 // ---------------------------------------------------------------------------------------------- days
 
 /** The rest of today and the next two days: solar expected, with the range it usually lands in, and the sky. */
-function DaysAhead({
+export function DaysAhead({
   f,
   acc,
   now,
@@ -474,7 +467,7 @@ function against(made: number, forecast: number): string {
 }
 
 /** The last 30 days: what the panels made each day, against what the day-ahead forecast said. */
-function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
+export function LastDays({ acc }: { acc: ForecastAccuracy | null | undefined }) {
   const days = acc?.days ?? [];
   const { hover: h, width, plot, bar } = useBarHover();
   if (!days.length) return null;

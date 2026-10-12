@@ -11,13 +11,13 @@ import { deviceColors, deviceIcon, ESTIMATED, watts } from "~/features/home/util
 /**
  * On the Overview, while an appliance is running: each one with where its cycle is, how long is left (and when that
  * is), what it's drawing and what the run has used so far (estimated, for an appliance that doesn't report its power and
- * has its estimate on). Nothing at all while nothing is running.
+ * has its estimate on). While nothing is, nothing at all, or (`quiet`, where its place is kept) a line saying so.
  */
-export function RunningNowCard() {
+export function RunningNowCard({ quiet = false }: { quiet?: boolean }) {
   const { data } = useQuery(homeQuery);
   const devices = data?.devices ?? [];
   const running = devices.filter((d) => !d.hidden && d.now?.running && !d.now.stale && d.now.online);
-  if (!running.length) return null;
+  if (!running.length && !quiet) return null;
   const colors = deviceColors(devices, data?.rooms);
   return (
     <Card aria-labelledby="h-running" className="col-span-12 gap-3">
@@ -27,6 +27,7 @@ export function RunningNowCard() {
           Home
         </Link>
       </div>
+      {!running.length && <span className="text-[13px] text-ink-faint">Nothing's running right now.</span>}
       <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 p-0">
         {running.map((d) => {
           const n = d.now!;

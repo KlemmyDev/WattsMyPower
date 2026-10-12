@@ -8,7 +8,6 @@ import { addDays, dateKey, midnight } from "~/features/common/time/utils";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { useNow } from "~/features/common/time/hooks";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
-import { historyQuery } from "~/features/common/readings/api";
 import { useForecast } from "~/features/common/weather/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
@@ -22,6 +21,7 @@ import {
   HomeSourcesCard,
   HomeTodayCard,
   useHomeDays,
+  useHomeToday,
 } from "~/features/home/components/HomeWhole";
 import { HabitsCard, StandbyCard } from "~/features/home/components/InsightCards";
 import { NowCard } from "~/features/home/components/NowCard";
@@ -64,9 +64,6 @@ function ConnectPrompt() {
   );
 }
 
-// The whole house through today, from the inverter: for the cards above the devices.
-const WHOLE_FIELDS = ["load_power", "pv_power", "battery_power"];
-
 /**
  * Home, live: what the house is drawing now and where from, then today against a usual day beside what each room is
  * drawing this minute; where the power went over a day or the last 7 or 30 days, split between the devices connected
@@ -82,10 +79,8 @@ export function HomePage({ range, day }: { range: Range; day?: number }) {
   const overview = useQuery(homeQuery);
   const p = useSnapshot();
   const f = useForecast();
-  const today = midnight(now);
-  const { data: whole } = useQuery(
-    historyQuery({ start: today, end: addDays(today, 1), points: 288, fields: WHOLE_FIELDS, live: true }),
-  );
+  const { today, series: wholeSeries } = useHomeToday(now);
+  const whole = { series: wholeSeries };
   const homeDays = useHomeDays(now);
   // While another day or period loads, the last one stays on screen (dimmed) rather than the card emptying.
   const usage = useQuery({ ...homeUsageQuery(start, end, bucket), placeholderData: keepPreviousData });

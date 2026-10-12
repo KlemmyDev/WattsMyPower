@@ -892,6 +892,14 @@
     transform: translateY(10px);
   }
 }
+/* The customising tray, sliding in from the right edge. */
+@keyframes wmpTrayIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
 @keyframes wmpFade {
   from {
     opacity: 0;
