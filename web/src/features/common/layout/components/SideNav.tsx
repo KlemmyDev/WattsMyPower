@@ -2,6 +2,7 @@ import { ChannelBadge } from "~/features/updates/components/ChannelBadge";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { reducedMotion } from "~/features/common/display/utils";
 import { ON } from "~/features/common/energy/utils";
 import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
 import { NavPower } from "~/features/common/layout/components/Dock";
@@ -9,6 +10,7 @@ import { NAV_DOCKED, useMedia, useNavItems, useSectionPages } from "~/features/c
 import { NAV_GROUPS, sectionOf, type SectionPages } from "~/features/common/layout/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
+import { Glint } from "~/features/common/ui/components/Glint";
 import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { updatesQuery } from "~/features/updates/api";
@@ -16,6 +18,9 @@ import { updatesQuery } from "~/features/updates/api";
 // A section's pages say for themselves which is current (a room is, on its devices' pages). Their links only count
 // themselves current on their exact page, so a link up the path ("/home") doesn't light up as well.
 const EXACT = { exact: true, includeSearch: false } as const;
+
+/** How long the spark takes along the wire to the page you've opened, up or down. */
+const TRAVEL = 520;
 
 /**
  * The navigation from tablets up, docked down the left. From xl it's the circuit: sections in groups with a reading
@@ -109,6 +114,33 @@ function Circuit({
   const live = useLive();
   const list = useRef<HTMLDivElement>(null);
   const wire = useWire(list, [path, items.length, variant, pages?.pages.length]);
+  // Pointing at a page further down the wire traces a faint path to it, in its colour: where the power would go. Only
+  // on the page it was traced on: opening one hides it.
+  const [ghost, setGhost] = useState<{ top: number; height: number; color?: string; on: boolean; path: string } | null>(
+    null,
+  );
+  const hovered = useRef<Element | null>(null);
+  const hideGhost = () => {
+    hovered.current = null;
+    setGhost((g) => g && { ...g, on: false });
+  };
+  const onOver = (e: React.PointerEvent) => {
+    const el = list.current;
+    const n = (e.target as Element).closest<HTMLElement>("[data-circuit-row], [data-circuit-branch]");
+    if (!el || !wire || n === hovered.current) return;
+    hovered.current = n;
+    // A page on a branch is reached at the top of its row, where its elbow leaves the wire.
+    const y =
+      n && (n.hasAttribute("data-circuit-branch") ? topIn(el, n) : topIn(el, n) + n.offsetHeight / 2) - wire.top;
+    if (!n || y == null || y <= wire.lit + 2) return setGhost((g) => g && { ...g, on: false });
+    setGhost({
+      top: wire.lit,
+      height: y - wire.lit,
+      color: n.style.getPropertyValue("--node-c") || undefined,
+      on: true,
+      path,
+    });
+  };
   // Where the list scrolls (a short screen), the current page is kept in view: Manage's sit at the bottom. Again as
   // its room changes, as the power flow arrives below it after the page opens.
   useEffect(() => {
@@ -121,6 +153,14 @@ function Circuit({
     return () => ro.disconnect();
   }, [path]);
   const at = items.findIndex((i) => i.to === current);
+  // The current section's row is on the way to one of its pages, when that's what's open.
+  const via = branches && !!pages?.pages.some((pg) => pg.active);
+  // The wire's pulse runs quicker the more solar there is (in half-kilowatt steps, so it doesn't jump at every
+  // reading), and rests when there's none.
+  const pv = p?.pv_power;
+  const rest = pv != null && pv <= ON;
+  const pulse =
+    pv == null || rest ? undefined : `${Math.max(1.3, 3.6 - Math.min(Math.round(pv / 500) / 2, 5) * 0.46).toFixed(2)}s`;
   const ev = live?.ev;
   const value: Partial<Record<string, string>> = p
     ? {
@@ -177,10 +217,33 @@ function Circuit({
           full && "-mx-3 w-auto [scrollbar-width:none] overflow-y-auto overscroll-contain px-3",
         )}
       >
-        <div ref={list} className="relative flex min-h-full flex-col">
+        <div
+          ref={list}
+          onPointerOver={onOver}
+          onPointerLeave={hideGhost}
+          className="relative isolate flex min-h-full flex-col"
+        >
           {wire && (
-            <span aria-hidden className="circuit-wire" style={{ top: wire.top, height: wire.height }}>
+            <span
+              aria-hidden
+              className="circuit-wire"
+              data-rest={rest || undefined}
+              style={{ top: wire.top, height: wire.height, "--pulse": pulse } as CSSProperties}
+            >
               <span className="circuit-lit" style={{ height: wire.lit }} />
+              <span
+                className="circuit-ghost"
+                data-on={(ghost?.on && ghost.path === path) || undefined}
+                style={
+                  ghost ? ({ top: ghost.top, height: ghost.height, "--g": ghost.color } as CSSProperties) : undefined
+                }
+              />
+              <span
+                className="circuit-spark"
+                data-dir={wire.dir}
+                data-moving={wire.moving || undefined}
+                style={{ top: wire.lit }}
+              />
             </span>
           )}
           {items
@@ -220,6 +283,7 @@ function Circuit({
                       color={i.color}
                       full={full}
                       on={current === i.to}
+                      via={current === i.to && via}
                       lit={at >= 0 && items.indexOf(i) <= at}
                     />
                     {branches && current === i.to && pages && <Branch pages={pages} />}
@@ -245,6 +309,7 @@ function CircuitLink({
   color,
   full,
   on,
+  via,
   lit,
 }: {
   to: string;
@@ -255,6 +320,8 @@ function CircuitLink({
   color: string;
   full: boolean;
   on: boolean;
+  /** It's current on the way to one of its pages: the power passes its node rather than landing there. */
+  via?: boolean;
   lit?: boolean;
 }) {
   return (
@@ -262,6 +329,7 @@ function CircuitLink({
       to={to}
       data-circuit-row
       data-lit={lit || undefined}
+      data-via={via || undefined}
       aria-label={full ? undefined : label}
       aria-current={on ? "page" : undefined}
       style={{ "--node-c": color } as CSSProperties}
@@ -275,8 +343,10 @@ function CircuitLink({
       <Icon name={icon} size={16} className="circuit-icon" />
       {full ? (
         <>
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {value && <span className="flex-none text-xs font-normal text-ink-faint tabular-nums">{value}</span>}
+          <span className="circuit-label min-w-0 flex-1 truncate">{label}</span>
+          {value && (
+            <Glint value={value} className="circuit-value flex-none text-xs font-normal text-ink-faint tabular-nums" />
+          )}
         </>
       ) : (
         <span
@@ -291,14 +361,20 @@ function CircuitLink({
   );
 }
 
-/** The current section's pages, each on an elbow off its node, under headings (rooms) where they have them. */
+/**
+ * The current section's pages, each on an elbow off its node, under headings (rooms) where they have them. They arrive
+ * one after another (`--i`), each elbow drawing out before its node pops in.
+ */
 function Branch({ pages }: { pages: SectionPages }) {
   return (
-    <div className="circuit-branch-in flex flex-col">
+    <div className="flex flex-col">
       {pages.pages.map((page, i) => (
         <Fragment key={page.key}>
           {page.group && page.group !== pages.pages[i - 1]?.group && (
-            <div className="flex items-baseline gap-2 pt-2 pr-2.5 pb-0.5 pl-[52px] text-[11.5px] font-medium text-ink-faint">
+            <div
+              style={{ "--i": i } as CSSProperties}
+              className="circuit-branch-head flex items-baseline gap-2 pt-2 pr-2.5 pb-0.5 pl-[52px] text-[11.5px] font-medium text-ink-faint"
+            >
               <span className="min-w-0 flex-1 truncate">{page.group}</span>
               {page.groupValue && <span className="flex-none tabular-nums">{page.groupValue}</span>}
             </div>
@@ -308,13 +384,13 @@ function Branch({ pages }: { pages: SectionPages }) {
             data-circuit-branch
             activeOptions={EXACT}
             aria-current={page.active ? "page" : undefined}
-            style={{ "--node-c": page.color } as CSSProperties}
+            style={{ "--node-c": page.color, "--i": i } as CSSProperties}
             className="relative flex h-[31px] flex-none items-center gap-2 rounded-[9px] pr-2.5 pl-[52px] text-[13px] text-ink-faint no-underline transition-colors duration-150 hover:text-ink aria-[current=page]:text-ink"
           >
             <span aria-hidden className="circuit-elbow" />
             <span aria-hidden className="circuit-sub-node" />
             <span className="min-w-0 flex-1 truncate">{page.label}</span>
-            {page.value && <span className="flex-none text-[11.5px] tabular-nums">{page.value}</span>}
+            {page.value && <Glint value={page.value} className="flex-none text-[11.5px] tabular-nums" />}
           </Link>
         </Fragment>
       ))}
@@ -403,24 +479,35 @@ function VersionTag({ full }: { full: boolean }) {
   );
 }
 
+/** How far down the list a row is. Added up to the list itself, in case something between them is positioned. */
+function topIn(list: HTMLElement, n: HTMLElement) {
+  let y = 0;
+  for (let at: Element | null = n; at instanceof HTMLElement && at !== list; at = at.offsetParent) y += at.offsetTop;
+  return y;
+}
+
 /**
  * Where the wire runs, in pixels down the list: from the first section's node to the last node on it (the last
  * section's, or the last of its pages when they're open), lit from the top down to the current page (its branch, when
  * one's open). Re-measured as the list changes size (a section's pages arriving) and once web fonts load.
+ *
+ * Opening another page sends a spark along the wire to it (`moving`, which way in `dir`): each node lights as the
+ * spark reaches it, and the ones it runs past flash. Only a new page does; the list changing size just re-measures.
  */
 function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
-  const [wire, setWire] = useState<{ top: number; height: number; lit: number } | null>(null);
+  const [wire, setWire] = useState<{
+    top: number;
+    height: number;
+    lit: number;
+    dir: "down" | "up";
+    moving: boolean;
+  } | null>(null);
+  const was = useRef<{ lit: number; at: Element | null } | null>(null);
   useLayoutEffect(() => {
     const el = list.current;
     if (!el) return;
-    // How far down the list a row is. Added up to the list itself: while a section's pages drop in (.circuit-branch-in)
-    // their group is moving, which makes it what their offsetTop counts from, so a page's own reads 0 then.
-    const topOf = (n: HTMLElement) => {
-      let y = 0;
-      for (let at: Element | null = n; at instanceof HTMLElement && at !== el; at = at.offsetParent) y += at.offsetTop;
-      return y;
-    };
-    const mid = (n: HTMLElement) => topOf(n) + n.offsetHeight / 2;
+    const mid = (n: HTMLElement) => topIn(el, n) + n.offsetHeight / 2;
+    let timer = 0;
     const place = () => {
       const rows = [...el.querySelectorAll<HTMLElement>("[data-circuit-row]")];
       const nodes = [...el.querySelectorAll<HTMLElement>("[data-circuit-row], [data-circuit-branch]")];
@@ -431,15 +518,50 @@ function useWire(list: React.RefObject<HTMLElement | null>, deps: unknown[]) {
       const row = el.querySelector<HTMLElement>('[data-circuit-row][aria-current="page"]');
       // A page on a branch is reached through its elbow, which leaves the wire at the top of its row: the wire stops
       // there, or it would carry on straight past the curve.
-      const to = branch ? topOf(branch) - top : row ? mid(row) - top : 0;
-      setWire({ top, height, lit: Math.max(0, to) });
+      const lit = Math.max(0, branch ? topIn(el, branch) - top : row ? mid(row) - top : 0);
+      const at = branch ?? row;
+      const before = was.current;
+      was.current = { lit, at };
+      if (!before || before.at === at)
+        return setWire((w) => ({ top, height, lit, dir: w?.dir ?? "down", moving: w?.moving ?? false }));
+      const from = before.lit;
+      travel(el, rows, top, from, lit);
+      const moving = Math.abs(lit - from) > 2 && !reducedMotion();
+      setWire({ top, height, lit, dir: lit >= from ? "down" : "up", moving });
+      window.clearTimeout(timer);
+      if (moving) timer = window.setTimeout(() => setWire((w) => w && { ...w, moving: false }), TRAVEL);
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(el);
     document.fonts?.ready.then(place);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller says what moves the current page
   }, deps);
   return wire;
+}
+
+/**
+ * Times each section's node to the spark going by, from `from` to `to` down the wire: a node it reaches lights (or,
+ * going up, goes out) as it gets there, and one it runs past on the way down flashes. The current section's node takes
+ * the same timing when the spark only passes it, on its way to one of its pages.
+ */
+function travel(list: HTMLElement, rows: HTMLElement[], top: number, from: number, to: number) {
+  for (const row of rows) {
+    const node = row.querySelector<HTMLElement>(".circuit-node");
+    if (!node) continue;
+    const y = topIn(list, row) + row.offsetHeight / 2 - top;
+    const reached = to > from ? y > from + 0.5 && y <= to + 0.5 : y > to + 0.5 && y <= from + 0.5;
+    const d = reached ? Math.round((Math.abs(y - from) / Math.abs(to - from)) * TRAVEL) : 0;
+    node.style.transitionDelay = `${d}ms`;
+    node.style.setProperty("--flash-d", `${d}ms`);
+    delete node.dataset.flash;
+    if (reached && to > from && y < to - 1 && !row.hasAttribute("aria-current")) {
+      void node.offsetWidth; // so the flash starts over
+      node.dataset.flash = "";
+    }
+  }
 }

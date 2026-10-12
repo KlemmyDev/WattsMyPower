@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Glint } from "~/features/common/ui/components/Glint";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
@@ -45,6 +46,8 @@ function usePowerNow() {
     hasBattery: !none,
     pv,
     g,
+    b,
+    l,
     soc,
     st,
     verb,
@@ -122,15 +125,20 @@ export function Dock() {
 }
 
 /**
- * The same power flow, always at the foot of the side nav, opening Overview. In full, solar → home ← grid on a
- * row, with the battery (if there is one) under them; on the rail, a column of each reading under its icon.
+ * The same power flow, always at the foot of the side nav, opening Overview. In full, a small circuit: solar, the
+ * battery (if there is one), home and grid as nodes on one wire, each lit while it's in use, with sparks running along
+ * the wire the way the power goes. On the rail, a column of each reading under its icon, joined the same way.
  */
 export function NavPower({ full }: { full: boolean }) {
   const f = usePowerNow();
   const onOverview = useRouterState({ select: (s) => s.location.pathname === "/" });
   if (!f) return null;
+  const pv = f.pv ?? 0;
+  const g = f.g ?? 0;
   const box =
     "group flex flex-none rounded-xl border border-fg/6 bg-fg/4 text-ink no-underline transition-colors duration-200 hover:border-fg/12 hover:bg-fg/6 hover:text-ink";
+  // Grid power runs toward home when importing (up the rail, or left along the circuit).
+  const grid = <Seg on={Math.abs(g) > ON} rev={g > 0} color={COLOR.gridLine} w={g} vertical={!full} />;
   if (!full)
     return (
       // Only where the rail has the height for it, as it doesn't scroll.
@@ -139,53 +147,145 @@ export function NavPower({ full }: { full: boolean }) {
         aria-label={f.label}
         title={f.label}
         aria-current={onOverview ? "page" : undefined}
-        className={cn(box, "w-12 flex-col items-center gap-2.5 py-2.5 [@media(max-height:1040px)]:hidden")}
+        className={cn(box, "w-12 flex-col items-center gap-1.5 py-2.5 [@media(max-height:1040px)]:hidden")}
       >
-        <RailItem icon="sun" color={COLOR.solar} v={f.solar} />
-        <RailItem icon="home" color={COLOR.ink} v={f.home} />
-        <RailItem icon="grid" color={COLOR.gridSoft} v={f.grid} />
+        <RailItem icon="sun" color={COLOR.solar} v={f.solar} on={f.pv} />
+        <Seg on={pv > ON} color={COLOR.solar} w={pv} vertical />
+        <RailItem icon="home" color={COLOR.ink} v={f.home} on={f.l} />
+        {grid}
+        <RailItem icon="grid" color={COLOR.gridSoft} v={f.grid} on={f.g} />
         {f.hasBattery && (
-          <span className="flex flex-col items-center gap-1">
+          <span className="mt-1 flex flex-col items-center gap-1">
             <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
-            <span className="text-[10.5px] font-semibold tabular-nums">{Math.round(f.soc)}%</span>
+            <Glint value={`${Math.round(f.soc)}%`} className="text-[10.5px] font-semibold tabular-nums" />
           </span>
         )}
       </Link>
     );
+  // What reaches home from solar and the battery (less, or the other way, when the grid's charging the battery).
+  const side = pv + (f.hasBattery ? (f.b ?? 0) : 0);
+  const batColor = f.st === "discharge" ? COLOR.warn : COLOR.batterySoft;
+  const nodes = [
+    <Node key="solar" icon="sun" color={COLOR.solar} lit={pv > ON} v={f.solar} k="Solar" on={f.pv} />,
+    f.hasBattery && (
+      <Node
+        key="battery"
+        icon="battery"
+        color={batColor}
+        lit={f.st === "charge" || f.st === "discharge"}
+        v={`${Math.round(f.soc)}%`}
+        k="Battery"
+        badge={<ModeBadge now={f.now} ring="var(--color-nav)" className="-right-2.5 -bottom-1 size-4" />}
+      />
+    ),
+    <Node key="home" icon="home" color={COLOR.ink} lit v={f.home} k="Home" on={f.l} />,
+    // "Importing" and "Exporting" are too wide for the column; the spark shows which way it goes.
+    <Node
+      key="grid"
+      icon="grid"
+      color={COLOR.gridSoft}
+      lit={Math.abs(g) > ON}
+      v={f.grid}
+      k={f.verb.replace(/ing$/, "")}
+      on={f.g}
+    />,
+  ].filter(Boolean);
+  // The wire runs from the first node's middle to the last's.
+  const inset = `${50 / nodes.length}%`;
   return (
     <Link
       to="/"
       aria-label={f.label}
       aria-current={onOverview ? "page" : undefined}
-      className={cn(box, "flex-col gap-3 px-2 pt-2.5 pb-2")}
+      className={cn(box, "px-1.5 pt-2.5 pb-2")}
     >
-      <span className="flex items-start">
-        <FlowItem icon="sun" color={COLOR.solar} k="Solar" v={f.solar} />
-        <Conn on={(f.pv || 0) > ON} color={COLOR.solar} className="mt-2.5 min-w-2 flex-1" />
-        <FlowItem icon="home" color={COLOR.ink} k="Home" v={f.home} />
-        <Conn
-          on={f.g != null && Math.abs(f.g) > ON}
-          rev={(f.g ?? 0) > 0}
-          color={COLOR.gridLine}
-          className="mt-2.5 min-w-2 flex-1"
-        />
-        {/* "Importing" and "Exporting" are too wide for the column; the dot shows which way it goes. */}
-        <FlowItem icon="grid" color={COLOR.gridSoft} k={f.verb.replace(/ing$/, "")} v={f.grid} />
-      </span>
-      {f.hasBattery && (
-        <span className="flex items-center gap-2 border-t border-fg/6 px-0.5 pt-2">
-          <SocRing ring={f.ring} now={f.now} behind="var(--color-nav)" className="size-6" inner="size-[19px]" />
-          <span className="text-[12.5px] font-medium text-ink-soft">Battery {Math.round(f.soc)}%</span>
-          <span
-            className="ml-auto text-[12.5px] font-semibold tracking-[-0.2px] tabular-nums"
-            style={{ color: f.batColor }}
-          >
-            {f.arrow}
-            {f.battery}
-          </span>
+      <span className="relative grid w-full" style={{ gridTemplateColumns: `repeat(${nodes.length}, minmax(0, 1fr))` }}>
+        <span aria-hidden className="absolute top-[22.5px] flex" style={{ left: inset, right: inset }}>
+          <Seg on={pv > ON} color={COLOR.solar} w={pv} />
+          {f.hasBattery && (
+            <Seg
+              on={Math.abs(side) > ON}
+              rev={side < 0}
+              color={f.st === "discharge" ? batColor : side < 0 ? COLOR.gridLine : COLOR.solar}
+              w={side}
+            />
+          )}
+          {grid}
         </span>
-      )}
+        {nodes}
+      </span>
     </Link>
+  );
+}
+
+/** A node of the nav's circuit: its icon, a dot lit in its colour while it's in use, its reading and what it is. */
+function Node({
+  icon,
+  color,
+  lit,
+  v,
+  k,
+  on,
+  badge,
+}: {
+  icon: IconName;
+  color: string;
+  lit: boolean;
+  v: string;
+  k: string;
+  /** The reading `v` glides from, which glints as it changes. */
+  on?: unknown;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <span
+      data-lit={lit || undefined}
+      className="nav-node flex min-w-0 flex-col items-center gap-[5px] leading-none"
+      style={{ "--c": color } as React.CSSProperties}
+    >
+      <span className="relative flex">
+        <Icon name={icon} size={14} className="nav-node-icon" />
+        {badge}
+      </span>
+      <span aria-hidden className="nav-node-dot" />
+      <Glint
+        value={v}
+        on={on}
+        className="mt-px text-xs font-semibold tracking-[-0.2px] whitespace-nowrap tabular-nums"
+      />
+      <span className="-mt-px text-[10.5px] whitespace-nowrap text-ink-faint">{k}</span>
+    </span>
+  );
+}
+
+/**
+ * A stretch of the nav's wire between two of the flow's readings, with a spark running along it the way the power goes
+ * (`rev` back toward the start), quicker the more of it there is (`w`, in watts).
+ */
+function Seg({
+  on,
+  rev,
+  color,
+  w,
+  vertical,
+}: {
+  on: boolean;
+  rev?: boolean;
+  color: string;
+  w: number;
+  vertical?: boolean;
+}) {
+  // A lap in half-kilowatt steps, so the spark doesn't change pace at every reading.
+  const lap = Math.max(0.7, 2.6 - Math.min(Math.round(Math.abs(w) / 500) / 2, 5) * 0.38);
+  return (
+    <span
+      aria-hidden
+      className="nav-seg"
+      data-on={on || undefined}
+      data-rev={rev || undefined}
+      data-vertical={vertical || undefined}
+      style={{ "--c": color, "--lap": `${lap.toFixed(2)}s` } as React.CSSProperties}
+    />
   );
 }
 
@@ -212,22 +312,15 @@ function DockItem({ icon, color, v }: { icon: IconName; color: string; v: string
   );
 }
 
-/** A column of the nav's flow: its icon, the reading under it, and what it is. A fixed width, so the row holds still. */
-function FlowItem({ icon, color, k, v }: { icon: IconName; color: string; k: string; v: string }) {
-  return (
-    <span className="flex w-12 flex-none flex-col items-center gap-1 leading-none">
-      <Tint icon={icon} color={color} className="mb-0.5 size-7" />
-      <span className="text-[12.5px] font-semibold tracking-[-0.2px] whitespace-nowrap tabular-nums">{v}</span>
-      <span className="text-[10.5px] text-ink-faint">{k}</span>
-    </span>
-  );
-}
-
-function RailItem({ icon, color, v }: { icon: IconName; color: string; v: string }) {
+function RailItem({ icon, color, v, on }: { icon: IconName; color: string; v: string; on: unknown }) {
   return (
     <span className="flex flex-col items-center gap-1">
       <Tint icon={icon} color={color} className="size-6" />
-      <span className="text-[10.5px] font-semibold tracking-[-0.2px] whitespace-nowrap tabular-nums">{v}</span>
+      <Glint
+        value={v}
+        on={on}
+        className="text-[10.5px] font-semibold tracking-[-0.2px] whitespace-nowrap tabular-nums"
+      />
     </span>
   );
 }
