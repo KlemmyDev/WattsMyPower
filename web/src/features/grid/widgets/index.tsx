@@ -6,13 +6,8 @@ import { Quiet, WidgetCard } from "~/features/common/widgets/parts";
 import type { WidgetDef, WidgetProps } from "~/features/common/widgets/types";
 import { gridQuery } from "~/features/grid/api";
 import { GridOverviewCard } from "~/features/grid/components/GridOverviewCard";
-import {
-  GridSummary,
-  GridTodayCard,
-  NoticesCard,
-  QualityCard,
-  WholesaleCard,
-} from "~/features/grid/components/GridPage";
+import { GridHero } from "~/features/grid/components/GridHero";
+import { MarketCard, NoticesCard, QualityCard } from "~/features/grid/components/GridPage";
 import { HazardsCard } from "~/features/grid/components/HazardsCard";
 import { OutagesCard } from "~/features/grid/components/OutagesCard";
 import { useGridDay } from "~/features/grid/hooks";
@@ -44,17 +39,15 @@ function Status({ ctx, h }: WidgetProps) {
     </WidgetCard>
   );
 }
-function Summary({ ctx }: WidgetProps) {
+/** The Grid page's top card: with the day's chart (Grid today) or without it (Grid at a glance). */
+function Hero({ ctx, chart }: WidgetProps & { chart: boolean }) {
   const { data } = useQuery(gridQuery);
-  return <GridSummary grid={data} p={ctx.p} s={ctx.s} now={ctx.now} />;
-}
-function Today({ ctx }: WidgetProps) {
   const { start, series } = useGridDay(ctx.now);
-  return <GridTodayCard series={series} p={ctx.p} start={start} now={ctx.now} />;
+  return <GridHero grid={data} p={ctx.p} s={ctx.s} series={series} start={start} now={ctx.now} chart={chart} />;
 }
 function Wholesale({ ctx }: WidgetProps) {
   const { data } = useQuery(gridQuery);
-  return data ? <WholesaleCard grid={data} now={ctx.now} /> : loading("Wholesale price");
+  return data ? <MarketCard grid={data} now={ctx.now} notices={false} /> : loading("Wholesale market");
 }
 function Quality({ ctx }: WidgetProps) {
   const { data } = useQuery(gridQuery);
@@ -99,13 +92,13 @@ export const widgets: WidgetDef[] = [
   {
     type: "grid-summary",
     name: "Grid at a glance",
-    sub: "How it's holding up, buying or selling now, and the price",
+    sub: "Bought today against a usual day, buying or selling now, sold, the prices and how it's holding up",
     group: "grid",
     icon: "grid",
-    thumb: { kind: "number", value: "0 W", color: COLOR.import },
-    sizes: size([6, 2], [12, 4], [12, 3]),
-    phone: size([4, 3], [4, 6], [4, 4]),
-    Component: Summary,
+    thumb: { kind: "number", value: "3.2 kWh", color: COLOR.import },
+    sizes: size([6, 3], [12, 4], [12, 3]),
+    phone: size([4, 5], [4, 7], [4, 6]),
+    Component: (props: WidgetProps) => <Hero {...props} chart={false} />,
   },
   {
     type: "grid-outages",
@@ -121,18 +114,18 @@ export const widgets: WidgetDef[] = [
   {
     type: "grid-today",
     name: "Grid today",
-    sub: "What you bought and sold through the day",
+    sub: "Buying and selling now and through the day, with the rates and the wholesale price under it",
     group: "grid",
     icon: "chart",
     thumb: { kind: "line", color: COLOR.import },
-    sizes: size([6, 4], [12, 6], [7, 4]),
-    phone: size([4, 4], [4, 6], [4, 5]),
-    Component: Today,
+    sizes: size([6, 8], [12, 10], [12, 8]),
+    phone: size([4, 10], [4, 13], [4, 11]),
+    Component: (props: WidgetProps) => <Hero {...props} chart />,
   },
   {
     type: "grid-wholesale",
-    name: "Wholesale price",
-    sub: "The market's price now and ahead",
+    name: "Wholesale market",
+    sub: "The market's price now, through today and ahead",
     group: "money",
     icon: "dollar",
     thumb: { kind: "bars", color: COLOR.import },
