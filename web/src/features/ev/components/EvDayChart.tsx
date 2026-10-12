@@ -5,7 +5,6 @@ import { kW, kWh } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { addDays, hourOf, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
 import { Icon } from "~/features/common/ui/components/Icon";
 import {
@@ -217,7 +216,7 @@ function Dot({ color, label, square }: { color: string; label: string; square?: 
 }
 
 /**
- * The car's day, in one place, day by day: its charge as read (a solid line; estimated in a straight line across the
+ * The car's day, inside its hero card, day by day: its charge as read (a solid line; estimated in a straight line across the
  * time it wasn't, dashed), when it was away and when it charged at home (shaded), its charge limit, each time the
  * dashboard woke it, and everything the dashboard did with it or saw done, marked along the top; and what went into it
  * while charging at home each half hour, from solar and from the grid.
@@ -261,21 +260,24 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
   const perAmp = v.volts && v.phases ? v.volts * v.phases : null;
 
   return (
-    <Card aria-labelledby={`h-tlv-${vin}`} className={cn("gap-4", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <TitleBlock
-          id={`h-tlv-${vin}`}
-          title="Through the day"
-          sub={[
-            first != null && last != null
-              ? `${dayName(start, now)}: ${Math.round(first)}% → ${Math.round(last)}%`
-              : dayName(start, now),
-            charged,
-            woken,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        />
+    <div role="group" aria-labelledby={`h-tlv-${vin}`} className={cn("flex min-w-0 flex-col gap-4", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h3 id={`h-tlv-${vin}`} className="m-0 text-[13px] font-medium text-ink">
+            {dayName(start, now)}
+            {first != null && last != null && (
+              <span className="font-normal text-ink-muted tabular-nums">
+                {" "}
+                · {Math.round(first)}% → {Math.round(last)}%
+              </span>
+            )}
+          </h3>
+          {(charged || woken) && (
+            <span className="text-xs text-ink-muted tabular-nums first-letter:uppercase">
+              {[charged, woken].filter(Boolean).join(" · ")}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           {zoom.zoomed && <ZoomOut from={from} to={to} onClick={zoom.reset} className="mr-1" />}
           <Button variant="round" aria-label="The day before" disabled={back >= 89} onClick={() => setBack(back + 1)}>
@@ -349,6 +351,6 @@ export function EvDayChart({ v, now, className }: { v: EvVehicle; now: number; c
         <Dot color={WAKE} label="Woken by the dashboard" />
         <span className="text-xs text-ink-faint max-md:hidden">Drag across a chart to look closer</span>
       </div>
-    </Card>
+    </div>
   );
 }

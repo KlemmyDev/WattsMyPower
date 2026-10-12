@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { useNow } from "~/features/common/time/hooks";
@@ -8,53 +9,81 @@ import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
 import { BluelinkReads } from "~/features/ev/components/BluelinkReads";
-import { BydPanel } from "~/features/ev/components/BydPanel";
+import { BydHero } from "~/features/ev/components/BydHero";
 import { Connection } from "~/features/ev/components/Connection";
 import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvDetails } from "~/features/ev/components/EvDetails";
+import { EvHero } from "~/features/ev/components/EvHero";
 import { EvInOut } from "~/features/ev/components/EvInOut";
-import { EvDayChart } from "~/features/ev/components/EvDayChart";
-import { EvPanel } from "~/features/ev/components/EvPanel";
 import { NextRead } from "~/features/ev/components/NextRead";
 import type { BluelinkCar, EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { carTitle, evTitle } from "~/features/ev/utils";
 
-/** One car, in full: big and simple at the top (its charge, what it's doing, how fresh that is), its day (its charge,
- * what went into it and from where, and everything the dashboard did with it, day by day), how it charges beside its
- * in and out (stacked on a narrower screen), and everything else it says about itself. */
-function Car({ v, provider, now }: { v: EvVehicle; provider: TeslaProvider | null; now: number }) {
+/** The columns under a car's hero, as Solar's, Home's and Battery's: the deeper story on the left, how it charges on
+ * the right. On one column, how it charges comes first. */
+function Columns({ left, right }: { left: ReactNode; right: ReactNode }) {
   return (
-    <div className="flex flex-col gap-5">
-      <EvPanel v={v} provider={provider} />
-      <EvDayChart v={v} now={now} />
-      <div className="grid grid-cols-2 items-start gap-5 max-lg:grid-cols-1">
-        <EvCharging v={v} className="min-w-0" />
-        <EvInOut vin={v.vin} now={now} className="min-w-0" />
-      </div>
-      <EvDetails vin={v.vin} name={v.name ?? "The car"} />
+    <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+      <div className="flex min-w-0 flex-col gap-5 max-3xl:order-2">{left}</div>
+      <div className="flex min-w-0 flex-col gap-5 max-3xl:order-1">{right}</div>
     </div>
   );
 }
 
-/** A Hyundai or Kia, as a Tesla is shown (its charge, then how it charges from the sun), beside how it's read and
- * what the dashboard did with it lately. Its cloud keeps no day of it to chart, nor details beyond its charge. */
-function BluelinkCarView({ v, choices }: { v: BluelinkCar; choices: number[] }) {
-  const reached = v.make === "Kia" ? "kia" : "hyundai";
+/** One Tesla, in full: today and now in its hero (with its day charted), then its in and out and everything else it
+ * says about itself beside how it charges. */
+function TeslaCar({
+  v,
+  provider,
+  alone,
+  now,
+}: {
+  v: EvVehicle;
+  provider: TeslaProvider | null;
+  alone: boolean;
+  now: number;
+}) {
   return (
     <div className="flex flex-col gap-5">
-      <EvPanel v={v} provider={reached} brand="bluelink" />
-      <div className="grid grid-cols-2 items-start gap-5 max-lg:grid-cols-1">
-        <EvCharging v={v} brand="bluelink" className="min-w-0" />
-        <BluelinkReads v={v} choices={choices} className="min-w-0" />
-      </div>
+      <EvHero v={v} provider={provider} alone={alone} now={now} />
+      <Columns
+        left={
+          <>
+            <EvInOut vin={v.vin} now={now} />
+            <EvDetails vin={v.vin} name={v.name ?? "The car"} />
+          </>
+        }
+        right={<EvCharging v={v} />}
+      />
+    </div>
+  );
+}
+
+/** A Hyundai or Kia, as a Tesla is shown (its hero, then how it charges from the sun), beside how it's read and what
+ * the dashboard did with it lately. Its cloud keeps no day of it to chart, nor details beyond its charge. */
+function BluelinkCarView({
+  v,
+  choices,
+  alone,
+  now,
+}: {
+  v: BluelinkCar;
+  choices: number[];
+  alone: boolean;
+  now: number;
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <EvHero v={v} provider={v.make === "Kia" ? "kia" : "hyundai"} brand="bluelink" alone={alone} now={now} />
+      <Columns left={<BluelinkReads v={v} choices={choices} />} right={<EvCharging v={v} brand="bluelink" />} />
     </div>
   );
 }
 
 /**
  * The EV page: each car connected (Teslas, through Tessie or over Bluetooth; Hyundais and Kias, through their cloud;
- * and BYDs, through BYD's cloud), or with
- * `vin`, one of them (its own page, as the side nav lists them).
+ * and BYDs, through BYD's cloud), or with `vin`, one of them (its own page, as the side nav lists them). One car is
+ * shown in full; several, each as a compact card that opens its own page.
  */
 export function EvPage({ vin }: { vin?: string } = {}) {
   const now = useNow(30_000);
@@ -65,7 +94,7 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     return (
       <>
         <PageHeader title="EV" sub="Checking the connection…" />
-        <Skeleton className="h-[260px] rounded-3xl" />
+        <Skeleton className="h-[420px] rounded-3xl" />
       </>
     );
   if (!data?.connected && !byd?.connected && !bluelink?.connected)
@@ -95,6 +124,8 @@ export function EvPage({ vin }: { vin?: string } = {}) {
   const byds = vin ? allByds.filter((v) => v.vin === vin) : allByds;
   const hks = vin ? allBluelink.filter((v) => v.vin === vin) : allBluelink;
   const cars = [...teslas, ...hks, ...byds];
+  // Only one car connected at all: what the house saw go to cars today is all its own.
+  const alone = allTeslas.length + allBluelink.length + allByds.length === 1;
   // One car shown: it's named for what it is (its own name is on its panel), with its model year.
   const one = cars.length === 1 ? cars[0] : null;
   // The Teslas' reach leads while any are shown, then a Hyundai or Kia's (a BYD panel says how fresh it is itself).
@@ -116,7 +147,7 @@ export function EvPage({ vin }: { vin?: string } = {}) {
   return (
     <>
       <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-5">
         {bluelink?.error && hks.length > 0 && (
           <Notice tone="bad" className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <span>
@@ -151,15 +182,48 @@ export function EvPage({ vin }: { vin?: string } = {}) {
             </Notice>
           )
         )}
-        {teslas.map((v) => (
-          <Car key={v.vin} v={v} provider={data?.provider ?? null} now={now} />
-        ))}
-        {hks.map((v) => (
-          <BluelinkCarView key={v.vin} v={v} choices={bluelink?.force_choices ?? []} />
-        ))}
-        {byds.map((v) => (
-          <BydPanel key={v.vin} v={v} />
-        ))}
+        {one ? (
+          teslas.length ? (
+            <TeslaCar v={teslas[0]} provider={data?.provider ?? null} alone={alone} now={now} />
+          ) : hks.length ? (
+            <BluelinkCarView v={hks[0]} choices={bluelink?.force_choices ?? []} alone={alone} now={now} />
+          ) : (
+            <BydHero v={byds[0]} />
+          )
+        ) : cars.length === 0 ? (
+          <EmptyState
+            icon="car"
+            id="h-te-none"
+            title="No cars yet"
+            action={
+              <ButtonLink to="/integrations/ev" variant="outline" size="md">
+                Your EV connections
+              </ButtonLink>
+            }
+          >
+            You're connected, but no car has shown up yet. It appears here once it's read.
+          </EmptyState>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,560px),1fr))] gap-5">
+            {teslas.map((v) => (
+              <EvHero key={v.vin} v={v} provider={data?.provider ?? null} alone={false} now={now} compact />
+            ))}
+            {hks.map((v) => (
+              <EvHero
+                key={v.vin}
+                v={v}
+                provider={v.make === "Kia" ? "kia" : "hyundai"}
+                brand="bluelink"
+                alone={false}
+                now={now}
+                compact
+              />
+            ))}
+            {byds.map((v) => (
+              <BydHero key={v.vin} v={v} compact />
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

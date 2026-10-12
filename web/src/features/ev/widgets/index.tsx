@@ -3,12 +3,11 @@ import { COLOR } from "~/features/common/theme/utils/colors";
 import { Quiet, WidgetCard } from "~/features/common/widgets/parts";
 import type { Choice, Settings, WidgetCtx, WidgetDef, WidgetProps } from "~/features/common/widgets/types";
 import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
-import { BydPanel } from "~/features/ev/components/BydPanel";
+import { BydHero } from "~/features/ev/components/BydHero";
 import { EvCharging } from "~/features/ev/components/EvCharging";
-import { EvDayChart } from "~/features/ev/components/EvDayChart";
+import { EvHero } from "~/features/ev/components/EvHero";
 import { EvInOut } from "~/features/ev/components/EvInOut";
 import { EvNow, evRows, evShow } from "~/features/ev/components/EvNow";
-import { EvPanel } from "~/features/ev/components/EvPanel";
 import { carTitle } from "~/features/ev/utils";
 
 const size = (min: [number, number], max: [number, number], d: [number, number]) => ({ min, max, default: d });
@@ -48,16 +47,26 @@ const quiet = (title: string, text: string) => (
   </WidgetCard>
 );
 
-function Summary({ settings }: WidgetProps) {
+/** The car's hero: at a glance (`compact`, opening its page), or today with its day charted and its limit to drag. */
+function Hero({ ctx, settings, chart }: WidgetProps & { chart: boolean }) {
   const c = useCar(settings);
-  if (c.tesla) return <EvPanel v={c.tesla} provider={c.teslaProvider} />;
-  if (c.bluelink) return <EvPanel v={c.bluelink} provider={c.bluelinkBrand} brand="bluelink" />;
-  if (c.byd) return <BydPanel v={c.byd} />;
+  const alone = ctx.cars.length === 1;
+  if (c.tesla)
+    return <EvHero v={c.tesla} provider={c.teslaProvider} alone={alone} now={ctx.now} chart={chart} compact={!chart} />;
+  if (c.bluelink)
+    return (
+      <EvHero
+        v={c.bluelink}
+        provider={c.bluelinkBrand}
+        brand="bluelink"
+        alone={alone}
+        now={ctx.now}
+        chart={false}
+        compact={!chart}
+      />
+    );
+  if (c.byd) return <BydHero v={c.byd} compact={!chart} />;
   return quiet("Car", "Looking for your car…");
-}
-function Day({ ctx, settings }: WidgetProps) {
-  const c = useCar(settings);
-  return c.tesla ? <EvDayChart v={c.tesla} now={ctx.now} /> : quiet("Car's day", "Its day is charted for a Tesla.");
 }
 function Charging({ settings }: WidgetProps) {
   const c = useCar(settings);
@@ -108,29 +117,29 @@ export const widgets: WidgetDef[] = [
   },
   {
     type: "car",
-    name: "Car",
-    sub: "Its charge, what it's doing, and its controls",
+    name: "Car at a glance",
+    sub: "Its charge, what it's doing now, and what it charged today",
     group: "car",
     icon: "car",
-    thumb: { kind: "number", value: "63%", color: COLOR.lilac },
+    thumb: { kind: "number", value: "63%", color: COLOR.danger },
     sizes: size([6, 3], [12, 5], [12, 4]),
-    phone: size([4, 4], [4, 7], [4, 5]),
+    phone: size([4, 6], [4, 8], [4, 7]),
     options: [pick],
     needs: needsCar,
-    Component: Summary,
+    Component: (props: WidgetProps) => <Hero {...props} chart={false} />,
   },
   {
     type: "car-day",
-    name: "Car's day",
-    sub: "Its charge through the day, and what the dashboard did",
+    name: "Car today",
+    sub: "Its charge and now, its limit to drag, and its day charted with what the dashboard did",
     group: "car",
     icon: "chart",
-    thumb: { kind: "line", color: COLOR.lilac },
-    sizes: size([6, 5], [12, 8], [12, 6]),
-    phone: size([4, 6], [4, 9], [4, 7]),
+    thumb: { kind: "line", color: COLOR.danger },
+    sizes: size([6, 9], [12, 12], [12, 10]),
+    phone: size([4, 13], [4, 16], [4, 14]),
     options: [pick],
     needs: needsCar,
-    Component: Day,
+    Component: (props: WidgetProps) => <Hero {...props} chart />,
   },
   {
     type: "car-charging",
