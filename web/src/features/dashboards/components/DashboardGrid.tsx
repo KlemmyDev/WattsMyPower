@@ -56,7 +56,34 @@ function Body({ item, ctx, screen }: { item: WidgetItem; ctx: WidgetCtx; screen:
   );
 }
 
-type Drag = { id: string; mode: "move" | "resize"; x0: number; y0: number; dx: number; dy: number };
+type Drag = {
+  id: string;
+  mode: "move" | "resize";
+  x0: number;
+  y0: number;
+  dx: number;
+  dy: number;
+  /** The rows' heights as they were when it started (they grow to fit what's in them), to count rows moved by. */
+  rows: number[];
+  /** Where the widget was in the grid, and its size, as drawn. */
+  box: { left: number; top: number; width: number; height: number };
+};
+
+/**
+ * How many rows a pull of `d` pixels from the line between rows `line - 1` and `line` crosses, by the rows' own heights:
+ * a row counts once the pull is past half of it.
+ */
+function rowsBy(rows: number[], line: number, d: number) {
+  let left = Math.abs(d);
+  let n = 0;
+  for (let r = d > 0 ? line : line - 1; r >= 0; r += d > 0 ? 1 : -1) {
+    const step = (rows[r] ?? ROW) + GAP;
+    if (left < step / 2) break;
+    left -= step;
+    n++;
+  }
+  return d > 0 ? n : -n;
+}
 
 const place = (i: WidgetItem): CSSProperties => ({
   gridColumn: `${i.x + 1} / span ${i.w}`,
@@ -64,8 +91,8 @@ const place = (i: WidgetItem): CSSProperties => ({
 });
 
 /**
- * A dashboard's widgets on its grid (12 columns on a computer, 4 on a phone). Shown, a row is at least its height and
- * grows to fit what's in it, so nothing is cut off. Being arranged, the rows are fixed and each widget can be dragged
+ * A dashboard's widgets on its grid (12 columns on a computer, 4 on a phone). A row is at least its height and grows to
+ * fit what's in it, so nothing is cut off, and being arranged a widget looks just as it does shown. Each can be dragged
  * by its body (on a touch screen, by the bar on top), resized by its corner, or moved and resized with the arrow keys
  * (Shift for size); the rest make room as it goes.
  */
@@ -76,6 +103,7 @@ export function DashboardGrid({
   editing = false,
   selected,
   onSelect,
+  onSettings = onSelect,
   onChange,
   onRemove,
 }: {
@@ -85,6 +113,8 @@ export function DashboardGrid({
   editing?: boolean;
   selected?: string | null;
   onSelect?: (id: string | null) => void;
+  /** Its settings asked for (its button, or Enter); else it's just chosen. */
+  onSettings?: (id: string) => void;
   onChange?: (items: WidgetItem[]) => void;
   onRemove?: (id: string) => void;
 }) {
@@ -109,7 +139,6 @@ export function DashboardGrid({
   }, []);
 
   const unitX = (width + GAP) / cols;
-  const unitY = ROW + GAP;
   const limits = (i: WidgetItem) => {
     const def = widgetDef(i.type);
     return def
@@ -122,8 +151,15 @@ export function DashboardGrid({
     const it = d && items.find((i) => i.id === d.id);
     if (!d || !it || unitX <= 0) return items;
     return d.mode === "move"
-      ? move(items, d.id, it.x + Math.round(d.dx / unitX), it.y + Math.round(d.dy / unitY), cols)
-      : resize(items, d.id, it.w + Math.round(d.dx / unitX), it.h + Math.round(d.dy / unitY), cols, limits(it));
+      ? move(items, d.id, it.x + Math.round(d.dx / unitX), it.y + rowsBy(d.rows, it.y, d.dy), cols)
+      : resize(
+          items,
+          d.id,
+          it.w + Math.round(d.dx / unitX),
+          it.h + rowsBy(d.rows, it.y + it.h, d.dy),
+          cols,
+          limits(it),
+        );
   };
   const dragged = drag && items.find((i) => i.id === drag.id);
   const shown = layoutFor(drag);
@@ -152,7 +188,21 @@ export function DashboardGrid({
     e.stopPropagation(); // a resize from the corner isn't also a move of the widget it's on
     e.currentTarget.setPointerCapture(e.pointerId);
     onSelect?.(id);
-    setDrag({ id, mode, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0 });
+    const grid = box.current;
+    const cell = e.currentTarget.closest("[data-widget]");
+    if (!grid || !cell) return;
+    const g = grid.getBoundingClientRect();
+    const c = cell.getBoundingClientRect();
+    setDrag({
+      id,
+      mode,
+      x0: e.clientX,
+      y0: e.clientY,
+      dx: 0,
+      dy: 0,
+      rows: getComputedStyle(grid).gridTemplateRows.split(" ").map(parseFloat),
+      box: { left: c.left - g.left, top: c.top - g.top, width: c.width, height: c.height },
+    });
   };
   const follow = (e: PointerEvent<HTMLElement>) => {
     const d = live.current;
@@ -179,7 +229,7 @@ export function DashboardGrid({
       onRemove?.(i.id);
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      onSelect?.(i.id);
+      onSettings?.(i.id);
     }
   };
 
@@ -187,7 +237,7 @@ export function DashboardGrid({
     <div
       ref={box}
       className="relative grid gap-5"
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: `${ROW}px` }}
+      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: `minmax(${ROW}px, auto)` }}
       onPointerDown={(e) => e.target === e.currentTarget && onSelect?.(null)}
     >
       {shown.map((i) => {
@@ -199,20 +249,20 @@ export function DashboardGrid({
             key={i.id}
             data-widget={i.id}
             style={place(i)}
-            className={cn("relative min-w-0 transition-[opacity] duration-200", !drag && "animate-fade")}
+            className={cn("relative flex min-w-0 flex-col *:flex-1", !drag && "animate-fade")}
           >
             {/* Kept while it's dragged (it holds the pointer), showing where it'll land. */}
             <Frame
               item={i}
               name={def?.name ?? "Widget"}
               on={on}
-              ghost={moving}
+              ghost={moving ? drag.box.height : 0}
               onDown={(e) => start(e, i.id, "move")}
               onResize={(e) => start(e, i.id, "resize")}
               onMove={follow}
               onUp={end}
               onKey={(e) => key(e, i)}
-              onSettings={() => onSelect?.(i.id)}
+              onSettings={() => onSettings?.(i.id)}
               onRemove={() => onRemove?.(i.id)}
             >
               <Body item={i} ctx={ctx} screen={screen} />
@@ -226,10 +276,10 @@ export function DashboardGrid({
           aria-hidden
           className="pointer-events-none absolute z-20 overflow-hidden rounded-3xl shadow-[0_28px_60px_-16px_rgb(0_0_0/0.7)] ring-2 ring-brand"
           style={{
-            left: dragged.x * unitX + drag.dx,
-            top: dragged.y * unitY + drag.dy,
-            width: dragged.w * unitX - GAP,
-            height: dragged.h * unitY - GAP,
+            left: drag.box.left + drag.dx,
+            top: drag.box.top + drag.dy,
+            width: drag.box.width,
+            height: drag.box.height,
             transform: "rotate(-1.2deg) scale(1.01)",
           }}
         >
@@ -260,8 +310,8 @@ function Frame({
   item: WidgetItem;
   name: string;
   on: boolean;
-  /** It's being dragged: in its place, only where it'll land. */
-  ghost: boolean;
+  /** It's being dragged (this tall): in its place, only where it'll land, holding its room. */
+  ghost: number;
   onDown: (e: PointerEvent<HTMLElement>) => void;
   onResize: (e: PointerEvent<HTMLElement>) => void;
   onMove: (e: PointerEvent<HTMLElement>) => void;
@@ -284,19 +334,19 @@ function Frame({
       onPointerCancel={onUp}
       onKeyDown={onKey}
       className={cn(
-        "group/w relative h-full cursor-grab touch-pan-y rounded-3xl active:cursor-grabbing",
+        "group/w relative flex cursor-grab touch-pan-y flex-col rounded-3xl active:cursor-grabbing",
         on
           ? "shadow-[0_0_0_8px_color-mix(in_srgb,var(--color-brand)_14%,transparent)] outline-2 outline-offset-2 outline-brand"
           : "outline-[1.5px] outline-offset-2 outline-brand/40 outline-dashed focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-solid",
       )}
     >
       {ghost ? (
-        <div className="h-full rounded-3xl border-2 border-dashed border-brand/60 bg-brand/8" />
-      ) : (
         <div
-          inert
-          className="pointer-events-none flex h-full flex-col overflow-hidden rounded-3xl select-none *:min-h-0 *:flex-1"
-        >
+          className="flex-1 rounded-3xl border-2 border-dashed border-brand/60 bg-brand/8"
+          style={{ minHeight: ghost }}
+        />
+      ) : (
+        <div inert className="pointer-events-none flex flex-1 flex-col rounded-3xl select-none *:min-h-0 *:flex-1">
           {children}
         </div>
       )}

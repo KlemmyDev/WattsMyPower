@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
@@ -47,6 +47,10 @@ type Draft = {
   sheet: "add" | "settings" | null;
   /** Asking to delete the dashboard. */
   deleting: boolean;
+  /** How wide the dashboard was shown (px), for it to be arranged at just that size. */
+  width: number;
+  /** On a computer: the tray is open (it can be tucked away, to see the whole dashboard). */
+  tray: boolean;
 };
 
 /**
@@ -63,6 +67,18 @@ export function DashboardPage() {
   const boards = doc?.dashboards ?? defaultDashboards(ctx);
   const [current, setCurrent] = useState(() => store.get(STORE_DASHBOARD));
   const [draft, setDraft] = useState<Draft | null>(null);
+  const shown = useRef<HTMLDivElement>(null);
+  // Arranging on a computer, the page is the dashboard and the tray: the side nav steps aside (see AppShell), so the
+  // dashboard keeps the width it's shown at.
+  const arranging = !!draft && !phone;
+  const tray = arranging && draft.tray;
+  useEffect(() => {
+    if (!arranging) return;
+    document.documentElement.dataset.customising = tray ? "tray" : "";
+    return () => {
+      delete document.documentElement.dataset.customising;
+    };
+  }, [arranging, tray]);
   const save = useMutation({
     mutationFn: saveDashboards,
     onSuccess: (d) => {
@@ -90,6 +106,8 @@ export function DashboardPage() {
       past: [],
       sheet: null,
       deleting: false,
+      width: shown.current?.clientWidth ?? 0,
+      tray: true,
     });
   /** A change to the draft, kept for Undo. */
   const change = (next: (d: Draft) => Partial<Draft>) =>
@@ -200,7 +218,9 @@ export function DashboardPage() {
             The solar forecast, the weather, and outages and warnings near you all need your location.
           </LocationPrompt>
         )}
-        <DashboardGrid key={`${board.id}:${screen}`} items={items} ctx={ctx} screen={screen} />
+        <div ref={shown}>
+          <DashboardGrid key={`${board.id}:${screen}`} items={items} ctx={ctx} screen={screen} />
+        </div>
         {!items.length && (
           <div className="flex flex-col items-center gap-3 py-16 text-center text-ink-muted">
             <span>Nothing on this dashboard yet.</span>
@@ -216,7 +236,7 @@ export function DashboardPage() {
   return (
     <>
       {/* On a computer the tray of widgets (or the one chosen's settings) is down the right edge, full height. */}
-      <div className={cn(!phone && "pr-[396px]")}>
+      <div>
         <div className="flex flex-col gap-4 pt-2 pb-6">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="flex items-baseline gap-2 font-display text-[26px] leading-9 font-bold">
@@ -327,10 +347,14 @@ export function DashboardPage() {
             className={cn(
               "-mx-3 min-w-0 rounded-[28px] bg-[radial-gradient(var(--color-line)_1px,transparent_1px)] bg-[length:22px_22px] px-3 pt-5 pb-16",
               screen === "phone" && !phone && "flex justify-center",
+              screen === "computer" && !phone && "w-fit min-w-[calc(100%+24px)]",
             )}
           >
+            {/* At the width it's shown at, so each widget looks just as it will; where the tray leaves less room, the
+                dashboard runs under it. */}
             <div
               data-widgets
+              style={screen === "computer" && !phone && draft.width ? { width: draft.width } : undefined}
               className={cn(
                 screen === "phone" && !phone && "w-[402px] rounded-[32px] border border-line bg-canvas p-4",
               )}
@@ -342,9 +366,8 @@ export function DashboardPage() {
                 screen={screen}
                 editing
                 selected={draft.selected}
-                onSelect={(id) =>
-                  setDraft((d) => d && { ...d, selected: id, sheet: id && phone ? "settings" : d.sheet })
-                }
+                onSelect={(id) => setDraft((d) => d && { ...d, selected: id })}
+                onSettings={(id) => setDraft((d) => d && { ...d, selected: id, sheet: "settings", tray: true })}
                 onChange={setItems}
                 onRemove={remove}
               />
@@ -402,22 +425,42 @@ export function DashboardPage() {
             inside the page's padding until it ends. */}
         {!phone &&
           createPortal(
-            <aside
-              aria-label={selected ? "Widget settings" : "Add widgets"}
-              className="fixed inset-y-0 right-0 z-40 flex w-[380px] animate-[wmpTrayIn_320ms_var(--ease-out-soft)] flex-col gap-4 overflow-y-auto border-l border-line-subtle bg-surface-inset px-6 py-7 shadow-[-24px_0_60px_-30px_rgb(0_0_0/0.6)] light:bg-surface"
-            >
-              {selected && (
+            draft.tray ? (
+              <aside
+                aria-label={selected ? "Widget settings" : "Add widgets"}
+                className="fixed inset-y-0 right-0 z-40 flex w-[380px] animate-[wmpTrayIn_320ms_var(--ease-out-soft)] flex-col gap-4 overflow-y-auto border-l border-line-subtle bg-surface-inset px-6 py-7 shadow-[-24px_0_60px_-30px_rgb(0_0_0/0.6)] light:bg-surface"
+              >
                 <button
                   type="button"
-                  onClick={() => setDraft((d) => d && { ...d, selected: null })}
-                  className="flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 font-sans text-[13px] text-brand hover:underline"
+                  aria-label="Tuck the tray away"
+                  title="Tuck the tray away, to see the whole dashboard"
+                  onClick={() => setDraft((d) => d && { ...d, tray: false })}
+                  className="absolute top-6 right-5 flex size-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-sub hover:bg-fg/8 hover:text-ink"
                 >
-                  <Icon name="chevL" size={14} />
-                  All widgets
+                  <Icon name="chevR" size={16} />
                 </button>
-              )}
-              {panel()}
-            </aside>,
+                {selected && (
+                  <button
+                    type="button"
+                    onClick={() => setDraft((d) => d && { ...d, selected: null })}
+                    className="flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 font-sans text-[13px] text-brand hover:underline"
+                  >
+                    <Icon name="chevL" size={14} />
+                    All widgets
+                  </button>
+                )}
+                {panel()}
+              </aside>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDraft((d) => d && { ...d, tray: true })}
+                className="fixed right-6 bottom-6 z-40 flex h-11 animate-[wmpTrayIn_320ms_var(--ease-out-soft)] cursor-pointer items-center gap-2 rounded-full border-0 bg-ink px-5 font-sans text-sm font-semibold text-ink-inverse shadow-pop"
+              >
+                <Icon name="plus" size={16} />
+                {selected ? "Widget settings" : "Add widgets"}
+              </button>
+            ),
             document.body,
           )}
       </div>
