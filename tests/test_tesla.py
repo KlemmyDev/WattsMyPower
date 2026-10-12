@@ -1451,19 +1451,40 @@ def test_a_car_that_doesnt_wake_is_left_asleep_for_a_while(ble: TeslaService, ra
     radio.asleep = True
     ble._bluetooth._charge.clear()  # type: ignore[union-attr]
     radio.asked.clear()
+    wakes = lambda: sum(1 for _, wake in radio.asked if wake)  # noqa: E731
     minutes(ble, live, clock, 6, grid=500)
     v = ble.status()["vehicles"][0]
     assert ble.status()["error"] is None and v["state"]["asleep"] is True  # asleep, not an error
-    assert v["no_wake_until"] == pytest.approx(clock() + bluetooth.WAKE_BACKOFF, abs=180)
-    assert "didn't wake up" in ble.log()[0]["text"]
-    # Until then it isn't asked to wake again, only checked without waking it.
-    tries = sum(1 for _, wake in radio.asked if wake)
+    assert wakes() == 1
+    # Missed once: tried again in a minute (a driver's key can miss once), not left for half an hour.
+    assert "didn't wake up" in ble.log()[0]["text"] and "tried again in 1 min" in ble.log()[0]["text"]
+    # Missing again and again, it's tried less and less often (read each five minutes here, with no sun to spare)...
     minutes(ble, live, clock, 20, grid=500)
-    assert sum(1 for _, wake in radio.asked if wake) == tries
-    # Once it's awake (woken from the Tesla app), its charge is read and it can be woken again.
+    assert wakes() == 4  # and woken at the reads 5, 10 and 20 minutes on
+    assert 1500 < ble.status()["vehicles"][0]["no_wake_until"] - clock() <= bluetooth.WAKE_BACKOFF[-1]
+    # ...settling at half an hour, when it isn't asked to wake again, only checked without waking it.
+    minutes(ble, live, clock, 20, grid=500)
+    assert wakes() == 4
+    # Once it's awake (woken from the Tesla app), its charge is read at the next check and it can be woken again, from
+    # a minute.
     radio.asleep = False
-    minutes(ble, live, clock, 15, grid=500)
+    minutes(ble, live, clock, 35, grid=500)
     assert ble.status()["vehicles"][0]["no_wake_until"] is None
+    assert not ble._bluetooth._missed  # type: ignore[union-attr]
+
+
+def test_a_car_that_misses_a_wake_with_spare_solar_is_tried_again_soon(ble: TeslaService, radio: FakeRadio,
+                                                                        live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    # Asleep with sun to spare: its first wake misses, and it's tried again a minute later, so it still starts soon
+    # (not half an hour on).
+    radio.wakes = False
+    radio.asleep = True
+    ble._bluetooth._charge.clear()  # type: ignore[union-attr]
+    minutes(ble, live, clock, 4, grid=-4000)
+    assert "tried again in 1 min" in ble.log()[0]["text"]
+    radio.wakes = True
+    minutes(ble, live, clock, 6, grid=-4000)
+    assert ble.status()["vehicles"][0]["state"]["asleep"] is False
 
 
 def test_a_command_that_doesnt_wake_the_car_says_so() -> None:
@@ -1475,7 +1496,7 @@ def test_a_command_that_doesnt_wake_the_car_says_so() -> None:
 
     with pytest.raises(TeslaError) as e:
         bluetooth._converse(asleep)
-    assert str(e.value).startswith("The car is asleep and didn't wake up for the dashboard's key")
+    assert str(e.value).startswith("The car is asleep and didn't wake up in time for the dashboard's key")
 
 
 def test_after_a_command_the_car_keeps_what_was_read_until_its_read_again(ble: TeslaService, radio: FakeRadio,
