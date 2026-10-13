@@ -1526,7 +1526,12 @@
   height: 0;
   pointer-events: none;
   transition: opacity 1.2s ease;
-  animation: skyTravel 120s linear infinite;
+  /* Each cloud is drawn once and only moved: across the sky, and bobbing (translate, apart from the crossing's
+     transform), so nothing inside it is painted again while it drifts. */
+  will-change: transform;
+  animation:
+    skyTravel var(--secs, 120s) linear var(--delay, 0s) infinite,
+    skyBob var(--bob, 11s) ease-in-out var(--bob-delay, 0s) infinite;
 }
 @keyframes skyTravel {
   from {
@@ -1536,19 +1541,13 @@
     transform: translateX(100%);
   }
 }
-.sky-bob {
-  position: relative;
-  width: 300px;
-  height: 120px;
-  animation: skyBob 11s ease-in-out infinite;
-}
 @keyframes skyBob {
   0%,
   100% {
-    transform: translateY(0) scaleX(1);
+    translate: 0 0;
   }
   50% {
-    transform: translateY(-5px) scaleX(1.035);
+    translate: 0 -5px;
   }
 }
 .sky-puff {
@@ -1716,4 +1715,40 @@
 .sky-float {
   background: rgb(12 12 14 / 0.72);
   backdrop-filter: blur(20px) saturate(1.15);
+}
+/* The sky is the top of its page, edge to edge, with its own links into the sections: no row of pills above it. */
+main:has(> .sky) > [data-section-strip] {
+  display: none;
+}
+/* Scrolled out of view, the sky stops moving (SolarSky sets data-still). */
+.sky[data-still] * {
+  animation-play-state: paused !important;
+}
+
+/*
+ * Lite effects (common/display/utils/effects), for a device that can't keep up: nothing blurs what's behind it, the
+ * page's light holds still without its grain, and the sky's clouds lose their soft glow and stop bobbing (SolarSky
+ * also draws fewer of them, and less rain).
+ */
+:root[data-effects="lite"] {
+  .glass {
+    backdrop-filter: none;
+    background-color: color-mix(in oklab, var(--color-surface) 94%, transparent);
+  }
+  .sky-float {
+    backdrop-filter: none;
+    background: rgb(12 12 14 / 0.84);
+  }
+  .page-glow-shape {
+    animation: none;
+  }
+  .page-glow-grain {
+    display: none;
+  }
+  .sky-lane {
+    animation: skyTravel var(--secs, 120s) linear var(--delay, 0s) infinite;
+  }
+  .sky-twinkle {
+    animation: none;
+  }
 }

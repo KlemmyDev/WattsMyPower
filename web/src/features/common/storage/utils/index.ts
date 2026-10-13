@@ -25,3 +25,4 @@ export const STORE_HOME_RANGE = "wmp-home-range";
 export const STORE_HOME_VIEW = "wmp-home-view";
 export const STORE_DASHBOARD = "wmp-dashboard";
 export const STORE_TIME_ZONE = "wmp-time-zone";
+export const STORE_EFFECTS = "wmp-effects";
