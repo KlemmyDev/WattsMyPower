@@ -1,18 +1,19 @@
 import { parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { DASH, kWh, pct } from "~/features/common/formatting/utils/number";
+import { DASH, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
 import { COLOR, heatColor } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
-import { ChartTooltip, TooltipRow, useBarHover } from "~/features/common/ui/components/ChartHover";
+import { useBarHover } from "~/features/common/ui/components/ChartHover";
+import { Delta } from "~/features/common/ui/components/Live";
 import { cn } from "~/features/common/ui/utils";
 import type { ForecastAccuracy } from "~/features/common/weather/types";
-import { EXPECTED, SOLAR } from "~/features/solar/components/parts";
+import { SectionLink } from "~/features/solar/components/sections/SolarSection";
 import type { SolarInsights } from "~/features/solar/types";
 import { pastDays } from "~/features/solar/utils";
 
 /**
  * The last days (up to 30) as a strip of cells, the brighter the more the panels made, with the figures that sum them
  * up beside it: the average, the best and lowest days, how far out the forecast was and how they did against the
- * weather.
+ * weather. Pointing at a day puts that day in the card's header in their place (no tooltip), and the rest fade back.
  */
 export function SolarDays({
   acc,
@@ -24,7 +25,7 @@ export function SolarDays({
   now: number;
 }) {
   const days = pastDays(acc, performance, now);
-  const { hover: h, width, plot, bar } = useBarHover();
+  const { hover: h, plot, bar } = useBarHover();
   if (!days.length) return null;
   const kwh = days.map((d) => d.kwh);
   const max = Math.max(...kwh);
@@ -41,16 +42,46 @@ export function SolarDays({
   ];
   return (
     <Card>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <TitleBlock title={`Last ${days.length} days`} sub={`${kWh(total)} in all`} />
-        <dl className="flex flex-wrap gap-x-7 gap-y-2">
-          {figures.map(([k, v]) => (
-            <div key={k} className="flex flex-col">
-              <dt className="text-[11.5px] text-ink-faint">{k}</dt>
-              <dd className="text-[17px] font-light tabular-nums">{v}</dd>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4" aria-live="polite">
+        {h == null ? (
+          <>
+            <TitleBlock
+              title={
+                <span className="flex items-baseline gap-3">
+                  {`Last ${days.length} days`}
+                  <SectionLink to="performance">Performance</SectionLink>
+                </span>
+              }
+              sub={`${kWh(total)} in all`}
+            />
+            <dl className="flex flex-wrap gap-x-7 gap-y-2">
+              {figures.map(([k, v]) => (
+                <div key={k} className="flex flex-col">
+                  <dt className="text-[11.5px] text-ink-faint">{k}</dt>
+                  <dd className="text-[17px] font-light tabular-nums">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        ) : (
+          <>
+            <TitleBlock
+              title={shortDay.format(parseYmd(days[h].date))}
+              sub={[
+                days[h].forecast != null ? `Forecast ${kWh(days[h].forecast)}` : null,
+                days[h].ratio != null ? `${pct(days[h].ratio! * 100)} of what the weather allowed` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{kWh(days[h].kwh)}</span>
+              <Delta value={days[h].kwh / (total / days.length) - 1}>
+                {signedPct(days[h].kwh / (total / days.length) - 1)} on average
+              </Delta>
             </div>
-          ))}
-        </dl>
+          </>
+        )}
       </div>
       <div className="flex flex-col gap-1.5">
         <div
@@ -67,28 +98,11 @@ export function SolarDays({
               className={cn(
                 "h-11 rounded-md border-0 p-0 transition-[scale,opacity] duration-200 max-sm:h-8 max-sm:rounded-[3px]",
                 h === i && "scale-y-110",
-                h != null && h !== i && "opacity-60",
+                h != null && h !== i && "opacity-35",
               )}
               style={{ background: heatColor(COLOR.solar, max > min ? (d.kwh - min) / (max - min) : 1) }}
             />
           ))}
-          {h != null && (
-            <ChartTooltip
-              left={((h + 0.5) / days.length) * 100}
-              flip={h > days.length / 2}
-              width={width}
-              className="top-auto bottom-full mb-2"
-            >
-              <span className="font-medium text-ink">{shortDay.format(parseYmd(days[h].date))}</span>
-              <TooltipRow label="Made" value={kWh(days[h].kwh)} color={SOLAR} />
-              {days[h].forecast != null && (
-                <TooltipRow label="Forecast" value={kWh(days[h].forecast)} color={EXPECTED} />
-              )}
-              {days[h].ratio != null && (
-                <TooltipRow label="Of what the weather allowed" value={pct(days[h].ratio! * 100)} />
-              )}
-            </ChartTooltip>
-          )}
         </div>
         <div className="flex items-center justify-between gap-3 font-mono text-[11px] text-ink-faint">
           <span>{shortDay.format(parseYmd(days[0].date))}</span>

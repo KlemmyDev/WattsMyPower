@@ -9,8 +9,9 @@ export const dailyQuery = (start: number, end: number) =>
     staleTime: 10 * 60_000,
   });
 
-/** Download link for a range's raw readings. */
-export const exportCsvUrl = (start: number, end: number) => `/api/export.csv?start=${start}&end=${end}`;
+/** Download link for a range's raw readings, or (`rollup`) its five-minute rows. */
+export const exportCsvUrl = (start: number, end: number, rollup = false) =>
+  `/api/export.csv?start=${start}&end=${end}${rollup ? "&rollup=true" : ""}`;
 
 /** What the database holds; `history_from` is when the recorded history starts. */
 export const statsQuery = queryOptions({

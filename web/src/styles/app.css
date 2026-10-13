@@ -1513,3 +1513,207 @@
   ) {
   animation: none;
 }
+
+/*
+ * The Solar page's sky (solar/components/SolarSky): cloud banks drifting across at their own speeds, rain, lightning,
+ * twinkling stars. With motion turned down every animation stops (above), so each cloud holds where it would have
+ * started (--start) rather than piling up on the left, and the rain, which only reads as rain while it falls, is left
+ * out for the haze.
+ */
+.sky-lane {
+  position: absolute;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+  transition: opacity 1.2s ease;
+  animation: skyTravel 120s linear infinite;
+}
+@keyframes skyTravel {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.sky-bob {
+  position: relative;
+  width: 300px;
+  height: 120px;
+  animation: skyBob 11s ease-in-out infinite;
+}
+@keyframes skyBob {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(1);
+  }
+  50% {
+    transform: translateY(-5px) scaleX(1.035);
+  }
+}
+.sky-puff {
+  position: absolute;
+  inset: 0;
+}
+.sky-puff-soft {
+  transform: scale(1.08);
+  transform-origin: 50% 60%;
+  filter: blur(9px);
+}
+.sky-cloud-0 {
+  mask-image:
+    radial-gradient(38px 38px at 62px 82px, #000 88%, transparent),
+    radial-gradient(34px 34px at 100px 64px, #000 88%, transparent),
+    radial-gradient(36px 36px at 142px 42px, #000 88%, transparent),
+    radial-gradient(40px 40px at 186px 54px, #000 88%, transparent),
+    radial-gradient(34px 34px at 228px 78px, #000 88%, transparent),
+    radial-gradient(28px 28px at 94px 94px, #000 88%, transparent),
+    radial-gradient(28px 28px at 208px 94px, #000 88%, transparent),
+    radial-gradient(130px 20px at 150px 102px, #000 88%, transparent);
+}
+.sky-cloud-1 {
+  mask-image:
+    radial-gradient(24px 24px at 40px 86px, #000 88%, transparent),
+    radial-gradient(30px 30px at 80px 74px, #000 88%, transparent),
+    radial-gradient(34px 34px at 124px 66px, #000 88%, transparent),
+    radial-gradient(32px 32px at 170px 64px, #000 88%, transparent),
+    radial-gradient(30px 30px at 214px 72px, #000 88%, transparent),
+    radial-gradient(22px 22px at 256px 84px, #000 88%, transparent),
+    radial-gradient(26px 26px at 104px 90px, #000 88%, transparent),
+    radial-gradient(26px 26px at 196px 90px, #000 88%, transparent),
+    radial-gradient(140px 16px at 150px 100px, #000 88%, transparent);
+}
+.sky-cloud-2 {
+  mask-image:
+    radial-gradient(26px 26px at 56px 84px, #000 88%, transparent),
+    radial-gradient(32px 32px at 90px 70px, #000 88%, transparent),
+    radial-gradient(24px 24px at 124px 84px, #000 88%, transparent),
+    radial-gradient(24px 24px at 190px 80px, #000 88%, transparent),
+    radial-gradient(30px 30px at 222px 66px, #000 88%, transparent),
+    radial-gradient(22px 22px at 254px 82px, #000 88%, transparent),
+    radial-gradient(62px 12px at 90px 98px, #000 88%, transparent),
+    radial-gradient(52px 12px at 222px 96px, #000 88%, transparent);
+}
+/* Each puff lit on top and shaded under it, toward the sun's (or the moon's) side by --dx. */
+.sky-vol.sky-cloud-0 {
+  background:
+    radial-gradient(28px 28px at calc(94px + var(--dx)) 86px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(28px 28px at calc(208px + var(--dx)) 86px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(38px 38px at calc(62px + var(--dx)) 71px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(34px 34px at calc(228px + var(--dx)) 68px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(34px 34px at calc(100px + var(--dx)) 54px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(40px 40px at calc(186px + var(--dx)) 42px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(36px 36px at calc(142px + var(--dx)) 31px, var(--hi), var(--mid) 50%, transparent 80%),
+    linear-gradient(180deg, var(--mid) 10%, var(--bot) 88%);
+}
+.sky-vol.sky-cloud-1 {
+  background:
+    radial-gradient(26px 26px at calc(104px + var(--dx)) 82px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(26px 26px at calc(196px + var(--dx)) 82px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(24px 24px at calc(40px + var(--dx)) 79px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(22px 22px at calc(256px + var(--dx)) 77px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(30px 30px at calc(80px + var(--dx)) 65px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(30px 30px at calc(214px + var(--dx)) 63px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(34px 34px at calc(124px + var(--dx)) 56px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(32px 32px at calc(170px + var(--dx)) 54px, var(--hi), var(--mid) 50%, transparent 80%),
+    linear-gradient(180deg, var(--mid) 30%, var(--bot) 92%);
+}
+.sky-vol.sky-cloud-2 {
+  background:
+    radial-gradient(24px 24px at calc(124px + var(--dx)) 77px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(26px 26px at calc(56px + var(--dx)) 76px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(22px 22px at calc(254px + var(--dx)) 75px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(24px 24px at calc(190px + var(--dx)) 73px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(32px 32px at calc(90px + var(--dx)) 60px, var(--hi), var(--mid) 50%, transparent 80%),
+    radial-gradient(30px 30px at calc(222px + var(--dx)) 57px, var(--hi), var(--mid) 50%, transparent 80%),
+    linear-gradient(180deg, var(--mid) 30%, var(--bot) 92%);
+}
+.sky-drop {
+  position: absolute;
+  top: 0;
+  border-radius: 1px;
+  background: linear-gradient(180deg, rgb(206 220 255 / 0), rgb(206 220 255 / 0.85));
+  transition: opacity 0.7s ease;
+  animation: skyFall 0.7s linear infinite;
+}
+@keyframes skyFall {
+  from {
+    transform: translateY(-80px);
+  }
+  to {
+    transform: translateY(1000px);
+  }
+}
+.sky-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  animation: skyFlash 6.2s infinite;
+}
+.sky-bolt {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+  animation: skyFlash 6.2s infinite;
+  filter: drop-shadow(0 0 5px rgb(210 220 255 / 0.95)) drop-shadow(0 0 18px rgb(160 180 255 / 0.6));
+}
+.sky-later {
+  animation-duration: 8.7s;
+  animation-delay: -3.1s;
+}
+@keyframes skyFlash {
+  0%,
+  90%,
+  100% {
+    opacity: 0;
+  }
+  90.6% {
+    opacity: 1;
+  }
+  91.4% {
+    opacity: 0.12;
+  }
+  92.3% {
+    opacity: 0.85;
+  }
+  94% {
+    opacity: 0;
+  }
+}
+.sky-twinkle {
+  position: absolute;
+  inset: 0;
+  animation: skyTwinkle 3.6s ease-in-out infinite alternate;
+}
+@keyframes skyTwinkle {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.sky-fade {
+  transition: opacity 1s ease;
+}
+:root[data-motion="reduce"] .sky-lane {
+  translate: var(--start) 0;
+}
+:root[data-motion="reduce"] .sky-drop {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky-lane {
+    translate: var(--start) 0;
+  }
+  .sky-drop {
+    display: none;
+  }
+}
+/* What floats over the sky (its figures, the weather, the buttons): near-solid, so it reads whatever the sky. */
+.sky-float {
+  background: rgb(12 12 14 / 0.72);
+  backdrop-filter: blur(20px) saturate(1.15);
+}
