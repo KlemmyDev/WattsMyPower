@@ -5,7 +5,7 @@ import appCss from "~/styles/app.css?url";
 import { ToastProvider } from "~/features/common/ui/components/Toast";
 import { useThemeSync } from "~/features/common/theme/hooks";
 import { THEME_SCRIPT } from "~/features/common/theme/utils";
-import { useDisplaySync } from "~/features/common/display/hooks";
+import { useDisplaySync, useEffectsCheck } from "~/features/common/display/hooks";
 import { DISPLAY_SCRIPT } from "~/features/common/display/utils";
 import type { RouterContext } from "~/router";
 
@@ -38,6 +38,7 @@ function Root() {
   const { queryClient } = Route.useRouteContext();
   useThemeSync();
   useDisplaySync();
+  useEffectsCheck();
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>

@@ -26,8 +26,8 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
 
 ## The sky hero (Solar)
 
-Solar leads with `SolarSky` rather than a `HeroCard`: the sky as it is now, edge to edge from `xl` (a rounded band
-below it), with the page's title on it. Its colours follow the real sunrise and sunset; the sun and moon (with its real
+Solar leads with `SolarSky` rather than a `HeroCard`: the sky as it is now, edge to edge at every width (out to the
+nav, up under the phone's header, with no section pills above it), with the page's title on it. Its colours follow the real sunrise and sunset; the sun and moon (with its real
 phase) cross on arcs and set below a soft horizon; cloud, rain and storms come from the day's hourly weather, eased
 between hours, with cloud banks drifting across at their own speeds. Over it: the moment's figure (big, rounded,
 `font-display` extra bold), a headline sentence and a half on how the day's going, the weather chip, the second figure
@@ -35,6 +35,21 @@ and the pace, and links into the sections. The day's chart along its foot is the
 keys) moves the whole scene to that moment, and "Play the day" runs midnight to midnight in 10 seconds. Everything
 floating over the sky uses `.sky-float` (near-solid). With motion turned down, nothing animates: clouds hold where
 they'd start and rain shows as haze. Pure maths in `features/solar/utils/sky.ts`, styles at the end of `app.css`.
+
+It's built to stay smooth on a slow device: only the cloud, rain and lightning the weather calls for are in the page,
+each cloud is painted once and then only moved (its bob is `translate`, apart from the crossing's `transform`), the
+clouds' colours follow the light by the quarter hour and only repaint when they change, the chart's lines are drawn
+once per reading, and the whole sky stops while it's scrolled away.
+
+## Lite effects
+
+`common/display/utils/effects.ts` sets `data-effects="lite"` on `<html>` for a device that can't keep up: one that
+says it's saving data or has very little memory or very few cores, or one whose frames, timed for two seconds once the
+page has settled, mostly come slower than about 45 a second (remembered for a week). Lite drops what's costly to keep
+drawing: backdrop blur on `.glass` and `.sky-float` (they go near-solid), the page light's drift and grain, and in the
+sky every other cloud bank, a third of the rain, the clouds' soft glow and bob, and plays the day at 30 frames a second.
+Anything new that blurs what's behind it or animates without end needs a lite rule. Setting `wmp-effects` in local
+storage to `lite` or `full` forces either, for trying them.
 
 ## The hero card
 

@@ -27,6 +27,7 @@ export function SectionPagesStrip() {
     // The row scrolls sideways on its own when it doesn't fit, not the page.
     <nav
       ref={row}
+      data-section-strip
       aria-label={`${pages.title} pages`}
       className="relative flex max-w-full [scrollbar-width:none] items-center gap-0.5 self-start overflow-x-auto overscroll-x-contain rounded-full border border-chip-line bg-chip p-1 md:max-w-[calc(100%-16rem)] xl:hidden [&::-webkit-scrollbar]:hidden"
     >

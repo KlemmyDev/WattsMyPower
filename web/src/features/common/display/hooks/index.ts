@@ -9,6 +9,7 @@ import {
   subscribeDisplay,
   type Display,
 } from "~/features/common/display/utils";
+import { effects, startEffects, subscribeEffects, type Effects } from "~/features/common/display/utils/effects";
 
 /** This browser's display choices, and a setter that saves and shows a change to them. */
 export function useDisplay(): [Display, (change: Partial<Display>) => void] {
@@ -27,4 +28,14 @@ export function useDisplaySync() {
     addEventListener("storage", onStorage);
     return () => removeEventListener("storage", onStorage);
   }, []);
+}
+
+/** How much to draw: "lite" on a device that can't keep up (see startEffects). */
+export function useEffects(): Effects {
+  return useSyncExternalStore(subscribeEffects, effects, () => "full");
+}
+
+/** Picks the level of effects for this device and times it once the page has settled. Use it once, at the root. */
+export function useEffectsCheck() {
+  useEffect(() => startEffects(), []);
 }
