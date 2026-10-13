@@ -6,6 +6,10 @@ import { hhmm } from "~/features/common/formatting/utils/date";
 import { kW } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { NAV, type NavPage, type SectionPages } from "~/features/common/layout/utils";
+import type { IconName } from "~/features/common/ui/components/Icon";
+
+/** Solar's pages a level down, each a section the Solar page's cards drill into. */
+type SolarPage = "/solar/strings" | "/solar/performance" | "/solar/forecast" | "/solar/readings";
 import { carTitle, evTitle, statusColor } from "~/features/ev/utils";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useHomeNavPages } from "~/features/home/hooks";
@@ -153,6 +157,27 @@ export function useSectionPages(section: string): SectionPages | null {
         // With one car, the EV page is its page.
         active: path === `/ev/${c.vin}` || (ev.length === 1 && path === "/ev"),
       })),
+    };
+  }
+  if (section === "/solar") {
+    const page = (to: SolarPage, label: string, icon: IconName): NavPage => ({
+      key: to,
+      label,
+      icon,
+      color: COLOR.solar,
+      link: { to },
+      active: path === to,
+    });
+    return {
+      title: "Solar",
+      sub: "What your panels are making, and the detail behind it",
+      root: { link: { to: "/solar" }, label: "Today", active: path === "/solar" },
+      pages: [
+        page("/solar/strings", "Strings and inverters", "bolt"),
+        page("/solar/performance", "Performance", "chart"),
+        page("/solar/forecast", "Forecast", "cloudSun"),
+        page("/solar/readings", "Readings", "database"),
+      ],
     };
   }
   if (section === "/bills")

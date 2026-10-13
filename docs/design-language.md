@@ -24,6 +24,18 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
   card (controls, say) first.
 - Balance the columns by moving cards around, never by making anything sticky.
 
+## The sky hero (Solar)
+
+Solar leads with `SolarSky` rather than a `HeroCard`: the sky as it is now, edge to edge from `xl` (a rounded band
+below it), with the page's title on it. Its colours follow the real sunrise and sunset; the sun and moon (with its real
+phase) cross on arcs and set below a soft horizon; cloud, rain and storms come from the day's hourly weather, eased
+between hours, with cloud banks drifting across at their own speeds. Over it: the moment's figure (big, rounded,
+`font-display` extra bold), a headline sentence and a half on how the day's going, the weather chip, the second figure
+and the pace, and links into the sections. The day's chart along its foot is the scrubber: dragging it (or the arrow
+keys) moves the whole scene to that moment, and "Play the day" runs midnight to midnight in 10 seconds. Everything
+floating over the sky uses `.sky-float` (near-solid). With motion turned down, nothing animates: clouds hold where
+they'd start and rain shows as haze. Pure maths in `features/solar/utils/sky.ts`, styles at the end of `app.css`.
+
 ## The hero card
 
 `web/src/features/common/ui/components/Hero.tsx`. Every Live page leads with one, and Insights pages (History, Plan,
@@ -50,13 +62,22 @@ itself out by its own width (a container), so phone stacking inside a hero uses 
 - One question per card: "Where it went", "If the grid went down", "Last 30 days". Title says the question in plain
   words, sub says the answer's frame ("Today's solar so far").
 - **Drill-down, in this order of preference:**
-  1. Hover/tap on a chart or bar reads out the detail (`ChartTooltip`, `TooltipRow`, `useBarHover`). Tooltips on strips
-     near a card's bottom open above (`className="top-auto bottom-full mb-2"`): glass cards are stacking contexts.
+  1. **The card answers as you point** (Solar leads; move other pages over as they're touched). Pointing at, tapping or
+     focusing a bar, day or part puts that item in the card's own header or corner figure in place of the card's
+     summary (`useBarHover`, `aria-live="polite"`), the rest fade to about 35%, and moving away puts the summary back.
+     No floating tooltip over the card. Bars are real `<button>`s with an `aria-label`, so it works by keyboard and
+     touch. Older cards still use `ChartTooltip`; tooltips on strips near a card's bottom open above
+     (`className="top-auto bottom-full mb-2"`), as glass cards are stacking contexts.
   2. A whole-card or whole-tile link to the item's own page (Home's room tiles: a stretched `Link`; buttons inside stay
-     clickable above it).
-  3. A quiet "See all" / "Details" link in the card header to a page with more.
+     clickable above it; Solar's Highlights).
+  3. A quiet link in the card header to a page with more (`SectionLink`: "Performance ›" beside "Last 30 days").
   4. A `Collapse` for rarely needed detail inside the card.
      Don't add tabs, accordions of accordions, or modals for reading data.
+- **Sections a level down.** When a page has more depth than its cards can hold, the depth lives on pages of its own
+  (Solar: Strings and inverters, Performance, Forecast, Readings at `/solar/<section>`), each opened from the card it
+  belongs to, never one catch-all "details" page. Each uses `SolarSection` (back link, title, live sub line, the other
+  sections at its foot), and the section's pages are listed in `useSectionPages` so the side nav and the phone's strip
+  of pages show them.
 - Last N days: a heat strip of cells (`SolarDays`, `BatteryDays`): figures in a `dl` to the right of the title, cells
   coloured with `heatColor(color, share)`, a Less–More key under it.
 - Splits: `Breakdown` (a bar of parts with a legend that lights the part on hover).

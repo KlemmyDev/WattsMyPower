@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { alpha } from "~/features/common/theme/utils/colors";
 import { useBarHover } from "~/features/common/ui/components/ChartHover";
@@ -8,10 +8,20 @@ export type BreakdownPart = { key: string; label: string; kwh: number; color: st
 
 /**
  * Energy split into its parts: a bar, and a line for each part below with its share of `total` and kWh. The part under
- * the pointer, on the bar or its line, lifts and lights up; the rest fade back.
+ * the pointer, on the bar or its line, lifts and lights up; the rest fade back. `onHover` hears which part that is
+ * (null as the pointer leaves), for the card to show it in its own header.
  */
-export function Breakdown({ parts, total }: { parts: BreakdownPart[]; total: number }) {
+export function Breakdown({
+  parts,
+  total,
+  onHover,
+}: {
+  parts: BreakdownPart[];
+  total: number;
+  onHover?: (key: string | null) => void;
+}) {
   const { hover, plot, bar } = useBarHover<string>();
+  useEffect(() => onHover?.(hover), [hover, onHover]);
   const lit = (key: string) => hover == null || hover === key;
   return (
     <div className="flex flex-col gap-4" {...plot}>

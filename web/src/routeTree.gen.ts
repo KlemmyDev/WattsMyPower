@@ -48,6 +48,10 @@ import { Route as AppSettingsHouseRouteImport } from './routes/_app/settings/hou
 import { Route as AppSettingsLocationRouteImport } from './routes/_app/settings/location'
 import { Route as AppSettingsSolarBatteryRouteImport } from './routes/_app/settings/solar-battery'
 import { Route as AppSettingsUpdatesRouteImport } from './routes/_app/settings/updates'
+import { Route as AppSolarForecastRouteImport } from './routes/_app/solar_.forecast'
+import { Route as AppSolarPerformanceRouteImport } from './routes/_app/solar_.performance'
+import { Route as AppSolarReadingsRouteImport } from './routes/_app/solar_.readings'
+import { Route as AppSolarStringsRouteImport } from './routes/_app/solar_.strings'
 import { Route as AppSystemIndexRouteImport } from './routes/_app/system/index'
 import { Route as AppSystemSplatRouteImport } from './routes/_app/system/$'
 import { Route as AppTeslaIndexRouteImport } from './routes/_app/tesla/index'
@@ -266,6 +270,26 @@ const AppSettingsUpdatesRoute = AppSettingsUpdatesRouteImport.update({
   path: '/updates',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
+const AppSolarForecastRoute = AppSolarForecastRouteImport.update({
+  id: '/solar_/forecast',
+  path: '/solar/forecast',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSolarPerformanceRoute = AppSolarPerformanceRouteImport.update({
+  id: '/solar_/performance',
+  path: '/solar/performance',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSolarReadingsRoute = AppSolarReadingsRouteImport.update({
+  id: '/solar_/readings',
+  path: '/solar/readings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSolarStringsRoute = AppSolarStringsRouteImport.update({
+  id: '/solar_/strings',
+  path: '/solar/strings',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSystemIndexRoute = AppSystemIndexRouteImport.update({
   id: '/system/',
   path: '/system/',
@@ -432,6 +456,10 @@ export interface FileRoutesByFullPath {
   '/settings/location': typeof AppSettingsLocationRoute
   '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
   '/settings/updates': typeof AppSettingsUpdatesRoute
+  '/solar/forecast': typeof AppSolarForecastRoute
+  '/solar/performance': typeof AppSolarPerformanceRoute
+  '/solar/readings': typeof AppSolarReadingsRoute
+  '/solar/strings': typeof AppSolarStringsRoute
   '/system/$': typeof AppSystemSplatRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/ev/': typeof AppEvIndexRoute
@@ -493,6 +521,10 @@ export interface FileRoutesByTo {
   '/settings/location': typeof AppSettingsLocationRoute
   '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
   '/settings/updates': typeof AppSettingsUpdatesRoute
+  '/solar/forecast': typeof AppSolarForecastRoute
+  '/solar/performance': typeof AppSolarPerformanceRoute
+  '/solar/readings': typeof AppSolarReadingsRoute
+  '/solar/strings': typeof AppSolarStringsRoute
   '/system/$': typeof AppSystemSplatRoute
   '/tesla/setup': typeof AppTeslaSetupRoute
   '/ev': typeof AppEvIndexRoute
@@ -558,6 +590,10 @@ export interface FileRoutesById {
   '/_app/settings/location': typeof AppSettingsLocationRoute
   '/_app/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
   '/_app/settings/updates': typeof AppSettingsUpdatesRoute
+  '/_app/solar_/forecast': typeof AppSolarForecastRoute
+  '/_app/solar_/performance': typeof AppSolarPerformanceRoute
+  '/_app/solar_/readings': typeof AppSolarReadingsRoute
+  '/_app/solar_/strings': typeof AppSolarStringsRoute
   '/_app/system/$': typeof AppSystemSplatRoute
   '/_app/tesla/setup': typeof AppTeslaSetupRoute
   '/_app/ev/': typeof AppEvIndexRoute
@@ -623,6 +659,10 @@ export interface FileRouteTypes {
     | '/settings/location'
     | '/settings/solar-battery'
     | '/settings/updates'
+    | '/solar/forecast'
+    | '/solar/performance'
+    | '/solar/readings'
+    | '/solar/strings'
     | '/system/$'
     | '/tesla/setup'
     | '/ev/'
@@ -684,6 +724,10 @@ export interface FileRouteTypes {
     | '/settings/location'
     | '/settings/solar-battery'
     | '/settings/updates'
+    | '/solar/forecast'
+    | '/solar/performance'
+    | '/solar/readings'
+    | '/solar/strings'
     | '/system/$'
     | '/tesla/setup'
     | '/ev'
@@ -748,6 +792,10 @@ export interface FileRouteTypes {
     | '/_app/settings/location'
     | '/_app/settings/solar-battery'
     | '/_app/settings/updates'
+    | '/_app/solar_/forecast'
+    | '/_app/solar_/performance'
+    | '/_app/solar_/readings'
+    | '/_app/solar_/strings'
     | '/_app/system/$'
     | '/_app/tesla/setup'
     | '/_app/ev/'
@@ -1057,6 +1105,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsUpdatesRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/solar_/forecast': {
+      id: '/_app/solar_/forecast'
+      path: '/solar/forecast'
+      fullPath: '/solar/forecast'
+      preLoaderRoute: typeof AppSolarForecastRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/solar_/performance': {
+      id: '/_app/solar_/performance'
+      path: '/solar/performance'
+      fullPath: '/solar/performance'
+      preLoaderRoute: typeof AppSolarPerformanceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/solar_/readings': {
+      id: '/_app/solar_/readings'
+      path: '/solar/readings'
+      fullPath: '/solar/readings'
+      preLoaderRoute: typeof AppSolarReadingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/solar_/strings': {
+      id: '/_app/solar_/strings'
+      path: '/solar/strings'
+      fullPath: '/solar/strings'
+      preLoaderRoute: typeof AppSolarStringsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/system/': {
       id: '/_app/system/'
       path: '/system'
@@ -1330,6 +1406,10 @@ interface AppRouteChildren {
   AppEvVinRoute: typeof AppEvVinRoute
   AppEvSetupRoute: typeof AppEvSetupRoute
   AppHomeDeviceRoute: typeof AppHomeDeviceRoute
+  AppSolarForecastRoute: typeof AppSolarForecastRoute
+  AppSolarPerformanceRoute: typeof AppSolarPerformanceRoute
+  AppSolarReadingsRoute: typeof AppSolarReadingsRoute
+  AppSolarStringsRoute: typeof AppSolarStringsRoute
   AppSystemSplatRoute: typeof AppSystemSplatRoute
   AppTeslaSetupRoute: typeof AppTeslaSetupRoute
   AppEvIndexRoute: typeof AppEvIndexRoute
@@ -1361,6 +1441,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppEvVinRoute: AppEvVinRoute,
   AppEvSetupRoute: AppEvSetupRoute,
   AppHomeDeviceRoute: AppHomeDeviceRoute,
+  AppSolarForecastRoute: AppSolarForecastRoute,
+  AppSolarPerformanceRoute: AppSolarPerformanceRoute,
+  AppSolarReadingsRoute: AppSolarReadingsRoute,
+  AppSolarStringsRoute: AppSolarStringsRoute,
   AppSystemSplatRoute: AppSystemSplatRoute,
   AppTeslaSetupRoute: AppTeslaSetupRoute,
   AppEvIndexRoute: AppEvIndexRoute,
