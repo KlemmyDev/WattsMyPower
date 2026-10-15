@@ -1,5 +1,6 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useEffects } from "~/features/common/display/hooks";
+import { reducedMotion } from "~/features/common/display/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
@@ -34,17 +35,18 @@ import type { WeatherDay, WeatherHour } from "~/features/weather/types";
 type Today = ReturnType<typeof solarToday>;
 
 /** How long "Play the day" takes to run from midnight to midnight. */
-const PLAY_MS = 10_000;
+const PLAY_MS = 20_000;
 const DAY = 86_400;
 const WHITE: Rgb = [255, 255, 255];
 
 /**
  * The Solar page's title and its top card. The card's top is the sky as it is now (or at any moment of today, scrubbed
  * along the chart or played through): the sun or moon where they are, the day's cloud, rain and storms coming and
- * going, the weather in the corner and, on a dark wash so it reads in any weather, a line on how the day's going.
+ * going, the weather in one top corner and, in the other on a dark wash so it reads in any weather and either theme, a
+ * line on how the day's going.
  * The sky fades into the card's solid ground, where the figures sit as on every page's top card (the Hero kit): what's
  * been made and what's being made at the moment shown, four figures that round the day out, its pace, and the day's
- * solar against what was expected, which moves the sky as you drag along it.
+ * solar against what was expected, which moves the sky as you drag along it, with Play the day and Back to now on it.
  */
 export function SolarSky({
   p,
@@ -83,6 +85,7 @@ export function SolarSky({
   };
   const play = () => {
     if (playing) return stop();
+    cancelAnimationFrame(frame.current);
     const from = scrub != null && scrub < start + DAY - 1800 ? scrub : start;
     let began: number | null = null;
     let shown = 0;
@@ -106,9 +109,21 @@ export function SolarSky({
     };
     frame.current = requestAnimationFrame(step);
   };
+  // Back to now glides there (quicker the nearer it is) rather than jumping, unless motion's turned down.
   const backToNow = () => {
     stop();
-    setScrub(null);
+    if (scrub == null || reducedMotion()) return setScrub(null);
+    const from = scrub;
+    const ms = 450 + Math.min(1, Math.abs(now - from) / (DAY / 2)) * 650;
+    let began: number | null = null;
+    const step = (t: number) => {
+      began ??= t;
+      const k = Math.min(1, (t - began) / ms);
+      if (k >= 1) return setScrub(null);
+      setScrub(from + (now - from) * (1 - Math.pow(1 - k, 3)));
+      frame.current = requestAnimationFrame(step);
+    };
+    frame.current = requestAnimationFrame(step);
   };
 
   // What doesn't change as the day's scrubbed is worked out once per reading, not on every frame of it.
@@ -140,31 +155,7 @@ export function SolarSky({
 
   return (
     <>
-      <PageHeader
-        title="Solar"
-        sub={subLine(live, today, hour, now, rise, set)}
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            {scrub != null && (
-              <button
-                type="button"
-                onClick={backToNow}
-                className="min-h-10 rounded-full border border-line bg-fg/4 px-4 text-[13px] text-ink tabular-nums transition-colors hover:bg-fg/8"
-              >
-                Back to now · {hhmm(now)}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={play}
-              className="flex min-h-10 items-center gap-2 rounded-full border border-line bg-fg/4 pr-4 pl-3.5 text-[13px] text-ink transition-colors hover:bg-fg/8"
-            >
-              <Icon name={playing ? "pause" : "play"} size={13} className="text-solar" />
-              {playLabel}
-            </button>
-          </div>
-        }
-      />
+      <PageHeader title="Solar" sub={subLine(live, today, hour, now, rise, set)} />
       <section
         ref={root}
         aria-label="Solar now"
@@ -193,9 +184,10 @@ export function SolarSky({
             {hour?.temp != null && <span className="text-white/80">{degrees(hour.temp, fahrenheit)}</span>}
             <span className="text-white/70">· {hhmm(view)}</span>
           </div>
-          {/* A dark wash under the line, soft-edged, so it reads in any weather: bright cloud, the sun, a storm. */}
-          <div className="absolute bottom-[34px] left-7 max-w-[600px] max-sm:right-5 max-sm:bottom-6 max-sm:left-5">
-            <div aria-hidden className="absolute -inset-x-10 -inset-y-6 bg-[rgb(8_10_16/0.62)] blur-[22px]" />
+          {/* Up in the sky itself, never over its fade into the card, on a soft dark wash so it reads in any weather
+              (bright cloud, the sun, a storm) and in either theme. On a phone it sits under the weather. */}
+          <div className="absolute top-6 left-7 max-w-[min(600px,calc(100%-300px))] max-sm:top-[68px] max-sm:right-5 max-sm:left-5 max-sm:max-w-none">
+            <div aria-hidden className="absolute -inset-x-10 -inset-y-6 bg-[rgb(8_10_16/0.55)] blur-[22px]" />
             <p
               aria-live="polite"
               className="relative text-[22px] leading-7 font-semibold tracking-[-0.005em] text-pretty text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.35)] max-sm:text-lg max-sm:leading-6"
@@ -256,6 +248,30 @@ export function SolarSky({
               stop();
               setScrub(t);
             }}
+            controls={
+              <>
+                <button
+                  type="button"
+                  onClick={play}
+                  aria-label={playLabel}
+                  className="flex min-h-9 items-center gap-2 rounded-full border border-line bg-surface pr-3.5 pl-3 text-[13px] text-ink shadow-sm transition-colors hover:bg-surface-raised max-sm:size-9 max-sm:justify-center max-sm:p-0"
+                >
+                  <Icon name={playing ? "pause" : "play"} size={13} className="text-solar" />
+                  <span className="max-sm:hidden">{playLabel}</span>
+                </button>
+                {scrub != null && (
+                  <button
+                    type="button"
+                    onClick={backToNow}
+                    className="min-h-9 rounded-full border border-line bg-surface px-3.5 text-[13px] whitespace-nowrap text-ink tabular-nums shadow-sm transition-colors hover:bg-surface-raised max-sm:px-3"
+                  >
+                    <span className="max-sm:hidden">Back to now · </span>
+                    <span className="sm:hidden">Now · </span>
+                    {hhmm(now)}
+                  </button>
+                )}
+              </>
+            }
           />
         </div>
       </section>
@@ -609,7 +625,7 @@ function SkyScene({
       )}
       {storm > 0 && <Lightning opacity={storm} />}
       {/* Everything sets into the card's ground: the sun and moon, the clouds, the rain. */}
-      <div className="absolute inset-x-0 bottom-0 h-[60px] bg-linear-to-b from-transparent to-surface" />
+      <div className="absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent via-surface/60 to-surface" />
     </div>
   );
 }
@@ -856,6 +872,7 @@ function SkyChart({
   set,
   array,
   onScrub,
+  controls,
 }: {
   series: HistorySeries | undefined;
   expected: Pt[];
@@ -867,6 +884,8 @@ function SkyChart({
   set: number;
   array: number | null;
   onScrub: (t: number | null) => void;
+  /** Play the day and the way back to now, over the chart's top left, where the night before sunrise leaves room. */
+  controls: ReactNode;
 }) {
   const pct = (t: number) => `${((t - start) / DAY) * 100}%`;
   const { top, exp, lines } = useMemo(() => {
@@ -917,7 +936,7 @@ function SkyChart({
         <span className="absolute inset-y-0 w-px bg-ink/55" style={{ left: pct(view) }} />
         {v != null && (
           <span
-            className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fff3dc] shadow-[0_0_0_4px_rgb(255_181_71/0.35),0_0_18px_#ffb547]"
+            className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-solar shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-solar)_28%,transparent),0_0_16px_var(--color-solar)]"
             style={{ left: pct(view), top: `${(Y(v) / H) * 100}%` }}
           />
         )}
@@ -933,6 +952,7 @@ function SkyChart({
         onChange={(e) => onScrub(start + Number(e.target.value) * 300)}
         className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
       />
+      <div className="absolute top-8 left-0 z-2 flex items-center gap-2">{controls}</div>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[38px] text-xs text-ink-faint tabular-nums"
