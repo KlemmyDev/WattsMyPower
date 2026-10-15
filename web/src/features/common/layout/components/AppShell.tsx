@@ -31,8 +31,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopBar onMenu={openMenu} />
         {/* From tablets up, the live clock and the account sit in the page's top right corner, centred on its title's
             line (the page's 40 px, the header's 8, then half the title's 50 less half their 40), and scroll away with
-            the page. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 pl-(--nav-w) in-data-customising:hidden max-md:hidden">
+            the page. A page whose title sits in its top card (Solar's sky) shows them there instead (app.css). */}
+        <div
+          data-page-corner
+          className="pointer-events-none absolute inset-x-0 top-0 pl-(--nav-w) in-data-customising:hidden max-md:hidden"
+        >
           <div className="mx-auto flex w-full max-w-[1320px] justify-end gap-2.5 px-8 pt-[53px] *:pointer-events-auto">
             <HeaderClock />
             <AccountAvatar />

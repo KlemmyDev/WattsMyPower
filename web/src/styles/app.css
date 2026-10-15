@@ -1515,253 +1515,165 @@
 }
 
 /*
- * The Solar page's sky (solar/components/SolarSky): cloud banks drifting across at their own speeds, rain, lightning,
- * twinkling stars. With motion turned down every animation stops (above), so each cloud holds where it would have
- * started (--start) rather than piling up on the left, and the rain, which only reads as rain while it falls, is left
- * out for the haze.
+ * The Solar page's sky (solar/components/SolarSky, its look in solar/utils/atmosphere): soft colour fields drifting
+ * over the day's colours, the sun or moon, fog, rain, a storm's flashes, twinkling stars, grain. Only transform and
+ * opacity ever animate, and nothing uses blur, masks or blend modes: Safari (iOS above all) draws those slowly and, in
+ * layers that move, clips them into hard lines at their edges. With motion turned down nothing moves at all.
  */
-.sky-lane {
+.atm-field {
   position: absolute;
-  right: 0;
-  height: 0;
-  pointer-events: none;
-  transition: opacity 1.2s ease;
-  /* Each cloud is drawn once and only moved: across the sky, and bobbing (translate, apart from the crossing's
-     transform), so nothing inside it is painted again while it drifts. */
   will-change: transform;
-  animation:
-    skyTravel var(--secs, 120s) linear var(--delay, 0s) infinite,
-    skyBob var(--bob, 11s) ease-in-out var(--bob-delay, 0s) infinite;
+  animation: atmDriftA 40s ease-in-out infinite alternate;
 }
-@keyframes skyTravel {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(100%);
-  }
+.atm-drift-b {
+  animation-name: atmDriftB;
 }
-@keyframes skyBob {
-  0%,
-  100% {
-    translate: 0 0;
+.atm-drift-c {
+  animation-name: atmDriftC;
+}
+.atm-drift-aurora {
+  animation-name: atmAurora;
+}
+@keyframes atmDriftA {
+  0% {
+    transform: translate3d(-4%, -3%, 0);
   }
   50% {
-    translate: 0 -5px;
+    transform: translate3d(3%, 2%, 0);
+  }
+  100% {
+    transform: translate3d(-1%, 4%, 0);
   }
 }
-.sky-puff {
-  position: absolute;
-  inset: 0;
+@keyframes atmDriftB {
+  0% {
+    transform: translate3d(3%, -2%, 0);
+  }
+  50% {
+    transform: translate3d(-3%, 3%, 0);
+  }
+  100% {
+    transform: translate3d(2%, 1%, 0);
+  }
 }
-.sky-puff-soft {
-  transform: scale(1.08);
-  transform-origin: 50% 60%;
-  filter: blur(9px);
+@keyframes atmDriftC {
+  0% {
+    transform: translate3d(-2%, 3%, 0);
+  }
+  50% {
+    transform: translate3d(4%, -2%, 0);
+  }
+  100% {
+    transform: translate3d(-3%, -3%, 0);
+  }
 }
-.sky-cloud-0 {
-  mask-image:
-    radial-gradient(38px 38px at 62px 82px, #000 84%, transparent),
-    radial-gradient(34px 34px at 100px 64px, #000 84%, transparent),
-    radial-gradient(36px 36px at 142px 46px, #000 84%, transparent),
-    radial-gradient(40px 40px at 186px 56px, #000 84%, transparent),
-    radial-gradient(34px 34px at 228px 78px, #000 84%, transparent),
-    radial-gradient(28px 28px at 94px 94px, #000 84%, transparent),
-    radial-gradient(28px 28px at 208px 94px, #000 84%, transparent),
-    radial-gradient(15.6px 15.6px at 31.5px 77.7px, #000 84%, transparent),
-    radial-gradient(18.2px 18.2px at 56.1px 51.4px, #000 84%, transparent),
-    radial-gradient(13.6px 13.6px at 95.7px 35.8px, #000 84%, transparent),
-    radial-gradient(15px 15px at 142.7px 17.1px, #000 84%, transparent),
-    radial-gradient(16.1px 16.1px at 179px 22px, #000 84%, transparent),
-    radial-gradient(14.2px 14.2px at 217.7px 44.8px, #000 84%, transparent),
-    radial-gradient(13.1px 13.1px at 254.7px 73.7px, #000 84%, transparent),
-    radial-gradient(104px 14px at 150px 100px, #000 84%, transparent);
+@keyframes atmAurora {
+  0% {
+    transform: translate3d(-8%, 0, 0) rotate(-7deg);
+  }
+  100% {
+    transform: translate3d(8%, -4%, 0) rotate(-3deg);
+  }
 }
-.sky-cloud-1 {
-  mask-image:
-    radial-gradient(24px 24px at 40px 86px, #000 84%, transparent),
-    radial-gradient(30px 30px at 80px 74px, #000 84%, transparent),
-    radial-gradient(34px 34px at 124px 66px, #000 84%, transparent),
-    radial-gradient(32px 32px at 170px 64px, #000 84%, transparent),
-    radial-gradient(30px 30px at 214px 72px, #000 84%, transparent),
-    radial-gradient(22px 22px at 256px 84px, #000 84%, transparent),
-    radial-gradient(26px 26px at 104px 90px, #000 84%, transparent),
-    radial-gradient(26px 26px at 196px 90px, #000 84%, transparent),
-    radial-gradient(8.2px 8.2px at 22.2px 76.2px, #000 84%, transparent),
-    radial-gradient(14.3px 14.3px at 56.8px 65.5px, #000 84%, transparent),
-    radial-gradient(15px 15px at 84.4px 49.7px, #000 84%, transparent),
-    radial-gradient(13.5px 13.5px at 119.4px 38px, #000 84%, transparent),
-    radial-gradient(15.6px 15.6px at 170.5px 38.7px, #000 84%, transparent),
-    radial-gradient(12.6px 12.6px at 215.5px 47.7px, #000 84%, transparent),
-    radial-gradient(11.4px 11.4px at 238.8px 63.4px, #000 84%, transparent),
-    radial-gradient(10.9px 10.9px at 272.5px 75.2px, #000 84%, transparent),
-    radial-gradient(112px 12px at 150px 98px, #000 84%, transparent);
-}
-.sky-cloud-2 {
-  mask-image:
-    radial-gradient(26px 26px at 56px 84px, #000 84%, transparent),
-    radial-gradient(32px 32px at 90px 70px, #000 84%, transparent),
-    radial-gradient(24px 24px at 124px 86px, #000 84%, transparent),
-    radial-gradient(24px 24px at 190px 82px, #000 84%, transparent),
-    radial-gradient(30px 30px at 222px 68px, #000 84%, transparent),
-    radial-gradient(22px 22px at 254px 82px, #000 84%, transparent),
-    radial-gradient(12.4px 12.4px at 35.4px 78px, #000 84%, transparent),
-    radial-gradient(12.4px 12.4px at 64.3px 60px, #000 84%, transparent),
-    radial-gradient(14.2px 14.2px at 87.8px 42px, #000 84%, transparent),
-    radial-gradient(14.8px 14.8px at 113.9px 61.2px, #000 84%, transparent),
-    radial-gradient(10.1px 10.1px at 142.2px 77.3px, #000 84%, transparent),
-    radial-gradient(9.3px 9.3px at 171.2px 75.5px, #000 84%, transparent),
-    radial-gradient(12.6px 12.6px at 199.8px 56.4px, #000 84%, transparent),
-    radial-gradient(13.9px 13.9px at 219.1px 43.7px, #000 84%, transparent),
-    radial-gradient(12.9px 12.9px at 243.4px 55.9px, #000 84%, transparent),
-    radial-gradient(8.1px 8.1px at 271.6px 74.7px, #000 84%, transparent),
-    radial-gradient(46px 10px at 90px 96px, #000 84%, transparent),
-    radial-gradient(40px 10px at 222px 94px, #000 84%, transparent);
-}
-.sky-cloud-3 {
-  mask-image:
-    radial-gradient(30px 30px at 70px 90px, #000 84%, transparent),
-    radial-gradient(36px 36px at 112px 72px, #000 84%, transparent),
-    radial-gradient(34px 34px at 150px 52px, #000 84%, transparent),
-    radial-gradient(30px 30px at 182px 36px, #000 84%, transparent),
-    radial-gradient(36px 36px at 200px 64px, #000 84%, transparent),
-    radial-gradient(32px 32px at 236px 86px, #000 84%, transparent),
-    radial-gradient(26px 26px at 96px 100px, #000 84%, transparent),
-    radial-gradient(26px 26px at 212px 100px, #000 84%, transparent),
-    radial-gradient(22px 22px at 160px 28px, #000 84%, transparent),
-    radial-gradient(13.7px 13.7px at 48.7px 78.7px, #000 84%, transparent),
-    radial-gradient(11.3px 11.3px at 67.8px 65.8px, #000 84%, transparent),
-    radial-gradient(15.2px 15.2px at 83.8px 62.8px, #000 84%, transparent),
-    radial-gradient(12.3px 12.3px at 115.1px 41.3px, #000 84%, transparent),
-    radial-gradient(11.1px 11.1px at 181.7px 10.9px, #000 84%, transparent),
-    radial-gradient(15px 15px at 205.2px 28.7px, #000 84%, transparent),
-    radial-gradient(11.6px 11.6px at 237.8px 59.3px, #000 84%, transparent),
-    radial-gradient(14.2px 14.2px at 261.3px 74.9px, #000 84%, transparent),
-    radial-gradient(96px 14px at 150px 104px, #000 84%, transparent);
-}
-/*
- * Each puff lit on top and shaded under it, toward the sun's (or the moon's) side by --dx: light along the cloud's upper
- * edge from that side (--rim, warm at golden hour, silver by moonlight), each puff's rounded top in --hi, and a darker
- * flat base (--base). The edges are soft (the masks fade from two thirds out) so a bank reads as cloud, not balls. All
- * of it is background on the one element, painted once and only moved.
- */
-.sky-vol.sky-cloud-0 {
-  background:
-    radial-gradient(70% 48% at calc(50% + var(--dx) * 7) 0%, var(--rim), transparent 100%),
-    linear-gradient(180deg, transparent 60%, var(--base) 100%),
-    radial-gradient(16.4px 14.1px at calc(31.5px + var(--dx) * 0.6) 73px, var(--hi), transparent 72%),
-    radial-gradient(19.1px 16.3px at calc(56.1px + var(--dx) * 0.6) 45.9px, var(--hi), transparent 72%),
-    radial-gradient(14.3px 12.3px at calc(95.7px + var(--dx) * 0.6) 31.7px, var(--hi), transparent 72%),
-    radial-gradient(15.7px 13.5px at calc(142.7px + var(--dx) * 0.6) 12.6px, var(--hi), transparent 72%),
-    radial-gradient(16.9px 14.5px at calc(179px + var(--dx) * 0.6) 17.2px, var(--hi), transparent 72%),
-    radial-gradient(14.9px 12.8px at calc(217.7px + var(--dx) * 0.6) 40.5px, var(--hi), transparent 72%),
-    radial-gradient(13.8px 11.8px at calc(254.7px + var(--dx) * 0.6) 69.7px, var(--hi), transparent 72%),
-    radial-gradient(41.4px 36px at calc(142px + var(--dx)) 30.9px, var(--hi), transparent 74%),
-    radial-gradient(46px 40px at calc(186px + var(--dx)) 39.2px, var(--hi), transparent 74%),
-    radial-gradient(39.1px 34px at calc(100px + var(--dx)) 49.7px, var(--hi), transparent 74%),
-    radial-gradient(39.1px 34px at calc(228px + var(--dx)) 63.7px, var(--hi), transparent 74%),
-    radial-gradient(43.7px 38px at calc(62px + var(--dx)) 66px, var(--hi), transparent 74%),
-    radial-gradient(32.2px 28px at calc(94px + var(--dx)) 82.2px, var(--hi), transparent 74%),
-    radial-gradient(32.2px 28px at calc(208px + var(--dx)) 82.2px, var(--hi), transparent 74%),
-    linear-gradient(180deg, var(--mid) 18%, var(--bot) 90%);
-}
-.sky-vol.sky-cloud-1 {
-  background:
-    radial-gradient(70% 48% at calc(50% + var(--dx) * 7) 0%, var(--rim), transparent 100%),
-    linear-gradient(180deg, transparent 60%, var(--base) 100%),
-    radial-gradient(8.6px 7.3px at calc(22.2px + var(--dx) * 0.6) 73.7px, var(--hi), transparent 72%),
-    radial-gradient(15px 12.9px at calc(56.8px + var(--dx) * 0.6) 61.2px, var(--hi), transparent 72%),
-    radial-gradient(15.7px 13.5px at calc(84.4px + var(--dx) * 0.6) 45.2px, var(--hi), transparent 72%),
-    radial-gradient(14.1px 12.1px at calc(119.4px + var(--dx) * 0.6) 33.9px, var(--hi), transparent 72%),
-    radial-gradient(16.4px 14.1px at calc(170.5px + var(--dx) * 0.6) 34px, var(--hi), transparent 72%),
-    radial-gradient(13.2px 11.3px at calc(215.5px + var(--dx) * 0.6) 43.9px, var(--hi), transparent 72%),
-    radial-gradient(12px 10.3px at calc(238.8px + var(--dx) * 0.6) 59.9px, var(--hi), transparent 72%),
-    radial-gradient(11.4px 9.8px at calc(272.5px + var(--dx) * 0.6) 71.9px, var(--hi), transparent 72%),
-    radial-gradient(36.8px 32px at calc(170px + var(--dx)) 50.6px, var(--hi), transparent 74%),
-    radial-gradient(39.1px 34px at calc(124px + var(--dx)) 51.7px, var(--hi), transparent 74%),
-    radial-gradient(34.5px 30px at calc(214px + var(--dx)) 59.4px, var(--hi), transparent 74%),
-    radial-gradient(34.5px 30px at calc(80px + var(--dx)) 61.4px, var(--hi), transparent 74%),
-    radial-gradient(25.3px 22px at calc(256px + var(--dx)) 74.8px, var(--hi), transparent 74%),
-    radial-gradient(27.6px 24px at calc(40px + var(--dx)) 75.9px, var(--hi), transparent 74%),
-    radial-gradient(29.9px 26px at calc(104px + var(--dx)) 79.1px, var(--hi), transparent 74%),
-    radial-gradient(29.9px 26px at calc(196px + var(--dx)) 79.1px, var(--hi), transparent 74%),
-    linear-gradient(180deg, var(--mid) 18%, var(--bot) 90%);
-}
-.sky-vol.sky-cloud-2 {
-  background:
-    radial-gradient(70% 48% at calc(50% + var(--dx) * 7) 0%, var(--rim), transparent 100%),
-    linear-gradient(180deg, transparent 60%, var(--base) 100%),
-    radial-gradient(13px 11.2px at calc(35.4px + var(--dx) * 0.6) 74.3px, var(--hi), transparent 72%),
-    radial-gradient(13px 11.2px at calc(64.3px + var(--dx) * 0.6) 56.2px, var(--hi), transparent 72%),
-    radial-gradient(14.9px 12.7px at calc(87.8px + var(--dx) * 0.6) 37.7px, var(--hi), transparent 72%),
-    radial-gradient(15.5px 13.3px at calc(113.9px + var(--dx) * 0.6) 56.8px, var(--hi), transparent 72%),
-    radial-gradient(10.6px 9.1px at calc(142.2px + var(--dx) * 0.6) 74.2px, var(--hi), transparent 72%),
-    radial-gradient(9.8px 8.4px at calc(171.2px + var(--dx) * 0.6) 72.7px, var(--hi), transparent 72%),
-    radial-gradient(13.2px 11.3px at calc(199.8px + var(--dx) * 0.6) 52.6px, var(--hi), transparent 72%),
-    radial-gradient(14.6px 12.5px at calc(219.1px + var(--dx) * 0.6) 39.5px, var(--hi), transparent 72%),
-    radial-gradient(13.6px 11.7px at calc(243.4px + var(--dx) * 0.6) 52px, var(--hi), transparent 72%),
-    radial-gradient(8.5px 7.3px at calc(271.6px + var(--dx) * 0.6) 72.3px, var(--hi), transparent 72%),
-    radial-gradient(34.5px 30px at calc(222px + var(--dx)) 55.4px, var(--hi), transparent 74%),
-    radial-gradient(36.8px 32px at calc(90px + var(--dx)) 56.6px, var(--hi), transparent 74%),
-    radial-gradient(27.6px 24px at calc(190px + var(--dx)) 71.9px, var(--hi), transparent 74%),
-    radial-gradient(25.3px 22px at calc(254px + var(--dx)) 72.8px, var(--hi), transparent 74%),
-    radial-gradient(29.9px 26px at calc(56px + var(--dx)) 73.1px, var(--hi), transparent 74%),
-    radial-gradient(27.6px 24px at calc(124px + var(--dx)) 75.9px, var(--hi), transparent 74%),
-    linear-gradient(180deg, var(--mid) 18%, var(--bot) 90%);
-}
-.sky-vol.sky-cloud-3 {
-  background:
-    radial-gradient(70% 48% at calc(50% + var(--dx) * 7) 0%, var(--rim), transparent 100%),
-    linear-gradient(180deg, transparent 60%, var(--base) 100%),
-    radial-gradient(14.4px 12.3px at calc(48.7px + var(--dx) * 0.6) 74.6px, var(--hi), transparent 72%),
-    radial-gradient(11.9px 10.2px at calc(67.8px + var(--dx) * 0.6) 62.4px, var(--hi), transparent 72%),
-    radial-gradient(16px 13.7px at calc(83.8px + var(--dx) * 0.6) 58.2px, var(--hi), transparent 72%),
-    radial-gradient(12.9px 11.1px at calc(115.1px + var(--dx) * 0.6) 37.6px, var(--hi), transparent 72%),
-    radial-gradient(11.6px 10px at calc(181.7px + var(--dx) * 0.6) 7.6px, var(--hi), transparent 72%),
-    radial-gradient(15.7px 13.5px at calc(205.2px + var(--dx) * 0.6) 24.2px, var(--hi), transparent 72%),
-    radial-gradient(12.2px 10.4px at calc(237.8px + var(--dx) * 0.6) 55.8px, var(--hi), transparent 72%),
-    radial-gradient(14.9px 12.8px at calc(261.3px + var(--dx) * 0.6) 70.6px, var(--hi), transparent 72%),
-    radial-gradient(25.3px 22px at calc(160px + var(--dx)) 18.8px, var(--hi), transparent 74%),
-    radial-gradient(34.5px 30px at calc(182px + var(--dx)) 23.4px, var(--hi), transparent 74%),
-    radial-gradient(39.1px 34px at calc(150px + var(--dx)) 37.7px, var(--hi), transparent 74%),
-    radial-gradient(41.4px 36px at calc(200px + var(--dx)) 48.9px, var(--hi), transparent 74%),
-    radial-gradient(41.4px 36px at calc(112px + var(--dx)) 56.9px, var(--hi), transparent 74%),
-    radial-gradient(36.8px 32px at calc(236px + var(--dx)) 72.6px, var(--hi), transparent 74%),
-    radial-gradient(34.5px 30px at calc(70px + var(--dx)) 77.4px, var(--hi), transparent 74%),
-    radial-gradient(29.9px 26px at calc(96px + var(--dx)) 89.1px, var(--hi), transparent 74%),
-    radial-gradient(29.9px 26px at calc(212px + var(--dx)) 89.1px, var(--hi), transparent 74%),
-    linear-gradient(180deg, var(--mid) 18%, var(--bot) 90%);
-}
-.sky-drop {
+/* The sun and moon, placed and sized from SolarSky by transform alone. */
+.atm-orb {
   position: absolute;
   top: 0;
-  border-radius: 1px;
-  background: linear-gradient(180deg, rgb(206 220 255 / 0), rgb(206 220 255 / 0.85));
-  transition: opacity 0.7s ease;
-  animation: skyFall 0.7s linear infinite;
+  left: 0;
+  will-change: transform;
 }
-@keyframes skyFall {
+.atm-bloom {
+  position: absolute;
+  inset: 0;
+  animation: atmBreathe 9s ease-in-out infinite;
+}
+@keyframes atmBreathe {
+  0%,
+  100% {
+    opacity: 0.86;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.atm-ring {
+  background: radial-gradient(
+    closest-side,
+    rgb(200 215 255 / 0) 78%,
+    rgb(200 215 255 / 0.16) 87%,
+    rgb(200 215 255 / 0.05) 92%,
+    rgb(200 215 255 / 0) 97%
+  );
+}
+.atm-fog {
+  position: absolute;
+  left: -30%;
+  width: 160%;
+  will-change: transform;
+  animation: atmFog 52s ease-in-out infinite alternate;
+}
+@keyframes atmFog {
   from {
-    transform: translateY(-80px);
+    transform: translate3d(-9%, 0, 0);
   }
   to {
-    transform: translateY(1000px);
+    transform: translate3d(9%, 0, 0);
   }
+}
+.atm-sheen {
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  left: -60%;
+  width: 60%;
+  background: linear-gradient(105deg, rgb(255 255 255 / 0), rgb(230 238 255 / 0.07) 50%, rgb(255 255 255 / 0));
+  will-change: transform;
+  animation: atmSheen 17s ease-in-out infinite;
+}
+@keyframes atmSheen {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(270%, 0, 0);
+  }
+}
+/* Rain: two tiled layers of streaks (a 240 x 300 tile), each falling one tile and starting over, seamlessly. */
+.atm-rain {
+  position: absolute;
+  inset: -40% -25%;
+  transform: rotate(14deg);
+}
+.atm-streaks {
+  position: absolute;
+  inset: -300px 0 0;
+  background-size: 240px 300px;
+  will-change: transform;
+  animation: atmFall 1.25s linear infinite;
+}
+.atm-streaks-near {
+  background-position: 97px 41px;
+  animation-duration: 0.85s;
+}
+@keyframes atmFall {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 300px, 0);
+  }
+}
+.atm-grain {
+  position: absolute;
+  inset: 0;
+  background-size: 128px 128px;
+  opacity: 0.3;
 }
 .sky-flash {
   position: absolute;
   inset: 0;
-  pointer-events: none;
   opacity: 0;
   animation: skyFlash 6.2s infinite;
-}
-.sky-bolt {
-  position: absolute;
-  top: 0;
-  pointer-events: none;
-  opacity: 0;
-  animation: skyFlash 6.2s infinite;
-  filter: drop-shadow(0 0 5px rgb(210 220 255 / 0.95)) drop-shadow(0 0 18px rgb(160 180 255 / 0.6));
 }
 .sky-later {
   animation-duration: 8.7s;
@@ -1799,27 +1711,28 @@
     opacity: 1;
   }
 }
-.sky-fade {
+.sky-fade,
+.atm-fade {
   transition: opacity 1s ease;
 }
-:root[data-motion="reduce"] .sky-lane {
-  translate: var(--start) 0;
+/* A device that can't keep up (lite effects): the fields and fog hold still, which leaves only the rain moving. */
+.atm-lite :is(.atm-field, .atm-fog, .atm-bloom) {
+  animation: none;
+  will-change: auto;
 }
-:root[data-motion="reduce"] .sky-drop {
-  display: none;
+:root[data-motion="reduce"] .sky * {
+  animation: none !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  .sky-lane {
-    translate: var(--start) 0;
-  }
-  .sky-drop {
-    display: none;
+  .sky * {
+    animation: none !important;
+    transition: none !important;
   }
 }
-/* What floats over the sky (the weather in its corner): near-solid, so it reads whatever the sky. */
-.sky-float {
-  background: rgb(12 12 14 / 0.72);
-  backdrop-filter: blur(20px) saturate(1.15);
+/* Solar's title sits in its sky card, which shows the live clock and account itself, so the page corner steps aside. */
+body:has(.sky) [data-page-corner] {
+  display: none;
 }
 /* Scrolled out of view, the sky stops moving (SolarSky sets data-still). */
 .sky[data-still] * {
@@ -1828,26 +1741,19 @@
 
 /*
  * Lite effects (common/display/utils/effects), for a device that can't keep up: nothing blurs what's behind it, the
- * page's light holds still without its grain, and the sky's clouds lose their soft glow and stop bobbing (SolarSky
- * also draws fewer of them, and less rain).
+ * page's light holds still without its grain, and the sky's colour fields and fog hold still (SolarSky also leaves out
+ * the rain's sheen and its nearer streaks).
  */
 :root[data-effects="lite"] {
   .glass {
     backdrop-filter: none;
     background-color: color-mix(in oklab, var(--color-surface) 94%, transparent);
   }
-  .sky-float {
-    backdrop-filter: none;
-    background: rgb(12 12 14 / 0.84);
-  }
   .page-glow-shape {
     animation: none;
   }
   .page-glow-grain {
     display: none;
-  }
-  .sky-lane {
-    animation: skyTravel var(--secs, 120s) linear var(--delay, 0s) infinite;
   }
   .sky-twinkle {
     animation: none;
