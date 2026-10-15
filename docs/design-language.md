@@ -26,16 +26,18 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
 
 ## The sky hero (Solar)
 
-Solar keeps the usual `PageHeader` (title, live sub line, and "Play the day" with "Back to now" as its action), then a
-top card in two parts. Its top is the sky as it is now: colours that follow the real sunrise and sunset, the sun and
-moon (with its real phase) on arcs that set into the card's ground, and cloud, rain and storms from the day's hourly
-weather, eased between hours, with cloud banks drifting across at their own speeds. The weather chip sits in its top
-right corner (`.sky-float`, near-solid), and its one headline line sits bottom left on a soft dark wash, so both read in
-any weather. The sky fades into the card's solid ground, where the figures sit just as on every other page's top card
-(the Hero kit: the lead and live figures, four stats, the pace bar), with the day's chart under them. The chart is the
-scrubber: dragging it (or the arrow keys) moves the sky and the figures to that moment, and "Play the day" runs
-midnight to midnight in 10 seconds. With motion turned down, nothing animates: clouds hold where they'd start and rain
-shows as haze. Pure maths in `features/solar/utils/sky.ts`, styles at the end of `app.css`.
+Solar keeps the usual `PageHeader`, then a top card in two parts. Its top is the sky as it is now: colours that follow
+the real sunrise and sunset, the sun and moon (with its real phase) on arcs that set into the card's ground, and cloud,
+rain and storms from the day's hourly weather, eased between hours, with cloud banks drifting across at their own
+speeds. The weather chip sits in one top corner (`.sky-float`, near-solid) and the headline line in the other, on a
+soft dark wash so it reads in any weather. Text stays up in the sky, never over its fade into the ground, where a dark
+wash would show as a smudge in the light theme. The sky fades into the card's solid ground, where the figures sit just
+as on every other page's top card (the Hero kit: the lead and live figures, four stats, the pace bar), with the day's
+chart under them. The chart is the scrubber: dragging it (or the arrow keys) moves the sky and the figures to that
+moment. "Play the day" (midnight to midnight in 20 seconds) and "Back to now" (which glides back) sit on the chart's
+top left, where the night before sunrise leaves room. With motion turned down, nothing animates: clouds hold where
+they'd start, rain shows as haze, and Back to now jumps. Pure maths in `features/solar/utils/sky.ts`, styles at the end
+of `app.css`.
 
 Clouds are cumulus banks built from CSS gradients: a mask of round lobes with smaller bumps along the outline (the
 cauliflower edge), each lobe lit broadly from above toward the sun or moon, a lit edge on that side (warm at golden
