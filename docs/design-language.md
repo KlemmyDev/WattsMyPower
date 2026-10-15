@@ -35,8 +35,7 @@ it sinks, and the moon a crisp small orb (in its real phase) with a halo. Cloud 
 bands that veil the orb, rain cools them with fine streaks of falling light and a slow sheen, a storm darkens them and
 flashes, and clear nights get stars and a faint aurora. The title reads on a wash of the sky's own top colour, worked
 out each time to be only as strong as the words need (4.5:1 for the line, 3:1 for the title). The sky fades into the
-card's solid ground, where the figures sit just as on every other page's top card (the Hero kit), with the day's chart
-under them. The chart is the scrubber: dragging it (or the arrow keys) moves the sky and the figures to that moment.
+card's solid ground. Right under the sky comes the day's chart, then the figures, just as on every other page's top card (the Hero kit). The chart is the scrubber: dragging it (or the arrow keys) moves the sky and the figures to that moment, and sitting between them it keeps both in view while you drag, on a phone too.
 "Play the day" (midnight to midnight in 20 seconds) and "Back to now" (which glides back) sit on the chart's top left,
 where the night before sunrise leaves room. Maths in `features/solar/utils/atmosphere.ts` and `sky.ts`, styles at the
 end of `app.css`.

@@ -9,7 +9,7 @@ import { HeaderClock } from "~/features/common/layout/components/TopBar";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { hourOf } from "~/features/common/time/utils";
-import { HeroFigures, HeroLead, HeroLive, HeroStat, HeroStats, HeroTop } from "~/features/common/ui/components/Hero";
+import { HeroLead, HeroLive } from "~/features/common/ui/components/Hero";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import { useFahrenheit } from "~/features/common/weather/hooks";
@@ -33,9 +33,10 @@ const DAY = 86_400;
  * along the chart or played through): the sun or moon where they are, the day's cloud, rain and storms coming and
  * going, the weather in one top corner and, in the other on a dark wash so it reads in any weather and either theme, a
  * line on how the day's going.
- * The sky fades into the card's solid ground, where the figures sit as on every page's top card (the Hero kit): what's
- * been made and what's being made at the moment shown, four figures that round the day out, its pace, and the day's
- * solar against what was expected, which moves the sky as you drag along it, with Play the day and Back to now on it.
+ * The sky fades into the card's solid ground. First, right under the sky, the day's solar against what was expected:
+ * dragging along it moves the sky and the figures under it (so all three show while you drag), with Play the day and
+ * Back to now on it. Then the figures, as on every page's top card (the Hero kit): what's been made and what's being
+ * made at the moment shown, four figures that round the day out, and its pace.
  */
 export function SolarSky({
   p,
@@ -166,7 +167,7 @@ export function SolarSky({
         data-still={onScreen ? undefined : ""}
         className="sky relative isolate flex [transform:translateZ(0)] flex-col overflow-hidden rounded-[28px] border border-line-subtle bg-surface max-sm:rounded-3xl"
       >
-        <div ref={skyRef} className="relative h-[300px] flex-none overflow-hidden text-white max-sm:h-[260px]">
+        <div ref={skyRef} className="relative h-[280px] flex-none overflow-hidden text-white max-sm:h-[210px]">
           <SkyScene
             view={view}
             start={start}
@@ -216,82 +217,105 @@ export function SolarSky({
           </div>
         </div>
 
-        <div className="@container relative flex flex-col gap-6 p-7 max-sm:p-5">
-          <HeroTop>
-            <HeroFigures>
-              <HeroLead label={lead.label} value={lead.value} unit={lead.unit} sub={more || undefined} />
+        <div className="@container relative flex flex-col gap-5 p-7 max-sm:gap-4 max-sm:p-5">
+          {/* First, right under the sky, wherever the figures below it rearrange themselves (they reorder on a phone). */}
+          <div className="@max-xl:-order-3">
+            <SkyChart
+              series={series}
+              expected={expected}
+              hours={weather?.hours}
+              start={start}
+              now={now}
+              view={view}
+              rise={rise}
+              set={set}
+              array={s?.pv_kw ?? null}
+              onScrub={(t) => {
+                stop();
+                setScrub(t);
+              }}
+              controls={
+                <>
+                  <button
+                    type="button"
+                    onClick={play}
+                    aria-label={playLabel}
+                    className="flex min-h-9 items-center gap-2 rounded-full border border-line bg-surface pr-3.5 pl-3 text-[13px] text-ink shadow-sm transition-colors hover:bg-surface-raised max-sm:size-9 max-sm:justify-center max-sm:p-0"
+                  >
+                    <Icon name={playing ? "pause" : "play"} size={13} className="text-solar" />
+                    <span className="max-sm:hidden">{playLabel}</span>
+                  </button>
+                  {scrub != null && (
+                    <button
+                      type="button"
+                      onClick={backToNow}
+                      className="min-h-9 rounded-full border border-line bg-surface px-3.5 text-[13px] whitespace-nowrap text-ink tabular-nums shadow-sm transition-colors hover:bg-surface-raised max-sm:px-3"
+                    >
+                      <span className="max-sm:hidden">Back to now · </span>
+                      <span className="sm:hidden">Now · </span>
+                      {hhmm(now)}
+                    </button>
+                  )}
+                </>
+              }
+            />
+          </div>
+          {/* The figures in as little height as reads well, so the sky, the chart and every figure show at once while
+              you drag, on a phone too: there the two figures sit side by side and the four under them two by two,
+              without their small print. */}
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 max-sm:grid max-sm:grid-cols-2 max-sm:items-start max-sm:gap-x-4 max-sm:gap-y-3 @max-xl:-order-2">
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-4 max-sm:contents">
+              <HeroLead
+                label={lead.label}
+                value={lead.value}
+                unit={lead.unit}
+                sub={more ? <span className="max-sm:hidden">{more}</span> : undefined}
+              />
               <HeroLive
                 label={second.label}
                 on={second.live}
                 color={SOLAR}
                 value={second.value}
                 unit={second.unit}
-                sub={second.sub}
+                sub={second.sub ? <span className="max-sm:hidden">{second.sub}</span> : undefined}
               />
-            </HeroFigures>
-            <HeroStats>
-              <HeroStat
-                label="Peak today"
-                value={today.peak ? kW(today.peak.w) : DASH}
-                sub={today.peak ? `At ${hhmm(today.peak.t)}` : "Not yet"}
-              />
-              <HeroStat
-                label="Best hour"
-                value={best ? `${hourLabel(best.h)}–${hourLabel(best.h + 1)}` : DASH}
-                sub={best ? `${kWh(best.kwh)} in the hour` : "Not yet"}
-              />
-              <HeroStat
-                label="Against a usual day"
-                value={vsUsual != null ? (Math.abs(vsUsual) < 0.04 ? "About usual" : signedPct(vsUsual)) : DASH}
-                sub={usual ? `Usual is ${kWh(usual)}` : "Needs a few days"}
-              />
-              <HeroStat
-                label="Tomorrow"
-                value={today.tomorrow ? kWh(today.tomorrow.pv_kwh) : DASH}
-                sub={today.tomorrow?.code != null ? codeName(today.tomorrow.code) : "Forecast"}
-              />
-            </HeroStats>
-          </HeroTop>
+            </div>
+            <dl className="grid grid-cols-4 gap-x-8 gap-y-3 max-sm:col-span-2 max-sm:gap-x-4 max-sm:gap-y-2 @max-2xl:grid-cols-2">
+              {(
+                [
+                  [
+                    "Peak today",
+                    today.peak ? kW(today.peak.w) : DASH,
+                    today.peak ? `At ${hhmm(today.peak.t)}` : "Not yet",
+                  ],
+                  [
+                    "Best hour",
+                    best ? `${hourLabel(best.h)}–${hourLabel(best.h + 1)}` : DASH,
+                    best ? `${kWh(best.kwh)} in the hour` : "Not yet",
+                  ],
+                  [
+                    "Against a usual day",
+                    vsUsual != null ? (Math.abs(vsUsual) < 0.04 ? "About usual" : signedPct(vsUsual)) : DASH,
+                    usual ? `Usual is ${kWh(usual)}` : "Needs a few days",
+                  ],
+                  [
+                    "Tomorrow",
+                    today.tomorrow ? kWh(today.tomorrow.pv_kwh) : DASH,
+                    today.tomorrow?.code != null ? codeName(today.tomorrow.code) : "Forecast",
+                  ],
+                ] as const
+              ).map(([label, value, sub]) => (
+                <div key={label} className="flex min-w-0 flex-col gap-0.5">
+                  <dt className="truncate text-xs text-ink-faint">{label}</dt>
+                  <dd className="text-[20px] leading-6 font-light tracking-[-0.3px] whitespace-nowrap tabular-nums max-sm:text-[17px] max-sm:leading-[22px]">
+                    {value}
+                  </dd>
+                  <dd className="truncate text-[11.5px] text-ink-faint max-sm:hidden">{sub}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
           <Pace today={today} done={done} />
-          <SkyChart
-            series={series}
-            expected={expected}
-            hours={weather?.hours}
-            start={start}
-            now={now}
-            view={view}
-            rise={rise}
-            set={set}
-            array={s?.pv_kw ?? null}
-            onScrub={(t) => {
-              stop();
-              setScrub(t);
-            }}
-            controls={
-              <>
-                <button
-                  type="button"
-                  onClick={play}
-                  aria-label={playLabel}
-                  className="flex min-h-9 items-center gap-2 rounded-full border border-line bg-surface pr-3.5 pl-3 text-[13px] text-ink shadow-sm transition-colors hover:bg-surface-raised max-sm:size-9 max-sm:justify-center max-sm:p-0"
-                >
-                  <Icon name={playing ? "pause" : "play"} size={13} className="text-solar" />
-                  <span className="max-sm:hidden">{playLabel}</span>
-                </button>
-                {scrub != null && (
-                  <button
-                    type="button"
-                    onClick={backToNow}
-                    className="min-h-9 rounded-full border border-line bg-surface px-3.5 text-[13px] whitespace-nowrap text-ink tabular-nums shadow-sm transition-colors hover:bg-surface-raised max-sm:px-3"
-                  >
-                    <span className="max-sm:hidden">Back to now · </span>
-                    <span className="sm:hidden">Now · </span>
-                    {hhmm(now)}
-                  </button>
-                )}
-              </>
-            }
-          />
         </div>
       </section>
     </>
@@ -797,7 +821,7 @@ function SkyChart({
   const Y = (x: number) => H - (x / top) * (H - 24);
 
   return (
-    <div className="relative h-[230px] max-sm:h-[190px]">
+    <div className="relative h-[210px] max-sm:h-[160px]">
       {icons.map(
         (x) =>
           x.icon && (
@@ -820,7 +844,7 @@ function SkyChart({
         />
       ))}
       {lines}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[38px] h-[160px] max-sm:h-[120px]">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[38px] h-[140px] max-sm:h-[100px]">
         <span className="absolute inset-y-0 w-px bg-ink/55" style={{ left: pct(view) }} />
         {v != null && (
           <span
@@ -905,7 +929,7 @@ function ChartLines({
       aria-hidden
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      className="absolute inset-x-0 bottom-[38px] h-[160px] w-full overflow-visible max-sm:h-[120px]"
+      className="absolute inset-x-0 bottom-[38px] h-[140px] w-full overflow-visible max-sm:h-[100px]"
     >
       <defs>
         <linearGradient id="sky-solar" x1="0" y1="0" x2="0" y2="1">
