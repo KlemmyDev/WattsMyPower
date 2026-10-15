@@ -26,36 +26,35 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
 
 ## The sky hero (Solar)
 
-Solar keeps the usual `PageHeader`, then a top card in two parts. Its top is the sky as it is now: colours that follow
-the real sunrise and sunset, the sun and moon (with its real phase) on arcs that set into the card's ground, and cloud,
-rain and storms from the day's hourly weather, eased between hours, with cloud banks drifting across at their own
-speeds. The weather chip sits in one top corner (`.sky-float`, near-solid) and the headline line in the other, on a
-soft dark wash so it reads in any weather. Text stays up in the sky, never over its fade into the ground, where a dark
-wash would show as a smudge in the light theme. The sky fades into the card's solid ground, where the figures sit just
-as on every other page's top card (the Hero kit: the lead and live figures, four stats, the pace bar), with the day's
-chart under them. The chart is the scrubber: dragging it (or the arrow keys) moves the sky and the figures to that
-moment. "Play the day" (midnight to midnight in 20 seconds) and "Back to now" (which glides back) sit on the chart's
-top left, where the night before sunrise leaves room. With motion turned down, nothing animates: clouds hold where
-they'd start, rain shows as haze, and Back to now jumps. Pure maths in `features/solar/utils/sky.ts`, styles at the end
-of `app.css`.
+Solar has no page header. Its title, "Solar", and a line on how the day's going sit in the top left of its top card,
+over the sky, with the weather, the live clock and the account in the top right (the page corner steps aside for them;
+on a phone the clock and account stay in the top bar). The sky is drawn in the "Atmosphere" look: no drawn clouds, the
+weather felt as light and colour. Its base colours follow the real sunrise and sunset. Five soft colour fields drift
+slowly over it, one of them warm and riding with the light. The sun is a luminous orb with a wide bloom that warms as
+it sinks, and the moon a crisp small orb (in its real phase) with a halo. Cloud greys the colours and brings wide fog
+bands that veil the orb, rain cools them with fine streaks of falling light and a slow sheen, a storm darkens them and
+flashes, and clear nights get stars and a faint aurora. The title reads on a wash of the sky's own top colour, worked
+out each time to be only as strong as the words need (4.5:1 for the line, 3:1 for the title). The sky fades into the
+card's solid ground, where the figures sit just as on every other page's top card (the Hero kit), with the day's chart
+under them. The chart is the scrubber: dragging it (or the arrow keys) moves the sky and the figures to that moment.
+"Play the day" (midnight to midnight in 20 seconds) and "Back to now" (which glides back) sit on the chart's top left,
+where the night before sunrise leaves room. Maths in `features/solar/utils/atmosphere.ts` and `sky.ts`, styles at the
+end of `app.css`.
 
-Clouds are cumulus banks built from CSS gradients: a mask of round lobes with smaller bumps along the outline (the
-cauliflower edge), each lobe lit broadly from above toward the sun or moon, a lit edge on that side (warm at golden
-hour, silver by moonlight, dulled in a storm) and a darker flat base. Avoid a bright centre with a ring on each lobe:
-that reads as balls, not cloud.
-
-It's built to stay smooth on a slow device: only the cloud, rain and lightning the weather calls for are in the page,
-each cloud is painted once and then only moved (its bob is `translate`, apart from the crossing's `transform`), the
-clouds' colours follow the light by the quarter hour and only repaint when they change, the chart's lines are drawn
-once per reading, and the whole sky stops while it's scrolled away.
+It's built to stay smooth on a phone, Safari above all. Everything is a gradient: no blur filters, masks, blend modes
+or backdrop blur, which Safari draws slowly and, in layers that move, clips into hard lines at their edges. The
+colours only change every five minutes of sky (so a few times a second while the day plays), the sun and moon move by
+transform alone, and everything that moves for good (drift, fog, rain) moves by transform or opacity. Rain is two
+tiled layers, not a layer per drop, and the grain is a small noise tile drawn once. The whole sky stops while it's
+scrolled away, and holds still with motion turned down.
 
 ## Lite effects
 
 `common/display/utils/effects.ts` sets `data-effects="lite"` on `<html>` for a device that can't keep up: one that
 says it's saving data or has very little memory or very few cores, or one whose frames, timed for two seconds once the
 page has settled, mostly come slower than about 45 a second (remembered for a week). Lite drops what's costly to keep
-drawing: backdrop blur on `.glass` and `.sky-float` (they go near-solid), the page light's drift and grain, and in the
-sky every other cloud bank, a third of the rain, the clouds' soft glow and bob, and plays the day at 30 frames a second.
+drawing: backdrop blur on `.glass` (it goes near-solid), the page light's drift and grain, and in the sky the colour
+fields' and fog's drift, the rain's sheen and nearer streaks, and plays the day at 30 frames a second.
 Anything new that blurs what's behind it or animates without end needs a lite rule. Setting `wmp-effects` in local
 storage to `lite` or `full` forces either, for trying them.
 

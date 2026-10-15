@@ -3,33 +3,23 @@ import { useEffects } from "~/features/common/display/hooks";
 import { reducedMotion } from "~/features/common/display/utils";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
-import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
+import { InverterNotice } from "~/features/common/layout/components/InverterNotice";
+import { HeaderClock } from "~/features/common/layout/components/TopBar";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { hourOf } from "~/features/common/time/utils";
 import { HeroFigures, HeroLead, HeroLive, HeroStat, HeroStats, HeroTop } from "~/features/common/ui/components/Hero";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { cn } from "~/features/common/ui/utils";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { codeName, degrees, hourIcon } from "~/features/common/weather/utils";
 import { SOLAR } from "~/features/solar/components/parts";
 import { Pace } from "~/features/solar/components/SolarHero";
 import { expectedToday, place, solarNow, solarToday } from "~/features/solar/utils";
-import {
-  clamp01,
-  CLOUDS,
-  css,
-  cssA,
-  DROPS,
-  mix,
-  moonAge,
-  moonFace,
-  skyColours,
-  standardHour,
-  weatherAt,
-  type CloudBank,
-  type Rgb,
-} from "~/features/solar/utils/sky";
+import { atmosphere, orbits, ORBS, type Atmosphere, type Field } from "~/features/solar/utils/atmosphere";
+import { moonAge, moonFace, weatherAt } from "~/features/solar/utils/sky";
 import type { WeatherDay, WeatherHour } from "~/features/weather/types";
 
 type Today = ReturnType<typeof solarToday>;
@@ -37,7 +27,6 @@ type Today = ReturnType<typeof solarToday>;
 /** How long "Play the day" takes to run from midnight to midnight. */
 const PLAY_MS = 20_000;
 const DAY = 86_400;
-const WHITE: Rgb = [255, 255, 255];
 
 /**
  * The Solar page's title and its top card. The card's top is the sky as it is now (or at any moment of today, scrubbed
@@ -74,7 +63,10 @@ export function SolarSky({
   const [playing, setPlaying] = useState(false);
   const frame = useRef(0);
   const root = useRef<HTMLElement>(null);
+  const skyRef = useRef<HTMLDivElement>(null);
   const onScreen = useOnScreen(root);
+  const size = useSize(skyRef);
+  const phone = size.w < 600;
   const lite = useEffects() === "lite";
   const fahrenheit = useFahrenheit();
 
@@ -145,6 +137,18 @@ export function SolarSky({
   const lead = leadFigure({ scrub, ahead, view, today, madeBy, now, rise });
   const second = secondFigure({ scrub, ahead, view, live, today, pvAt, now, rise });
   const [line, more] = story({ today, now, rise, set, hours: weather?.hours, usual });
+  // The sky's colours change every five minutes of the day shown, not on every frame of it playing.
+  const step = Math.round(view / 300) * 300;
+  const sky = useMemo(
+    () =>
+      atmosphere((step - start) / 3600, (rise - start) / 3600, (set - start) / 3600, weatherAt(weather?.hours, step), {
+        W: size.w,
+        H: size.h,
+        phone,
+        story: line,
+      }),
+    [step, start, rise, set, weather?.hours, size.w, size.h, phone, line],
+  );
   // Nothing more expected today: the sun's down, or the forecast has no more to come.
   const done = today.made != null && today.heading != null && today.heading - today.made < 0.05;
   const vsUsual =
@@ -155,45 +159,60 @@ export function SolarSky({
 
   return (
     <>
-      <PageHeader title="Solar" sub={subLine(live, today, hour, now, rise, set)} />
+      <InverterNotice />
       <section
         ref={root}
-        aria-label="Solar now"
+        aria-labelledby="h-solar"
         data-still={onScreen ? undefined : ""}
-        className="sky relative isolate flex flex-col overflow-hidden rounded-[28px] border border-line-subtle bg-surface max-sm:rounded-3xl"
+        className="sky relative isolate flex [transform:translateZ(0)] flex-col overflow-hidden rounded-[28px] border border-line-subtle bg-surface max-sm:rounded-3xl"
       >
-        <div className="relative h-[300px] flex-none overflow-hidden text-white [--cs:0.8] max-sm:h-[240px] max-sm:[--cs:0.5]">
+        <div ref={skyRef} className="relative h-[300px] flex-none overflow-hidden text-white max-sm:h-[260px]">
           <SkyScene
             view={view}
             start={start}
             rise={rise}
             set={set}
-            hours={weather?.hours}
             south={(at?.lat ?? -27) < 0}
             lite={lite}
+            W={size.w}
+            H={size.h}
+            phone={phone}
+            a={sky}
           />
-          <div className="sky-float absolute top-5 right-5 flex min-h-9 items-center gap-2 rounded-full border border-white/12 py-1.5 pr-3.5 pl-2.5 text-[13px] tabular-nums max-sm:top-3.5 max-sm:right-3.5">
-            {hour?.code != null && (
-              <Icon
-                name={hourIcon({ code: hour.code, is_day: hour.is_day ?? 1 })}
-                size={18}
-                className="text-white/85"
-              />
-            )}
-            <span>{hour?.code != null ? codeName(hour.code) : "Sky"}</span>
-            {hour?.temp != null && <span className="text-white/80">{degrees(hour.temp, fahrenheit)}</span>}
-            <span className="text-white/70">· {hhmm(view)}</span>
-          </div>
-          {/* Up in the sky itself, never over its fade into the card, on a soft dark wash so it reads in any weather
-              (bright cloud, the sun, a storm) and in either theme. On a phone it sits under the weather. */}
-          <div className="absolute top-6 left-7 max-w-[min(600px,calc(100%-300px))] max-sm:top-[68px] max-sm:right-5 max-sm:left-5 max-sm:max-w-none">
-            <div aria-hidden className="absolute -inset-x-10 -inset-y-6 bg-[rgb(8_10_16/0.55)] blur-[22px]" />
-            <p
-              aria-live="polite"
-              className="relative text-[22px] leading-7 font-semibold tracking-[-0.005em] text-pretty text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.35)] max-sm:text-lg max-sm:leading-6"
-            >
-              {line}
-            </p>
+          {/* The page's title and how the day's going, up in the sky (never over its fade into the card) on the
+              sky's own wash, and the weather in the other corner (beside the title on a phone). */}
+          <div className="absolute top-[26px] right-[22px] left-7 flex items-start justify-between gap-4 max-sm:top-[18px] max-sm:right-5 max-sm:left-5 max-sm:flex-wrap max-sm:items-center max-sm:gap-y-1">
+            <div className="flex max-w-[600px] min-w-0 flex-col gap-0.5 max-sm:contents">
+              <h1
+                id="h-solar"
+                className="font-display text-[40px] leading-[46px] font-semibold text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.22)] max-sm:text-[30px] max-sm:leading-9"
+              >
+                Solar
+              </h1>
+              <p
+                aria-live="polite"
+                className="text-base leading-[22px] font-medium text-pretty text-white/90 tabular-nums [text-shadow:0_1px_12px_rgb(0_0_0/0.22)] max-sm:order-1 max-sm:w-full"
+              >
+                {line}
+              </p>
+            </div>
+            <div className="flex flex-none items-center gap-2.5">
+              <div
+                className="flex min-h-9 items-center gap-2 rounded-full border border-white/14 py-1.5 pr-3.5 pl-2.5 text-[13px] whitespace-nowrap tabular-nums max-sm:min-h-[34px] max-sm:gap-1.5 max-sm:pr-3 max-sm:pl-2"
+                style={{ background: sky.chip }}
+              >
+                {hour?.code != null && (
+                  <Icon name={hourIcon({ code: hour.code, is_day: hour.is_day ?? 1 })} size={phone ? 16 : 18} />
+                )}
+                <span>{hour?.code != null ? codeName(hour.code) : "Sky"}</span>
+                {hour?.temp != null && <span className="text-zinc-200">{degrees(hour.temp, fahrenheit)}</span>}
+                {/* The time shown, once it isn't now (the live clock says now). */}
+                {scrub != null && <span className="text-zinc-300">· {hhmm(view)}</span>}
+              </div>
+              {/* From tablets up, the page's live clock and account, which sit in its top right corner elsewhere. */}
+              <HeaderClock className="max-md:hidden" />
+              <AccountAvatar className="max-md:hidden" />
+            </div>
           </div>
         </div>
 
@@ -348,22 +367,6 @@ function secondFigure(x: {
   return { label: "Panels resting", live: false, sub: undefined, ...split(kW(0)) };
 }
 
-/** The line under the page's title: what's happening, numbers first. */
-function subLine(
-  live: ReturnType<typeof solarNow>,
-  today: Today,
-  hour: WeatherHour | undefined,
-  now: number,
-  rise: number,
-  set: number,
-) {
-  const sky = hour?.code != null ? codeName(hour.code).toLowerCase() : null;
-  if (live.producing) return [`${kW(live.pv)} now`, sky].filter(Boolean).join(" · ");
-  if (now > set && today.made != null) return `${kWh(today.made)} today · done for the day`;
-  if (now < rise) return `Sun's up at ${hhmm(rise)}`;
-  return "Panels resting";
-}
-
 /** The clock hour that's made the most so far today, from the five-minute readings, and its kWh. */
 function bestHour(series: HistorySeries | undefined, now: number): { h: number; kwh: number } | null {
   const ts = series?.t ?? [];
@@ -484,296 +487,226 @@ function expectedBetween(pts: Pt[], from: number, to: number): number {
 
 // ------------------------------------------------------------------------------------------------- the scene
 
-/** Clouds on a device that can't keep up: every other bank, still spread through every amount of cover. */
-const LITE_CLOUDS = CLOUDS.filter((_, i) => i % 2 === 0);
-
 /**
- * The sky at `view`: its colours for the time of day, stars, the sun and moon on their arcs (setting into the card's
- * ground rather than vanishing), cloud banks drifting across at their own speeds, an overcast layer, rain, and
- * lightning in a storm. Everything follows the weather eased between hours, so it comes and goes smoothly.
+ * The sky at `view` in its "Atmosphere" look (`a`, from utils/atmosphere): the base colours, the drifting colour fields, the sun
+ * or moon, stars, fog, rain, a storm's flashes, grain, and the wash behind the title.
  *
- * It's drawn to be cheap to keep moving: only the cloud, rain and lightning the weather calls for are there at all,
- * each cloud is painted once and then only moved, and the clouds' colours follow the light by the quarter hour, so
- * while the day plays they're repainted a few times a second rather than on every frame. `lite` draws less again.
+ * Built to stay smooth on a phone. The colours (every gradient) only change every five minutes of sky, so while the
+ * day plays they're repainted a few times a second, not on every frame; the sun and moon move every frame, but only
+ * by transform. Everything that moves for good (the fields' drift, fog, rain) moves by transform or opacity alone, and
+ * nothing uses blur, masks or blend modes. `lite` (a device that can't keep up) holds the fields and fog still and
+ * drops the sheen.
  */
 function SkyScene({
   view,
   start,
   rise,
   set,
-  hours,
   south,
   lite,
+  W,
+  H,
+  phone,
+  a,
 }: {
   view: number;
   start: number;
   rise: number;
   set: number;
-  hours: WeatherHour[] | undefined;
   south: boolean;
   lite: boolean;
+  W: number;
+  H: number;
+  phone: boolean;
+  a: Atmosphere;
 }) {
-  const h = (view - start) / 3600;
-  const riseH = (rise - start) / 3600;
-  const setH = (set - start) / 3600;
-  const w = weatherAt(hours, view);
-  const [top, mid, low] = skyColours(standardHour(h, riseH, setH), w);
-
-  // The sun across the day; the moon across the night, from sunset to the next sunrise.
-  const xs = (h - riseH) / (setH - riseH);
-  const es = Math.sin(Math.PI * xs);
-  const night = 24 - (setH - riseH);
-  const xm = h >= setH ? (h - setH) / night : h < riseH ? (h + 24 - setH) / night : -1;
-  const em = xm >= 0 && xm <= 1 ? Math.sin(Math.PI * xm) : -0.5;
-  const day = clamp01(es * 4 + 0.35);
-
-  const quarter = Math.round(view / 900) * 900;
-  const tone = useMemo(() => cloudTone(quarter, start, riseH, setH, hours), [quarter, start, riseH, setH, hours]);
-
-  const arc = (x: number, e: number): CSSProperties => ({ left: `${6 + x * 88}%`, top: `${100 - e * 82}%` });
-  const sunCol = css(mix([255, 247, 226], [255, 156, 90], clamp01(1 - es * 3)));
+  const o = orbits((view - start) / 3600, (rise - start) / 3600, (set - start) / 3600);
+  const G = phone ? ORBS.phone : ORBS.wide;
+  // An orb `size` across, centred on a point of the sky, moved only by transform.
+  const orb = (x: number, y: number, size: number, scale = 1): CSSProperties => ({
+    width: size,
+    height: size,
+    transform: `translate3d(${(x * W - size / 2).toFixed(1)}px, ${(y * H - size / 2).toFixed(1)}px, 0) scale(${scale.toFixed(3)})`,
+  });
   const age = moonAge(view);
-  const stars = (1 - day) * (1 - w.cover) * 0.9;
-  const storm = clamp01((w.storm - 0.2) / 0.6);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 -z-1">
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `linear-gradient(180deg, ${css(top)} 0%, ${css(mid)} 50%, ${css(low)} 80%, var(--color-surface) 100%)`,
-        }}
-      />
-      {stars > 0.01 && <Stars opacity={stars} />}
-      <div className="absolute inset-0 overflow-hidden">
-        <span
-          className="absolute size-[420px] rounded-full max-sm:size-[300px]"
-          style={{
-            ...arc(xs, es),
-            opacity: clamp01(es * 3 + 0.4) * (0.95 - 0.45 * w.cover),
-            transform: `translate(-50%, -50%) scale(${1 + w.cover * 0.5})`,
-            background: `radial-gradient(closest-side, rgba(255,232,180,${0.7 - 0.3 * w.cover}), rgba(255,180,90,0.2) 38%, rgba(255,150,60,0) 72%)`,
-          }}
-        />
-        <span
-          className="absolute size-14 -translate-x-1/2 -translate-y-1/2 rounded-full max-sm:size-11"
-          style={{
-            ...arc(xs, es),
-            opacity: es > -0.2 ? 1 - 0.9 * w.cover : 0,
-            background: `radial-gradient(circle, ${sunCol} 0 56%, rgba(255,226,170,0.55) 72%, rgba(255,214,150,0) 100%)`,
-            boxShadow: `0 0 40px 12px rgba(255,214,150,${0.5 - 0.35 * w.cover})`,
-          }}
-        />
-        <span
-          className="absolute size-[280px] rounded-full max-sm:size-[210px]"
-          style={{
-            ...arc(xm, em),
-            opacity: clamp01(em * 3 + 0.3) * (1 - day) * (0.9 - 0.5 * w.cover),
-            transform: `translate(-50%, -50%) scale(${1 + w.cover * 0.6})`,
-            background:
-              "radial-gradient(closest-side, rgba(214,224,255,0.3), rgba(180,196,240,0.08) 45%, rgba(180,196,240,0) 72%)",
-          }}
-        />
-        <span
-          className="absolute size-11 -translate-x-1/2 -translate-y-1/2 rounded-full max-sm:size-9"
-          style={{ ...arc(xm, em), opacity: (1 - day) * (1 - 0.85 * w.cover), ...moonFace(age, 44, south) }}
-        />
+    <div aria-hidden className={cn("atm pointer-events-none absolute inset-0 overflow-hidden", lite && "atm-lite")}>
+      <div className="absolute inset-0" style={{ background: a.base }} />
+      {[...a.aurora, ...a.fields].map((f, i) => (
+        <AtmField key={i} f={f} aurora={i < a.aurora.length} />
+      ))}
+      {a.stars > 0.01 && <Stars opacity={a.stars} />}
+      <div className="atm-orb" style={orb(o.sun.x, o.sun.y, G.bloom, a.sun.bloomScale)}>
+        <div className="atm-bloom" style={{ background: a.sun.bloom }} />
       </div>
+      <div className="atm-orb" style={{ ...orb(o.sun.x, o.sun.y, G.glow), background: a.sun.glow }} />
       <div
-        className="sky-fade absolute inset-0"
-        style={{
-          opacity: Math.pow(w.cover, 1.6) * 0.95,
-          background: `linear-gradient(180deg, ${tone.shade} 0%, ${tone.haze} 42%, ${tone.clear} 85%)`,
-        }}
+        className="atm-orb"
+        style={{ ...orb(o.sun.x, o.sun.y, G.core), background: a.sun.core, opacity: a.sun.coreOpacity }}
       />
-      {(lite ? LITE_CLOUDS : CLOUDS).map((c) => {
-        const o =
-          c.layer === "scud"
-            ? clamp01((w.rain - 0.3) / 0.3) * clamp01(w.cover * 2 - 1)
-            : clamp01((w.cover - c.from) / 0.18);
-        const i = CLOUDS.indexOf(c);
-        return o > 0.005 && <Cloud key={i} i={i} c={c} o={o} tone={tone.layers[c.layer]} lite={lite} />;
-      })}
       <div
-        className="sky-fade absolute inset-0"
-        style={{
-          opacity: w.rain * 0.65,
-          background: `linear-gradient(180deg, ${tone.wet0} 15%, ${tone.wet1} 70%, ${tone.wet2} 100%)`,
-        }}
+        className="atm-orb"
+        style={{ ...orb(o.moon.x, o.moon.y, G.halo, a.moon.haloScale), background: a.moon.halo }}
       />
-      {w.rain > 0 && (
-        <div className="absolute -inset-x-[15%] -top-[12%] bottom-0 rotate-[11deg]">
-          {DROPS.map((d, i) => {
-            const o = clamp01((w.rain - d.from) / 0.12) * (d.near ? 0.8 : 0.45);
-            if (o <= 0 || (lite && i % 3)) return null;
-            return (
-              <span
-                key={i}
-                className="sky-drop"
-                style={{
-                  left: `${d.x}%`,
-                  width: d.near ? 1.6 : 1,
-                  height: d.len,
-                  animationDuration: `${d.secs}s`,
-                  animationDelay: `${d.delay}s`,
-                  opacity: o,
-                }}
-              />
-            );
-          })}
+      <div className="atm-orb atm-ring" style={{ ...orb(o.moon.x, o.moon.y, G.ring), opacity: a.moon.ringOpacity }} />
+      <div
+        className="atm-orb rounded-full"
+        style={{ ...orb(o.moon.x, o.moon.y, G.moon), opacity: a.moon.coreOpacity, ...moonFace(age, G.moon, south) }}
+      />
+      {a.fog.bands.length > 0 && (
+        <div className="atm-fade absolute inset-0" style={{ opacity: a.fog.opacity }}>
+          {a.fog.bands.map((b, i) => (
+            <div
+              key={i}
+              className="atm-fog"
+              style={{
+                top: `${((b.cy - b.ry) * 100).toFixed(1)}%`,
+                height: `${(b.ry * 200).toFixed(1)}%`,
+                background: b.background,
+                animationDuration: `${b.secs}s`,
+                animationDirection: b.reverse ? "alternate-reverse" : undefined,
+              }}
+            />
+          ))}
         </div>
       )}
-      {storm > 0 && <Lightning opacity={storm} />}
-      {/* Everything sets into the card's ground: the sun and moon, the clouds, the rain. */}
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent via-surface/60 to-surface" />
+      {a.rain > 0.005 && <Rain opacity={a.rain} lite={lite} />}
+      {a.storm > 0 && <Flashes opacity={a.storm} />}
+      <Grain />
+      {/* Everything sets into the card's ground. */}
+      <div className="absolute inset-x-0 bottom-0 h-[70px] bg-linear-to-b from-transparent via-surface/50 to-surface" />
+      {/* The wash behind the title: the sky's own top colour, deeper, only as strong as the words need. */}
+      <div className="absolute inset-0" style={{ background: a.wash }} />
     </div>
   );
 }
 
-type CloudColours = { hi: string; mid: string; bot: string; glow: string; rim: string; base: string };
-type Tone = {
-  layers: Record<CloudBank["layer"], CloudColours & { dx: string }>;
-  shade: string;
-  haze: string;
-  clear: string;
-  wet0: string;
-  wet1: string;
-  wet2: string;
-};
+/** One soft colour field, drifting slowly by transform (held still on a device that can't keep up). */
+const AtmField = memo(function AtmField({ f, aurora }: { f: Field; aurora: boolean }) {
+  return (
+    <div
+      className={cn("atm-field", aurora ? "atm-drift-aurora" : `atm-drift-${f.drift}`)}
+      style={{
+        left: `${((f.cx - f.rx) * 100).toFixed(2)}%`,
+        top: `${((f.cy - f.ry) * 100).toFixed(2)}%`,
+        width: `${(f.rx * 200).toFixed(2)}%`,
+        height: `${(f.ry * 200).toFixed(2)}%`,
+        background: f.background,
+        animationDuration: `${f.secs}s`,
+        animationDirection: f.reverse ? "alternate-reverse" : undefined,
+      }}
+    />
+  );
+});
+
+/** Rain: fine streaks of light falling at a slant in two depths, each one tiled layer moved by transform, and a slow sheen. */
+const Rain = memo(function Rain({ opacity, lite }: { opacity: number; lite: boolean }) {
+  return (
+    <div className="atm-fade absolute inset-0 overflow-hidden" style={{ opacity }}>
+      {!lite && <div className="atm-sheen" />}
+      <div className="atm-rain">
+        <div className="atm-streaks" style={{ backgroundImage: STREAKS_FAR }} />
+        {!lite && <div className="atm-streaks atm-streaks-near" style={{ backgroundImage: STREAKS_NEAR }} />}
+      </div>
+    </div>
+  );
+});
+
+/** A tile of rain streaks as an SVG image, the same every time: `n` lines of light fading in and out down their length. */
+function streakTile(seed: number, n: number, len: [number, number], alpha: [number, number]) {
+  let s = seed;
+  const r = () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+  const lines = Array.from({ length: n }, () => {
+    const x = (r() * 240).toFixed(1);
+    const y = (r() * 300).toFixed(1);
+    const l = (len[0] + r() * (len[1] - len[0])).toFixed(0);
+    const a = (alpha[0] + r() * (alpha[1] - alpha[0])).toFixed(2);
+    return `<rect x='${x}' y='${y}' width='1' height='${l}' rx='0.5' fill='url(%23g)' opacity='${a}'/>`;
+  }).join("");
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='240' height='300'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>` +
+    `<stop offset='0' stop-color='%23e2ecff' stop-opacity='0'/><stop offset='0.6' stop-color='%23e2ecff'/><stop offset='1' stop-color='%23e2ecff' stop-opacity='0'/>` +
+    `</linearGradient></defs>${lines}</svg>`;
+  return `url("data:image/svg+xml,${svg.replace(/</g, "%3C").replace(/>/g, "%3E")}")`;
+}
+const STREAKS_FAR = streakTile(11, 14, [40, 70], [0.25, 0.5]);
+const STREAKS_NEAR = streakTile(29, 8, [70, 120], [0.35, 0.65]);
+
+/** A storm's flashes, out of step with each other. */
+const Flashes = memo(function Flashes({ opacity }: { opacity: number }) {
+  return (
+    <div className="atm-fade absolute inset-0" style={{ opacity }}>
+      <div
+        className="sky-flash"
+        style={{
+          background:
+            "radial-gradient(ellipse 55% 60% at 64% 18%, rgba(226,232,255,0.6), rgba(190,205,255,0.14) 55%, rgba(190,205,255,0) 80%)",
+        }}
+      />
+      <div
+        className="sky-flash sky-later"
+        style={{
+          background:
+            "radial-gradient(ellipse 45% 50% at 22% 14%, rgba(226,232,255,0.45), rgba(190,205,255,0.1) 55%, rgba(190,205,255,0) 80%)",
+        }}
+      />
+    </div>
+  );
+});
 
 /**
- * The clouds' light at a moment: white tops by day, warm at golden hour, moonlit blue-grey at night, slate in a storm,
- * lit toward the sun's (or the moon's) side, with a bright rim where the light catches their edges (warm low in the sky,
- * silver by moonlight, all but gone in a storm) and a darker belly. As strings, so a cloud whose light hasn't changed
- * isn't drawn again.
+ * A fine film grain over the sky, which also keeps its soft gradients from banding: a small tile of noise drawn once
+ * on a canvas and repeated, with no filter or blend mode.
  */
-function cloudTone(t: number, start: number, riseH: number, setH: number, hours: WeatherHour[] | undefined): Tone {
-  const h = (t - start) / 3600;
-  const w = weatherAt(hours, t);
-  const [, mid, low] = skyColours(standardHour(h, riseH, setH), w);
-  const xs = (h - riseH) / (setH - riseH);
-  const night = 24 - (setH - riseH);
-  const xm = h >= setH ? (h - setH) / night : h < riseH ? (h + 24 - setH) / night : -1;
-  const es = Math.sin(Math.PI * xs);
-  const day = clamp01(es * 4 + 0.35);
-  // The rim: sunlight, warmer the lower the sun, or the moon's silver; dulled by a storm.
-  const rimCol = mix([196, 208, 236], mix(WHITE, [255, 200, 140], clamp01(1 - es * 2.2)), day);
-  const rimA = (0.32 + 0.6 * day) * (1 - 0.75 * w.storm);
-
-  let light = mix(mix([75, 85, 107], mid, 0.3), mix(WHITE, low, 0.22), day);
-  let shade = mix(light, [43, 49, 61], 0.5);
-  light = mix(light, [59, 65, 76], w.storm * 0.55);
-  shade = mix(shade, [29, 33, 40], w.storm * 0.6);
-  const dx = `${((clamp01(day > 0.5 ? xs : xm) - 0.5) * 24).toFixed(1)}px`;
-
-  const layer = (l: CloudBank["layer"]) => {
-    let top = light;
-    let bot: Rgb;
-    if (l === "far") {
-      top = mix(light, mid, 0.35);
-      bot = mix(shade, mid, 0.35);
-    } else if (l === "scud") {
-      top = mix(shade, light, 0.3);
-      bot = mix(shade, [18, 20, 26], 0.45);
-    } else bot = mix(shade, low, 0.25 * day * (1 - w.storm));
-    const hi = mix(
-      top,
-      WHITE,
-      (l === "scud" ? 0.08 : l === "far" ? 0.18 : 0.32) * (0.35 + 0.65 * day) * (1 - 0.4 * w.storm),
-    );
-    return {
-      hi: css(hi),
-      mid: css(l === "near" ? mix(top, bot, 0.18) : top),
-      bot: css(bot),
-      glow: cssA(top, 0.5),
-      rim: cssA(rimCol, rimA * (l === "far" ? 0.55 : l === "scud" ? 0.25 : 1)),
-      base: cssA(mix(bot, [10, 12, 18], 0.35), (l === "far" ? 0.12 : l === "scud" ? 0.45 : 0.34) + 0.2 * w.storm),
-      dx,
-    };
-  };
-  return {
-    layers: { far: layer("far"), near: layer("near"), scud: layer("scud") },
-    shade: css(shade),
-    haze: cssA(light, 0.6),
-    clear: cssA(light, 0),
-    wet0: cssA(shade, 0),
-    wet1: cssA(shade, 0.5),
-    wet2: cssA(shade, 0.15),
-  };
+const Grain = memo(function Grain() {
+  const [tile] = useState(grainTile);
+  return tile ? <div className="atm-grain" style={{ backgroundImage: `url(${tile})` }} /> : null;
+});
+let grain: string | null | undefined;
+function grainTile(): string | null {
+  if (grain !== undefined) return grain;
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const x = c.getContext("2d");
+    if (!x) return (grain = null);
+    const img = x.createImageData(128, 128);
+    let s = 7;
+    for (let i = 0; i < img.data.length; i += 4) {
+      s = (s * 16807) % 2147483647;
+      const v = s / 2147483647;
+      const light = v > 0.5;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = light ? 255 : 0;
+      img.data[i + 3] = Math.round(Math.abs(v - 0.5) * 2 * 40);
+    }
+    x.putImageData(img, 0, 0);
+    grain = c.toDataURL("image/png");
+  } catch {
+    grain = null;
+  }
+  return grain;
 }
 
-/** One clock for every cloud, so one that's only just come out is where it would have been all along. */
-const cloudClock = () => performance.now() / 1000;
-
-/**
- * A cloud bank crossing at its own pace (the far ones slowest), puffs lit on top toward the sun or moon and shaded
- * under. Only its opacity changes as the weather comes and goes, which moves nothing that has to be painted again.
- */
-const Cloud = memo(
-  function Cloud({
-    i,
-    c,
-    o,
-    tone,
-    lite,
-  }: {
-    i: number;
-    c: CloudBank;
-    o: number;
-    tone: CloudColours & { dx: string };
-    lite: boolean;
-  }) {
-    const [delay] = useState(() => -((cloudClock() + c.secs * c.start) % c.secs));
-    const vars = {
-      "--hi": tone.hi,
-      "--mid": tone.mid,
-      "--bot": tone.bot,
-      "--rim": tone.rim,
-      "--base": tone.base,
-      "--dx": tone.dx,
-    } as CSSProperties;
-    return (
-      <div
-        className="sky-lane"
-        style={
-          {
-            left: `calc(-330px * ${c.scale} * var(--cs))`,
-            top: `${c.top}%`,
-            opacity: o * (c.layer === "far" ? 0.8 : c.layer === "scud" ? 0.9 : 0.97),
-            "--secs": `${c.secs}s`,
-            "--delay": `${delay.toFixed(1)}s`,
-            "--bob": `${9 + (i % 5) * 1.7}s`,
-            "--bob-delay": `-${(i * 1.3).toFixed(1)}s`,
-            "--start": `${c.start * 100}%`,
-          } as CSSProperties
-        }
-      >
-        <div
-          className="absolute top-0 left-0 h-[120px] w-[300px] origin-top-left"
-          style={{
-            transform: `scale(calc(${c.scale} * var(--cs)))`,
-            filter: lite ? undefined : `blur(${c.layer === "far" ? 2.2 : c.layer === "scud" ? 1.8 : 0.8}px)`,
-          }}
-        >
-          {!lite && <div className={`sky-puff sky-puff-soft sky-cloud-${c.shape}`} style={{ background: tone.glow }} />}
-          <div className={`sky-puff sky-vol sky-cloud-${c.shape}`} style={vars} />
-        </div>
-      </div>
-    );
-  },
-  // The same light in a new object (the next quarter hour, unchanged at midday) isn't a reason to paint it again.
-  (a, b) =>
-    a.o === b.o &&
-    a.lite === b.lite &&
-    a.c === b.c &&
-    a.tone.hi === b.tone.hi &&
-    a.tone.mid === b.tone.mid &&
-    a.tone.bot === b.tone.bot &&
-    a.tone.glow === b.tone.glow &&
-    a.tone.rim === b.tone.rim &&
-    a.tone.base === b.tone.base &&
-    a.tone.dx === b.tone.dx,
-);
+/** How big `ref` is (px), following it as it resizes. */
+function useSize(ref: RefObject<HTMLElement | null>): { w: number; h: number } {
+  const [size, setSize] = useState({ w: 1100, h: 300 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      const w = Math.round(e.contentRect.width);
+      const h = Math.round(e.contentRect.height);
+      setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return size;
+}
 
 /** Two layers of stars twinkling out of step, faded by daylight and cloud. */
 const Stars = memo(function Stars({ opacity }: { opacity: number }) {
@@ -805,51 +738,6 @@ const STARS_B = dots([
   [25, 6, 1],
   [88, 21, 1],
 ]);
-
-/** A storm's flashes and bolts, out of step with each other. */
-const Lightning = memo(function Lightning({ opacity }: { opacity: number }) {
-  return (
-    <div className="sky-fade absolute inset-0" style={{ opacity }}>
-      <div
-        className="sky-flash"
-        style={{
-          background:
-            "radial-gradient(ellipse 55% 60% at 64% 18%, rgba(226,232,255,0.7), rgba(190,205,255,0.16) 55%, rgba(190,205,255,0) 80%)",
-        }}
-      />
-      <div
-        className="sky-flash sky-later"
-        style={{
-          background:
-            "radial-gradient(ellipse 45% 50% at 22% 14%, rgba(226,232,255,0.55), rgba(190,205,255,0.12) 55%, rgba(190,205,255,0) 80%)",
-        }}
-      />
-      <svg className="sky-bolt left-[62%] h-[240px] w-24 max-sm:h-[180px] max-sm:w-[72px]" viewBox="0 0 120 300">
-        <path
-          d="M70 0 58 70l14 4-26 76 14 4-26 86M58 70 40 104M46 150l-16 28"
-          fill="none"
-          stroke="#f4f6ff"
-          strokeWidth={2.2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      </svg>
-      <svg
-        className="sky-bolt sky-later left-[30%] h-[180px] w-[72px] max-sm:h-[130px] max-sm:w-[52px]"
-        viewBox="0 0 120 300"
-      >
-        <path
-          d="M50 0 62 60l-14 6 22 74-14 6 18 74M62 60l18 32"
-          fill="none"
-          stroke="#f4f6ff"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      </svg>
-    </div>
-  );
-});
 
 // ------------------------------------------------------------------------------------------------- the chart
 
