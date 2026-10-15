@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { SolarReadingsPage } from "~/features/solar/components/sections/ReadingsPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Solar's detail now sits on the Solar page itself: old links and bookmarks go there. */
 export const Route = createFileRoute("/_app/solar_/readings")({
-  head: () => ({ meta: [{ title: "Readings · Solar · WattsMyPower" }] }),
-  component: SolarReadingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/solar", replace: true });
+  },
 });

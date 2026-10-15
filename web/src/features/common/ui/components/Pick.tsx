@@ -3,8 +3,8 @@ import { TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
 
 /*
- * Pieces the Performance and Forecast pages share: picking a bar or day to read it out in the card's own header, in
- * place of a tooltip.
+ * A card that answers as you point (docs/design-language.md): picking a bar or day reads it out in the card's own
+ * header, in place of a tooltip.
  */
 
 /**
@@ -35,7 +35,9 @@ export const dim = (picked: unknown, me: unknown) =>
 
 /**
  * A card's header that reads out what's picked: the title, a muted line under it (announced as it changes), and a
- * figure in the corner with what it is above it and, beside it, an optional change chip.
+ * figure in the corner with what it is above it and, beside it, an optional change chip. It keeps the same height
+ * whatever it reads out (room for two lines under the title, and for the chip), so the chart under it never moves:
+ * a chart that moved from under the pointer would lose it, put the header back, and flicker.
  */
 export function PickHead({
   id,
@@ -59,13 +61,13 @@ export function PickHead({
         id={id}
         title={title}
         sub={
-          <span aria-live="polite" className="tabular-nums">
+          <span aria-live="polite" className="block min-h-10 tabular-nums">
             {sub}
           </span>
         }
       />
       {value != null && (
-        <div className="flex shrink-0 flex-col items-end gap-0.5">
+        <div className="flex min-h-[52px] shrink-0 flex-col items-end gap-0.5 max-sm:min-h-[76px]">
           <span className="text-xs whitespace-nowrap text-ink-faint">{label}</span>
           <span className="flex items-center gap-2 max-sm:flex-col max-sm:items-end max-sm:gap-1">
             {chip && <span className="max-sm:order-1">{chip}</span>}

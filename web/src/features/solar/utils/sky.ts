@@ -139,7 +139,7 @@ export type CloudBank = {
   scale: number;
   from: number;
   layer: "far" | "near" | "scud";
-  shape: 0 | 1 | 2;
+  shape: 0 | 1 | 2 | 3;
   secs: number;
   start: number;
 };
@@ -153,13 +153,13 @@ export const CLOUDS: CloudBank[] = [
   { top: 11, scale: 0.7, from: 0.75, layer: "far", shape: 2, secs: 200, start: 0.6 },
   { top: 18, scale: 1.5, from: 0.03, layer: "near", shape: 0, secs: 105, start: 0.15 },
   { top: 26, scale: 1.3, from: 0.06, layer: "near", shape: 2, secs: 120, start: 0.56 },
-  { top: 13, scale: 1.8, from: 0.26, layer: "near", shape: 1, secs: 95, start: 0.82 },
+  { top: 10, scale: 1.8, from: 0.26, layer: "near", shape: 3, secs: 95, start: 0.82 },
   { top: 30, scale: 1.4, from: 0.36, layer: "near", shape: 0, secs: 115, start: 0.36 },
   { top: 21, scale: 2.0, from: 0.48, layer: "near", shape: 1, secs: 88, start: 0.04 },
   { top: 34, scale: 1.7, from: 0.58, layer: "near", shape: 0, secs: 100, start: 0.7 },
   { top: 27, scale: 2.2, from: 0.7, layer: "near", shape: 1, secs: 90, start: 0.44 },
   { top: 38, scale: 1.9, from: 0.8, layer: "near", shape: 2, secs: 82, start: 0.24 },
-  { top: 19, scale: 2.4, from: 0.9, layer: "near", shape: 0, secs: 78, start: 0.9 },
+  { top: 16, scale: 2.4, from: 0.9, layer: "near", shape: 3, secs: 78, start: 0.9 },
   { top: 40, scale: 1.6, from: 0, layer: "scud", shape: 1, secs: 34, start: 0.2 },
   { top: 47, scale: 1.3, from: 0, layer: "scud", shape: 2, secs: 27, start: 0.62 },
   { top: 36, scale: 1.9, from: 0, layer: "scud", shape: 1, secs: 40, start: 0.86 },

@@ -1,17 +1,18 @@
-import { Link } from "@tanstack/react-router";
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { useEffects } from "~/features/common/display/hooks";
-import { hhmm } from "~/features/common/formatting/utils/date";
-import { DASH, kW, kWh, signedPct } from "~/features/common/formatting/utils/number";
+import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
+import { DASH, kW, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
+import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
+import { hourOf } from "~/features/common/time/utils";
+import { HeroFigures, HeroLead, HeroLive, HeroStat, HeroStats, HeroTop } from "~/features/common/ui/components/Hero";
 import { Icon } from "~/features/common/ui/components/Icon";
-import { cn } from "~/features/common/ui/utils";
 import { useFahrenheit } from "~/features/common/weather/hooks";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { codeName, degrees, hourIcon } from "~/features/common/weather/utils";
-import { SECTIONS, type SectionKey } from "~/features/solar/components/sections/SolarSection";
+import { SOLAR } from "~/features/solar/components/parts";
+import { Pace } from "~/features/solar/components/SolarHero";
 import { expectedToday, place, solarNow, solarToday } from "~/features/solar/utils";
 import {
   clamp01,
@@ -38,10 +39,12 @@ const DAY = 86_400;
 const WHITE: Rgb = [255, 255, 255];
 
 /**
- * The Solar page's top: the sky as it is now (or at any moment of today, scrubbed along the chart or played through),
- * edge to edge at every width with the page's title on it, the sun or moon where they are, the day's cloud, rain and
- * storms coming and going, and over it the figure the moment's about, a line on how the day's going, and the day's
- * solar against what was expected.
+ * The Solar page's title and its top card. The card's top is the sky as it is now (or at any moment of today, scrubbed
+ * along the chart or played through): the sun or moon where they are, the day's cloud, rain and storms coming and
+ * going, the weather in the corner and, on a dark wash so it reads in any weather, a line on how the day's going.
+ * The sky fades into the card's solid ground, where the figures sit as on every page's top card (the Hero kit): what's
+ * been made and what's being made at the moment shown, four figures that round the day out, its pace, and the day's
+ * solar against what was expected, which moves the sky as you drag along it.
  */
 export function SolarSky({
   p,
@@ -112,6 +115,7 @@ export function SolarSky({
   const live = useMemo(() => solarNow(p, s, f, now), [p, s, f, now]);
   const today = useMemo(() => solarToday({ p, s, f, acc, series, weather, now }), [p, s, f, acc, series, weather, now]);
   const expected = useMemo(() => expectedToday(weather, f, now), [weather, f, now]);
+  const best = useMemo(() => bestHour(series, now), [series, now]);
   const at = place(s);
   const view = scrub ?? now;
   const ahead = view > now + 60;
@@ -123,167 +127,139 @@ export function SolarSky({
   const pvAt = ahead ? valueAt(expected, view) : seriesAt(series, view);
   const madeBy = ahead ? (today.made ?? 0) + expectedBetween(expected, now, view) : madeUntil(series, view);
 
-  const lead = leadFigure({ scrub, ahead, view, live, today, pvAt, now, rise, set });
-  const second = secondFigure({ scrub, ahead, live, today, madeBy, now, rise, set });
+  const lead = leadFigure({ scrub, ahead, view, today, madeBy, now, rise });
+  const second = secondFigure({ scrub, ahead, view, live, today, pvAt, now, rise });
   const [line, more] = story({ today, now, rise, set, hours: weather?.hours, usual });
-  const pace = today.made != null && today.heading ? Math.min(1, today.made / today.heading) : null;
+  // Nothing more expected today: the sun's down, or the forecast has no more to come.
+  const done = today.made != null && today.heading != null && today.heading - today.made < 0.05;
+  const vsUsual =
+    usual && (now > set ? today.made : today.heading) != null
+      ? (now > set ? today.made! : today.heading!) / usual - 1
+      : null;
   const playLabel = playing ? "Pause" : scrub != null && scrub >= start + DAY - 120 ? "Play again" : "Play the day";
 
   return (
-    <section
-      ref={root}
-      aria-label="Solar now"
-      data-still={onScreen ? undefined : ""}
-      className={cn(
-        "sky relative isolate flex min-h-[760px] flex-col overflow-hidden text-white md:min-h-[700px]",
-        // Edge to edge at every width: out past the page's side padding to the nav (or the screen's edge), and up over
-        // the page's top padding and, below md, under the phone's header (16 + 40 + 8 px and its hairline, see TopBar),
-        // which is see-through at the top. The page hides its row of section pills above it (app.css).
-        "mx-[calc((100%_-_(100vw_-_var(--nav-w)))/2)] -mt-[89px] sm:-mt-[101px] md:-mt-10",
-        "[--cs:1] max-sm:[--cs:0.55]",
-      )}
-    >
-      <SkyScene
-        view={view}
-        start={start}
-        rise={rise}
-        set={set}
-        hours={weather?.hours}
-        south={(at?.lat ?? -27) < 0}
-        lite={lite}
-      />
-
-      <div className="relative z-1 mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-8 pt-10 max-md:gap-4 max-md:pt-[73px] max-sm:px-5">
-        <div className="flex items-start justify-between gap-6 max-md:flex-col-reverse max-md:gap-1">
-          <header className="flex min-w-0 flex-col gap-1 max-md:gap-0">
-            <h1 className="text-white">Solar</h1>
-            <p className="font-display text-base leading-[22px] font-medium text-white/80 tabular-nums max-md:text-sm">
-              {subLine(live, today, hour, now, rise, set)}
-            </p>
-          </header>
-          <div className="flex flex-none items-center gap-2 max-md:self-end">
+    <>
+      <PageHeader
+        title="Solar"
+        sub={subLine(live, today, hour, now, rise, set)}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
             {scrub != null && (
               <button
                 type="button"
                 onClick={backToNow}
-                className="sky-float min-h-10 rounded-full border border-white/15 px-4 text-[13px] text-white max-md:hidden"
+                className="min-h-10 rounded-full border border-line bg-fg/4 px-4 text-[13px] text-ink tabular-nums transition-colors hover:bg-fg/8"
               >
-                Back to now
+                Back to now · {hhmm(now)}
               </button>
             )}
             <button
               type="button"
               onClick={play}
-              aria-label={playLabel}
-              className="sky-float flex min-h-10 items-center gap-2 rounded-full border border-white/15 pr-4 pl-3.5 text-[13px] text-white max-md:size-10 max-md:justify-center max-md:p-0"
+              className="flex min-h-10 items-center gap-2 rounded-full border border-line bg-fg/4 pr-4 pl-3.5 text-[13px] text-ink transition-colors hover:bg-fg/8"
             >
               <Icon name={playing ? "pause" : "play"} size={13} className="text-solar" />
-              <span className="max-md:hidden">{playLabel}</span>
+              {playLabel}
             </button>
-            <div className="sky-float flex min-h-10 items-center gap-2 rounded-full border border-white/10 pr-4 pl-3 text-sm tabular-nums max-md:text-[13px]">
-              {hour?.code != null && (
-                <Icon
-                  name={hourIcon({ code: hour.code, is_day: hour.is_day ?? 1 })}
-                  size={18}
-                  className="text-white/85"
-                />
-              )}
-              <span>{hour?.code != null ? codeName(hour.code) : "Sky"}</span>
-              {hour?.temp != null && <span className="text-white/60">{degrees(hour.temp, fahrenheit)}</span>}
-              <span className="text-white/55">· {hhmm(view)}</span>
-            </div>
-            <AccountAvatar className="sky-float border-white/15 text-white/85 hover:border-white/30 hover:text-white max-md:hidden" />
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-start justify-between gap-8 max-md:gap-4">
-          <div className="flex max-w-[640px] min-w-0 flex-col gap-1.5">
-            <span className="flex items-center gap-2 text-sm text-white/85 tabular-nums">
-              {lead.live && (
-                <span className="size-2 animate-pulse rounded-full bg-solar shadow-[0_0_10px] shadow-solar" />
-              )}
-              {lead.label}
-            </span>
-            <span className="flex items-baseline gap-2.5 font-display leading-none font-extrabold tracking-[-0.03em] tabular-nums [text-shadow:0_2px_30px_rgb(0_0_0/0.25)]">
-              <span className="text-[112px] max-md:text-[84px]">{lead.value}</span>
-              <span className="text-4xl font-bold tracking-normal text-white/70 max-md:text-[28px]">{lead.unit}</span>
-            </span>
-            <p className="mt-2.5 text-xl leading-snug font-medium text-pretty [text-shadow:0_1px_14px_rgb(0_0_0/0.25)] max-md:mt-2 max-md:text-[17px]">
-              {line} <span className="font-normal text-white/80">{more}</span>
+        }
+      />
+      <section
+        ref={root}
+        aria-label="Solar now"
+        data-still={onScreen ? undefined : ""}
+        className="sky relative isolate flex flex-col overflow-hidden rounded-[28px] border border-line-subtle bg-surface max-sm:rounded-3xl"
+      >
+        <div className="relative h-[300px] flex-none overflow-hidden text-white [--cs:0.8] max-sm:h-[240px] max-sm:[--cs:0.5]">
+          <SkyScene
+            view={view}
+            start={start}
+            rise={rise}
+            set={set}
+            hours={weather?.hours}
+            south={(at?.lat ?? -27) < 0}
+            lite={lite}
+          />
+          <div className="sky-float absolute top-5 right-5 flex min-h-9 items-center gap-2 rounded-full border border-white/12 py-1.5 pr-3.5 pl-2.5 text-[13px] tabular-nums max-sm:top-3.5 max-sm:right-3.5">
+            {hour?.code != null && (
+              <Icon
+                name={hourIcon({ code: hour.code, is_day: hour.is_day ?? 1 })}
+                size={18}
+                className="text-white/85"
+              />
+            )}
+            <span>{hour?.code != null ? codeName(hour.code) : "Sky"}</span>
+            {hour?.temp != null && <span className="text-white/80">{degrees(hour.temp, fahrenheit)}</span>}
+            <span className="text-white/70">· {hhmm(view)}</span>
+          </div>
+          {/* A dark wash under the line, soft-edged, so it reads in any weather: bright cloud, the sun, a storm. */}
+          <div className="absolute bottom-[34px] left-7 max-w-[600px] max-sm:right-5 max-sm:bottom-6 max-sm:left-5">
+            <div aria-hidden className="absolute -inset-x-10 -inset-y-6 bg-[rgb(8_10_16/0.62)] blur-[22px]" />
+            <p
+              aria-live="polite"
+              className="relative text-[22px] leading-7 font-semibold tracking-[-0.005em] text-pretty text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.35)] max-sm:text-lg max-sm:leading-6"
+            >
+              {line}
             </p>
           </div>
-
-          <div className="flex w-[260px] flex-col gap-2.5 max-md:w-full max-md:gap-2">
-            {/* On a phone the second figure and the pace share a card. */}
-            <div className="sky-float flex items-center justify-between gap-3 rounded-[18px] border border-white/10 px-3.5 py-3 md:hidden">
-              <div className="min-w-0">
-                <div className="text-xs text-white/65">{second.label}</div>
-                <div className="text-[22px] leading-7 font-light tabular-nums">
-                  {second.value} <span className="text-[13px] text-white/55">{second.unit}</span>
-                </div>
-              </div>
-              {pace != null && (
-                <div className="w-[130px] flex-none">
-                  <div className="flex justify-between text-xs text-white/65">
-                    <span>Pace</span>
-                    <span className="text-solar tabular-nums">{Math.round(pace * 100)}%</span>
-                  </div>
-                  <PaceBar pace={pace} className="mt-1.5 h-1.5" />
-                </div>
-              )}
-            </div>
-            <div className="sky-float rounded-[20px] border border-white/10 px-[18px] py-4 max-md:hidden">
-              <div className="text-[13px] text-white/65">{second.label}</div>
-              <div className="mt-0.5 text-[28px] leading-8 font-light tabular-nums">
-                {second.value} <span className="text-[15px] text-white/55">{second.unit}</span>
-              </div>
-            </div>
-            {pace != null && (
-              <div className="sky-float rounded-[20px] border border-white/10 px-[18px] py-4 max-md:hidden">
-                <div className="flex justify-between text-[13px] text-white/65">
-                  <span>Today's pace</span>
-                  <span className="text-solar tabular-nums">{Math.round(pace * 100)}%</span>
-                </div>
-                <PaceBar pace={pace} className="mt-2.5 h-2" />
-                <div className="mt-2 text-xs text-white/55 tabular-nums">
-                  {kWh(today.made)} of about {kWh(today.heading)}
-                </div>
-              </div>
-            )}
-            <div className="flex flex-col gap-1.5 max-md:flex-row max-md:gap-2">
-              <SkyLink to="strings">Strings and inverters</SkyLink>
-              <SkyLink to="readings">Every reading</SkyLink>
-            </div>
-          </div>
         </div>
-      </div>
 
-      <SkyChart
-        series={series}
-        expected={expected}
-        hours={weather?.hours}
-        start={start}
-        now={now}
-        view={view}
-        rise={rise}
-        set={set}
-        array={s?.pv_kw ?? null}
-        onScrub={(t) => {
-          stop();
-          setScrub(t);
-        }}
-      />
-      {/* On a phone the way back sits over the chart's right, where the thumb is. */}
-      {scrub != null && (
-        <button
-          type="button"
-          onClick={backToNow}
-          className="sky-float absolute right-3.5 bottom-[190px] z-2 min-h-10 rounded-full border border-white/15 px-3.5 text-[13px] text-white tabular-nums md:hidden"
-        >
-          Back to now · {hhmm(now)}
-        </button>
-      )}
-    </section>
+        <div className="@container relative flex flex-col gap-6 p-7 max-sm:p-5">
+          <HeroTop>
+            <HeroFigures>
+              <HeroLead label={lead.label} value={lead.value} unit={lead.unit} sub={more || undefined} />
+              <HeroLive
+                label={second.label}
+                on={second.live}
+                color={SOLAR}
+                value={second.value}
+                unit={second.unit}
+                sub={second.sub}
+              />
+            </HeroFigures>
+            <HeroStats>
+              <HeroStat
+                label="Peak today"
+                value={today.peak ? kW(today.peak.w) : DASH}
+                sub={today.peak ? `At ${hhmm(today.peak.t)}` : "Not yet"}
+              />
+              <HeroStat
+                label="Best hour"
+                value={best ? `${hourLabel(best.h)}–${hourLabel(best.h + 1)}` : DASH}
+                sub={best ? `${kWh(best.kwh)} in the hour` : "Not yet"}
+              />
+              <HeroStat
+                label="Against a usual day"
+                value={vsUsual != null ? (Math.abs(vsUsual) < 0.04 ? "About usual" : signedPct(vsUsual)) : DASH}
+                sub={usual ? `Usual is ${kWh(usual)}` : "Needs a few days"}
+              />
+              <HeroStat
+                label="Tomorrow"
+                value={today.tomorrow ? kWh(today.tomorrow.pv_kwh) : DASH}
+                sub={today.tomorrow?.code != null ? codeName(today.tomorrow.code) : "Forecast"}
+              />
+            </HeroStats>
+          </HeroTop>
+          <Pace today={today} done={done} />
+          <SkyChart
+            series={series}
+            expected={expected}
+            hours={weather?.hours}
+            start={start}
+            now={now}
+            view={view}
+            rise={rise}
+            set={set}
+            array={s?.pv_kw ?? null}
+            onScrub={(t) => {
+              stop();
+              setScrub(t);
+            }}
+          />
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -300,36 +276,32 @@ function useOnScreen(ref: RefObject<HTMLElement | null>): boolean {
   return on;
 }
 
-/** The day's pace as a bar, sunrise orange to solar gold. */
-function PaceBar({ pace, className }: { pace: number; className: string }) {
-  return (
-    <div className={cn("overflow-hidden rounded-full bg-white/10", className)}>
-      <div
-        className="h-full rounded-full bg-linear-to-r from-solar-deep to-solar transition-[width] duration-700 ease-out-soft"
-        style={{ width: `${pace * 100}%` }}
-      />
-    </div>
-  );
-}
-
-/** A way into one of Solar's sections, floating on the sky. */
-function SkyLink({ to, children }: { to: SectionKey; children: ReactNode }) {
-  const s = SECTIONS.find((x) => x.key === to)!;
-  return (
-    <Link
-      to={s.to}
-      className="sky-float flex min-h-[38px] items-center justify-between gap-2 rounded-[14px] border border-white/10 px-3.5 py-2 text-[13px] whitespace-nowrap text-white/80 no-underline transition-colors hover:border-white/20 hover:text-white max-md:min-h-11 max-md:flex-1 max-md:px-3"
-    >
-      {children}
-      <Icon name="chevR" size={14} />
-    </Link>
-  );
-}
-
 // ------------------------------------------------------------------------------------------------- the figures
 
-/** The big figure: what's being made now (or at the moment scrubbed to), or the day's total once the sun's down. */
+const split = (s: string) => {
+  const [value, unit] = s.split(" ");
+  return { value, unit: unit ?? "" };
+};
+
+/** The lead figure: made by the moment shown, made today, or what's expected before the sun's up. */
 function leadFigure(x: {
+  scrub: number | null;
+  ahead: boolean;
+  view: number;
+  today: Today;
+  madeBy: number;
+  now: number;
+  rise: number;
+}) {
+  if (x.scrub != null)
+    return { label: `${x.ahead ? "Likely made by" : "Made by"} ${hhmm(x.view)}`, ...split(kWh(x.madeBy)) };
+  if (x.now < x.rise && !x.today.made && x.today.heading != null)
+    return { label: "Expected today", ...split(kWh(x.today.heading)) };
+  return { label: "Made today", ...(x.today.made != null ? split(kWh(x.today.made)) : { value: DASH, unit: "" }) };
+}
+
+/** The figure beside it: what's being made at the moment shown, or when the sun's up, or tomorrow's forecast. */
+function secondFigure(x: {
   scrub: number | null;
   ahead: boolean;
   view: number;
@@ -338,43 +310,26 @@ function leadFigure(x: {
   pvAt: number | null;
   now: number;
   rise: number;
-  set: number;
 }) {
-  const split = (s: string) => {
-    const [value, unit] = s.split(" ");
-    return { value, unit: unit ?? "" };
-  };
   if (x.scrub != null)
-    return { label: `${x.ahead ? "Expected at" : "At"} ${hhmm(x.view)}`, live: false, ...split(kW(x.pvAt ?? 0)) };
-  if (x.live.producing) return { label: "Generating now", live: true, ...split(kW(x.live.pv)) };
-  if (x.now < x.rise && x.today.heading != null)
-    return { label: "Expected today", live: false, ...split(kWh(x.today.heading)) };
-  return {
-    label: "Made today",
-    live: false,
-    ...(x.today.made != null ? split(kWh(x.today.made)) : { value: DASH, unit: "" }),
-  };
-}
-
-/** The figure beside it: made by the moment shown, made so far, or tomorrow's forecast. */
-function secondFigure(x: {
-  scrub: number | null;
-  ahead: boolean;
-  live: ReturnType<typeof solarNow>;
-  today: Today;
-  madeBy: number;
-  now: number;
-  rise: number;
-  set: number;
-}) {
-  const split = (label: string, s: string) => {
-    const [value, unit] = s.split(" ");
-    return { label, value, unit: unit ?? "" };
-  };
-  if (x.scrub != null) return split(x.ahead ? "Likely made by then" : "Made by then", kWh(x.madeBy));
-  if (x.live.producing) return split("Made so far", kWh(x.today.made));
-  if (x.now < x.rise) return split("Sun up at", hhmm(x.rise));
-  return split("Tomorrow, expected", kWh(x.today.tomorrow?.pv_kwh));
+    return {
+      label: `${x.ahead ? "Expected at" : "At"} ${hhmm(x.view)}`,
+      live: false,
+      sub: undefined,
+      ...split(kW(x.pvAt ?? 0)),
+    };
+  if (x.live.producing)
+    return {
+      label: "Generating now",
+      live: true,
+      sub:
+        x.live.array && x.live.share != null
+          ? `${pct(x.live.share * 100)} of your ${x.live.array} kW array`
+          : undefined,
+      ...split(kW(x.live.pv)),
+    };
+  if (x.now < x.rise) return { label: "Sun up at", live: false, sub: undefined, ...split(hhmm(x.rise)) };
+  return { label: "Panels resting", live: false, sub: undefined, ...split(kW(0)) };
 }
 
 /** The line under the page's title: what's happening, numbers first. */
@@ -391,6 +346,23 @@ function subLine(
   if (now > set && today.made != null) return `${kWh(today.made)} today · done for the day`;
   if (now < rise) return `Sun's up at ${hhmm(rise)}`;
   return "Panels resting";
+}
+
+/** The clock hour that's made the most so far today, from the five-minute readings, and its kWh. */
+function bestHour(series: HistorySeries | undefined, now: number): { h: number; kwh: number } | null {
+  const ts = series?.t ?? [];
+  const v = series?.pv_power ?? [];
+  const hours = new Map<number, number>();
+  for (let i = 0; i < ts.length - 1; i++) {
+    if (ts[i] >= now) break;
+    const w = v[i];
+    if (w == null) continue;
+    const h = hourOf(ts[i]);
+    hours.set(h, (hours.get(h) ?? 0) + (w * (ts[i + 1] - ts[i])) / 3_600_000);
+  }
+  let best: { h: number; kwh: number } | null = null;
+  for (const [h, kwh] of hours) if (kwh > 0.05 && (!best || kwh > best.kwh)) best = { h, kwh };
+  return best;
 }
 
 /** The first rain or storm still to come today in daylight, as "Showers likely from 3 pm" (or nothing). */
@@ -500,8 +472,8 @@ function expectedBetween(pts: Pt[], from: number, to: number): number {
 const LITE_CLOUDS = CLOUDS.filter((_, i) => i % 2 === 0);
 
 /**
- * The sky at `view`: its colours for the time of day, stars, the sun and moon on their arcs (setting below the
- * horizon rather than vanishing), cloud banks drifting across at their own speeds, an overcast layer, rain, and
+ * The sky at `view`: its colours for the time of day, stars, the sun and moon on their arcs (setting into the card's
+ * ground rather than vanishing), cloud banks drifting across at their own speeds, an overcast layer, rain, and
  * lightning in a storm. Everything follows the weather eased between hours, so it comes and goes smoothly.
  *
  * It's drawn to be cheap to keep moving: only the cloud, rain and lightning the weather calls for are there at all,
@@ -553,13 +525,13 @@ function SkyScene({
       <div
         className="absolute inset-0"
         style={{
-          background: `linear-gradient(180deg, ${css(top)} 0%, ${css(mid)} 46%, ${css(low)} 76%, var(--color-canvas) 100%)`,
+          background: `linear-gradient(180deg, ${css(top)} 0%, ${css(mid)} 50%, ${css(low)} 80%, var(--color-surface) 100%)`,
         }}
       />
       {stars > 0.01 && <Stars opacity={stars} />}
-      <div className="absolute inset-x-0 top-0 h-[76%] overflow-hidden [mask-image:linear-gradient(to_bottom,#000_78%,transparent)]">
+      <div className="absolute inset-0 overflow-hidden">
         <span
-          className="absolute size-[520px] rounded-full max-sm:size-[300px]"
+          className="absolute size-[420px] rounded-full max-sm:size-[300px]"
           style={{
             ...arc(xs, es),
             opacity: clamp01(es * 3 + 0.4) * (0.95 - 0.45 * w.cover),
@@ -568,16 +540,16 @@ function SkyScene({
           }}
         />
         <span
-          className="absolute size-[62px] -translate-x-1/2 -translate-y-1/2 rounded-full max-sm:size-11"
+          className="absolute size-14 -translate-x-1/2 -translate-y-1/2 rounded-full max-sm:size-11"
           style={{
             ...arc(xs, es),
             opacity: es > -0.2 ? 1 - 0.9 * w.cover : 0,
             background: `radial-gradient(circle, ${sunCol} 0 56%, rgba(255,226,170,0.55) 72%, rgba(255,214,150,0) 100%)`,
-            boxShadow: `0 0 44px 14px rgba(255,214,150,${0.5 - 0.35 * w.cover})`,
+            boxShadow: `0 0 40px 12px rgba(255,214,150,${0.5 - 0.35 * w.cover})`,
           }}
         />
         <span
-          className="absolute size-[340px] rounded-full max-sm:size-[210px]"
+          className="absolute size-[280px] rounded-full max-sm:size-[210px]"
           style={{
             ...arc(xm, em),
             opacity: clamp01(em * 3 + 0.3) * (1 - day) * (0.9 - 0.5 * w.cover),
@@ -587,8 +559,8 @@ function SkyScene({
           }}
         />
         <span
-          className="absolute size-[50px] -translate-x-1/2 -translate-y-1/2 rounded-full max-sm:size-9"
-          style={{ ...arc(xm, em), opacity: (1 - day) * (1 - 0.85 * w.cover), ...moonFace(age, 50, south) }}
+          className="absolute size-11 -translate-x-1/2 -translate-y-1/2 rounded-full max-sm:size-9"
+          style={{ ...arc(xm, em), opacity: (1 - day) * (1 - 0.85 * w.cover), ...moonFace(age, 44, south) }}
         />
       </div>
       <div
@@ -636,11 +608,13 @@ function SkyScene({
         </div>
       )}
       {storm > 0 && <Lightning opacity={storm} />}
+      {/* Everything sets into the card's ground: the sun and moon, the clouds, the rain. */}
+      <div className="absolute inset-x-0 bottom-0 h-[60px] bg-linear-to-b from-transparent to-surface" />
     </div>
   );
 }
 
-type CloudColours = { hi: string; mid: string; bot: string; glow: string };
+type CloudColours = { hi: string; mid: string; bot: string; glow: string; rim: string; base: string };
 type Tone = {
   layers: Record<CloudBank["layer"], CloudColours & { dx: string }>;
   shade: string;
@@ -653,7 +627,9 @@ type Tone = {
 
 /**
  * The clouds' light at a moment: white tops by day, warm at golden hour, moonlit blue-grey at night, slate in a storm,
- * lit toward the sun's (or the moon's) side. As strings, so a cloud whose light hasn't changed isn't drawn again.
+ * lit toward the sun's (or the moon's) side, with a bright rim where the light catches their edges (warm low in the sky,
+ * silver by moonlight, all but gone in a storm) and a darker belly. As strings, so a cloud whose light hasn't changed
+ * isn't drawn again.
  */
 function cloudTone(t: number, start: number, riseH: number, setH: number, hours: WeatherHour[] | undefined): Tone {
   const h = (t - start) / 3600;
@@ -662,7 +638,11 @@ function cloudTone(t: number, start: number, riseH: number, setH: number, hours:
   const xs = (h - riseH) / (setH - riseH);
   const night = 24 - (setH - riseH);
   const xm = h >= setH ? (h - setH) / night : h < riseH ? (h + 24 - setH) / night : -1;
-  const day = clamp01(Math.sin(Math.PI * xs) * 4 + 0.35);
+  const es = Math.sin(Math.PI * xs);
+  const day = clamp01(es * 4 + 0.35);
+  // The rim: sunlight, warmer the lower the sun, or the moon's silver; dulled by a storm.
+  const rimCol = mix([196, 208, 236], mix(WHITE, [255, 200, 140], clamp01(1 - es * 2.2)), day);
+  const rimA = (0.32 + 0.6 * day) * (1 - 0.75 * w.storm);
 
   let light = mix(mix([75, 85, 107], mid, 0.3), mix(WHITE, low, 0.22), day);
   let shade = mix(light, [43, 49, 61], 0.5);
@@ -683,13 +663,15 @@ function cloudTone(t: number, start: number, riseH: number, setH: number, hours:
     const hi = mix(
       top,
       WHITE,
-      (l === "scud" ? 0.08 : l === "far" ? 0.2 : 0.45) * (0.35 + 0.65 * day) * (1 - 0.4 * w.storm),
+      (l === "scud" ? 0.08 : l === "far" ? 0.18 : 0.32) * (0.35 + 0.65 * day) * (1 - 0.4 * w.storm),
     );
     return {
       hi: css(hi),
       mid: css(l === "near" ? mix(top, bot, 0.18) : top),
       bot: css(bot),
       glow: cssA(top, 0.5),
+      rim: cssA(rimCol, rimA * (l === "far" ? 0.55 : l === "scud" ? 0.25 : 1)),
+      base: cssA(mix(bot, [10, 12, 18], 0.35), (l === "far" ? 0.12 : l === "scud" ? 0.45 : 0.34) + 0.2 * w.storm),
       dx,
     };
   };
@@ -726,7 +708,14 @@ const Cloud = memo(
     lite: boolean;
   }) {
     const [delay] = useState(() => -((cloudClock() + c.secs * c.start) % c.secs));
-    const vars = { "--hi": tone.hi, "--mid": tone.mid, "--bot": tone.bot, "--dx": tone.dx } as CSSProperties;
+    const vars = {
+      "--hi": tone.hi,
+      "--mid": tone.mid,
+      "--bot": tone.bot,
+      "--rim": tone.rim,
+      "--base": tone.base,
+      "--dx": tone.dx,
+    } as CSSProperties;
     return (
       <div
         className="sky-lane"
@@ -765,6 +754,8 @@ const Cloud = memo(
     a.tone.mid === b.tone.mid &&
     a.tone.bot === b.tone.bot &&
     a.tone.glow === b.tone.glow &&
+    a.tone.rim === b.tone.rim &&
+    a.tone.base === b.tone.base &&
     a.tone.dx === b.tone.dx,
 );
 
@@ -817,7 +808,7 @@ const Lightning = memo(function Lightning({ opacity }: { opacity: number }) {
             "radial-gradient(ellipse 45% 50% at 22% 14%, rgba(226,232,255,0.55), rgba(190,205,255,0.12) 55%, rgba(190,205,255,0) 80%)",
         }}
       />
-      <svg className="sky-bolt left-[60%] h-[300px] w-[120px] max-sm:h-[200px] max-sm:w-20" viewBox="0 0 120 300">
+      <svg className="sky-bolt left-[62%] h-[240px] w-24 max-sm:h-[180px] max-sm:w-[72px]" viewBox="0 0 120 300">
         <path
           d="M70 0 58 70l14 4-26 76 14 4-26 86M58 70 40 104M46 150l-16 28"
           fill="none"
@@ -828,7 +819,7 @@ const Lightning = memo(function Lightning({ opacity }: { opacity: number }) {
         />
       </svg>
       <svg
-        className="sky-bolt sky-later left-[18%] h-[225px] w-[90px] max-sm:h-[150px] max-sm:w-[60px]"
+        className="sky-bolt sky-later left-[30%] h-[180px] w-[72px] max-sm:h-[130px] max-sm:w-[52px]"
         viewBox="0 0 120 300"
       >
         <path
@@ -850,8 +841,8 @@ const W = 1000;
 const H = 220;
 
 /**
- * The day's solar against what was expected, midnight to midnight, along the foot of the sky: the hour's weather
- * above it every three hours, sunrise and sunset marked. Drag along it (or use the arrow keys) to move the whole
+ * The day's solar against what was expected, midnight to midnight, at the foot of the card: the hour's weather above
+ * it every three hours, sunrise and sunset marked. Drag along it (or use the arrow keys) to move the whole
  * scene to that moment. The lines are drawn once per reading; scrubbing only moves the marker.
  */
 function SkyChart({
@@ -899,14 +890,14 @@ function SkyChart({
   const Y = (x: number) => H - (x / top) * (H - 24);
 
   return (
-    <div className="relative z-1 mt-auto h-[290px] max-md:h-[220px]">
+    <div className="relative h-[230px] max-sm:h-[190px]">
       {icons.map(
         (x) =>
           x.icon && (
             <span
               key={x.t}
               aria-hidden
-              className="sky-fade absolute top-1 -translate-x-1/2 text-white"
+              className="sky-fade absolute top-1 -translate-x-1/2 text-ink-muted"
               style={{ left: pct(x.t), opacity: Math.abs(view - x.t) <= 5400 ? 1 : 0.45 }}
             >
               <Icon name={x.icon} size={18} />
@@ -917,13 +908,13 @@ function SkyChart({
         <span
           key={i}
           aria-hidden
-          className="absolute top-8 bottom-10 border-l border-dashed"
-          style={{ left: pct(t), borderColor: i ? "rgb(255 176 138 / 0.3)" : "rgb(255 214 150 / 0.3)" }}
+          className="absolute top-8 bottom-[38px] border-l border-dashed"
+          style={{ left: pct(t), borderColor: i ? "rgb(255 150 110 / 0.35)" : "rgb(255 190 110 / 0.35)" }}
         />
       ))}
       {lines}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-10 h-[210px] max-md:h-[150px]">
-        <span className="absolute inset-y-0 w-px bg-white/55" style={{ left: pct(view) }} />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[38px] h-[160px] max-sm:h-[120px]">
+        <span className="absolute inset-y-0 w-px bg-ink/55" style={{ left: pct(view) }} />
         {v != null && (
           <span
             className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fff3dc] shadow-[0_0_0_4px_rgb(255_181_71/0.35),0_0_18px_#ffb547]"
@@ -940,21 +931,21 @@ function SkyChart({
         step={1}
         value={Math.min(287, Math.round((view - start) / 300))}
         onChange={(e) => onScrub(start + Number(e.target.value) * 300)}
-        className="absolute inset-x-0 bottom-0 h-[250px] w-full cursor-ew-resize opacity-0 max-md:h-[190px]"
+        className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-10 text-xs text-white/55 tabular-nums"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[38px] text-xs text-ink-faint tabular-nums"
       >
-        <span className="absolute top-3 left-4 max-md:hidden">Midnight</span>
-        <span className="absolute top-3 -translate-x-1/2 text-[#ffd08a]" style={{ left: pct(rise) }}>
+        <span className="absolute top-[11px] left-0 max-sm:hidden">Midnight</span>
+        <span className="absolute top-[11px] -translate-x-1/2 text-solar" style={{ left: pct(rise) }}>
           Sunrise {hhmm(rise)}
         </span>
-        <span className="absolute top-3 left-1/2 -translate-x-1/2">Noon</span>
-        <span className="absolute top-3 -translate-x-1/2 text-[#ffb08a]" style={{ left: pct(set) }}>
+        <span className="absolute top-[11px] left-1/2 -translate-x-1/2 max-sm:hidden">Noon</span>
+        <span className="absolute top-[11px] -translate-x-1/2 text-solar-deep" style={{ left: pct(set) }}>
           Sunset {hhmm(set)}
         </span>
-        <span className="absolute top-3 right-4 max-md:hidden">Midnight</span>
+        <span className="absolute top-[11px] right-0 max-sm:hidden">Midnight</span>
       </div>
     </div>
   );
@@ -1006,7 +997,7 @@ function ChartLines({
       aria-hidden
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      className="absolute inset-x-0 bottom-10 h-[210px] w-full overflow-visible max-md:h-[150px]"
+      className="absolute inset-x-0 bottom-[38px] h-[160px] w-full overflow-visible max-sm:h-[120px]"
     >
       <defs>
         <linearGradient id="sky-solar" x1="0" y1="0" x2="0" y2="1">
@@ -1014,19 +1005,21 @@ function ChartLines({
           <stop offset="1" stopColor="var(--color-solar-deep)" stopOpacity={0.04} />
         </linearGradient>
       </defs>
-      {ghost && <path d={ghost} fill="rgb(255 255 255 / 0.05)" />}
+      {ghost && <path d={ghost} fill="var(--color-fg)" fillOpacity={0.05} />}
       {expLine && (
         <path
           d={expLine}
           fill="none"
-          stroke="rgb(255 255 255 / 0.45)"
+          stroke="var(--color-ink-faint)"
           strokeWidth={1.5}
           strokeDasharray="4 5"
           vectorEffect="non-scaling-stroke"
         />
       )}
       {area && <path d={area} fill="url(#sky-solar)" />}
-      {line && <path d={line} fill="none" stroke="#ffd08a" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
+      {line && (
+        <path d={line} fill="none" stroke="var(--color-solar)" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+      )}
     </svg>
   );
 }

@@ -6,9 +6,9 @@ import { fromDateKey } from "~/features/common/time/utils";
 import { Card, Footnote, Muted } from "~/features/common/ui/components/Card";
 import { Delta } from "~/features/common/ui/components/Live";
 import { cn } from "~/features/common/ui/utils";
-import { ChartKey, dim, KeyItem, PickHead, usePick } from "~/features/solar/components/sections/PerformanceParts";
+import { ChartKey, dim, KeyItem, PickHead, usePick } from "~/features/common/ui/components/Pick";
 import type { PerformanceDay, SolarInsights } from "~/features/solar/types";
-import { averageRatio, HEALTHY, isLow, nextDate, performanceNote } from "~/features/solar/utils/forecastSections";
+import { averageRatio, HEALTHY, isLow, nextDate, performanceNote } from "~/features/solar/utils/performance";
 
 type Performance = NonNullable<SolarInsights["performance"]>;
 

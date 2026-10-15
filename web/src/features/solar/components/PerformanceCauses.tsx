@@ -6,7 +6,7 @@ import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
 import type { Causes, SolarInsights } from "~/features/solar/types";
-import { performanceNote, type Tone } from "~/features/solar/utils/forecastSections";
+import { performanceNote, type Tone } from "~/features/solar/utils/performance";
 
 type Cause = {
   key: string;

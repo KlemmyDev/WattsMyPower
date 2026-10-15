@@ -182,7 +182,7 @@ function Daylight({ sun, now }: { sun: Today["sun"]; now: number }) {
  * Today's pace along one bar out of where it's heading: made so far (the figure above it), the rest the forecast
  * expects (dashed), the range it likely lands in, and a tick for this morning's forecast.
  */
-function Pace({ today: t, done }: { today: Today; done: boolean }) {
+export function Pace({ today: t, done }: { today: Today; done: boolean }) {
   const whole = Math.max(t.heading ?? 0, t.planned ?? 0, t.likely?.high ?? 0, t.made ?? 0, 0.1);
   const at = (v: number) => Math.min(100, (v / whole) * 100);
   return (
