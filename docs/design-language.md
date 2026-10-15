@@ -26,15 +26,21 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
 
 ## The sky hero (Solar)
 
-Solar leads with `SolarSky` rather than a `HeroCard`: the sky as it is now, edge to edge at every width (out to the
-nav, up under the phone's header, with no section pills above it), with the page's title on it. Its colours follow the real sunrise and sunset; the sun and moon (with its real
-phase) cross on arcs and set below a soft horizon; cloud, rain and storms come from the day's hourly weather, eased
-between hours, with cloud banks drifting across at their own speeds. Over it: the moment's figure (big, rounded,
-`font-display` extra bold), a headline sentence and a half on how the day's going, the weather chip, the second figure
-and the pace, and links into the sections. The day's chart along its foot is the scrubber: dragging it (or the arrow
-keys) moves the whole scene to that moment, and "Play the day" runs midnight to midnight in 10 seconds. Everything
-floating over the sky uses `.sky-float` (near-solid). With motion turned down, nothing animates: clouds hold where
-they'd start and rain shows as haze. Pure maths in `features/solar/utils/sky.ts`, styles at the end of `app.css`.
+Solar keeps the usual `PageHeader` (title, live sub line, and "Play the day" with "Back to now" as its action), then a
+top card in two parts. Its top is the sky as it is now: colours that follow the real sunrise and sunset, the sun and
+moon (with its real phase) on arcs that set into the card's ground, and cloud, rain and storms from the day's hourly
+weather, eased between hours, with cloud banks drifting across at their own speeds. The weather chip sits in its top
+right corner (`.sky-float`, near-solid), and its one headline line sits bottom left on a soft dark wash, so both read in
+any weather. The sky fades into the card's solid ground, where the figures sit just as on every other page's top card
+(the Hero kit: the lead and live figures, four stats, the pace bar), with the day's chart under them. The chart is the
+scrubber: dragging it (or the arrow keys) moves the sky and the figures to that moment, and "Play the day" runs
+midnight to midnight in 10 seconds. With motion turned down, nothing animates: clouds hold where they'd start and rain
+shows as haze. Pure maths in `features/solar/utils/sky.ts`, styles at the end of `app.css`.
+
+Clouds are cumulus banks built from CSS gradients: a mask of round lobes with smaller bumps along the outline (the
+cauliflower edge), each lobe lit broadly from above toward the sun or moon, a lit edge on that side (warm at golden
+hour, silver by moonlight, dulled in a storm) and a darker flat base. Avoid a bright centre with a ring on each lobe:
+that reads as balls, not cloud.
 
 It's built to stay smooth on a slow device: only the cloud, rain and lightning the weather calls for are in the page,
 each cloud is painted once and then only moved (its bob is `translate`, apart from the crossing's `transform`), the
@@ -79,20 +85,20 @@ itself out by its own width (a container), so phone stacking inside a hero uses 
 - **Drill-down, in this order of preference:**
   1. **The card answers as you point** (Solar leads; move other pages over as they're touched). Pointing at, tapping or
      focusing a bar, day or part puts that item in the card's own header or corner figure in place of the card's
-     summary (`useBarHover`, `aria-live="polite"`), the rest fade to about 35%, and moving away puts the summary back.
+     summary (`usePick` from `common/ui/components/Pick`, `aria-live="polite"`), the rest fade to about 35%, and moving away puts the summary back.
      No floating tooltip over the card. Bars are real `<button>`s with an `aria-label`, so it works by keyboard and
      touch. Older cards still use `ChartTooltip`; tooltips on strips near a card's bottom open above
      (`className="top-auto bottom-full mb-2"`), as glass cards are stacking contexts.
+     A header that swaps what it reads out must keep its height (both versions in one grid cell, or `PickHead`), or the
+     chart under it moves out from under the pointer, the card puts its summary back, and it flickers.
   2. A whole-card or whole-tile link to the item's own page (Home's room tiles: a stretched `Link`; buttons inside stay
-     clickable above it; Solar's Highlights).
-  3. A quiet link in the card header to a page with more (`SectionLink`: "Performance ›" beside "Last 30 days").
-  4. A `Collapse` for rarely needed detail inside the card.
+     clickable above it).
+  3. A `Collapse` for rarely needed detail inside the card.
      Don't add tabs, accordions of accordions, or modals for reading data.
-- **Sections a level down.** When a page has more depth than its cards can hold, the depth lives on pages of its own
-  (Solar: Strings and inverters, Performance, Forecast, Readings at `/solar/<section>`), each opened from the card it
-  belongs to, never one catch-all "details" page. Each uses `SolarSection` (back link, title, live sub line, the other
-  sections at its foot), and the section's pages are listed in `useSectionPages` so the side nav and the phone's strip
-  of pages show them.
+- **Depth on the page, in plain words.** When a page has more to say, fold it into its cards rather than pages a level
+  down: a sentence that sums it up where it belongs (Solar's verdict on how the panels did under Last 30 days, how
+  close the forecast gets under Days ahead), a card for the hardware ("Your panels": inverters and strings), and a
+  quiet link to download the readings. Nothing confusing, no catch-all "details" page.
 - Last N days: a heat strip of cells (`SolarDays`, `BatteryDays`): figures in a `dl` to the right of the title, cells
   coloured with `heatColor(color, share)`, a Less–More key under it.
 - Splits: `Breakdown` (a bar of parts with a legend that lights the part on hover).

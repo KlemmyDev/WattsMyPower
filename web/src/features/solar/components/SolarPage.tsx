@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
-import { InverterNotice } from "~/features/common/layout/components/InverterNotice";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot } from "~/features/common/live/types";
@@ -9,21 +8,23 @@ import { COLOR } from "~/features/common/theme/utils/colors";
 import { useNow } from "~/features/common/time/hooks";
 import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
+import { Icon } from "~/features/common/ui/components/Icon";
+import { exportCsvUrl } from "~/features/history/api";
 import { useForecast, useForecastAccuracy } from "~/features/common/weather/hooks";
 import { solarInsightsQuery } from "~/features/solar/api";
 import { SolarDays } from "~/features/solar/components/SolarDays";
 import { SolarTrend } from "~/features/solar/components/SolarHealth";
-import { SolarHighlights } from "~/features/solar/components/SolarHighlights";
 import { SolarOutlook } from "~/features/solar/components/SolarOutlook";
 import { SolarSky } from "~/features/solar/components/SolarSky";
+import { YourPanels } from "~/features/solar/components/YourPanels";
 import { useSolarDay } from "~/features/solar/hooks";
-import { pastDays, solarToday } from "~/features/solar/utils";
+import { pastDays } from "~/features/solar/utils";
 
 /**
- * Solar: the sky as it is now, with what the panels are making and how the day's going (scrub or play through the
- * day); four highlights that each lead into a section of their own; the last days and the days ahead; where today's
- * went and the year. The detail (strings and inverters, performance, the forecast, every reading) is a page a level
- * down, opened from the card it belongs to.
+ * Solar, on one page: the sky as it is now over what the panels are making and how the day's going (scrub or play
+ * through the day); the last days (with how the panels are doing against the weather) and the days ahead (with how
+ * close the forecast gets); where today's went, the panels' inverters and strings, and the year; and today's readings
+ * to download. Nothing is a level down: each card says what it's about in plain words.
  */
 export function SolarPage() {
   const now = useNow(30_000);
@@ -33,14 +34,11 @@ export function SolarPage() {
   const acc = useForecastAccuracy();
   const { start, series, weather } = useSolarDay(now);
   const { data: insights } = useQuery(solarInsightsQuery);
-  const today = solarToday({ p, s, f, acc, series, weather, now });
   const past = pastDays(acc, insights?.performance, now);
   const usual = past.length >= 3 ? past.reduce((a, d) => a + d.kwh, 0) / past.length : null;
   return (
     <>
       <SolarSky p={p} s={s} f={f} acc={acc} series={series} weather={weather} start={start} now={now} usual={usual} />
-      <InverterNotice />
-      <SolarHighlights today={today} series={series} usual={usual} />
       <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
         <div className="flex min-w-0 flex-col gap-5">
           <SolarDays acc={acc} performance={insights?.performance} now={now} />
@@ -48,9 +46,18 @@ export function SolarPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <WhereItWent p={p} />
+          <YourPanels p={p} s={s} now={now} />
           {insights && <SolarTrend trend={insights.trend} />}
         </div>
       </div>
+      <a
+        href={exportCsvUrl(start, start + 86_400, true)}
+        download
+        className="flex min-h-10 items-center gap-2 self-start rounded-full border border-line bg-fg/4 px-4 text-sm text-ink-body no-underline transition-colors hover:bg-fg/8 hover:text-ink"
+      >
+        <Icon name="download" size={16} />
+        Download today's readings
+      </a>
     </>
   );
 }

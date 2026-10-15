@@ -6,11 +6,11 @@ import { fromDateKey } from "~/features/common/time/utils";
 import { Card, Footnote, Muted } from "~/features/common/ui/components/Card";
 import { Delta } from "~/features/common/ui/components/Live";
 import { cn } from "~/features/common/ui/utils";
-import { causesOf } from "~/features/solar/components/sections/PerformanceCauses";
-import { dayLine, RatioBars, RatioKey, washedOn } from "~/features/solar/components/sections/PerformanceDays";
-import { dim, PickHead, usePick } from "~/features/solar/components/sections/PerformanceParts";
+import { causesOf } from "~/features/solar/components/PerformanceCauses";
+import { dayLine, RatioBars, RatioKey, washedOn } from "~/features/solar/components/PerformanceDays";
+import { dim, PickHead, usePick } from "~/features/common/ui/components/Pick";
 import type { SolarInsights } from "~/features/solar/types";
-import { averageRatio, performanceNote, type Tone } from "~/features/solar/utils/forecastSections";
+import { averageRatio, performanceNote, type Tone } from "~/features/solar/utils/performance";
 
 const noteBg: Record<Tone, string> = { warn: "bg-warn-subtle", ok: "bg-fg/4", wait: "bg-fg/4" };
 const noteDot: Record<Tone, string> = { warn: "bg-solar", ok: "bg-good", wait: "bg-grey-500" };

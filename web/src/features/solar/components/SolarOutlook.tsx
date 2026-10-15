@@ -12,7 +12,6 @@ import { useFahrenheit } from "~/features/common/weather/hooks";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { codeIcon, codeName, degrees } from "~/features/common/weather/utils";
 import { SOLAR } from "~/features/solar/components/parts";
-import { SectionLink } from "~/features/solar/components/sections/SolarSection";
 
 const TH = "pb-2 text-left text-[11.5px] font-normal text-ink-faint";
 const TD = "border-t border-line-subtle py-2.5 text-[13px] tabular-nums";
@@ -20,7 +19,7 @@ const TD = "border-t border-line-subtle py-2.5 text-[13px] tabular-nums";
 /**
  * The rest of today and the next two days, a line each: the sky, the sunlight expected, the solar the forecast
  * expects and the range it usually lands in. Pointing at a day puts its likely range in the corner, where tomorrow's
- * sits otherwise.
+ * sits otherwise. Under it, how close the forecast usually gets.
  */
 export function SolarOutlook({
   f,
@@ -35,17 +34,7 @@ export function SolarOutlook({
   const located = useLocationSet();
   const range = acc?.range;
   const { hover, plot, bar } = useBarHover<string>();
-  const title = (
-    <TitleBlock
-      title={
-        <span className="flex items-baseline gap-3">
-          Days ahead
-          <SectionLink to="forecast">Forecast</SectionLink>
-        </span>
-      }
-      sub="Solar the forecast expects, today and the next two days"
-    />
-  );
+  const title = <TitleBlock title="Days ahead" sub="Solar the forecast expects, today and the next two days" />;
   if (located === false)
     return (
       <Card className="h-full">
@@ -134,6 +123,7 @@ export function SolarOutlook({
           })}
         </tbody>
       </table>
+      {acc?.mae_kwh != null && <p className="text-[13px] text-ink-muted">{closeness(acc)}</p>}
       <Footnote>
         {range
           ? `Sunlight is kWh/m² on flat ground. The shaded range is where 8 in 10 of the last ${range.days} days landed against their forecast.`
@@ -141,4 +131,13 @@ export function SolarOutlook({
       </Footnote>
     </Card>
   );
+}
+
+/** How close the forecast usually gets, in a sentence, with which way it leans when it leans more than a little. */
+function closeness(acc: ForecastAccuracy): string {
+  const within = `The forecast is usually within ${kWh(acc.mae_kwh!)} a day of what your panels make`;
+  const bias = acc.bias_kwh ?? 0;
+  if (acc.mae_kwh! > 0 && Math.abs(bias) > acc.mae_kwh! / 2)
+    return `${within}, and it tends to come in a little ${bias > 0 ? "high" : "low"}.`;
+  return `${within}.`;
 }
