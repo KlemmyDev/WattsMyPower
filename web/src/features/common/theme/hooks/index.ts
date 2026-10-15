@@ -37,3 +37,16 @@ export function useThemeSync() {
     };
   }, []);
 }
+
+/** The theme the page is showing ("light" or "dark"), following it as it switches. */
+export function useShownTheme(): "light" | "dark" {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mo = new MutationObserver(onChange);
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      return () => mo.disconnect();
+    },
+    () => (document.documentElement.dataset.theme === "light" ? "light" : "dark"),
+    () => "dark",
+  );
+}

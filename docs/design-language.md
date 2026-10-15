@@ -40,6 +40,11 @@ card's solid ground. Right under the sky comes the day's chart, then the figures
 where the night before sunrise leaves room. Maths in `features/solar/utils/atmosphere.ts` and `sky.ts`, styles at the
 end of `app.css`.
 
+In the light theme the same sky is lifted to pastels (the darker a colour, the more, toward a dusky periwinkle), so
+it stays airy on the white page and fades into it softly: pale blue by day, lavender at dusk and night. Its words turn
+to ink on a pale haze of the sky (worked out the same way), the weather chip is frosted white, rain falls as slate
+streaks, and the grain all but goes.
+
 It's built to stay smooth on a phone, Safari above all. Everything is a gradient: no blur filters, masks, blend modes
 or backdrop blur, which Safari draws slowly and, in layers that move, clips into hard lines at their edges. The
 colours only change every five minutes of sky (so a few times a second while the day plays), the sun and moon move by

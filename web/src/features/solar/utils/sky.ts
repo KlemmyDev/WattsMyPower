@@ -89,12 +89,17 @@ export const moonLit = (age: number) => (1 - Math.cos(2 * Math.PI * age)) / 2;
  * The moon's face as a shadow over a disc `size` across: the lit side grows from one edge to full and shrinks back to
  * the other. From the southern hemisphere a waxing moon is lit on the left.
  */
-export function moonFace(age: number, size: number, south: boolean): { background: string; boxShadow: string } {
+export function moonFace(
+  age: number,
+  size: number,
+  south: boolean,
+  /** The unlit side: near black in a dark sky, a faint shade of the sky in the light theme's pale one. */
+  DARK = "rgba(18,22,38,0.92)",
+): { background: string; boxShadow: string } {
   const lit = moonLit(age);
   const waxing = age < 0.5;
   const litLeft = waxing === south;
   const LIGHT = "#f2eedf";
-  const DARK = "rgba(18,22,38,0.92)";
   if (lit <= 0.5) {
     // A crescent: a dark disc with a lit band along one edge.
     const band = size * lit * 1.1;

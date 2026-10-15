@@ -1669,6 +1669,10 @@
   background-size: 128px 128px;
   opacity: 0.3;
 }
+/* On the light theme's pale sky the grain would read as grit: just enough to keep the gradients from banding. */
+:root[data-theme="light"] .atm-grain {
+  opacity: 0.12;
+}
 .sky-flash {
   position: absolute;
   inset: 0;

@@ -156,7 +156,17 @@ export type Atmosphere = {
 };
 
 /** The sky's size and the places of its words, in px, for the wash to keep them readable. */
-export type SkyFrame = { W: number; H: number; phone: boolean; story: string };
+/** The sky's size (px), whether it's a phone's, the line under the title, and whether the page is in its light theme. */
+export type SkyFrame = { W: number; H: number; phone: boolean; story: string; light: boolean };
+
+/**
+ * A colour for the light theme: lifted toward a cool white, the darker the more (and the darkest toward a dusky
+ * periwinkle), so the sky stays airy on a white page (pastel by day, lavender dusk at night) and fades into it softly.
+ */
+function pastel(c: Rgb): Rgb {
+  const dim = 1 - Math.sqrt(lum(c));
+  return mix(c, mix([238, 242, 251], [188, 196, 232], dim), 0.34 + 0.36 * dim);
+}
 
 /** The orbs' sizes (px) on a phone and wider. */
 export const ORBS = {
@@ -168,7 +178,8 @@ export const ORBS = {
  * The sky at a moment. `h` is hours since midnight, `rise` and `set` the sun's (hours), `w` the weather then.
  */
 export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, frame: SkyFrame): Atmosphere {
-  const { W, H, phone } = frame;
+  const { W, H, phone, light } = frame;
+  const tone = (c: Rgb) => (light ? pastel(c) : c);
   const std = standardHour(h, rise, set);
   const {
     es,
@@ -180,8 +191,10 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
   const dark = clamp01(-es * 3);
 
   const base = stops(SKY, std).map((c) => weathered(c, w, day));
-  base.push(mix(base[2], [20, 20, 22], 0.4));
-  const F = stops(FIELD, std).map((c) => weathered(c, w, day));
+  // The horizon, settling toward the card's ground (dark, or the light theme's white) under the fade.
+  base.push(light ? mix(base[2], [250, 250, 252], 0.45) : mix(base[2], [20, 20, 22], 0.4));
+  if (light) base.forEach((c, i) => (base[i] = pastel(c)));
+  const F = stops(FIELD, std).map((c) => tone(weathered(c, w, day)));
 
   // What the sky can put behind the words at its brightest, for the wash (ellipses in px).
   type Ell = {
@@ -209,7 +222,7 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
         [0.7, 0.34, 0.6, 0.18, [150, 104, 255], 0.22, 39, true],
       ] as const
     ).forEach(([cx, cy, rx, ry, c, a, secs, reverse]) => {
-      const col = weathered([...c] as Rgb, w, 0);
+      const col = tone(weathered([...c] as Rgb, w, 0));
       aurora.push({ cx, cy, rx, ry, background: radial(col, a * auA, PF), drift: "a", secs, reverse });
       keep({ cx, cy, rx, ry: ry * 1.4 }, col, a * auA, PF, 0.2);
     });
@@ -280,7 +293,7 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
   // Fog: slow, wide bands that cross and veil the orb.
   const fogO = clamp01((w.cover - 0.3) / 0.45);
   let fogCol = mix(mix(base[1], [228, 231, 236], 0.55), [40, 46, 60], 1 - day);
-  fogCol = mix(fogCol, mix([16, 20, 30], [104, 114, 132], day), w.rain * 0.55);
+  fogCol = tone(mix(fogCol, mix([16, 20, 30], [104, 114, 132], day), w.rain * 0.55));
   const fogA = lerp(0.6, 0.5, day);
   const bands =
     fogO > 0.005
@@ -334,11 +347,13 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
     const d = Math.sqrt(Math.pow(x / 640, 2) + Math.pow(y / 220, 2));
     return d <= 0.5 ? 1 : d <= 0.75 ? lerp(1, 0.55, (d - 0.5) / 0.25) : d < 1 ? lerp(0.55, 0, (d - 0.75) / 0.25) : 0;
   };
-  const wc = mix(base[0], [3, 5, 12], 0.72);
+  // Dark: white words on a deeper tone of the sky's top. Light: dark ink on a pale haze of it.
+  const wc = light ? mix(base[0], [250, 251, 253], 0.8) : mix(base[0], [3, 5, 12], 0.72);
+  const ink: Rgb = light ? [17, 17, 17] : [255, 255, 255];
   const needed = (bg: Rgb, f: number, alphaText: number, need: number) => {
     const ok = (a: number) => {
       const b = mix(bg, wc, a * f);
-      return contrast(mix(b, [255, 255, 255], alphaText), b) >= need;
+      return contrast(mix(b, ink, alphaText), b) >= need;
     };
     if (ok(0)) return 0;
     if (f <= 0.02 || !ok(1)) return 1;
@@ -374,7 +389,7 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
     const bg = mix(sampleSky(x, y), wc, washA * washAt(x, y));
     chipA = Math.max(chipA, needed(bg, 1, 0.96, 4.7));
   });
-  chipA = Math.min(0.86, Math.max(0.3, chipA));
+  chipA = Math.min(0.86, Math.max(light ? 0.55 : 0.3, chipA));
   const wash = phone
     ? `linear-gradient(180deg, ${cssA(wc, washA)} 0px, ${cssA(wc, washA)} 92px, ${cssA(wc, washA * 0.5)} 126px, ${cssA(wc, 0)} 170px)`
     : `radial-gradient(640px 220px at 0 0, ${cssA(wc, washA)} 0%, ${cssA(wc, washA)} 50%, ${cssA(wc, washA * 0.55)} 75%, ${cssA(wc, 0)} 100%)`;
@@ -396,7 +411,7 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
       ringOpacity: moonVis * clamp01(0.8 - 0.7 * w.cover),
       coreOpacity: moonVis * (1 - 0.7 * w.cover),
     },
-    stars: clamp01(-es * 4) * clamp01(1 - w.cover * 1.15) * 0.95,
+    stars: clamp01(-es * 4) * clamp01(1 - w.cover * 1.15) * (light ? 0.4 : 0.95),
     fog: { opacity: fogO, bands },
     rain,
     storm: clamp01((w.storm - 0.2) / 0.6),
