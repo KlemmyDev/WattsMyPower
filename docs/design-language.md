@@ -40,6 +40,15 @@ card's solid ground. Right under the sky comes the day's chart, then the figures
 where the night before sunrise leaves room. Maths in `features/solar/utils/atmosphere.ts` and `sky.ts`, styles at the
 end of `app.css`.
 
+Along the bottom of the sky sits your roof (`SolarRoof`, geometry in `utils/roof.ts`): one Colorbond slope seen from
+eye level, its ridge low across the sky like a horizon, two rows of framed mono panels on it, a strip of bare roof
+around them so it reads as the top of a house. Only the slope and its ridge show, never the far pitch. It keeps its
+own palette in either theme and is lit by the sky: darker towards night, cooler in rain, warm at the ends of the day,
+cloud shadows drifting over, wet glass in rain, the moon caught in the glass at night. How hard the panels are working
+(a share of the array) is told by the orange lines along each row's top rail: more of them running, longer, brighter
+and quicker as power rises, with a band of light crossing the glass. They stop when the panels do. Home and Battery
+are meant to follow with close-ups of their own (the house's wall, the garage or side of the house).
+
 It's built to stay smooth on a phone, Safari above all. Everything is a gradient: no blur filters, masks, blend modes
 or backdrop blur, which Safari draws slowly and, in layers that move, clips into hard lines at their edges. The
 colours only change every five minutes of sky (so a few times a second while the day plays), the sun and moon move by

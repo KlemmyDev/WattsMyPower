@@ -16,6 +16,7 @@ import { useFahrenheit } from "~/features/common/weather/hooks";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
 import { codeName, degrees, hourIcon } from "~/features/common/weather/utils";
 import { SOLAR } from "~/features/solar/components/parts";
+import { SolarRoof } from "~/features/solar/components/SolarRoof";
 import { Pace } from "~/features/solar/components/SolarHero";
 import { expectedToday, place, solarNow, solarToday } from "~/features/solar/utils";
 import { atmosphere, orbits, ORBS, type Atmosphere, type Field } from "~/features/solar/utils/atmosphere";
@@ -135,6 +136,10 @@ export function SolarSky({
   const pvAt = ahead ? valueAt(expected, view) : seriesAt(series, view);
   const madeBy = ahead ? (today.made ?? 0) + expectedBetween(expected, now, view) : madeUntil(series, view);
 
+  // How hard the panels are working at the moment shown, as a share of the array: the roof in the sky shows it.
+  const pvShown = scrub == null ? (live.pv ?? pvAt ?? 0) : (pvAt ?? 0);
+  const arrayW = (s?.pv_kw ?? 0) * 1000 || Math.max(5000, today.peak?.w ?? 0);
+
   const lead = leadFigure({ scrub, ahead, view, today, madeBy, now, rise });
   const second = secondFigure({ scrub, ahead, view, live, today, pvAt, now, rise });
   const [line, more] = story({ today, now, rise, set, hours: weather?.hours, usual });
@@ -167,7 +172,7 @@ export function SolarSky({
         data-still={onScreen ? undefined : ""}
         className="sky relative isolate flex [transform:translateZ(0)] flex-col overflow-hidden rounded-[28px] border border-line-subtle bg-surface max-sm:rounded-3xl"
       >
-        <div ref={skyRef} className="relative h-[280px] flex-none overflow-hidden text-white max-sm:h-[210px]">
+        <div ref={skyRef} className="relative h-[312px] flex-none overflow-hidden text-white max-sm:h-[240px]">
           <SkyScene
             view={view}
             start={start}
@@ -179,6 +184,7 @@ export function SolarSky({
             H={size.h}
             phone={phone}
             a={sky}
+            roof={<SolarRoof light={sky.light} share={pvShown / arrayW} on={pvShown > 50} phone={phone} />}
           />
           {/* The page's title and how the day's going, up in the sky (never over its fade into the card) on the
               sky's own wash, and the weather in the other corner (beside the title on a phone). */}
@@ -513,7 +519,7 @@ function expectedBetween(pts: Pt[], from: number, to: number): number {
 
 /**
  * The sky at `view` in its "Atmosphere" look (`a`, from utils/atmosphere): the base colours, the drifting colour fields, the sun
- * or moon, stars, fog, rain, a storm's flashes, grain, and the wash behind the title.
+ * or moon, stars, fog, your roof along the bottom, rain, a storm's flashes, grain, and the wash behind the title.
  *
  * Built to stay smooth on a phone. The colours (every gradient) only change every five minutes of sky, so while the
  * day plays they're repainted a few times a second, not on every frame; the sun and moon move every frame, but only
@@ -532,6 +538,7 @@ function SkyScene({
   H,
   phone,
   a,
+  roof,
 }: {
   view: number;
   start: number;
@@ -543,6 +550,8 @@ function SkyScene({
   H: number;
   phone: boolean;
   a: Atmosphere;
+  /** Your roof, low across the sky: over its light and fog, under its rain. */
+  roof: ReactNode;
 }) {
   const o = orbits((view - start) / 3600, (rise - start) / 3600, (set - start) / 3600);
   const G = phone ? ORBS.phone : ORBS.wide;
@@ -595,6 +604,7 @@ function SkyScene({
           ))}
         </div>
       )}
+      {roof}
       {a.rain > 0.005 && <Rain opacity={a.rain} lite={lite} />}
       {a.storm > 0 && <Flashes opacity={a.storm} />}
       <Grain />

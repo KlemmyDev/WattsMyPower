@@ -1715,7 +1715,46 @@
 .atm-fade {
   transition: opacity 1s ease;
 }
-/* A device that can't keep up (lite effects): the fields and fog hold still, which leaves only the rain moving. */
+/* The roof in Solar's sky (SolarRoof): power running along each row of panels, a band of light crossing the glass,
+   cloud shadows drifting over the sheet. All by transform or dash offset. */
+.roof-comet {
+  animation: roofComet var(--dur) cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes roofComet {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.roof-sheen {
+  animation: roofSheen 7s ease-in-out infinite;
+}
+@keyframes roofSheen {
+  from {
+    transform: translateX(-120px);
+  }
+  to {
+    transform: translateX(760px);
+  }
+}
+.roof-cloud {
+  animation: roofCloud 46s ease-in-out infinite alternate;
+}
+@keyframes roofCloud {
+  from {
+    transform: translateX(-220px);
+  }
+  to {
+    transform: translateX(260px);
+  }
+}
+/* A device that can't keep up (lite effects): the fields and fog hold still, which leaves only the rain moving (and,
+   on the roof, the power along its panels). */
+.atm-lite :is(.roof-sheen, .roof-cloud) {
+  animation: none;
+}
 .atm-lite :is(.atm-field, .atm-fog, .atm-bloom) {
   animation: none;
   will-change: auto;

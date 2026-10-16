@@ -153,6 +153,9 @@ export type Atmosphere = {
   /** The dark wash behind the title and its strength, and the weather chip's background. */
   wash: string;
   chip: string;
+  /** What lights the roof under the sky (SolarRoof): the sun's height (-1..1), how much the sun and moon show, the
+   * colour low in the sky (which its glass reflects), and the weather. */
+  light: { es: number; sun: number; moon: number; horizon: string; cover: number; rain: number };
 };
 
 /** The sky's size and the places of its words, in px, for the wash to keep them readable. */
@@ -402,5 +405,6 @@ export function atmosphere(h: number, rise: number, set: number, w: SkyWeather, 
     storm: clamp01((w.storm - 0.2) / 0.6),
     wash,
     chip: cssA(wc, chipA),
+    light: { es, sun: sunVis, moon: moonVis, horizon: css(mix(base[2], base[3], 0.5)), cover: w.cover, rain: w.rain },
   };
 }
