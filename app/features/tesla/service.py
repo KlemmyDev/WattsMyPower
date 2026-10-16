@@ -69,6 +69,7 @@ CHARGE_KEY = "tesla_charge"  # kv: each car's last charge reading over Bluetooth
 DETAILS_KEY = "tesla_details"  # kv: each car's details, group by group (app.features.tesla.details), as last read
 WAKE_WHY = {
     "first": "to read it after a restart",
+    "plugged": "to read it after it was plugged in",
     "ready": "to get it ready for spare solar",
     "refresh": "to read its details",
     "command": "to send it a command",

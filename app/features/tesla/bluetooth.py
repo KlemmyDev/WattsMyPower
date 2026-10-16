@@ -23,8 +23,11 @@ closely the service follows the car (app.features.tesla.control.readiness):
             back in range, been sent a command, or been plugged in or out; an asleep car is left be. The household
             wakes it from the EV page if they want it read (refresh_details)
 
-Asleep, its last charge reading stands, and a closed charge port says it's unplugged. A car with no charge reading
-yet (the dashboard has just started) is woken once to be read, unless its port is closed. A command wakes the car
+Asleep, its last charge reading stands, a closed charge port says it's unplugged and an open one that it's plugged
+in (and an asleep car isn't charging, whatever it last said). A car with no charge reading yet (the dashboard has just
+started) is woken once to be read, unless its port is closed; so, by day, is one plugged in since its charge was read
+(it fell asleep before the dashboard read it, say with every connection taken by the phones around it as it was
+plugged in): its last reading is from before, its level and whether it's full along with it. A command wakes the car
 first, and it's given WAKE_SECONDS to wake. A car that doesn't wake isn't woken again for a while, longer each time
 it misses in a row (WAKE_BACKOFF): a driver's key can miss once (the car slow to come up after a long sleep), so it's
 tried again within a minute; a charging manager's key may not be allowed to wake it at all, so it soon settles at half
@@ -215,6 +218,9 @@ class BluetoothClient:
         self._no_wake: dict[str, float] = {}  # vin -> until when it isn't woken (it didn't wake last time)
         self._missed: dict[str, int] = {}  # vin -> how many times in a row it didn't wake (WAKE_BACKOFF)
         self._stale: set[str] = set()  # cars sent a command since their charge was read: read it at the next read
+        # Cars whose charge port has opened or closed since their charge was read (plugged in or out while the
+        # dashboard wasn't looking): what's kept is from before, so it's read at the next read, and by day woken for.
+        self._behind: set[str] = set()
         self._linked: set[str] = set()  # cars whose link was held open after their last read
 
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -236,22 +242,23 @@ class BluetoothClient:
         now = self.clock()
         at, charge = self._charge.get(vin, (0.0, None))
         plugged = None if charge is None else charge.get("charging_state") not in ("", "Disconnected")
+        behind = vin in self._behind
         extras: tuple[str, ...] = ()
         if want == "night":
-            read = plugged is not False or vin in self._gone or vin in self._stale  # only read if it's awake
+            read = plugged is not False or vin in self._gone or vin in self._stale or behind  # only if it's awake
             wake = False
         elif want == "quiet":
-            read = charge is None or now - at >= QUIET_READ or vin in self._gone or vin in self._stale
-            wake = charge is None
+            read = charge is None or now - at >= QUIET_READ or vin in self._gone or vin in self._stale or behind
+            wake = charge is None or behind
             extras = self._due(vin, 0) if read else ()  # along with the hourly read, never on their own
         else:
-            read, wake = True, want == "ready" or charge is None
+            read, wake = True, want == "ready" or charge is None or behind
             extras = self._due(vin, DETAILS_ACTIVE if want == "active" else DETAILS_EVERY)[:EXTRAS_PER_READ]
         if wake and now < self._no_wake.get(vin, 0):
             wake = False  # it didn't wake last time: left asleep, its charge read once it's awake anyway
         # By day (or while it's charging), plugged in or not known to be unplugged: the link's held open after, so
         # the dashboard keeps its place among the few connections the car takes (see the module's docstring).
-        hold = want != "night" and plugged is not False
+        hold = want != "night" and (plugged is not False or behind)
         r = self.radio.read(vin, self.key, read, wake, plugged, extras, hold=hold)
         if r.get("held"):
             self._linked.add(vin)
@@ -263,7 +270,7 @@ class BluetoothClient:
         elif r.get("charge_state") is not None:
             self._no_wake.pop(vin, None)
             self._missed.pop(vin, None)
-        return self._row(vin, r, "ready" if want == "ready" else "first")
+        return self._row(vin, r, "ready" if want == "ready" else "plugged" if behind else "first")
 
     def _row(self, vin: str, r: dict[str, Any], why: str | None = None) -> dict[str, Any]:
         """What was read of a car (radio.read's answer), with what's kept from before, as vehicles() gives it. With
@@ -278,20 +285,27 @@ class BluetoothClient:
             self._kept()
             self._gone.discard(vin)
             self._stale.discard(vin)
+            self._behind.discard(vin)
+        elif charge is not None and r.get("port_open") is not None:
+            if r["port_open"] != (charge.get("charging_state") not in ("", "Disconnected")):
+                self._behind.add(vin)
         if r.get("status"):
             self._status[vin] = (now, r["status"])
         for g, raw in (r.get("extras") or {}).items():
             self._extras.setdefault(vin, {})[g] = (int(now), raw)
             self._refused.get(vin, {}).pop(g, None)
-        for g, why in (r.get("refused") or {}).items():
-            self._refused.setdefault(vin, {})[g] = (int(now), why)
+        for g, reason in (r.get("refused") or {}).items():
+            self._refused.setdefault(vin, {})[g] = (int(now), reason)
         state = dict(charge or {})
         if state:
             state["timestamp"] = int(at * 1000)
         if r.get("port_open") is False:
             state["charging_state"] = "Disconnected"  # a closed charge port: nothing's plugged in
-        elif r.get("port_open") and not state.get("charging_state"):
-            state["charging_state"] = "Stopped"  # its charge not read yet, but its port's open: plugged in
+        elif r.get("port_open") and state.get("charging_state") in (None, "", "Disconnected"):
+            # Its port's open, though its charge wasn't read yet (or was read unplugged): it's plugged in.
+            state["charging_state"] = "Stopped"
+        if r.get("asleep") and state.get("charging_state") in ("Charging", "Starting"):
+            state["charging_state"] = "Stopped"  # a car that's charging is awake: it's stopped since it was read
         last: dict[str, Any] = {
             "display_name": self.names.get(vin),
             "state": "asleep" if r.get("asleep") else "online",

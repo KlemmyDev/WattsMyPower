@@ -1487,6 +1487,75 @@ def test_a_car_that_misses_a_wake_with_spare_solar_is_tried_again_soon(ble: Tesl
     assert ble.status()["vehicles"][0]["state"]["asleep"] is False
 
 
+def test_a_car_plugged_in_while_the_dashboard_wasnt_looking_still_charges_from_the_sun(
+    ble: TeslaService, radio: FakeRadio, tessie: FakeTessie, live: FakeLive, clock: Clock
+) -> None:
+    # Read last while unplugged, full to its limit (it charged yesterday, then drove off)...
+    radio.asleep = False
+    tessie.charge(charging_state="Disconnected", battery_level=80, charge_limit_soc=80)
+    minutes(ble, live, clock, 6, grid=500)
+    assert ble.status()["vehicles"][0]["state"]["plugged"] is False
+    # ...then home at 50% late in the evening and plugged in, asleep again before it was read (the phones nearby
+    # taking every connection, say).
+    clock.t += 4 * 3600
+    tessie.charge(charging_state="Stopped", battery_level=50)
+    radio.asleep = True
+    minutes(ble, live, clock, 60, grid=500)
+    assert radio.asleep and ble.history.wakes(VIN, 0, 2**40) == []  # not woken at night
+    assert ble.status()["vehicles"][0]["state"]["plugged"] is True  # its port's open: plugged in
+    # The next morning, with the sun to spare: woken, read (50%, not full), and charging.
+    clock.t += 9 * 3600
+    minutes(ble, live, clock, 10, spare=5000)
+    assert ("start_charging", {}) in tessie.commands
+    assert ble.status()["vehicles"][0]["state"]["soc"] == 50
+    assert "Woke the car to read it after it was plugged in" in [e["text"] for e in ble.log()]
+
+
+def test_a_car_whose_port_opened_while_it_slept_is_woken_once_by_day_to_be_read() -> None:
+    clock = Clock()
+    unplugged = last_state(charging_state="Disconnected", battery_level=80)["charge_state"]
+    plugged = last_state(charging_state="Stopped", battery_level=50)["charge_state"]
+    asleep_open = {"heard": True, "asleep": True, "port_open": True, "charge_state": None}
+    radio = ScriptedRadio(
+        {"heard": True, "asleep": False, "port_open": False, "charge_state": unplugged},
+        asleep_open,
+        asleep_open,
+        asleep_open,
+        {"heard": True, "asleep": False, "port_open": True, "charge_state": plugged, "woke": True},
+        asleep_open,
+    )
+    client = BluetoothClient("key", lambda: [VIN], radio, clock)  # type: ignore[arg-type]
+    client.vehicles({VIN: "quiet"})
+    clock.t += 300
+    seen = client.vehicles({VIN: "night"})[0]["last_state"]
+    assert seen["charge_state"]["charging_state"] == "Stopped"  # its port's open: plugged in
+    assert radio.asked[1] == (False, False, False)
+    clock.t += 1800
+    client.vehicles({VIN: "night"})
+    assert radio.asked[2] == (True, False, False)  # its charge read if it's awake (it isn't), and never woken at night
+    clock.t += 1800
+    client.vehicles({VIN: "quiet"})  # by day: its last reading is from before it was plugged in, so it's woken
+    assert radio.asked[3] == (True, True, False)
+    assert client.vehicles({VIN: "quiet"})[0]["woke"] == "plugged"
+    clock.t += 300
+    client.vehicles({VIN: "quiet"})  # read since: left to sleep again
+    assert radio.asked[5] == (False, False, True)
+
+
+def test_an_asleep_car_isnt_charging_whatever_it_last_said() -> None:
+    clock = Clock()
+    charging = last_state(charging_state="Charging", charger_actual_current=8)["charge_state"]
+    radio = ScriptedRadio(
+        {"heard": True, "asleep": False, "port_open": True, "charge_state": charging},
+        {"heard": True, "asleep": True, "port_open": True, "charge_state": None},
+    )
+    client = BluetoothClient("key", lambda: [VIN], radio, clock)  # type: ignore[arg-type]
+    client.vehicles({VIN: "active"})
+    clock.t += 60
+    state = control.parse(VIN, client.vehicles({VIN: "active"})[0]["last_state"], HOME, in_range=True)
+    assert state.asleep and state.plugged and not state.charging
+
+
 def test_a_command_that_doesnt_wake_the_car_says_so() -> None:
     from tesla_fleet_api.exceptions import BluetoothCommandFailed
 
