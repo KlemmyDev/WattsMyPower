@@ -364,7 +364,7 @@ export type EvLevels = {
   away: { start: number; end: number }[];
   charging: { start: number; end: number }[];
   /** Each time the dashboard woke the car, and why. */
-  wakes: { t: number; reason: "first" | "ready" | "refresh" | "command" | "solar" | string }[];
+  wakes: { t: number; reason: "first" | "plugged" | "ready" | "refresh" | "command" | "solar" | string }[];
   /** What the car drew from the house while charging at home, each five minutes it did (average W), and of that
    * what came from the grid. */
   power: { t: number; w: number; grid_w: number }[];
