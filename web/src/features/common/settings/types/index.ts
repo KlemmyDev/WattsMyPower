@@ -23,6 +23,12 @@ export type Settings = {
   home_standby_goal: number;
   location_name: string | null;
   /**
+   * The time zone days roll over in and times are shown in: "auto" for the location's own (location_zone, looked up
+   * when the location is set; null until then), or one chosen by its IANA name, e.g. "Australia/Perth".
+   */
+  time_zone: string;
+  location_zone: string | null;
+  /**
    * What the inverter can't report (Settings): the array size in kW, the battery's capacity in kWh
    * (0 = what the inverter reports), the reserve (%) used when the inverter doesn't report one, and its maximum rate in kW.
    */

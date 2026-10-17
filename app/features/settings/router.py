@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from app.container import Services
+from app.core.timezone import site_zone, use_zone
 from app.dependencies import JsonBody, ServicesDep
-from app.features.settings.store import SYSTEM
+from app.features.settings.store import SYSTEM, ZONE
+from app.features.weather.openmeteo import zone_at
+
+log = logging.getLogger(__name__)
 
 # Settings the weather is fetched for or the forecast's sunlight depends on: changing one refetches.
 WEATHER = {"latitude", "longitude", "weather_model", "panel_tilt", "panel_bearing", "pv_kw", "forecast_learning"}
@@ -24,6 +29,34 @@ def name_location(svc: Services) -> dict[str, Any] | None:
         return None  # none chosen yet, or it's named
     name = svc.geocoder.reverse(*where)
     return svc.settings.save({"location_name": name}) if name else None
+
+
+def zone_location(svc: Services) -> dict[str, Any] | None:
+    """Look up the location's time zone if it isn't known yet (a network lookup), and keep days in it unless another
+    zone is chosen. Returns the settings when it was found."""
+    where = svc.settings.location()
+    if where is None or svc.settings.location_zone():
+        return None
+    try:
+        tz = zone_at(*where)
+    except Exception as e:
+        log.warning("Couldn't look up the location's time zone (%s); days roll over in %s for now.", e, site_zone())
+        return None
+    if not tz:
+        return None
+    svc.settings.set_location_zone(tz)
+    apply_zone(svc)
+    return svc.settings.all_values()
+
+
+def apply_zone(svc: Services) -> None:
+    """Keep the process's days in the site's time zone (chosen, else the location's), and tell every open dashboard
+    when that's a change, so it draws its times in it."""
+    if not use_zone(svc.settings.zone()):
+        return
+    log.info("Days roll over at midnight in %s.", site_zone())
+    svc.insights.forget_history()  # its months and last 30 days were worked out in the old zone
+    svc.live.publish()
 
 
 @router.get("/settings")
@@ -42,6 +75,12 @@ async def put_settings(svc: ServicesDep, changes: JsonBody):
         saved = await asyncio.to_thread(svc.settings.save, changes)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    if "latitude" in changes or "longitude" in changes:
+        await asyncio.to_thread(svc.settings.set_location_zone, None)  # the old place's zone may not be the new one's
+        zoned = await asyncio.to_thread(zone_location, svc)
+        saved = zoned or {**saved, "location_zone": None}
+    if ZONE in changes or "latitude" in changes or "longitude" in changes:
+        apply_zone(svc)
     if SYSTEM.keys() & changes.keys():  # the battery's capacity or reserve may have changed: tell every open dashboard
         svc.live.publish()
     if WEATHER & changes.keys():  # fetch for the new place or model, and retrain for new panels

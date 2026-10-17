@@ -8,6 +8,9 @@ stored in the database and wins over the environment. The system details were on
 set in the environment before they could be edited here: seed_system copies those
 values in once, and after that the database is the only source.
 
+The site's time zone (where days roll over) is the location's own unless another is chosen: "auto" in time_zone,
+with the location's looked up and kept in location_zone. Until both are known it's TZ from the environment.
+
 The location has no default: until someone chooses one (or LATITUDE/LONGITUDE set it), nothing that
 depends on where the house is (the forecast, weather, outages, warnings, the AEMO region) is fetched.
 Installs from when it defaulted to Brisbane keep it: seed_location saves it for them, once.
@@ -23,6 +26,7 @@ from typing import Any
 from app.core.config import Config
 from app.core.database import Database
 from app.core.schema import SAMPLE_TABLES
+from app.core.timezone import is_zone
 
 # Text settings: key -> max length. Stored in the kv table (the settings table holds REALs).
 TEXT: dict[str, int] = {
@@ -31,6 +35,10 @@ TEXT: dict[str, int] = {
     "home_street": 80,
     "home_suburb": 60,
 }
+# The time zone chosen in Settings → Location, by IANA name ("Australia/Perth"), or "auto" (the default): the location's.
+ZONE = "time_zone"
+# kv: the location's own time zone, looked up when it's chosen (app.features.settings.router.zone_location).
+LOCATION_ZONE = "location_zone"
 # The electricity networks whose outages can be followed (app.features.grid.outages.networks), by state.
 POWER_NETWORKS = (
     "energex", "ergon",
@@ -187,7 +195,7 @@ class SettingsStore:
     def load(self) -> None:
         with self.db.reading() as conn:
             rows = conn.execute("SELECT key, value FROM settings").fetchall()
-            keys = [*TEXT, *CHOICES, *LISTS]
+            keys = [*TEXT, *CHOICES, *LISTS, ZONE, LOCATION_ZONE]
             marks = ",".join("?" * len(keys))
             text = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({marks})", keys).fetchall()
         with self._lock:
@@ -258,6 +266,25 @@ class SettingsStore:
         with self._lock:
             return self._text.get(key)
 
+    def zone_choice(self) -> str:
+        """The time zone chosen in Settings, or "auto" for the location's."""
+        tz = self.get_text(ZONE)
+        return tz if is_zone(tz) else "auto"
+
+    def location_zone(self) -> str | None:
+        """The location's own time zone, once it's been looked up (None before, or with no location)."""
+        tz = self.get_text(LOCATION_ZONE)
+        return tz if self.location_set() and is_zone(tz) else None
+
+    def zone(self) -> str | None:
+        """The site's time zone: the one chosen, else the location's. None leaves it to TZ in the environment."""
+        chosen = self.zone_choice()
+        return chosen if chosen != "auto" else self.location_zone()
+
+    def set_location_zone(self, tz: str | None) -> None:
+        """Keep the location's time zone (None: forget it, as when the location moves)."""
+        self._store({LOCATION_ZONE: tz if is_zone(tz) else None})
+
     def get_choice(self, key: str) -> str:
         allowed, default = CHOICES[key]
         value = self.get_text(key)
@@ -273,7 +300,8 @@ class SettingsStore:
             values.update(latitude=None, longitude=None)
         whole = {k: int(v) for k, v in values.items() if k in WHOLE}
         choices = {k: self.get_choice(k) for k in CHOICES} | {k: self.get_list(k) for k in LISTS}
-        return {**values, **whole, **{k: self.get_text(k) for k in TEXT}, **choices}
+        zones = {ZONE: self.zone_choice(), LOCATION_ZONE: self.location_zone()}
+        return {**values, **whole, **{k: self.get_text(k) for k in TEXT}, **choices, **zones}
 
     def save(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Validate and store. Raises ValueError naming the first bad field."""
@@ -288,6 +316,11 @@ class SettingsStore:
                 if not isinstance(raw, list) or len(raw) > most or any(v not in allowed for v in raw):
                     raise ValueError(f"{key} must be a list of up to {most} of {', '.join(allowed)}")
                 text[key] = ",".join(raw) or None
+                continue
+            if key == ZONE:
+                if raw != "auto" and not is_zone(raw):
+                    raise ValueError("Choose a time zone from the list, like Australia/Sydney.")
+                text[key] = None if raw == "auto" else raw
                 continue
             if key in CHOICES:
                 allowed, default = CHOICES[key]
@@ -309,18 +342,22 @@ class SettingsStore:
             if key in WHOLE and not value.is_integer():
                 raise ValueError(f"{key} must be a whole number")
             clean[key] = round(value, 6)
+        self._store(text, clean)
+        return self.all_values()
+
+    def _store(self, text: dict[str, str | None], values: dict[str, float] | None = None) -> None:
+        """Store text settings (None removes one) and numbers, in the database and here."""
         with self.db.writing() as conn:
-            conn.executemany("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", clean.items())
+            conn.executemany("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (values or {}).items())
             for k, t in text.items():
                 if t is None:
                     conn.execute("DELETE FROM kv WHERE key = ?", (k,))
                 else:
                     conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (k, t))
         with self._lock:
-            self._values.update(clean)
+            self._values.update(values or {})
             for k, t in text.items():
                 if t is None:
                     self._text.pop(k, None)
                 else:
                     self._text[k] = t
-        return self.all_values()

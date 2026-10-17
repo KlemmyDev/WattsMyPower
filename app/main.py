@@ -39,7 +39,7 @@ from app.features.live.router import router as live_router
 from app.features.meter.router import router as meter_router
 from app.features.onboarding.router import router as onboarding_router
 from app.features.readings.router import router as readings_router
-from app.features.settings.router import name_location
+from app.features.settings.router import apply_zone, name_location, zone_location
 from app.features.settings.router import router as settings_router
 from app.features.storage.router import router as storage_router
 from app.features.tariffs.router import router as tariffs_router
@@ -113,6 +113,7 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
                 *where,
             )
         await asyncio.to_thread(services.settings.load)
+        apply_zone(services)  # the time zone chosen, or the location's: days roll over in it from here on
         await asyncio.to_thread(services.tariffs.load)
         await asyncio.to_thread(services.amber.load)
         if poll:
@@ -128,11 +129,13 @@ def create_app(config: Config | None = None, *, poll: bool = True, serve_dashboa
             await services.tesla.start()  # reads and steers the Teslas, once they're connected (Tessie or Bluetooth)
             await services.byd.start()  # reads the BYDs from BYD's cloud, once an account's connected
             await services.bluelink.start()  # reads and charges the Hyundais and Kias, once an account's connected
-            # In the background: a network lookup for the forecast location's place name.
+            # In the background: network lookups for the forecast location's place name and its time zone.
             naming = asyncio.create_task(asyncio.to_thread(name_location, services))
+            zoning = asyncio.create_task(asyncio.to_thread(zone_location, services))
         yield
         if poll:
             naming.cancel()
+            zoning.cancel()
             await services.hazards.stop()
             await services.outages.stop()
             await services.grid.stop()

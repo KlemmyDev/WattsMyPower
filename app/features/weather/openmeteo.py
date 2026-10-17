@@ -20,6 +20,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from app.core.http import get_json
+from app.core.timezone import is_zone
 
 FORECAST = "https://api.open-meteo.com/v1/forecast"
 HISTORICAL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
@@ -82,6 +83,14 @@ def history_url(latitude: float, longitude: float, model: str, start: dt.date, e
     if start >= HISTORICAL_FROM:
         return _url(HISTORICAL, latitude, longitude, model, HOURLY, start_date=start, end_date=through)
     return _url(ARCHIVE, latitude, longitude, model, ARCHIVE_HOURLY, start_date=start, end_date=through)
+
+
+def zone_at(latitude: float, longitude: float, get: Fetch = lambda u: get_json(u, timeout=10)) -> str | None:
+    """The time zone Open-Meteo works out for a place (its `timezone=auto`), by IANA name; None if it has none this
+    machine knows. The site's time zone follows it unless another is chosen (app.features.settings.store)."""
+    params = {"latitude": f"{latitude:.4f}", "longitude": f"{longitude:.4f}", "timezone": "auto", "forecast_days": 1}
+    tz = (get(f"{FORECAST}?{urlencode(params)}") or {}).get("timezone")
+    return tz if is_zone(tz) else None
 
 
 def rows(data: dict[str, Any]) -> list[Row]:
