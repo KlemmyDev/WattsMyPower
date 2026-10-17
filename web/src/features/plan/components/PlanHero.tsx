@@ -163,9 +163,9 @@ export function PlanHero({
           />
           {d.cost != null ? (
             <HeroStat
-              label="Expected cost"
+              label="Net cost"
               value={money(d.cost)}
-              sub={d.cost < 0 ? "In credit, supply included" : "Supply charge included"}
+              sub={d.cost < 0 ? "In credit after the supply charge" : "Supply charge less solar credit"}
             />
           ) : (
             <HeroStat
