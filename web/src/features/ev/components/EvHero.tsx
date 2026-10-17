@@ -35,7 +35,7 @@ import { carMood, carTitle, MODE_LABEL, STATUS_LABEL } from "~/features/ev/utils
 const ROLLUP_KWH = 5 / 60 / 1000; // each of the car's power readings is five minutes' average (W)
 
 /** While it waits for spare solar: how closely it's followed, so it's clear why it's (not) being kept awake. */
-function readiness(v: EvVehicle, provider: Reached | null): string | null {
+export function readiness(v: EvVehicle, provider: Reached | null): string | null {
   if (v.night && v.status !== "charging")
     return "Left to sleep overnight. It's checked every half hour without waking it, or wake it to read it now.";
   if (v.status !== "waiting") return null;
@@ -54,7 +54,7 @@ function readiness(v: EvVehicle, provider: Reached | null): string | null {
 
 /** How fresh what's shown is: asleep or not, when its charge was read, and when it was last checked (over Bluetooth,
  * the car's checked without waking it far more often than its charge is read). */
-function freshness(v: EvVehicle, provider: Reached | null): string {
+export function freshness(v: EvVehicle, provider: Reached | null): string {
   const s = v.state;
   if (provider === "hyundai" || provider === "kia")
     // The cloud only has what the car last sent it: when it did, and when the cloud was last read.
@@ -151,8 +151,7 @@ function WakeButton({ v }: { v: EvVehicle }) {
  * at home today, how much of that was sun and what it cost; its charge along a bar with the limit as a handle you drag
  * (and, charging, where it's heading); where it is between asleep, awake and charging, with what it's doing in a
  * sentence; and for a Tesla, unless `chart` is off, its day. `compact` (several cars, or a dashboard widget): the bar's
- * only shown, with no buttons, and the whole card opens the car's own page. Without `figures` (the EV page, whose top
- * card has them), the rest: its limit to drag, where it is between asleep and charging, its buttons and its day.
+ * only shown, with no buttons, and the whole card opens the car's own page.
  */
 export function EvHero({
   v,
@@ -162,7 +161,6 @@ export function EvHero({
   now,
   chart = true,
   compact = false,
-  figures = true,
 }: {
   v: EvVehicle;
   provider?: Reached | null;
@@ -172,7 +170,6 @@ export function EvHero({
   now: number;
   chart?: boolean;
   compact?: boolean;
-  figures?: boolean;
 }) {
   const { command } = useEvChange(brand);
   const s = v.state;
@@ -227,99 +224,97 @@ export function EvHero({
           className="absolute inset-0 z-1 rounded-[inherit] outline-none"
         />
       )}
-      {figures && (
-        <HeroTop>
-          <HeroFigures>
-            <HeroLead
-              label={compact ? name : "Charge"}
-              value={soc == null ? DASH : Math.round(soc)}
-              unit={soc == null ? undefined : "%"}
+      <HeroTop>
+        <HeroFigures>
+          <HeroLead
+            label={compact ? name : "Charge"}
+            value={soc == null ? DASH : Math.round(soc)}
+            unit={soc == null ? undefined : "%"}
+            sub={
+              <>
+                {where}
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium whitespace-nowrap",
+                    !solar && !v.hold && "bg-fg/6 text-ink-muted",
+                  )}
+                  style={
+                    v.hold
+                      ? { background: alpha(COLOR.warn, 0.14), color: COLOR.warn }
+                      : solar
+                        ? { background: alpha(COLOR.solar, 0.14), color: COLOR.solar }
+                        : undefined
+                  }
+                >
+                  {v.hold ? "On hold" : MODE_LABEL[v.control.mode]}
+                </span>
+              </>
+            }
+          />
+          {charging ? (
+            <HeroLive
+              label="Charging now"
+              on
+              color={mood.color}
+              {...split(kW((s?.power_kw ?? 0) * 1000))}
               sub={
-                <>
-                  {where}
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium whitespace-nowrap",
-                      !solar && !v.hold && "bg-fg/6 text-ink-muted",
-                    )}
-                    style={
-                      v.hold
-                        ? { background: alpha(COLOR.warn, 0.14), color: COLOR.warn }
-                        : solar
-                          ? { background: alpha(COLOR.solar, 0.14), color: COLOR.solar }
-                          : undefined
-                    }
-                  >
-                    {v.hold ? "On hold" : MODE_LABEL[v.control.mode]}
-                  </span>
-                </>
+                [s?.amps != null && `at ${s.amps} A`, s?.energy_added != null && `${kWh(s.energy_added)} this charge`]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
               }
             />
-            {charging ? (
-              <HeroLive
-                label="Charging now"
-                on
-                color={mood.color}
-                {...split(kW((s?.power_kw ?? 0) * 1000))}
-                sub={
-                  [s?.amps != null && `at ${s.amps} A`, s?.energy_added != null && `${kWh(s.energy_added)} this charge`]
-                    .filter(Boolean)
-                    .join(" · ") || undefined
-                }
-              />
-            ) : solar && spare != null && s?.at_home !== false && (spare > 0 || v.follow === "ready") ? (
-              <HeroLive
-                label="Spare solar now"
-                on={v.min_w != null && spare >= v.min_w}
-                color={COLOR.solar}
-                {...split(kW(Math.max(0, spare)))}
-                sub={v.min_w != null ? `Starts at ${kW(v.min_w)}` : undefined}
-              />
-            ) : (
-              <HeroLive
-                label="Right now"
-                on={false}
-                color={mood.color}
-                value={asleep ? "Asleep" : STATUS_LABEL[v.status]}
-                sub={s?.as_of ? `Charge read ${hhmm(s.as_of)}` : undefined}
-              />
-            )}
-          </HeroFigures>
-          <HeroStats>
-            <HeroStat
-              label="Range"
-              value={s?.range_km != null ? `${Math.round(s.range_km)} km` : DASH}
-              sub={
-                s?.range_km != null && soc && limit && limit > soc
-                  ? `About ${Math.round((s.range_km / soc) * limit)} km at ${pct(limit)}`
-                  : undefined
-              }
+          ) : solar && spare != null && s?.at_home !== false && (spare > 0 || v.follow === "ready") ? (
+            <HeroLive
+              label="Spare solar now"
+              on={v.min_w != null && spare >= v.min_w}
+              color={COLOR.solar}
+              {...split(kW(Math.max(0, spare)))}
+              sub={v.min_w != null ? `Starts at ${kW(v.min_w)}` : undefined}
             />
-            <HeroStat
-              label="Charged today"
-              value={today.kwh != null ? kWh(today.kwh) : DASH}
-              sub={today.kwh != null && today.kwh < 0.05 ? "Nothing yet" : today.kwh != null ? "At home" : undefined}
+          ) : (
+            <HeroLive
+              label="Right now"
+              on={false}
+              color={mood.color}
+              value={asleep ? "Asleep" : STATUS_LABEL[v.status]}
+              sub={s?.as_of ? `Charge read ${hhmm(s.as_of)}` : undefined}
             />
-            <HeroStat
-              label="Sun or battery"
-              value={today.share != null ? pct(today.share * 100) : DASH}
-              sub={today.grid != null && today.share != null ? `${kWh(today.grid)} from the grid` : undefined}
-            />
-            {today.cost != null ? (
-              <HeroStat label="Cost today" value={money(today.cost)} sub="At your rates" />
-            ) : (
-              charging &&
-              s?.minutes_to_full != null && (
-                <HeroStat
-                  label="Full in"
-                  value={duration(s.minutes_to_full * 60)}
-                  sub={limit != null ? `To ${pct(limit)}` : undefined}
-                />
-              )
-            )}
-          </HeroStats>
-        </HeroTop>
-      )}
+          )}
+        </HeroFigures>
+        <HeroStats>
+          <HeroStat
+            label="Range"
+            value={s?.range_km != null ? `${Math.round(s.range_km)} km` : DASH}
+            sub={
+              s?.range_km != null && soc && limit && limit > soc
+                ? `About ${Math.round((s.range_km / soc) * limit)} km at ${pct(limit)}`
+                : undefined
+            }
+          />
+          <HeroStat
+            label="Charged today"
+            value={today.kwh != null ? kWh(today.kwh) : DASH}
+            sub={today.kwh != null && today.kwh < 0.05 ? "Nothing yet" : today.kwh != null ? "At home" : undefined}
+          />
+          <HeroStat
+            label="Sun or battery"
+            value={today.share != null ? pct(today.share * 100) : DASH}
+            sub={today.grid != null && today.share != null ? `${kWh(today.grid)} from the grid` : undefined}
+          />
+          {today.cost != null ? (
+            <HeroStat label="Cost today" value={money(today.cost)} sub="At your rates" />
+          ) : (
+            charging &&
+            s?.minutes_to_full != null && (
+              <HeroStat
+                label="Full in"
+                value={duration(s.minutes_to_full * 60)}
+                sub={limit != null ? `To ${pct(limit)}` : undefined}
+              />
+            )
+          )}
+        </HeroStats>
+      </HeroTop>
       {compact ? (
         <HeroBar legend={legend}>
           {fullAt != null && limit != null && (

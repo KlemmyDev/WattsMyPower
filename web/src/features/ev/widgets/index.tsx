@@ -6,7 +6,7 @@ import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
 import { BydHero } from "~/features/ev/components/BydHero";
 import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvHero } from "~/features/ev/components/EvHero";
-import { EvInOut } from "~/features/ev/components/EvInOut";
+import { EvDays, EvTrips } from "~/features/ev/components/EvDays";
 import { EvNow, evRows, evShow } from "~/features/ev/components/EvNow";
 import { carTitle } from "~/features/ev/utils";
 
@@ -74,9 +74,13 @@ function Charging({ settings }: WidgetProps) {
   if (c.bluelink) return <EvCharging v={c.bluelink} brand="bluelink" />;
   return quiet("Charging", "Charging from spare solar is for a Tesla, Hyundai or Kia.");
 }
-function InOut({ ctx, settings }: WidgetProps) {
+function Trips({ ctx, settings }: WidgetProps) {
   const c = useCar(settings);
-  return c.tesla ? <EvInOut vin={c.tesla.vin} now={ctx.now} /> : quiet("In and out", "Kept for a Tesla.");
+  return c.tesla ? <EvTrips vin={c.tesla.vin} now={ctx.now} /> : quiet("Trips and charges", "Kept for a Tesla.");
+}
+function Days({ ctx, settings }: WidgetProps) {
+  const c = useCar(settings);
+  return c.tesla ? <EvDays vin={c.tesla.vin} now={ctx.now} /> : quiet("Last 30 days", "Kept for a Tesla.");
 }
 
 /** The EV page's cards, as widgets, each for the car chosen. */
@@ -144,27 +148,40 @@ export const widgets: WidgetDef[] = [
   {
     type: "car-charging",
     name: "Charging from solar",
-    sub: "How it charges, and the spare there is for it",
+    sub: "How it charges, what's next, and starting or stopping it",
     group: "car",
     icon: "sun",
     thumb: { kind: "rows" },
-    sizes: size([5, 5], [12, 9], [6, 7]),
-    phone: size([4, 7], [4, 10], [4, 8]),
+    sizes: size([4, 4], [12, 7], [4, 5]),
+    phone: size([4, 5], [4, 8], [4, 6]),
     options: [pick],
     needs: needsCar,
     Component: Charging,
   },
   {
     type: "car-in-out",
-    name: "Car in and out",
-    sub: "Charges at home, and what it used while away",
+    name: "Car trips and charges",
+    sub: "Its latest trips out and charges at home",
     group: "car",
     icon: "car",
-    thumb: { kind: "bars", color: COLOR.lilac },
-    sizes: size([5, 5], [12, 12], [6, 8]),
-    phone: size([4, 7], [4, 12], [4, 9]),
+    thumb: { kind: "rows" },
+    sizes: size([4, 5], [12, 12], [4, 7]),
+    phone: size([4, 6], [4, 12], [4, 7]),
     options: [pick],
     needs: needsCar,
-    Component: InOut,
+    Component: Trips,
+  },
+  {
+    type: "car-days",
+    name: "Car's last 30 days",
+    sub: "What it added at home each day, and how much was sun",
+    group: "car",
+    icon: "calendar",
+    thumb: { kind: "bars", color: COLOR.danger },
+    sizes: size([4, 3], [12, 5], [4, 4]),
+    phone: size([4, 4], [4, 6], [4, 4]),
+    options: [pick],
+    needs: needsCar,
+    Component: Days,
   },
 ];

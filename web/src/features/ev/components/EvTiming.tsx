@@ -2,10 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { duration } from "~/features/common/formatting/utils/date";
 import { Button } from "~/features/common/ui/components/Button";
-import { Segmented } from "~/features/common/ui/components/Segmented";
+import { Collapse } from "~/features/common/ui/components/Collapse";
+import { CardText, ChoiceTiles, SmallCard, type Choice } from "~/features/common/ui/components/SmallCard";
 import { bluelinkQuery, teslaQuery } from "~/features/ev/api";
 import { useEvChange } from "~/features/ev/hooks";
 import type { EvBrand, EvTimingKey, EvVehicle } from "~/features/ev/types";
+import { COLOR } from "~/features/common/theme/utils/colors";
 
 /** A wait in seconds, in words: "45 s", "1 min 30 s", "3 min", "1 h 30 min". */
 function span(secs: number): string {
@@ -130,9 +132,7 @@ function TimingRow({
 }
 
 type PresetKey = Exclude<EvTimingKey, "battery_full">;
-type Preset = {
-  id: "standard" | "quick" | "steady";
-  label: string;
+type Preset = Choice<"standard" | "quick" | "steady"> & {
   about: string;
   values: Record<PresetKey, number> | null;
 };
@@ -140,56 +140,72 @@ type Preset = {
 /** Ready-made timings, each a whole set (the home battery's full level is left as it is). Standard is the defaults. */
 const PRESETS: Preset[] = [
   {
-    id: "standard",
-    label: "Standard",
-    about: "Balanced. Rides out a short cloud without starting and stopping too often.",
-    values: null,
-  },
-  {
-    id: "quick",
+    value: "quick",
     label: "Quick",
+    sub: "Catches short sunny spells",
+    icon: "bolt",
     about:
-      "Follows the sun closely and catches short sunny spells, so the car gets more of it. It starts and stops more often, and wakes the car more.",
+      "Follows the sun closely, so the car gets more of it. It starts and stops more often, and wakes the car more.",
     values: { start_after: 60, stop_after: 120, min_switch: 120, amps_every: 20, average: 40, lead: 2700 },
   },
   {
-    id: "steady",
+    value: "standard",
+    label: "Standard",
+    sub: "Balanced",
+    icon: "sun",
+    about: "Rides out a short cloud without starting and stopping too often.",
+    values: null,
+  },
+  {
+    value: "steady",
     label: "Steady",
+    sub: "Rides out clouds",
+    icon: "cloud",
     about:
-      "Rides out clouds and changes speed less often. Fewer starts and stops are easier on the car, but it can miss a short sunny spell.",
+      "Changes speed less often. Fewer starts and stops are easier on the car, but it can miss a short sunny spell.",
     values: { start_after: 600, stop_after: 900, min_switch: 1200, amps_every: 180, average: 420, lead: 900 },
   },
 ];
 const PRESET_KEYS: PresetKey[] = ["start_after", "stop_after", "min_switch", "amps_every", "average", "lead"];
 
 /**
- * How the car's solar charging is timed (app.features.tesla.control.TIMING): a preset (Standard, the defaults; Quick;
- * Steady), each setting them all at once, or Custom, each wait as a slider, its default a Reset away. The preset shown
- * is the one the car's timings match; Custom when none does, or once it's chosen. The home battery's full level only
- * in Custom, and only with the home battery first.
+ * How the car's solar charging is timed (app.features.tesla.control.TIMING), as a small card: three presets as tiles
+ * (Quick; Standard, the defaults; Steady), each setting them all at once, and "Set your own" folding out each wait as a
+ * slider, its default a Reset away. The tile lit is the preset the car's timings match; none once they're its own. The
+ * home battery's full level is only among the sliders, and only with the home battery first. Shown while it charges
+ * from solar.
  */
-export function EvTiming({ v, hasBattery, brand = "tesla" }: { v: EvVehicle; hasBattery: boolean; brand?: EvBrand }) {
+export function EvTiming({
+  v,
+  hasBattery,
+  brand = "tesla",
+  className,
+}: {
+  v: EvVehicle;
+  hasBattery: boolean;
+  brand?: EvBrand;
+  className?: string;
+}) {
   const { data: tesla } = useQuery({ ...teslaQuery, enabled: brand === "tesla" });
   const { data: bluelink } = useQuery({ ...bluelinkQuery, enabled: brand === "bluelink" });
   const status = brand === "tesla" ? tesla : bluelink;
   const { configure } = useEvChange(brand);
   const [custom, setCustom] = useState(false);
   const limits = status?.timing;
-  if (!limits) return null;
+  if (!limits || v.control.mode !== "solar") return null;
   const valuesOf = (p: Preset) =>
     p.values ?? (Object.fromEntries(PRESET_KEYS.map((k) => [k, limits[k].default])) as Record<PresetKey, number>);
   const matched = PRESETS.find((p) => PRESET_KEYS.every((k) => v.control[k] === valuesOf(p)[k]));
-  const chosen = custom || !matched ? "custom" : matched.id;
-  const choose = (id: Preset["id"] | "custom") => {
-    if (id === "custom") return setCustom(true);
+  const choose = (id: Preset["value"]) => {
     setCustom(false);
-    const p = PRESETS.find((x) => x.id === id)!;
+    const p = PRESETS.find((x) => x.value === id)!;
     // Standard sets each back to its default (null), so it follows the defaults if they change.
     configure.mutate({
       vin: v.vin,
       ...Object.fromEntries(PRESET_KEYS.map((k) => [k, p.values ? p.values[k] : null])),
     });
   };
+  const open = custom || !matched;
   // A Hyundai or Kia's speed can't be changed, so there's no time between changes of it to set.
   const rows = ROWS.filter(
     (r) =>
@@ -198,40 +214,45 @@ export function EvTiming({ v, hasBattery, brand = "tesla" }: { v: EvVehicle; has
   );
   const full = rows.some((r) => r.key === "battery_full") && v.control.battery_full !== limits.battery_full.default;
   return (
-    <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <span className="text-sm font-semibold">Timing</span>
-        <Segmented
-          label="Timing"
-          value={chosen}
-          onChange={choose}
-          options={[
-            ...PRESETS.map((p) => ({ value: p.id, label: p.label })),
-            { value: "custom" as const, label: "Custom" },
-          ]}
-          className="max-sm:w-full"
-          buttonClassName="px-3 py-[7px] text-[13px] max-sm:flex-1 max-sm:justify-center"
-        />
-      </div>
-      <span className="text-[13px] leading-5 text-pretty text-ink-muted">
-        {chosen === "custom" ? "Your own timing, set below." : PRESETS.find((p) => p.id === chosen)!.about} It starts
-        after {span(v.control.start_after)} of enough sun, stops after {span(v.control.stop_after)} without it, and
-        waits at least {span(v.control.min_switch)} between the two.
-        {full && chosen !== "custom" && ` Your home battery counts as full at ${v.control.battery_full}%.`}
-      </span>
-      {chosen === "custom" && (
-        <div className="flex flex-col gap-4">
-          {rows.map((r) => (
-            <TimingRow
-              key={r.key}
-              row={r}
-              value={v.control[r.key]}
-              limits={limits[r.key]}
-              onSave={(value) => configure.mutate({ vin: v.vin, [r.key]: value })}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <SmallCard
+      id={`h-tt-${v.vin}`}
+      title="Charging timing"
+      note={matched ? matched.label : "Your own"}
+      className={className}
+    >
+      <ChoiceTiles
+        label="Timing"
+        options={PRESETS}
+        value={matched?.value ?? null}
+        onChange={choose}
+        color={COLOR.solar}
+      />
+      <CardText>
+        {matched ? `${matched.about} ` : ""}It starts after {span(v.control.start_after)} of enough sun, stops after{" "}
+        {span(v.control.stop_after)} without it, and waits at least {span(v.control.min_switch)} between the two.
+        {full && !open && ` Your home battery counts as full at ${v.control.battery_full}%.`}
+      </CardText>
+      <Button
+        variant="muted-link"
+        size="sm"
+        aria-expanded={open}
+        disabled={!matched}
+        onClick={() => setCustom(!custom)}
+        className="self-start"
+      >
+        {open ? (matched ? "Hide your own timing" : "Your own timing") : "Set your own"}
+      </Button>
+      <Collapse open={open} className="flex flex-col gap-4 pt-1">
+        {rows.map((r) => (
+          <TimingRow
+            key={r.key}
+            row={r}
+            value={v.control[r.key]}
+            limits={limits[r.key]}
+            onSave={(value) => configure.mutate({ vin: v.vin, [r.key]: value })}
+          />
+        ))}
+      </Collapse>
+    </SmallCard>
   );
 }

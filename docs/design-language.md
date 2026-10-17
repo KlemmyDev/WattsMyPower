@@ -116,6 +116,22 @@ On a dashboard, `HeroCard` names its page and links there (from the widget's gro
 itself out by its own width (a container), so phone stacking inside a hero uses `@max-xl:` and two-across stats
 `@max-2xl:`, not viewport breakpoints.
 
+## Small cards (the live pages, EV first)
+
+Under the sky card, a live page can lay its cards out as a grid of small cards instead of two columns (EV does; the
+other live pages move over as they're touched). The kit is `common/ui/components/SmallCard`:
+
+- `CardGrid`: three across where the page has room, two, then one (container queries, so it fits beside the side nav).
+  Cards in a row share its height, and each rises in after the one before as the page opens (`.card-grid` in app.css).
+- `SmallCard`: a short title (16 px, semibold) and, on its right, a faint note that frames it ("Last 30 days",
+  "Share sun on", "62% now"). Then what answers it, and a line or two of `CardText`. Radius 22 px, padding 20 × 22.
+- `ChoiceTiles` for a choice of two to four (how it charges, timing presets, who gets the sun first): an icon, a name
+  and a few words each, the chosen one lit in its colour. `null` lights none (a setting of your own).
+- `Facts` for a few name–value rows.
+- One question per card, and fewer things in each: split a big card into several small ones rather than stacking
+  rows inside one. A card that only matters in one mode (solar charging's) leaves itself out otherwise. Rare detail
+  goes in a `Collapse` behind a quiet link ("Everything else"); a heat strip reads a day out in the note as you point.
+
 ## Cards below the hero
 
 - `Card` from `common/ui/components/Card`. Header is `TitleBlock` (title + one muted line) on the left and, when the
