@@ -60,8 +60,11 @@ is full), and the garage or carport and the battery and inverter. It keeps its o
 the real sun ("Lit"): each face its material's own colour, brighter the more squarely it meets the sun, warmer late in
 the day; shadows cast along the light (the house on the lawn, the eaves on the walls, the battery on its wall), softened
 by cloud; soft dark at the walls' feet and under the eaves; gutters, downpipes, sills and the eaves' undersides; and
-faceted trees (gums and shade trees, by your garden) out to the horizon, fading into its haze. Over that, the sky's
-light: darker towards night with its windows lit, cooler in rain, wet glass in rain, the moon in the glass at night.
+faceted trees (gums and shade trees, by your garden) out to the horizon, fading into its haze. The sky's light is
+baked into each face as it's drawn (never laid over the picture, which would show through whatever's in front):
+darker towards night, cooler in rain, warm at the ends of the day, the garage under its own light. At night the windows
+light up from inside (brighter low down, a blind shading the top, light spilling on the wall), the porch light comes on,
+and warm light falls on the lawn in front of them. The glass gets wet in rain and catches the moon.
 The battery shows its level on its face (blue charging, amber discharging), with power running along the conduit from
 the eave to the inverter and between the inverter and the battery. How hard the panels are
 working (a share of the array) is told by the orange lines along each row's top rail: more of them running, longer,

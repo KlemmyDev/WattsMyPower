@@ -20,8 +20,11 @@ import { clamp01, css, mix, rgb, type Rgb } from "~/features/solar/utils/sky";
  * Scene units as the Overview house: x along the street (the house 0..10), y towards the street (its front wall at
  * y = 8), z up. The street side faces the equator, so the sun comes round the front. Faces are drawn far to near
  * within layers (ground, trees, the house, what's in front of it); what hangs on a wall is drawn with that wall, so it
- * never sorts behind it. Everything that stands still is one SVG string per camera and light (cached); what moves (the
- * power, the battery's level, the light over it all) is laid over it by houseOverlay().
+ * never sorts behind it. The light of the moment (night, the warm ends of the day, rain, the garage's own light) is
+ * baked into each face as it's drawn, never laid over the picture, which would show through whatever's in front.
+ * Everything that stands still is one SVG string per camera and light (cached). What moves (the power along its lines,
+ * the battery's level, the warmth of the glass) fills slots left in that string right after what it's on (slotMarkup),
+ * so whatever's in front of it hides it.
  */
 
 export type P3 = [number, number, number];
@@ -35,13 +38,51 @@ export type Pose = { eye: P3; at: P3; fov: number; cx: number; cy: number };
  * night), how warm it is (low sun), the cloud over it (softening shadows), how much daylight the sky gives (`sky`), and
  * the sky's colour low down (the far trees fade into it).
  */
-export type Light = { dir: P3; el: number; L: number; warm: number; cover: number; sky: number; horizon: Rgb };
+export type Light = {
+  dir: P3;
+  el: number;
+  L: number;
+  warm: number;
+  cover: number;
+  sky: number;
+  horizon: Rgb;
+  /** The sky's own: the sun's height on its arc (-1..1), how wet it is, and how much the moon shows. */
+  es: number;
+  rain: number;
+  moon: number;
+};
 
-/** One shape in drawing order; `clip` keeps it to another outline (a shadow to the wall it falls on). */
-type Shape = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string };
+/** What moves, drawn into a slot right after what it's on: a row of panels' glass (its warmth and sheen), the power
+ * along a rail, and the battery and inverter (their level, lights and power). */
+export type Slot = { kind: "glass"; cells: string } | { kind: "rail"; d: string; i: number } | { kind: "kit" };
+
+/**
+ * One shape in drawing order; `clip` keeps it to another outline (a shadow to the wall it falls on). `inside` takes the
+ * garage's own light, `roof` the warm rim at the ends of the day, `own` keeps its colour as it is (the trees have their
+ * own night). `raw` is markup drawn as it is, and `slot` a place for what moves.
+ */
+type Shape = {
+  d: string;
+  fill?: string;
+  stroke?: string;
+  width?: number;
+  opacity?: number;
+  clip?: string;
+  inside?: boolean;
+  roof?: boolean;
+  own?: boolean;
+  raw?: string;
+  slot?: Slot;
+  /** A window pane: where it is on the picture, and how brightly it's lit at night. */
+  win?: { x: number; y: number; w: number; h: number; k: number };
+  /** A row of panels' glass: its cell gaps, for when they glow. */
+  cells?: string;
+};
 
 /** The battery and inverter as drawn: their power lines, and the battery's level bar for a level (0 to 1). */
 export type Kit = {
+  /** Whether it shows at all: not when its wall faces away from the camera. */
+  shown: boolean;
   battery: boolean;
   dc: string;
   link: string;
@@ -52,21 +93,12 @@ export type HouseArt = {
   /** The picture's size (the sky's frame). */
   w: number;
   h: number;
-  /** Everything that stands still, as SVG markup. */
+  /** Everything that stands still, as SVG markup, with an empty `<g data-slot>` for each of `slots`. */
   svg: string;
-  /** All the panels' glass (what the glass shows is clipped to it), their cell gaps, and their rails. */
-  glass: string;
-  cells: string;
-  rails: string[];
-  /** Everything built, the roof faces, the windows and inside the garage: for the light over them. */
-  built: string;
-  roofs: string;
-  windows: string;
-  inside: string;
+  slots: Slot[];
   kit: Kit | null;
-  /** Where the sheen crosses the glass and the moon lies in it. */
+  /** Where the sheen crosses the glass. */
   sheen: { x: number; cx: number; cy: number; rot: number };
-  moon: P2;
 };
 
 /** The picture's size: a phone's sky, or a wider one. */
@@ -179,6 +211,13 @@ const PANEL_GAP = 0.07;
 const PANEL_L = 1.72;
 const FASCIA = "#f2efe8";
 const SHADOW = "#18213a";
+
+/** A colour as numbers: "#rrggbb", "rgb(r,g,b)" or "rgba(r,g,b,a)". */
+function parseCol(col: string): number[] | null {
+  if (col[0] === "#") return rgb(col);
+  const m = col.match(/[\d.]+/g);
+  return m ? m.map(Number) : null;
+}
 
 // ------------------------------------------------------------------------------------------------- the light
 
@@ -294,13 +333,8 @@ type Item = { layer: number; depth: number; shapes: Shape[]; d?: string; pts?: P
 
 class Builder {
   items: Item[] = [];
-  built: string[] = [];
-  roofs: string[] = [];
-  glass: string[] = [];
-  cells: string[] = [];
   rails: string[] = [];
-  windows: string[] = [];
-  inside: string[] = [];
+  windows = 0;
   /** Drawn in layers (the ground, trees, the house, what's in front of it), far to near within each. */
   layer = 0;
   /** The walls things hang on (front and side), each one draw item. */
@@ -313,6 +347,8 @@ class Builder {
   /** Each fill's own colour before it's lit (the side shades a flat drawing bakes in go back to the face's). */
   base: Map<string, string>;
   panelsLeft: number;
+  /** How dark it is, 0 by day to 0.9 at night: the windows and the porch light come on with it. */
+  night: number;
   constructor(
     readonly cam: Cam,
     readonly roof: Roof,
@@ -321,6 +357,7 @@ class Builder {
     readonly sun: Light,
   ) {
     this.panelsLeft = panels;
+    this.night = clamp01(1 - sun.sky * 1.5) * 0.9;
     this.base = new Map([
       [walls.side, walls.face],
       [roof.side, roof.face],
@@ -347,11 +384,13 @@ class Builder {
   face(pts: P3[], fill: string, extra: Shape[] = [], roof = false, inside = false): Item | null {
     const d = this.cam.poly(pts);
     if (!d) return null;
-    const it = this.add(this.depthOf(pts), { d, fill: inside ? fill : this.light(fill, pts) }, ...extra);
+    const it = this.add(
+      this.depthOf(pts),
+      { d, fill: inside ? fill : this.light(fill, pts), inside, roof },
+      ...extra.map((x) => (inside ? { ...x, inside } : x)),
+    );
     it.d = d;
     it.pts = pts;
-    (inside ? this.inside : this.built).push(d);
-    if (roof) this.roofs.push(d);
     return it;
   }
   /** A face's colour in the light: its material's own colour, lit by how squarely it faces the sun. */
@@ -400,6 +439,7 @@ class Builder {
     }
     const width = { tile: 0.9, corrugated: 0.7, rib: 1.2, seam: 1.6, none: 0 }[material];
     const extra: Shape[] = [{ d: lines, stroke: roof.line, width }];
+    const r0 = this.rails.length;
     if (opts.panels) extra.push(...this.panels(pl));
     const [a1, b1] = pl.ulim(1);
     if (opts.cap !== false) {
@@ -407,7 +447,15 @@ class Builder {
       if (pl.lo > 0) extra.push({ d: cam.seg(pl.P(0, 0), pl.P(a1, 1)), stroke: roof.cap, width: 3.8 });
       if (pl.hi > 0) extra.push({ d: cam.seg(pl.P(pl.L, 0), pl.P(b1, 1)), stroke: roof.cap, width: 3.8 });
     }
-    this.face(pl.outline(), fill, extra, true);
+    const it = this.face(pl.outline(), fill, extra, true);
+    // The power along each row's rail, drawn right after the face it's on.
+    if (it)
+      for (let i = r0; i < this.rails.length; i++)
+        this.items.push({
+          layer: it.layer,
+          depth: it.depth - 1e-3,
+          shapes: [{ d: "", slot: { kind: "rail", d: this.rails[i], i } }],
+        });
     if (opts.fascia !== false) {
       // The fascia, and a gutter along it just out and below: drawn after the walls (and the eaves' undersides), so
       // it's in front of them from low down.
@@ -484,13 +532,11 @@ class Builder {
       const r = cam.seg(pl.P(rb, v1 + 0.025, lift / 2), pl.P(ra, v1 + 0.025, lift / 2));
       if (r) this.rails.push(r);
     }
-    this.glass.push(glass);
-    this.cells.push(gaps);
     return [
       { d: shadows, fill: "#000000", opacity: 0.25 },
       { d: edges, fill: "#7d8693" },
       { d: frames, fill: "#c3cad4" },
-      { d: glass, fill: "url(#lh-glass)" },
+      { d: glass, fill: "url(#lh-glass)", cells: gaps },
       { d: gaps, stroke: "#c9d3e6", width: 0.7, opacity: 0.22 },
     ];
   }
@@ -593,7 +639,17 @@ class Builder {
     const wall = this.wallItems[side];
     const pane = this.cam.poly([q(a0, z0, 0.03), q(a1, z0, 0.03), q(a1, z1, 0.03), q(a0, z1, 0.03)]);
     if (!pane || !wall) return;
-    this.windows.push(pane);
+    // Where the pane is on the picture (for the light it spills on the wall), and how brightly it's lit: rooms vary.
+    const corners = [q(a0, z0, 0.03), q(a1, z0, 0.03), q(a1, z1, 0.03), q(a0, z1, 0.03)].map(this.cam.p);
+    let win: Shape["win"];
+    if (corners.every(Boolean)) {
+      const xs = (corners as P2[]).map((p) => p[0]);
+      const ys = (corners as P2[]).map((p) => p[1]);
+      const x = Math.min(...xs);
+      const y = Math.min(...ys);
+      win = { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y, k: [1, 0.82, 0.62][this.windows % 3] };
+    }
+    this.windows++;
     const sill = [
       q(a0 - 0.2, z0 - 0.12, 0.02),
       q(a1 + 0.2, z0 - 0.12, 0.02),
@@ -616,7 +672,7 @@ class Builder {
         ]),
         fill: "#f4f1ea",
       },
-      { d: pane, fill: "url(#lh-win)" },
+      { d: pane, fill: "url(#lh-win)", win },
       {
         d: this.cam.poly([q(a0, z1 - 0.17, 0.035), q(a1, z1 - 0.17, 0.035), q(a1, z1, 0.035), q(a0, z1, 0.035)]),
         fill: "#16203a",
@@ -645,7 +701,6 @@ function groundAndWalls(B: Builder, g: Geometry) {
     const d = B.cam.poly(pts);
     if (!d) return;
     B.add(depth, { d, fill: litColour(fill, [0, 0, 1], B.sun) });
-    B.built.push(d);
   };
   B.layer = -2;
   ground(
@@ -740,7 +795,98 @@ function groundAndWalls(B: Builder, g: Geometry) {
         fill: "#16203a",
         opacity: 0.3,
       },
+      // The porch light beside the door.
+      {
+        d: B.cam.poly([
+          [5.8, 8.04, z0 + 2.12],
+          [5.98, 8.04, z0 + 2.12],
+          [5.98, 8.04, z0 + 2.34],
+          [5.8, 8.04, z0 + 2.34],
+        ]),
+        fill: "#3b3f45",
+      },
     );
+  if (B.night > 0.02) nightLights(B, g);
+}
+
+/**
+ * At night: the porch light and its glow on the wall around it, and warm light from the windows and the porch falling
+ * on the lawn in front of them, softening outwards. Gradients and opacity alone (no blur, for Safari).
+ */
+function nightLights(B: Builder, g: Geometry) {
+  const n = B.night;
+  const pool = (pts: P3[], op: number) => {
+    const d = B.cam.poly(pts);
+    if (d)
+      B.items.push({
+        layer: -1.5,
+        depth: 1e4 - 1,
+        shapes: [{ d: "", raw: `<path d="${d}" fill="#ffc874" opacity="${(op * n).toFixed(3)}"/>` }],
+      });
+  };
+  if (!g.raised)
+    for (const [a0, a1, k] of [
+      [1.2, 3.2, 1],
+      [6.6, 8.8, 0.82],
+    ])
+      for (const [spread, reach, op] of [
+        [0.9, 1.9, 0.07],
+        [0.45, 1.2, 0.08],
+        [0.1, 0.6, 0.1],
+      ])
+        pool(
+          [
+            [a0 - spread * 0.3, 8.02, 0.02],
+            [a1 + spread * 0.3, 8.02, 0.02],
+            [a1 + spread, 8 + reach, 0.02],
+            [a0 - spread, 8 + reach, 0.02],
+          ],
+          op * k,
+        );
+  for (const [r, op] of [
+    [1.6, 0.06],
+    [1.0, 0.08],
+    [0.55, 0.1],
+  ])
+    pool(
+      Array.from({ length: 14 }, (_, i): P3 => {
+        const t = (i / 13) * Math.PI;
+        return [5.1 + Math.cos(t) * r * 1.3, 8.02 + Math.sin(t) * r, 0.02];
+      }),
+      op,
+    );
+  if (!g.garage && !g.raised)
+    for (const [spread, reach, op] of [
+      [0.7, 1.5, 0.05],
+      [0.3, 0.8, 0.06],
+    ])
+      pool(
+        [
+          [10.02, 1.6 - spread * 0.3, 0.02],
+          [10.02, 3.6 + spread * 0.3, 0.02],
+          [10 + reach, 3.6 + spread, 0.02],
+          [10 + reach, 1.6 - spread, 0.02],
+        ],
+        op * 0.62,
+      );
+  // The porch light: a bright lamp, and its glow on the wall around it, just after the front wall.
+  const fw = B.wallItems.front;
+  const at: P3 = [5.89, 8.06, g.z0 + 2.2];
+  const lamp = B.cam.p(at);
+  if (!fw || !lamp) return;
+  const k = B.cam.focal / B.cam.depth(at);
+  B.items.push({
+    layer: fw.layer,
+    depth: fw.depth - 1e-4,
+    shapes: [
+      {
+        d: "",
+        raw:
+          `<ellipse cx="${n1(lamp[0])}" cy="${n1(lamp[1] + 0.25 * k)}" rx="${n1(1.5 * k)}" ry="${n1(1.3 * k)}" fill="url(#lh-spill)" opacity="${(0.9 * n).toFixed(2)}"/>` +
+          `<circle cx="${n1(lamp[0])}" cy="${n1(lamp[1])}" r="${n1(Math.max(1.5, 0.07 * k))}" fill="#fff4d6" opacity="${n.toFixed(2)}"/>`,
+      },
+    ],
+  });
 }
 
 function gable(B: Builder, eave: number, rise: number, material: Material, oh = 0.45) {
@@ -1092,7 +1238,7 @@ function roofSlab(B: Builder, g: Garage) {
 // ------------------------------------------------------------------------------------------------- the battery and inverter
 
 /** The kit's layer: inside the garage between its walls and its shell, else in front of the wall it's on. */
-const kitLayer = (M: Mount) => (M.inside ? 3 : M.o[0] === 10 ? 1 : 5);
+const kitLayer = (M: Mount) => (M.inside ? 3 : M.o[0] === 10 ? 1 : 4.6);
 
 /** The kit's colours, each side and top back to its front's own before it's lit. */
 const KIT_BASE: [string, string][] = [
@@ -1114,8 +1260,13 @@ function kit(
   M: Mount,
   battery: boolean,
 ): Kit & { q: (u: number, o: number, z: number) => P3; boxes: number[][] } {
-  B.layer = kitLayer(M);
   const q = (u: number, o: number, z: number): P3 => addk(addk(addk(M.o, M.a, u), M.n, o), [0, 0, z]);
+  // On a wall that faces away from the camera it's behind that wall: none of it shows.
+  if (!B.facing(q(0.8, 0, 1.0), M.n)) {
+    const none = { track: "", fill: "", up: "", led: "", status: "" };
+    return { q, boxes: [], shown: false, battery, dc: "", link: "", bar: () => none };
+  }
+  B.layer = kitLayer(M);
   const wbox = (
     u0: number,
     u1: number,
@@ -1170,6 +1321,8 @@ function kit(
   const link = [q(1.15, 0.05, iz0), q(1.15, 0.05, 0.72), q(bu1, 0.05, 0.72)];
   pipe(dc);
   if (battery) pipe(link);
+  // Its level, lights and power, drawn right after it.
+  B.items.push({ layer: B.layer, depth: -1e5, shapes: [{ d: "", slot: { kind: "kit" } }] });
   B.layer = 0;
   const um = (bu0 + bu1) / 2;
   const w = 0.035;
@@ -1181,6 +1334,7 @@ function kit(
           [iu0, iu1, 0, 0.2, iz0, iz1],
         ]
       : [[iu0, iu1, 0, 0.2, iz0, iz1]],
+    shown: true,
     battery,
     dc: B.cam.line(dc),
     link: battery ? B.cam.line(link) : "",
@@ -1335,7 +1489,7 @@ function litExtras(B: Builder, K: ReturnType<typeof kit>, g: Geometry, mountWall
 
   // The battery and inverter: dark where they stand, and their shadows on the wall in the sun.
   B.layer = kitLayer(g.mount);
-  if (K.battery)
+  if (K.battery && K.shown)
     B.add(1e5, {
       d: B.cam.poly([K.q(-0.07, 0, 0.004), K.q(0.73, 0, 0.004), K.q(0.73, 0.36, 0.004), K.q(-0.07, 0.36, 0.004)]),
       fill: SHADOW,
@@ -1368,7 +1522,6 @@ function litExtras(B: Builder, K: ReturnType<typeof kit>, g: Geometry, mountWall
       { d: body, fill: "#4d6b45" },
       { d: top, fill: "#8fae74", opacity: +(0.3 + 0.4 * sun.L).toFixed(2) },
     );
-    B.built.push(body);
   };
   for (const [x, r] of [
     [0.7, 0.46],
@@ -1593,7 +1746,8 @@ function trees(B: Builder, garden: Garden, w: number, lite: boolean) {
       });
     }
     faces.sort((x, y) => y.depth - x.depth);
-    B.add(dep, ...shapes, ...faces);
+    // The trees keep their own night (tone() darkens them), so the light of the moment isn't baked into them again.
+    B.add(dep, ...[...shapes, ...faces].map((x) => ({ ...x, own: true })));
   }
   B.layer = 0;
 }
@@ -1636,7 +1790,20 @@ export function houseArt(
         phone,
         houseKey(o),
         [...pose.eye, ...pose.at, pose.fov, pose.cx, pose.cy].map(r2).join(","),
-        [...light.dir, light.el, light.L, light.warm, light.cover, light.sky, ...light.horizon].map(r2).join(","),
+        [
+          ...light.dir,
+          light.el,
+          light.L,
+          light.warm,
+          light.cover,
+          light.sky,
+          ...light.horizon,
+          light.es,
+          light.rain,
+          light.moon,
+        ]
+          .map(r2)
+          .join(","),
         lite,
       ].join("/")
     : "";
@@ -1658,7 +1825,38 @@ export function houseArt(
   litExtras(B, K, g, mountWall);
   trees(B, look.garden, w, lite);
 
-  const shapes = B.items.sort((a, b) => a.layer - b.layer || b.depth - a.depth).flatMap((i) => i.shapes);
+  // The garage stands against the house's side wall (x = 10). From that side it's drawn after the house; from the
+  // other side (out west) before it, after the trees, so the house hides it. Its own parts keep their order.
+  const west = cam.eye[0] < 10;
+  const order = (l: number) => (west && l >= 2 && l < 6 ? -0.6 + (l - 2) * 0.05 : l);
+  const shapes = B.items.sort((a, b) => order(a.layer) - order(b.layer) || b.depth - a.depth).flatMap((i) => i.shapes);
+
+  // The light of the moment: night, rain and the warm ends of the day outside, the garage's own light inside.
+  const L = light.sky;
+  const shadeAmt = (1 - L) * 0.64 + L * (0.06 + 0.1 * light.cover + 0.14 * light.rain);
+  const SH = mix(mix([96, 106, 126], [11, 18, 38], 1 - L), [44, 56, 80], light.rain * 0.5);
+  const shadeCol = css(SH);
+  const rim = L * clamp01(1 - light.es * 2.6) * (1 - 0.8 * light.cover) * 0.28;
+  const lit = B.night;
+  const baked = new Map<string, string>();
+  const bake = (col: string | undefined, sh: Shape) => {
+    if (!col || col === "none" || col.startsWith("url(") || sh.own) return col ?? "none";
+    const key = `${col}|${sh.inside ? 1 : 0}${sh.roof ? 1 : 0}`;
+    const hit = baked.get(key);
+    if (hit) return hit;
+    const cc = parseCol(col);
+    if (!cc) return col;
+    let c: Rgb = [cc[0], cc[1], cc[2]];
+    if (sh.inside) c = mix(mix(c, SH, 0.18 + shadeAmt * 0.5), [255, 207, 138], lit * 0.22);
+    else {
+      c = mix(c, SH, shadeAmt);
+      if (sh.roof && rim > 0.01) c = mix(c, [255, 154, 90], rim);
+    }
+    const out = cc.length > 3 ? `rgba(${c.map(Math.round).join(",")},${cc[3]})` : css(c);
+    baked.set(key, out);
+    return out;
+  };
+
   // The sky's haze along the horizon, which the lawn's far edge and the far trees sink into.
   const hf = unit([cam.fwd[0], cam.fwd[1], 1e-9]);
   const h0 = cam.p(addk(cam.eye, hf, 5000))?.[1] ?? h / 2;
@@ -1667,8 +1865,25 @@ export function houseArt(
     `<defs><linearGradient id="lh-haze" gradientUnits="userSpaceOnUse" x1="0" y1="${n1(h0 - 70)}" x2="0" y2="${n1(h0 + 6)}">` +
     `<stop offset="0" stop-color="${hor}" stop-opacity="0"/><stop offset="1" stop-color="${hor}" stop-opacity=".7"/></linearGradient></defs>` +
     `<rect x="-600" y="${n1(h0 - 70)}" width="${w + 1200}" height="76" fill="url(#lh-haze)"/>`;
+  const slots: Slot[] = [];
+  const slot = (x: Slot) => {
+    svg += `<g data-slot="${slots.length}"></g>`;
+    slots.push(x);
+  };
+  const full = (fill: string, a: number) =>
+    `<rect x="-600" y="-600" width="${w + 1200}" height="${h + 1200}" fill="${fill}" fill-opacity="${a.toFixed(3)}"/>`;
+  const moon = cam.p([4, 6.5, g.eave + 1.0]);
+  const moonA = light.moon * (1 - 0.8 * light.cover) * 0.4;
   let ci = 0;
   for (const s of shapes) {
+    if (s.slot) {
+      slot(s.slot);
+      continue;
+    }
+    if (s.raw != null) {
+      svg += s.raw;
+      continue;
+    }
     let clip = "";
     if (s.clip) {
       svg += `<clipPath id="lh-k${ci}"><path d="${s.clip}"/></clipPath>`;
@@ -1676,24 +1891,39 @@ export function houseArt(
     }
     const op = s.opacity != null ? ` opacity="${s.opacity}"` : "";
     svg += s.stroke
-      ? `<path d="${s.d}" fill="none" stroke="${s.stroke}" stroke-width="${s.width}" stroke-linecap="round"${op}${clip}/>`
-      : `<path d="${s.d}" fill="${s.fill ?? "none"}"${op}${clip}/>`;
+      ? `<path d="${s.d}" fill="none" stroke="${bake(s.stroke, s)}" stroke-width="${s.width}" stroke-linecap="round"${op}${clip}/>`
+      : `<path d="${s.d}" fill="${bake(s.fill, s)}"${op}${clip}/>`;
+    if (s.fill === "url(#lh-glass)") {
+      // What a row of panels' glass shows: the sky's colour (more of it towards night), the warmth of making power and
+      // a band of light crossing it (in its slot), wet in rain, the moon in it, then the light of the moment.
+      svg += `<clipPath id="lh-k${ci}"><path d="${s.d}"/></clipPath><g clip-path="url(#lh-k${ci++})">${full(hor, 0.16 + 0.3 * (1 - L))}`;
+      slot({ kind: "glass", cells: s.cells ?? "" });
+      if (light.rain > 0.01) svg += full("#c8d4ea", 0.18 * light.rain * 0.9);
+      if (moon && moonA > 0.01)
+        svg += `<ellipse cx="${n1(moon[0])}" cy="${n1(moon[1])}" rx="92" ry="14" fill="url(#lh-moon)" opacity="${moonA.toFixed(2)}"/>`;
+      svg += `${full(shadeCol, shadeAmt)}</g>`;
+    }
+    if (s.fill === "url(#lh-win)") {
+      // A window darkens with the evening and lights up from inside: brighter low down, a blind shading its top, and a
+      // soft spill of light on the wall around it. Rooms vary in how bright they are.
+      svg += `<path d="${s.d}" fill="${shadeCol}" opacity="${shadeAmt.toFixed(2)}"/>`;
+      if (lit > 0.01) {
+        const k = s.win?.k ?? 1;
+        svg += `<path d="${s.d}" fill="url(#lh-winlit)" opacity="${(lit * (0.55 + 0.45 * k)).toFixed(2)}"/><path d="${s.d}" fill="url(#lh-blind)" opacity="${lit.toFixed(2)}"/>`;
+        if (s.win)
+          svg += `<ellipse cx="${n1(s.win.x + s.win.w / 2)}" cy="${n1(s.win.y + s.win.h * 0.6)}" rx="${n1(s.win.w * 1.05)}" ry="${n1(s.win.h * 1.15)}" fill="url(#lh-spill)" opacity="${(lit * 0.75 * k).toFixed(2)}"/>`;
+      }
+    }
   }
 
-  // The sheen lies along the slope as this camera sees it; the moon sits low in the glass.
+  // The sheen lies along the slope as this camera sees it.
   const c0 = cam.p([5, 8, g.eave + 0.4]) ?? [w / 2, h / 2];
   const c1 = cam.p([5, 5, g.eave + 1.6]) ?? [w / 2, h / 2 - 1];
   const art: HouseArt = {
     w,
     h,
     svg,
-    glass: B.glass.join(""),
-    cells: B.cells.join(""),
-    rails: B.rails,
-    built: B.built.join(""),
-    roofs: B.roofs.join(""),
-    windows: B.windows.join(""),
-    inside: B.inside.join(""),
+    slots,
     kit: K,
     sheen: {
       x: c0[0] - 420,
@@ -1701,7 +1931,6 @@ export function houseArt(
       cy: c0[1],
       rot: (Math.atan2(c1[1] - c0[1], c1[0] - c0[0]) * 180) / Math.PI + 90,
     },
-    moon: cam.p([4, 6.5, g.eave + 1.0]) ?? [w / 2, h / 2],
   };
   if (keep) {
     cache.set(key, art);
@@ -1712,10 +1941,8 @@ export function houseArt(
 
 // ------------------------------------------------------------------------------------------------- what moves over it
 
-/** What the house shows at a moment, over its picture. */
+/** What the house shows at a moment, in its slots. */
 export type HouseState = {
-  /** The sky's light (atmosphere.ts): the sun's height, the moon, the colour low in the sky, cloud and rain. */
-  light: { es: number; moon: number; horizon: string; cover: number; rain: number };
   /** How hard the panels are working, of the array (0 to 1), and whether they are. */
   share: number;
   on: boolean;
@@ -1745,59 +1972,43 @@ function flow(d: string, color: string, f: number, i: number, now: number) {
   return s + "</g>";
 }
 
+const reverse = (d: string) => (d ? `M${d.slice(1).split(" L").reverse().join(" L")}` : d);
+
 /**
- * What moves over the house, as SVG markup: what the glass shows (the sky's colour, the warmth of making power, a band
- * of light crossing it, wet in rain), the light over everything (night, rain, the warm ends of the day, the windows and
- * the garage lit from inside), and the power: along each row of panels, down the conduit to the inverter, and in or out
- * of the battery, whose level shows on its face (blue charging, amber discharging).
+ * What moves, for one of the picture's slots: in a row of panels' glass, the warmth of making power, a band of light
+ * crossing it and its cells glowing; along a rail, the power; on the battery and inverter, the power down the conduit
+ * and in or out of the battery, and its level on its face (blue charging, amber discharging) with its lights.
  */
-export function houseOverlay(art: HouseArt, s: HouseState): string {
-  const { light } = s;
+export function slotMarkup(art: HouseArt, slot: Slot, s: HouseState): string {
   const f = s.on ? clamp01(s.share) : 0;
-  const L = clamp01(light.es * 3 + 0.25);
-  const shade = (1 - L) * 0.64 + L * (0.06 + 0.1 * light.cover + 0.14 * light.rain);
-  const shadeCol = css(mix(mix([96, 106, 126], [11, 18, 38], 1 - L), [44, 56, 80], light.rain * 0.5));
-  const rim = L * clamp01(1 - light.es * 2.6) * (1 - 0.8 * light.cover) * 0.28;
-  const lit = clamp01(1 - L * 1.5) * 0.9;
-  const W = art.w + 400;
-  const H = art.h + 400;
-  const full = (fill: string, a: number) =>
-    `<rect x="-200" y="-200" width="${W}" height="${H}" fill="${fill}" fill-opacity="${a.toFixed(3)}"/>`;
-
-  let out = `<g clip-path="url(#lh-glassclip)">${full(light.horizon, 0.16 + 0.3 * (1 - L))}`;
-  if (s.on) out += full(PV, 0.03 + 0.2 * f);
-  if (f > 0.06)
-    out +=
-      `<g opacity="${(0.08 + 0.4 * f).toFixed(2)}"><g class="roof-sheen" style="animation-duration:${(10 - 5 * f).toFixed(1)}s">` +
-      `<rect x="${n1(art.sheen.x)}" y="-300" width="108" height="${art.h + 600}" fill="url(#lh-sheen)" fill-opacity=".4" transform="rotate(${art.sheen.rot.toFixed(1)} ${n1(art.sheen.cx)} ${n1(art.sheen.cy)})"/></g></g>`;
-  if (light.rain > 0.01) out += full("#c8d4ea", 0.18 * light.rain * 0.9);
-  out += `</g>`;
-  if (s.on)
-    out += `<path d="${art.cells}" fill="none" stroke="#ffd08a" stroke-width=".8" opacity="${(0.03 + 0.15 * f).toFixed(2)}"/>`;
-
-  out += `<path d="${art.built}" fill="${shadeCol}" opacity="${shade.toFixed(3)}"/>`;
-  if (art.inside)
-    out += `<path d="${art.inside}" fill="${shadeCol}" opacity="${(0.18 + shade * 0.5).toFixed(2)}"/><path d="${art.inside}" fill="#ffcf8a" opacity="${(lit * 0.22).toFixed(2)}"/>`;
-  if (rim > 0.01) out += `<path d="${art.roofs}" fill="#ff9a5a" opacity="${rim.toFixed(3)}"/>`;
-  if (lit > 0.01) out += `<path d="${art.windows}" fill="#ffd27f" opacity="${lit.toFixed(3)}"/>`;
-  const moon = light.moon * (1 - 0.8 * light.cover) * 0.4;
-  if (moon > 0.01)
-    out += `<ellipse cx="${n1(art.moon[0])}" cy="${n1(art.moon[1])}" rx="92" ry="14" fill="url(#lh-moon)" opacity="${moon.toFixed(2)}"/>`;
-
-  if (s.on) art.rails.forEach((d, i) => (out += flow(d, PV, f, i, s.now)));
+  if (slot.kind === "glass") {
+    if (!s.on) return "";
+    let out = `<rect x="-600" y="-600" width="${art.w + 1200}" height="${art.h + 1200}" fill="${PV}" fill-opacity="${(0.03 + 0.2 * f).toFixed(3)}"/>`;
+    if (f > 0.06)
+      out +=
+        `<g opacity="${(0.08 + 0.4 * f).toFixed(2)}"><g class="roof-sheen" style="animation-duration:${(10 - 5 * f).toFixed(1)}s">` +
+        `<rect x="${n1(art.sheen.x)}" y="-300" width="108" height="${art.h + 600}" fill="url(#lh-sheen)" fill-opacity=".4" transform="rotate(${art.sheen.rot.toFixed(1)} ${n1(art.sheen.cx)} ${n1(art.sheen.cy)})"/></g></g>`;
+    if (slot.cells)
+      out += `<path d="${slot.cells}" fill="none" stroke="#ffd08a" stroke-width=".8" opacity="${(0.03 + 0.15 * f).toFixed(2)}"/>`;
+    return out;
+  }
+  if (slot.kind === "rail") return s.on ? flow(slot.d, PV, f, slot.i, s.now) : "";
   const K = art.kit;
-  if (!K) return out;
-  if (s.on) out += flow(K.dc, PV, f, 3, s.now);
+  if (!K?.shown) return "";
+  let out = s.on ? flow(K.dc, PV, f, 3, s.now) : "";
   if (!K.battery) return out;
   // The inverter reports charging as negative.
   const b = s.battery.w == null ? 0 : -s.battery.w / 1000;
   const charging = b > 0.02;
   const draining = b < -0.02;
-  if (charging || draining) {
-    let d = K.link;
-    if (draining && d) d = `M${d.slice(1).split(" L").reverse().join(" L")}`;
-    out += flow(d, charging ? CHARGE : DRAIN, Math.max(0.15, clamp01(Math.abs(b) / 5)), 5, s.now);
-  }
+  if (charging || draining)
+    out += flow(
+      draining ? reverse(K.link) : K.link,
+      charging ? CHARGE : DRAIN,
+      Math.max(0.15, clamp01(Math.abs(b) / 5)),
+      5,
+      s.now,
+    );
   if (s.battery.level == null) return out;
   const bar = K.bar(s.battery.level / 100);
   const col = draining ? DRAIN : CHARGE;

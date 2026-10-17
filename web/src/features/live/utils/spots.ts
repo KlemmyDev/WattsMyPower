@@ -47,10 +47,11 @@ registerSpot("solar-intro", (g, phone) => {
 /** Battery: close on the battery and inverter, on the side wall (or the garage's), or inside the garage. */
 registerSpot("battery", (g, phone) => {
   const M = g.mount;
+  // In the garage: from just outside the door, a little to the left, looking in at the back wall (clear of a car).
   if (M.inside)
     return phone
-      ? { eye: rel(M, 13.85, 3.0, 1.7), at: rel(M, 0.35, 0.9, 1.0), fov: 34, cx: 320, cy: 310 }
-      : { eye: rel(M, 14.45, 3.4, 1.75), at: rel(M, 0.35, 0.9, 1.0), fov: 30, cx: 700, cy: 338 };
+      ? { eye: rel(M, 8.65, 0.2, 1.9), at: rel(M, 0.25, 0.85, 1.05), fov: 50, cx: 330, cy: 290 }
+      : { eye: rel(M, 8.25, 0.2, 1.9), at: rel(M, 0.25, 0.85, 1.05), fov: 44, cx: 700, cy: 280 };
   return phone
     ? { eye: rel(M, 7.2, 8.65, 1.75), at: rel(M, 0.25, 0.95, 1.0), fov: 38, cx: 330, cy: 310 }
     : { eye: rel(M, 8.0, 9.25, 1.8), at: rel(M, 0.25, 0.9, 1.0), fov: 32, cx: 690, cy: 338 };

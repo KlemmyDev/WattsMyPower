@@ -6,7 +6,7 @@ import {
   geometry,
   houseArt,
   houseKey,
-  houseOverlay,
+  slotMarkup,
   type HouseArt,
   type HouseState,
   type Light,
@@ -49,7 +49,6 @@ export const LiveHouse = memo(function LiveHouse({
   lite: boolean;
 }) {
   const still = useRef<SVGGElement>(null);
-  const moving = useRef<SVGGElement>(null);
   const hkey = houseKey(house);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the house as drawn, by what makes it differ
   const g = useMemo(() => geometry(house), [hkey]);
@@ -74,13 +73,16 @@ export const LiveHouse = memo(function LiveHouse({
       still.current.innerHTML = art.svg;
       drawn.current.svg = art.svg;
     }
-    // What moves is written again only when it's changed (its comets carry on from where they were when it is).
+    // What moves is written into its slots again only when it's changed (its comets carry on from where they were).
     const s = L.state;
-    const over = `${s.share.toFixed(3)}|${s.on}|${s.battery.w}|${s.battery.level?.toFixed(1)}|${s.light.es.toFixed(3)}|${s.light.cover}|${s.light.rain}|${s.light.moon.toFixed(2)}|${s.light.horizon}`;
-    if (moving.current && (drawn.current.art !== art || drawn.current.over !== over)) {
-      moving.current.innerHTML =
-        `<clipPath id="lh-glassclip"><path d="${art.glass}"/></clipPath>` +
-        houseOverlay(art, { ...s, now: performance.now() });
+    const over = `${s.share.toFixed(3)}|${s.on}|${s.battery.w}|${s.battery.level?.toFixed(1)}`;
+    if (still.current && (drawn.current.art !== art || drawn.current.over !== over)) {
+      const now = performance.now();
+      const groups = still.current.querySelectorAll<SVGGElement>("g[data-slot]");
+      groups.forEach((el, i) => {
+        const slot = art.slots[i];
+        if (slot) el.innerHTML = slotMarkup(art, slot, { ...s, now });
+      });
       drawn.current.art = art;
       drawn.current.over = over;
     }
@@ -172,7 +174,6 @@ export const LiveHouse = memo(function LiveHouse({
     >
       <HouseDefs w={w} h={h} />
       <g ref={still} />
-      <g ref={moving} />
     </svg>
   );
 });
@@ -189,7 +190,7 @@ function firstVisit(): boolean {
   return true;
 }
 
-/** The glass's and windows' colours, the sheen, and the moon in the glass. Only one live sky is ever on a page, so
+/** The glass's and windows' colours (and their light at night), the sheen, and the moon in the glass. Only one live sky is ever on a page, so
  * their ids are fixed (the house's markup names them). */
 const HouseDefs = memo(function HouseDefs({ w, h }: { w: number; h: number }) {
   return (
@@ -208,6 +209,21 @@ const HouseDefs = memo(function HouseDefs({ w, h }: { w: number; h: number }) {
         <stop offset={0} stopColor="#fff6e0" stopOpacity={0} />
         <stop offset={0.5} stopColor="#fff6e0" />
         <stop offset={1} stopColor="#fff6e0" stopOpacity={0} />
+      </linearGradient>
+      <radialGradient id="lh-winlit" cx={0.5} cy={0.85} r={0.95}>
+        <stop offset={0} stopColor="#fff0c4" />
+        <stop offset={0.45} stopColor="#ffc978" />
+        <stop offset={1} stopColor="#d9823f" />
+      </radialGradient>
+      <radialGradient id="lh-spill">
+        <stop offset={0} stopColor="#ffd590" stopOpacity={0.55} />
+        <stop offset={0.5} stopColor="#ffc06a" stopOpacity={0.18} />
+        <stop offset={1} stopColor="#ffb04f" stopOpacity={0} />
+      </radialGradient>
+      <linearGradient id="lh-blind" x1={0} y1={0} x2={0} y2={1}>
+        <stop offset={0} stopColor="#6a3a18" stopOpacity={0.55} />
+        <stop offset={0.22} stopColor="#6a3a18" stopOpacity={0.25} />
+        <stop offset={0.3} stopColor="#6a3a18" stopOpacity={0} />
       </linearGradient>
       <radialGradient id="lh-moon">
         <stop offset={0} stopColor="#dfe7ff" stopOpacity={0.9} />

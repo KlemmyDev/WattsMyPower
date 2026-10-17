@@ -151,10 +151,7 @@ export function LiveCard({ hero, day }: { hero: LiveHero; day: LiveDay }) {
   const share = Math.round((pv / arrayW) * 200) / 200;
   const on = pv > 50;
   const house = useMemo(() => houseOptions(s), [s]);
-  const state = useMemo(
-    () => ({ light: sky.light, share, on, battery: { w: batteryW, level } }),
-    [sky.light, share, on, batteryW, level],
-  );
+  const state = useMemo(() => ({ share, on, battery: { w: batteryW, level } }), [share, on, batteryW, level]);
 
   const playLabel = playing ? "Pause" : scrub != null && scrub >= start + DAY - 120 ? "Play again" : "Play the day";
   const controls = (

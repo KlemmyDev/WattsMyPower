@@ -79,5 +79,8 @@ export function lightAt(
     cover: r2(w.cover),
     sky: r2(clamp01(sky.es * 3 + 0.25)),
     horizon: channels(sky.horizon).map(Math.round) as Rgb,
+    es: r2(sky.es),
+    rain: r2(sky.rain),
+    moon: r2(sky.moon),
   };
 }
