@@ -118,7 +118,7 @@ export function SolarTrend({ trend: t }: { trend: SolarInsights["trend"] }) {
             : "What the panels make per unit of sunshine, month by month"
         }
         label={m ? monthYear.format(parseYmd(m.month)) : "Change a year"}
-        value={m ? pct(m.ratio * 100) : t?.per_year == null ? DASH : perYear(t.per_year)}
+        value={m ? pct(m.ratio * 100) : t?.per_year == null ? "Not yet" : perYear(t.per_year)}
         chip={
           m && avg ? <Delta value={m.ratio / avg - 1}>{signedPct(m.ratio / avg - 1)} on the year</Delta> : undefined
         }
