@@ -53,7 +53,7 @@ export function HomeSourcesCard({
         <TitleBlock className="min-w-0 flex-1" title="Where it came from" sub="Today's home use so far" />
         {self != null && (
           <div className="flex flex-none flex-col items-end gap-0.5">
-            <span className="text-xs text-ink-faint">Self-powered</span>
+            <span className="text-xs text-ink-faint">Self-sufficiency</span>
             <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{pct(self * 100)}</span>
           </div>
         )}
@@ -151,7 +151,7 @@ export function HomeDaysCard({ days }: { days: DataDay[] }) {
                 color={SOURCES.grid}
               />
               <TooltipRow label="Home used" value={kWh(whole[h].home)} />
-              <TooltipRow label="Self-powered" value={pct(whole[h].ss * 100)} />
+              <TooltipRow label="Self-sufficiency" value={pct(whole[h].ss * 100)} />
             </ChartTooltip>
           )}
         </div>

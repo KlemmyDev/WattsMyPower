@@ -139,7 +139,7 @@ export function HomeHero({
             sub={bill ? `${kWh(bill.import_kwh)}${bill.saved > 0 ? ` · ${money(bill.saved)} saved` : ""}` : undefined}
           />
           <HeroStat
-            label="Made itself"
+            label="Self-sufficiency"
             value={today.self != null ? pct(today.self * 100) : DASH}
             sub="Solar and the battery"
           />
