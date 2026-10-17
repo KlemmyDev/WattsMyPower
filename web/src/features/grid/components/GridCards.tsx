@@ -1,23 +1,29 @@
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { errorMessage } from "~/features/common/api/utils";
-import { ON } from "~/features/common/energy/utils";
+import { useHasBattery } from "~/features/battery/hooks";
+import { ON, reserveOf } from "~/features/common/energy/utils";
 import { duration, hhmm, hourLabel, weekdayShort } from "~/features/common/formatting/utils/date";
-import type { Snapshot } from "~/features/common/live/types";
+import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
+import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
-import { COLOR } from "~/features/common/theme/utils/colors";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { sameDay } from "~/features/common/time/utils";
-import { Button } from "~/features/common/ui/components/Button";
+import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
+import { dim, usePick } from "~/features/common/ui/components/Pick";
+import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { cn } from "~/features/common/ui/utils";
+import type { Forecast } from "~/features/common/weather/types";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
-import { PLANNED, UNPLANNED } from "~/features/grid/components/OutagesCard";
+import { PLANNED, RADII, UNPLANNED } from "~/features/grid/components/OutagesCard";
 import type { GridView, HazardsView, Outage, OutagesView } from "~/features/grid/types";
-import { listed, wholesaleCents } from "~/features/grid/utils";
+import { LEVEL, listed, perMWh, wholesaleCents, wholesaleKind } from "~/features/grid/utils";
+import { useSaveSettings } from "~/features/common/settings/hooks";
 
 /*
  * The Grid page's cards under its top card: simple ones, each a title with a word on it in the corner, one picture of
@@ -26,9 +32,6 @@ import { listed, wholesaleCents } from "~/features/grid/utils";
  */
 
 const HOUR = 3600;
-/** A wholesale price below this is cheap, at or above `DEAR` dear ($/MWh: 5c and 20c a kWh). */
-const CHEAP = 50;
-const DEAR = 200;
 
 /** A card with a title, a word on it in the corner, and what's in it. */
 function Tile({
@@ -36,16 +39,33 @@ function Tile({
   aside,
   children,
   className,
+  style,
+  dot,
 }: {
   title: string;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
+  /** A dot before the title in this colour (the urgent card's level). */
+  dot?: string;
 }) {
   return (
-    <Card className={cn("gap-3.5 rounded-[22px] px-[22px] py-5 max-sm:rounded-[22px] max-sm:px-5", className)}>
+    <Card
+      className={cn("gap-3.5 rounded-[22px] px-[22px] py-5 max-sm:rounded-[22px] max-sm:px-5", className)}
+      style={style}
+    >
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-base leading-6 font-bold tracking-normal">{title}</h2>
+        <h2 className="flex items-center gap-2 font-display text-base leading-6 font-bold tracking-normal">
+          {dot && (
+            <i
+              aria-hidden
+              className="size-2 flex-none rounded-full"
+              style={{ background: dot, boxShadow: `0 0 0 3px ${alpha(dot, 0.25)}` }}
+            />
+          )}
+          {title}
+        </h2>
         {aside && <span className="min-w-0 truncate text-xs text-ink-faint">{aside}</span>}
       </div>
       {children}
@@ -122,7 +142,7 @@ function hours(grid: GridView, start: number): Hour[] {
   });
 }
 
-const kind = (p: number | null) => (p == null ? null : p < CHEAP ? "cheap" : p >= DEAR ? "dear" : "mid");
+const kind = wholesaleKind;
 
 /** The hours either side of `i` priced like it (cheap with cheap, dear with dear): "from 10 am to 2 pm". */
 function run(list: Hour[], i: number): string {
@@ -136,12 +156,35 @@ function run(list: Hour[], i: number): string {
   return a === b ? `around ${hourLabel(list[i].h)}` : `from ${hourLabel(a)} to ${hourLabel(b + 1)}`;
 }
 
+/** What the forecast has the house doing on the grid in the hour from `t`, if it's still to come: " You're likely to
+ * sell about 1.2 kWh then." */
+function likely(f: Forecast | null | undefined, t: number, now: number): string {
+  if (t + HOUR <= now) return "";
+  const h = f?.hours.find((x) => x.ts === t);
+  if (!h) return "";
+  if (h.grid_kwh > 0.05) return ` You're likely to buy about ${kWh(h.grid_kwh)} then.`;
+  if (h.grid_kwh < -0.05) return ` You're likely to sell about ${kWh(-h.grid_kwh)} then.`;
+  return " Your solar and battery should have the house covered then.";
+}
+
 /**
  * What power sells for in the region today, before network charges: each hour as a bar (teal when cheap, orange when
- * dear, this hour outlined), and a sentence on the price now and when it's cheapest and dearest. AEMO's notices about
- * tight supply, while there are any.
+ * dear, this hour outlined), and a sentence on the price now and when it's cheapest and dearest. Pointing at an hour
+ * (or tapping it) reads it out in the corner and the sentence: its price, and for the hours ahead, what the forecast
+ * (`f`) has the house buying or selling then. AEMO's notices about tight supply, while there are any.
  */
-export function WholesaleCard({ grid, start, now }: { grid: GridView; start: number; now: number }) {
+export function WholesaleCard({
+  grid,
+  start,
+  now,
+  f,
+}: {
+  grid: GridView;
+  start: number;
+  now: number;
+  f?: Forecast | null;
+}) {
+  const { picked, plot, item } = usePick();
   const qc = useQueryClient();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -163,6 +206,7 @@ export function WholesaleCard({ grid, start, now }: { grid: GridView; start: num
   const low = priced.length ? list.indexOf(priced.reduce((a, x) => (x.price! < a.price! ? x : a))) : -1;
   const high = priced.length ? list.indexOf(priced.reduce((a, x) => (x.price! > a.price! ? x : a))) : -1;
   const active = grid.notices.filter((n) => n.active && !n.cancels).sort((a, b) => b.at - a.at);
+  const pick = picked != null ? list[picked] : null;
   if (!grid.enabled)
     return (
       <Tile title="Wholesale market" aside="AEMO">
@@ -175,34 +219,48 @@ export function WholesaleCard({ grid, start, now }: { grid: GridView; start: num
       </Tile>
     );
   return (
-    <Tile title="Wholesale market" aside={`${grid.region_name ?? "AEMO"} · c/kWh`}>
+    <Tile
+      title="Wholesale market"
+      aside={
+        pick?.price != null ? (
+          <span className="text-ink tabular-nums" aria-live="polite">
+            {hourLabel(pick.h)}–{hourLabel(pick.h + 1)} · {wholesaleCents(pick.price)}
+          </span>
+        ) : (
+          `${grid.region_name ?? "AEMO"} · c/kWh`
+        )
+      }
+    >
       {priced.length > 0 && (
         <>
-          <div
-            role="img"
-            aria-label="Today's wholesale price, hour by hour"
-            className="grid h-14 grid-cols-24 items-end gap-0.5"
-          >
+          <div className="grid h-14 grid-cols-24 gap-0.5" {...plot}>
             {list.map((x) => {
               const k = kind(x.price);
               return (
-                <i
+                <button
                   key={x.h}
-                  title={
+                  type="button"
+                  disabled={x.price == null}
+                  aria-label={
                     x.price == null
                       ? undefined
                       : `${hourLabel(x.h)} to ${hourLabel(x.h + 1)}: ${wholesaleCents(x.price)}${x.forecast ? ", forecast" : ""}`
                   }
-                  className={cn(
-                    "rounded-t-[3px] rounded-b-[1px]",
-                    x.h === nowH && x.price != null && "outline-2 outline-offset-1 outline-ink",
-                  )}
-                  style={{
-                    height: `${x.price == null ? 0 : Math.max(6, (Math.max(0, x.price) / top) * 100)}%`,
-                    background: k === "cheap" ? COLOR.teal : k === "dear" ? COLOR.export : "var(--color-ink-faint)",
-                    opacity: k === "cheap" ? 0.75 : k === "dear" ? 0.8 : 0.45,
-                  }}
-                />
+                  {...item(x.h)}
+                  className={cn("flex h-full cursor-pointer items-end border-0 bg-transparent p-0", dim(picked, x.h))}
+                >
+                  <i
+                    className={cn(
+                      "w-full rounded-t-[3px] rounded-b-[1px] transition-[height] duration-200",
+                      x.h === nowH && x.price != null && "outline-2 outline-offset-1 outline-ink",
+                    )}
+                    style={{
+                      height: `${x.price == null ? 0 : Math.max(6, (Math.max(0, x.price) / top) * 100)}%`,
+                      background: k === "cheap" ? COLOR.teal : k === "dear" ? COLOR.export : "var(--color-ink-faint)",
+                      opacity: picked === x.h ? 1 : k === "cheap" ? 0.75 : k === "dear" ? 0.8 : 0.45,
+                    }}
+                  />
+                </button>
               );
             })}
           </div>
@@ -215,6 +273,12 @@ export function WholesaleCard({ grid, start, now }: { grid: GridView; start: num
           <Button variant="link" size="sm" onClick={retry} disabled={busy} className="h-auto p-0 align-baseline">
             {busy ? "Trying…" : "Try again"}
           </Button>
+        </Note>
+      ) : pick?.price != null ? (
+        <Note>
+          <span className="text-ink">{wholesaleCents(pick.price)} a kWh</span> from {hourLabel(pick.h)} to{" "}
+          {hourLabel(pick.h + 1)} ({perMWh(pick.price)}){pick.forecast ? ", as AEMO forecasts it" : ""}.
+          {likely(f, start + pick.h * HOUR, now)}
         </Note>
       ) : priced.length ? (
         <Note>
@@ -272,6 +336,10 @@ function planned(o: Outage, now: number): string {
   return ` ${day} from ${hhmm(o.start)}${o.end ? ` to ${hhmm(o.end)}` : ""}`;
 }
 
+/** How far away, and which way: "3.2 km NW", "Under 1 km away". */
+const away = (o: Outage) =>
+  o.distance_km < 1 ? "Under 1 km away" : `${+o.distance_km.toFixed(1)} km ${o.direction}`.trim();
+
 const SHOWN = 4;
 
 /**
@@ -316,7 +384,7 @@ export function OutagesNearby({ view, now }: { view: OutagesView; now: number })
           ? `Planned work reaches ${where(here)}${planned(here, now)}. Charge your battery before it starts.`
           : `An outage reaches ${where(here)}${here.end ? `. Power's due back by ${hhmm(here.end)}` : ""}.`
         : nearest
-          ? `The nearest is ${nearest.distance_km} km ${nearest.direction}${view.street ? " and doesn't reach your street" : ""}.`
+          ? `The nearest is ${away(nearest).replace("Under 1 km away", "under 1 km away")}${view.street ? " and doesn't reach your street" : ""}.`
           : `Nothing within ${view.radius_km} km, and no planned work in the next two weeks.`;
   return (
     <Tile title="Outages nearby" aside={`${sources} · ${view.radius_km} km`}>
@@ -333,7 +401,10 @@ export function OutagesNearby({ view, now }: { view: OutagesView; now: number })
               {o.affects ? (
                 <span className="text-warn"> {o.affects === "street" ? "on your street" : "in your area"}</span>
               ) : (
-                `, ${placeOf(o)}`
+                <>
+                  , {placeOf(o)}
+                  <span className="text-ink-faint tabular-nums"> · {away(o)}</span>
+                </>
               )}
             </Line>
           ))}
@@ -479,17 +550,42 @@ export function VoltageToday({
 // ---------------------------------------------------------------------------------------------- warnings
 
 /**
- * The Bureau's weather warnings and the Fire Department's fires for the house's area, as a short list. Only while
- * there are some: the page's top card says when all's clear.
+ * The Bureau's weather warnings and the Fire Department's fires for the house's area, as a short list, or that it's
+ * all clear (and when each source last answered).
  */
 export function WarningsNow({ view, now }: { view: HazardsView; now: number }) {
   const fires = view.fires.filter((f) => f.level !== "Information");
-  if (!view.weather.length && !fires.length) return null;
+  const aside = view.fires_followed ? "Bureau · Fire Department" : "Bureau of Meteorology";
+  if (!view.enabled)
+    return (
+      <Tile title="Warnings" aside={aside}>
+        <Note>
+          Weather and fire warnings are turned off.{" "}
+          <Link to="/integrations/grid" className="text-brand no-underline hover:underline">
+            Turn them on
+          </Link>
+        </Note>
+      </Tile>
+    );
+  if (!view.location_set)
+    return (
+      <Tile title="Warnings" aside={aside}>
+        <LocationPrompt>Set your location to see weather and fire warnings for your area.</LocationPrompt>
+      </Tile>
+    );
   const serious = view.weather.some((w) => w.level === "warning") || fires.some((f) => f.level !== "Advice");
   const until = (t: number) => `Until ${sameDay(t, now) ? "" : `${weekdayShort.format(t * 1000)} `}${hhmm(t)}`;
+  const bom = view.sources.bom;
+  const qfd = view.sources.qfd;
+  const failed = [bom?.error && "the Bureau", view.fires_followed && qfd?.error && "the Fire Department"].filter(
+    Boolean,
+  ) as string[];
+  const checked = bom?.at ?? null;
+  const none = !view.weather.length && !fires.length;
   return (
-    <Tile title="Warnings" aside={fires.length ? "Bureau · Fire Department" : "Bureau of Meteorology"}>
+    <Tile title="Warnings" aside={aside}>
       <div className="flex flex-col gap-2">
+        {none && <Line right={checked ? `Checked ${hhmm(checked)}` : undefined}>None for your area right now</Line>}
         {view.weather.map((w) => (
           <Line
             key={w.id}
@@ -506,15 +602,101 @@ export function WarningsNow({ view, now }: { view: HazardsView; now: number }) {
             dot={
               f.level === "Emergency Warning" ? COLOR.danger : f.level === "Watch and Act" ? COLOR.warn : COLOR.solar
             }
-            right={f.here ? "Your area" : `${f.distance_km} km ${f.direction ?? ""}`}
+            right={f.here ? "Your area" : `${f.distance_km} km ${f.direction ?? ""}`.trim()}
           >
             {f.level}: {f.area || "Area not given"}
           </Line>
         ))}
       </div>
       <Note>
-        {serious ? "Keep your battery charged in case the power goes." : "Nothing urgent, but worth keeping an eye on."}
+        {failed.length
+          ? `Couldn't reach ${listed(failed)} last time, so this may be out of date.`
+          : none
+            ? `All clear from the Bureau${view.fires_followed ? " and no fires within " + view.radius_km + " km" : ""}.`
+            : serious
+              ? "Keep your battery charged in case the power goes."
+              : "Nothing urgent, but worth keeping an eye on."}
       </Note>
     </Tile>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------- the outlook
+
+/**
+ * When the grid isn't normal, its own card across the page in the level's colour: what it means, the battery (how
+ * long it would last at this use, and a way to charge it from the grid while there's still grid, when it's worth it),
+ * and each reason.
+ */
+export function GridAlert({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: SystemInfo | undefined }) {
+  const { level, reasons } = grid.outlook;
+  const l = LEVEL[level];
+  const hasBattery = useHasBattery();
+  const soc = p?.battery_soc;
+  const cap = s?.battery_kwh;
+  const load = p?.load_power;
+  // What's left above the reserve, at what the house is using now.
+  const left =
+    soc != null && cap && load && load > ON ? ((Math.max(0, soc - reserveOf(s)) / 100) * cap * 1000) / load : null;
+  const worried = level === "warning" || reasons.some((r) => r.kind === "storm");
+  return (
+    <Tile
+      title={l.word}
+      dot={l.color}
+      aside={hasBattery && soc != null ? <span className="text-ink tabular-nums">Battery {pct(soc)}</span> : undefined}
+      style={{
+        borderColor: alpha(l.color, 0.35),
+        backgroundColor: `color-mix(in oklab, ${l.color} 8%, color-mix(in oklab, var(--color-surface) 70%, transparent))`,
+      }}
+    >
+      {reasons.length > 0 && (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-2">
+          {reasons.map((r, i) => (
+            <Line key={`${r.kind}${i}`} dot={LEVEL[r.level].color} right={r.at ? hhmm(r.at) : undefined}>
+              <span className="font-medium">{r.title}</span>
+              <span className="text-ink-muted"> · {r.detail}</span>
+            </Line>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Note className="text-ink">
+          {l.sub}
+          {left != null && (
+            <span className="text-ink-muted"> Your battery would last about {duration(left * 3600)} at this use.</span>
+          )}
+        </Note>
+        {hasBattery && worried && soc != null && soc < 95 && (
+          <ButtonLink to="/battery" variant="primary" size="sm">
+            Charge from the grid
+          </ButtonLink>
+        )}
+      </div>
+    </Tile>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------- how far around
+
+/**
+ * How far around the house outages and fires are looked for: one setting for both, saved as it's chosen. The
+ * distances Manage → Integrations → Grid offers, plus whatever's set if it's another.
+ */
+export function RadiusPicker({ radius }: { radius: number }) {
+  const save = useSaveSettings();
+  const shown = save.isPending ? (save.variables?.outage_radius_km ?? radius) : radius;
+  const options = [...new Set([...RADII, radius])].sort((a, b) => a - b);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <span className="text-[13px] text-ink-muted">Outages and fires within</span>
+      <Segmented
+        label="How far around your house"
+        value={String(shown)}
+        onChange={(v) => save.mutate({ outage_radius_km: +v })}
+        options={options.map((r) => ({ value: String(r), label: `${r} km` }))}
+        className="max-sm:w-full"
+        buttonClassName="px-3 py-[7px] text-[13px] max-sm:flex-1 max-sm:justify-center max-sm:px-1"
+      />
+    </div>
   );
 }
