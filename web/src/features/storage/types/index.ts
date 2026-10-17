@@ -72,7 +72,7 @@ export type StorageReport = {
   databases: StorageDatabase[];
 };
 
-/** A backup downloaded (GET /api/storage/backup): the zip's name and size, and why the collector's database isn't in
+/** A backup downloaded (POST /api/storage/backup): the zip's name and size, and why the collector's database isn't in
  * it when it was asked for. */
 export type BackupSaved = { name: string; bytes: number; skipped: string | null };
 

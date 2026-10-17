@@ -8,10 +8,11 @@ import urllib.parse
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from app.dependencies import ServicesDep
-from app.features.storage.backup import Busy, send
+from app.features.storage.backup import MIN_PASSPHRASE, Busy, send
 
 router = APIRouter(prefix="/api")
 
@@ -22,13 +23,19 @@ async def storage(svc: ServicesDep, fresh: bool = False):
     return await asyncio.to_thread(svc.storage.report, fresh)
 
 
-@router.get("/storage/backup")
-async def backup(svc: ServicesDep, everything: bool = False) -> StreamingResponse:
-    """A zip of the dashboard's database, and with `everything` the collector's too, to download (see backup.py).
-    It's made before the first byte is sent, which takes a while with a large collector database. When the
+class BackupRequest(BaseModel):
+    everything: bool = False
+    # In the body, never the URL: a URL ends up in logs and browser history.
+    passphrase: str = Field(min_length=MIN_PASSPHRASE, max_length=256)
+
+
+@router.post("/storage/backup")
+async def backup(svc: ServicesDep, body: BackupRequest) -> StreamingResponse:
+    """An encrypted zip of the dashboard's database, and with `everything` the collector's too, to download (see
+    backup.py). It's made before the first byte is sent, which takes a while with a large collector database. When the
     collector's was asked for but isn't in it, X-Backup-Skipped says why (URL-encoded). 409 while another is made."""
     try:
-        made = await asyncio.to_thread(svc.storage.backups.make, everything)
+        made = await asyncio.to_thread(svc.storage.backups.make, body.everything, body.passphrase)
     except Busy:
         raise HTTPException(409, "A backup is already being made. Try again once it's downloaded.") from None
     except sqlite3.Error as e:
@@ -44,7 +51,7 @@ async def backup(svc: ServicesDep, everything: bool = False) -> StreamingRespons
         headers["X-Backup-Skipped"] = urllib.parse.quote(made.skipped)
     return StreamingResponse(
         send(made.path, made.done),
-        media_type="application/zip",
+        media_type="application/octet-stream",
         headers=headers,
         background=BackgroundTask(made.done),  # in case the download stops before the first chunk is read
     )

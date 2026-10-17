@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { Button } from "~/features/common/ui/components/Button";
+import { Field, Input } from "~/features/common/ui/components/Field";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { ProgressBar, Spinner } from "~/features/common/ui/components/Progress";
@@ -13,6 +14,9 @@ import { bytes } from "~/features/storage/utils";
 
 type What = "dashboard" | "everything";
 
+/** The shortest passphrase a backup accepts; the server refuses anything shorter. */
+const MIN_PASSPHRASE = 8;
+
 /** Settings → Data: download a backup of the databases, to keep before trying a new version or to take your data away. */
 export function BackupCard({ report }: { report: StorageReport }) {
   const size = (id: "dashboard" | "collector") => {
@@ -21,12 +25,19 @@ export function BackupCard({ report }: { report: StorageReport }) {
   };
   const collector = size("collector");
   const [what, setWhat] = useState<What>(collector != null ? "everything" : "dashboard");
+  const [passphrase, setPassphrase] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [progress, setProgress] = useState<BackupProgress | null>(null);
   const backup = useMutation({
-    mutationFn: () => downloadBackup(what === "everything", setProgress),
+    mutationFn: () => downloadBackup(what === "everything", passphrase, setProgress),
+    onSuccess: () => {
+      setPassphrase("");
+      setConfirm("");
+    },
     onSettled: () => setProgress(null),
   });
   const busy = backup.isPending;
+  const passphraseOk = passphrase.length >= MIN_PASSPHRASE && passphrase === confirm;
   const dashboard = size("dashboard");
   const options = [
     {
@@ -50,7 +61,7 @@ export function BackupCard({ report }: { report: StorageReport }) {
     <SettingsSection
       id="h-backup"
       title="Download a backup"
-      sub="A copy of your data to keep, before you try a new version or if you're moving on. The README inside the zip says how to put it back."
+      sub="A copy of your data to keep, before you try a new version or if you're moving on. It's encrypted with a passphrase you choose."
     >
       <ChoiceTiles
         label="What to include"
@@ -64,12 +75,36 @@ export function BackupCard({ report }: { report: StorageReport }) {
         <Icon name="lock" size={18} className="mt-px flex-none" />
         <span>
           <strong className="font-semibold">Keep it private.</strong> It holds the passwords and keys saved here: Tapo
-          and EcoFlow passwords, Amber, Tessie and Home Assistant tokens, and the Tesla key. Anyone with the file can
-          use them.
+          and EcoFlow passwords, Amber, Tessie and Home Assistant tokens, and the Tesla key. The passphrase opens it,
+          and there's no way to recover it: keep it somewhere safe.
         </span>
       </Notice>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">
+        <Field label="Passphrase" help={`At least ${MIN_PASSPHRASE} characters.`}>
+          <Input
+            type="password"
+            autoComplete="new-password"
+            minLength={MIN_PASSPHRASE}
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+        <Field
+          label="Confirm passphrase"
+          error={confirm && confirm !== passphrase ? "The passphrases don't match." : undefined}
+        >
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+      </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <Button onClick={() => backup.mutate()} disabled={busy}>
+        <Button onClick={() => backup.mutate()} disabled={busy || !passphraseOk}>
           {busy ? <Spinner className="text-current" /> : <Icon name="download" size={18} />}
           {busy ? "Preparing…" : "Download a backup"}
         </Button>
@@ -78,7 +113,8 @@ export function BackupCard({ report }: { report: StorageReport }) {
       {backup.isError && <Notice>{errorMessage(backup.error, "The backup couldn't be made. Try again.")}</Notice>}
       {backup.isSuccess && !busy && (
         <Notice tone={backup.data.skipped ? "warn" : "info"}>
-          Saved {backup.data.name} ({bytes(backup.data.bytes)}).
+          Saved {backup.data.name} ({bytes(backup.data.bytes)}). It needs the passphrase to open, so keep that somewhere
+          safe.
           {backup.data.skipped && <> The collector's database isn't in it. {backup.data.skipped}</>}
         </Notice>
       )}
