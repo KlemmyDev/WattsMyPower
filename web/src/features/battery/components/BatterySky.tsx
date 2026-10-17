@@ -201,7 +201,7 @@ export function useBatteryHero({
                 : `${kWh(io.home)} to your home`,
         },
         {
-          label: "Lowest tonight",
+          label: low && low.when <= now ? "Lowest so far" : "Forecast low",
           value: low ? pct(low.lo) : DASH,
           sub: low ? (low.when - view < 600 ? "Now" : `Around ${hhmm(low.when)}`) : "Needs a forecast",
         },
