@@ -96,9 +96,15 @@ says it's saving data or has very little memory or very few cores, or one whose 
 page has settled, mostly come slower than about 45 a second (remembered for a week). Lite drops what's costly to keep
 drawing: backdrop blur on `.glass` (it goes near-solid), the page light's drift and grain, and in the sky the colour
 fields' and fog's drift, the rain's sheen and nearer streaks, half the trees, and plays the day and flies the camera at
-30 frames a second.
+30 frames a second (any device does once a few of their frames come late: `live/utils/pace.ts`).
 Anything new that blurs what's behind it or animates without end needs a lite rule. Setting `wmp-effects` in local
 storage to `lite` or `full` forces either, for trying them.
+
+What animates without end moves by `transform`, `translate` or `opacity` only, never `left`, `top` or a size (a spark
+along a track is its track's container and travels `100cqw`). Inside an SVG anything that animates repaints everything
+around it, so the live sky's house keeps what moves in layers of their own (house3d's `layers`) and writes it again only
+when what it shows has changed, picking its animations up where they were. The page light follows the scroll by a
+scroll-driven animation where the browser has them, and the live pages' cards don't blur it.
 
 ## The hero card
 

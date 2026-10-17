@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { cn } from "~/features/common/ui/utils";
 import { orbits, ORBS, type Atmosphere, type Field } from "~/features/solar/utils/atmosphere";
 import { moonAge, moonFace } from "~/features/solar/utils/sky";
@@ -52,8 +52,12 @@ export function SkyScene({
   return (
     <div aria-hidden className={cn("atm pointer-events-none absolute inset-0 overflow-hidden", lite && "atm-lite")}>
       <div className="absolute inset-0" style={{ background: a.base }} />
-      {[...a.aurora, ...a.fields].map((f, i) => (
-        <AtmField key={i} f={f} aurora={i < a.aurora.length} />
+      {/* Keyed by kind, so an aurora coming or going at the ends of the day doesn't start the fields' drift over. */}
+      {a.aurora.map((f, i) => (
+        <AtmField key={`a${i}`} f={f} aurora />
+      ))}
+      {a.fields.map((f, i) => (
+        <AtmField key={`f${i}`} f={f} aurora={false} />
       ))}
       {a.stars > 0.01 && <Stars opacity={a.stars} />}
       <div className="atm-orb" style={orb(o.sun.x, o.sun.y, G.bloom, a.sun.bloomScale)}>
@@ -211,17 +215,23 @@ function grainTile(): string | null {
   return grain;
 }
 
-/** How big `ref` is (px), following it as it resizes. */
+/**
+ * How big `ref` is (px), following it as it resizes. Measured before the first paint, so a phone never shows a frame of
+ * the wide sky (and the house drawn for it) first.
+ */
 export function useSize(ref: RefObject<HTMLElement | null>): { w: number; h: number } {
-  const [size, setSize] = useState({ w: 1100, h: 300 });
-  useEffect(() => {
+  // A first guess from the window, so a phone's first draw is already a phone's (it's measured before it's shown).
+  const [size, setSize] = useState(() => ({
+    w: typeof window !== "undefined" && window.innerWidth < 640 ? window.innerWidth - 32 : 1100,
+    h: 300,
+  }));
+  useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      const w = Math.round(e.contentRect.width);
-      const h = Math.round(e.contentRect.height);
-      setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
-    });
+    if (!el) return;
+    const fit = (w: number, h: number) => setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
+    fit(el.clientWidth, el.clientHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => fit(Math.round(e.contentRect.width), Math.round(e.contentRect.height)));
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);

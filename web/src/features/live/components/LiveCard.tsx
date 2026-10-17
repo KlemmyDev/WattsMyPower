@@ -20,6 +20,7 @@ import { SkyScene, useOnScreen, useSize } from "~/features/live/components/LiveS
 import { CrossFade, Swap } from "~/features/live/components/Swap";
 import type { ChartProps, LiveDay, LiveHero, Slim } from "~/features/live/types";
 import { lightAt, seriesAt, valueAt } from "~/features/live/utils/day";
+import { pacer } from "~/features/live/utils/pace";
 import { carsQuery } from "~/features/car/api";
 import { addDays } from "~/features/common/time/utils";
 import { levelsQuery } from "~/features/ev/api";
@@ -71,16 +72,15 @@ export function LiveCard({ hero, day }: { hero: LiveHero; day: LiveDay }) {
     cancelAnimationFrame(frame.current);
     const from = scrub != null && scrub < start + DAY - 1800 ? scrub : start;
     let began: number | null = null;
-    let shown = 0;
+    // A device that can't keep up gets the day at 30 frames a second, so each one has time to be drawn.
+    const pace = pacer(lite);
     setPlaying(true);
     const step = (ms: number) => {
       began ??= ms;
-      // A device that can't keep up gets the day at 30 frames a second, so each one has time to be drawn.
-      if (lite && ms - shown < 32) {
+      if (!pace(ms)) {
         frame.current = requestAnimationFrame(step);
         return;
       }
-      shown = ms;
       const t = from + ((ms - began) / PLAY_MS) * DAY;
       if (t >= start + DAY - 60) {
         setScrub(start + DAY - 60);

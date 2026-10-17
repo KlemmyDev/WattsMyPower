@@ -13,12 +13,16 @@ import {
   type Pose,
   type SceneParts,
 } from "~/features/live/utils/house3d";
+import { pacer } from "~/features/live/utils/pace";
 import { between, FLIGHT_MS, INTRO_MS, spotPose } from "~/features/live/utils/spots";
 
 /** Once a visit: Solar's tilt up from the house to its roof. */
 const TILTED = "wmp-solar-tilt";
 
-type Flight = { from: Pose; to: Pose; t0: number; ms: number; raf: number; shown: number; frame: FrameRequestCallback };
+type Flight = { from: Pose; to: Pose; t0: number; ms: number; raf: number; frame: FrameRequestCallback };
+
+/** At rest, the house is drawn again at most this often (ms) as the day's scrubbed or played (lite: half as often). */
+const REST_MS = 100;
 
 /**
  * Your house along the bottom of the live pages' sky, through a camera at the page's spot (spots.ts): Solar's low on
@@ -31,8 +35,10 @@ type Flight = { from: Pose; to: Pose; t0: number; ms: number; raf: number; shown
  * The first time Solar opens in a visit, the camera starts low on the wall and the garden and tilts up to the roof (not
  * with motion turned down).
  *
- * React draws the frame and nothing in it: the house is SVG markup written straight into two groups, so a flight or a
- * scrub never re-renders thousands of paths.
+ * React draws the frame and nothing in it: the house is SVG markup written straight into layers of their own (house3d's
+ * `layers`), so a flight or a scrub never re-renders thousands of paths. What moves (the power, the glass's sheen,
+ * the battery's lights) has layers of its own, each its own picture on the screen, so its animations repaint only it
+ * and never the house around it; it's written again only when what it shows has changed, carrying on where it was.
  */
 export const LiveHouse = memo(function LiveHouse({
   house,
@@ -52,7 +58,7 @@ export const LiveHouse = memo(function LiveHouse({
   state: Omit<HouseState, "now">;
   lite: boolean;
 }) {
-  const still = useRef<SVGGElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const hkey = houseKey(house);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the house as drawn, by what makes it differ
   const g = useMemo(() => geometry(house), [hkey]);
@@ -66,30 +72,69 @@ export const LiveHouse = memo(function LiveHouse({
   });
   const pose = useRef<Pose | null>(null);
   const flight = useRef<Flight | null>(null);
-  const drawn = useRef<{ art: HouseArt | null; svg: string; over: string }>({ art: null, svg: "", over: "" });
+  const drawn = useRef<{ art: HouseArt | null; layers: string[]; looks: string[] }>({
+    art: null,
+    layers: [],
+    looks: [],
+  });
 
   /** Draws the house through `at`: its picture (kept, unless it's a flight's frame) and what moves over it. */
   const paint = (at: Pose, keep: boolean) => {
     const L = latest.current;
     const art = houseArt(L.house, L.phone, at, L.light, L.parts, L.lite, keep);
     pose.current = at;
-    if (still.current && drawn.current.svg !== art.svg) {
-      still.current.innerHTML = art.svg;
-      drawn.current.svg = art.svg;
-    }
-    // What moves is written into its slots again only when it's changed (its comets carry on from where they were).
-    const s = L.state;
-    const over = `${s.share.toFixed(3)}|${s.on}|${s.battery.w}|${s.battery.level?.toFixed(1)}|${s.grid}|${s.car}`;
-    if (still.current && (drawn.current.art !== art || drawn.current.over !== over)) {
-      const now = performance.now();
-      const groups = still.current.querySelectorAll<SVGGElement>("g[data-slot]");
-      groups.forEach((el, i) => {
-        const slot = art.slots[i];
-        if (slot) el.innerHTML = slotMarkup(art, slot, { ...s, now });
+    const el = box.current;
+    if (!el) return;
+    const D = drawn.current;
+    if (D.art !== art) {
+      // One SVG per layer, in order; only the layers whose markup changed are written again.
+      const frame = `0 0 ${art.w} ${art.h}`;
+      while (el.children.length < art.layers.length) el.appendChild(layer());
+      while (el.children.length > art.layers.length) el.lastChild!.remove();
+      art.layers.forEach((l, i) => {
+        const svg = el.children[i];
+        if (svg.getAttribute("viewBox") !== frame) svg.setAttribute("viewBox", frame);
+        svg.classList.toggle("lh-live", l.live);
+        if (D.layers[i] === l.svg) return;
+        svg.innerHTML = l.svg;
+        D.layers[i] = l.svg;
+        D.looks = [];
       });
-      drawn.current.art = art;
-      drawn.current.over = over;
+      D.layers.length = art.layers.length;
+      D.art = art;
     }
+    // What moves is written into its slots again only when what it shows has changed (a reading a few watts off the
+    // last draws the same), and then carries on from where it was.
+    const s = { ...L.state, now: 0 };
+    let now = 0;
+    el.querySelectorAll<SVGGElement>("g[data-slot]").forEach((g) => {
+      const i = Number(g.getAttribute("data-slot"));
+      const slot = art.slots[i];
+      if (!slot) return;
+      const look = slotMarkup(art, slot, s);
+      if (D.looks[i] === look) return;
+      now ||= performance.now();
+      g.innerHTML = slotMarkup(art, slot, { ...s, now });
+      D.looks[i] = look;
+    });
+  };
+
+  // At rest, drawn at most every REST_MS (the last change always drawn), so the day playing doesn't draw the house on
+  // every frame of it.
+  const rest = useRef({ at: 0, timer: 0 });
+  const settle = () => {
+    const R = rest.current;
+    if (flight.current || !pose.current) return;
+    const wait = REST_MS * (latest.current.lite ? 2 : 1) - (performance.now() - R.at);
+    if (wait > 0) {
+      R.timer ||= window.setTimeout(() => {
+        R.timer = 0;
+        settle();
+      }, wait);
+      return;
+    }
+    R.at = performance.now();
+    paint(latest.current.target, true);
   };
 
   const fly = (from: Pose, ms: number, delay = 0) => {
@@ -100,18 +145,17 @@ export const LiveHouse = memo(function LiveHouse({
       t0: performance.now() + delay,
       ms,
       raf: 0,
-      shown: 0,
       frame: () => {},
     };
     flight.current = f;
+    // A device that can't keep up gets the flight at 30 frames a second, so each one has time to be drawn.
+    const pace = pacer(latest.current.lite);
     const frame = (now: number) => {
       if (flight.current !== f) return;
-      // A device that can't keep up gets the flight at 30 frames a second, so each one has time to be drawn.
-      if (latest.current.lite && now - f.shown < 32) {
+      if (!pace(now)) {
         f.raf = requestAnimationFrame(frame);
         return;
       }
-      f.shown = now;
       f.to = latest.current.target;
       const k = Math.max(0, Math.min(1, (now - f.t0) / f.ms));
       if (k >= 1) {
@@ -153,14 +197,17 @@ export const LiveHouse = memo(function LiveHouse({
 
   // Anything else (the light, the power, the battery's level): drawn again at rest; a flight's next frame has it.
   useLayoutEffect(() => {
-    if (!flight.current && pose.current) paint(target, true);
+    settle();
   });
 
   // Leaving, a flight stops; back again (React trying the page twice in development), it carries on.
   useLayoutEffect(() => {
     const f = flight.current;
     if (f && !f.raf) f.raf = requestAnimationFrame(f.frame);
+    const R = rest.current;
     return () => {
+      clearTimeout(R.timer);
+      R.timer = 0;
       const g = flight.current;
       if (!g) return;
       cancelAnimationFrame(g.raf);
@@ -170,17 +217,22 @@ export const LiveHouse = memo(function LiveHouse({
 
   const { w, h } = phone ? FRAME.phone : FRAME.wide;
   return (
-    <svg
-      aria-hidden
-      viewBox={`0 0 ${w} ${h}`}
-      preserveAspectRatio="xMidYMin slice"
-      className="pointer-events-none absolute inset-0 size-full"
-    >
-      <HouseDefs w={w} h={h} />
-      <g ref={still} />
-    </svg>
+    <div aria-hidden className="pointer-events-none absolute inset-0">
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMin slice" className="absolute inset-0 size-full">
+        <HouseDefs w={w} h={h} />
+      </svg>
+      <div ref={box} className="contents" />
+    </div>
   );
 });
+
+/** One of the house's layers: an SVG over the whole sky, framed as the picture is. */
+function layer(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("preserveAspectRatio", "xMidYMin slice");
+  svg.setAttribute("class", "lh-layer");
+  return svg;
+}
 
 /** Whether this is Solar's first showing this visit (and motion's welcome): then it tilts up to the roof. */
 function firstVisit(): boolean {
