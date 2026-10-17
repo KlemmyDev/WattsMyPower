@@ -1,17 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { errorMessage } from "~/features/common/api/utils";
-import { ON } from "~/features/common/energy/utils";
 import { duration, hhmm, weekdayShort } from "~/features/common/formatting/utils/date";
-import { DASH, kW } from "~/features/common/formatting/utils/number";
-import { PageHeader } from "~/features/common/layout/components/PageHeader";
+import { DASH } from "~/features/common/formatting/utils/number";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
-import { useNow } from "~/features/common/time/hooks";
 import { addDays, midnight } from "~/features/common/time/utils";
 import { Button } from "~/features/common/ui/components/Button";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
@@ -23,70 +20,63 @@ import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { TimeLine, type LinePoint } from "~/features/common/ui/components/TimeLine";
 import { cn } from "~/features/common/ui/utils";
+import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 import { gridQuery, refreshGrid } from "~/features/grid/api";
-import { GridHero } from "~/features/grid/components/GridHero";
+import { Warnings } from "~/features/grid/components/GridHero";
+import { useGridHero } from "~/features/grid/components/GridSky";
 import { HazardsCard } from "~/features/grid/components/HazardsCard";
 import { OutagesCard } from "~/features/grid/components/OutagesCard";
 import { useGridDay } from "~/features/grid/hooks";
 import type { GridView, MarketNotice } from "~/features/grid/types";
-import { LEVEL, NOTICE_HELP, perMWh, REGIONS, wholesaleCents } from "~/features/grid/utils";
-
-/** What the grid's doing, in a few words, for under the page's title: trouble first, else what's flowing. */
-function doing(grid: GridView | undefined, p: Snapshot | null): string {
-  const level = grid?.outlook.level;
-  if (level === "outage") return LEVEL.outage.sub;
-  if (level && level !== "normal") return grid!.outlook.reasons[0]?.title ?? LEVEL[level].sub;
-  const g = p?.grid_power;
-  if (g == null) return "What you buy and sell, what power costs, and how the grid's holding up";
-  if (g > ON) return `Buying ${kW(g)} from the grid`;
-  if (g < -ON) return `Selling ${kW(-g)} to the grid`;
-  return "Not buying or selling right now";
-}
+import { NOTICE_HELP, perMWh, REGIONS, wholesaleCents } from "~/features/grid/utils";
 
 /**
- * The grid, as Solar, Home and Battery have theirs: today and now in one card (what you bought and sold, what's
- * flowing now, what power costs, how the grid's holding up and what to do when it isn't, and the day's chart with the
- * rates and the wholesale price under it), then outages around the house and the grid's voltage there on the left, and
- * weather and fire warnings and the wholesale market with AEMO's notices on the right.
+ * The grid. Its top card is the one the live pages share (its part is useGridHero): the street and the line to your
+ * meter in the sky, what you've spent or earned today, what's flowing now and at what price, and the day's chart with
+ * the price under it. Under it, when the grid isn't normal, what to do and why; then outages around the house and the
+ * grid's voltage there on the left, and weather and fire warnings and the wholesale market with AEMO's notices on the
+ * right.
  */
 export function GridPage() {
-  const now = useNow(30_000);
+  const { now } = useLiveDay();
   const p = useSnapshot();
   const s = useSystem();
   const { data: grid, isError } = useQuery(gridQuery);
   const { start, series } = useGridDay(now);
+  useLiveHero(useGridHero({ grid, p, s, series }));
   return (
     <>
-      <PageHeader title="Grid" sub={doing(grid, p)} />
-      <div className="flex flex-col gap-5">
-        <GridHero grid={grid} p={p} s={s} series={series} start={start} now={now} />
-        {/* Outages and the voltage on the left; warnings and the market on the right. Narrower, one column: outages,
+      {grid && grid.outlook.level !== "normal" && (
+        <Card>
+          <Warnings grid={grid} p={p} s={s} />
+        </Card>
+      )}
+      {/* Outages and the voltage on the left; warnings and the market on the right. Narrower, one column: outages,
             then warnings, then the rest. */}
-        <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
-          <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
-            {grid?.outages && (
-              <OutagesCard
-                view={grid.outages}
-                now={now}
-                home={s?.latitude != null && s.longitude != null ? { lat: s.latitude, lon: s.longitude } : null}
-                className="max-3xl:order-1"
-              />
-            )}
-            <QualityCard series={series} p={p} grid={grid} start={start} now={now} className="max-3xl:order-4" />
-          </div>
-          <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
-            {grid?.hazards && <HazardsCard view={grid.hazards} now={now} className="max-3xl:order-2" />}
-            {grid ? (
-              <MarketCard grid={grid} now={now} className="max-3xl:order-3" />
-            ) : (
-              <Skeleton className="h-[360px] rounded-3xl max-3xl:order-3" />
-            )}
-          </div>
+      <div className="live-cols grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+        <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
+          {grid?.outages && (
+            <OutagesCard
+              view={grid.outages}
+              now={now}
+              home={s?.latitude != null && s.longitude != null ? { lat: s.latitude, lon: s.longitude } : null}
+              className="max-3xl:order-1"
+            />
+          )}
+          <QualityCard series={series} p={p} grid={grid} start={start} now={now} className="max-3xl:order-4" />
         </div>
-        {isError && !grid && (
-          <div className="text-sm text-ink-faint">Couldn't load the grid's figures. Try again in a moment.</div>
-        )}
+        <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
+          {grid?.hazards && <HazardsCard view={grid.hazards} now={now} className="max-3xl:order-2" />}
+          {grid ? (
+            <MarketCard grid={grid} now={now} className="max-3xl:order-3" />
+          ) : (
+            <Skeleton className="h-[360px] rounded-3xl max-3xl:order-3" />
+          )}
+        </div>
       </div>
+      {isError && !grid && (
+        <div className="text-sm text-ink-faint">Couldn't load the grid's figures. Try again in a moment.</div>
+      )}
     </>
   );
 }

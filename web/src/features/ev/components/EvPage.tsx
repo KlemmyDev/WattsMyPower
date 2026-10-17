@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
-import { useNow } from "~/features/common/time/hooks";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Notice } from "~/features/common/ui/components/Notice";
@@ -15,23 +14,25 @@ import { EvCharging } from "~/features/ev/components/EvCharging";
 import { EvDetails } from "~/features/ev/components/EvDetails";
 import { EvHero } from "~/features/ev/components/EvHero";
 import { EvInOut } from "~/features/ev/components/EvInOut";
+import { useEvHero } from "~/features/ev/components/EvSky";
 import { NextRead } from "~/features/ev/components/NextRead";
 import type { BluelinkCar, EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { carTitle, evTitle } from "~/features/ev/utils";
+import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 
 /** The columns under a car's hero, as Solar's, Home's and Battery's: the deeper story on the left, how it charges on
  * the right. On one column, how it charges comes first. */
 function Columns({ left, right }: { left: ReactNode; right: ReactNode }) {
   return (
-    <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+    <div className="live-cols grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
       <div className="flex min-w-0 flex-col gap-5 max-3xl:order-2">{left}</div>
       <div className="flex min-w-0 flex-col gap-5 max-3xl:order-1">{right}</div>
     </div>
   );
 }
 
-/** One Tesla, in full: today and now in its hero (with its day charted), then its in and out and everything else it
- * says about itself beside how it charges. */
+/** One Tesla, in full: its charge limit, where it is and its day (its figures are in the top card), then its in and
+ * out and everything else it says about itself beside how it charges. */
 function TeslaCar({
   v,
   provider,
@@ -44,8 +45,8 @@ function TeslaCar({
   now: number;
 }) {
   return (
-    <div className="flex flex-col gap-5">
-      <EvHero v={v} provider={provider} alone={alone} now={now} />
+    <>
+      <EvHero v={v} provider={provider} alone={alone} now={now} figures={false} />
       <Columns
         left={
           <>
@@ -55,7 +56,7 @@ function TeslaCar({
         }
         right={<EvCharging v={v} />}
       />
-    </div>
+    </>
   );
 }
 
@@ -73,23 +74,40 @@ function BluelinkCarView({
   now: number;
 }) {
   return (
-    <div className="flex flex-col gap-5">
-      <EvHero v={v} provider={v.make === "Kia" ? "kia" : "hyundai"} brand="bluelink" alone={alone} now={now} />
+    <>
+      <EvHero
+        v={v}
+        provider={v.make === "Kia" ? "kia" : "hyundai"}
+        brand="bluelink"
+        alone={alone}
+        now={now}
+        figures={false}
+      />
       <Columns left={<BluelinkReads v={v} choices={choices} />} right={<EvCharging v={v} brand="bluelink" />} />
-    </div>
+    </>
   );
 }
 
 /**
  * The EV page: each car connected (Teslas, through Tessie or over Bluetooth; Hyundais and Kias, through their cloud;
- * and BYDs, through BYD's cloud), or with `vin`, one of them (its own page, as the side nav lists them). One car is
- * shown in full; several, each as a compact card that opens its own page.
+ * and BYDs, through BYD's cloud), or with `vin`, one of them (its own page, as the side nav lists them). The top card
+ * the live pages share is about one car (useEvHero): the one shown, else the first Tesla, Hyundai or Kia. One car is
+ * shown in full under it; several, each as a compact card that opens its own page. A BYD alone keeps its own card.
  */
 export function EvPage({ vin }: { vin?: string } = {}) {
-  const now = useNow(30_000);
+  const { now } = useLiveDay();
   const { data, error, isPending } = useQuery(teslaQuery);
   const { data: byd, isPending: bydPending } = useQuery(bydQuery);
   const { data: bluelink, isPending: bluelinkPending } = useQuery(bluelinkQuery);
+  const shownTeslas = data?.connected ? data.vehicles.filter((v) => !vin || v.vin === vin) : [];
+  const shownHks = bluelink?.connected ? bluelink.vehicles.filter((v) => !vin || v.vin === vin) : [];
+  const focus: EvVehicle | null = shownTeslas[0] ?? (shownHks[0] as EvVehicle | undefined) ?? null;
+  const connectedCars =
+    (data?.connected ? data.vehicles.length : 0) +
+    (bluelink?.connected ? bluelink.vehicles.length : 0) +
+    (byd?.connected ? byd.vehicles.length : 0);
+  const hero = useEvHero({ v: focus, brand: shownTeslas[0] ? "tesla" : "bluelink", alone: connectedCars === 1 });
+  useLiveHero(hero);
   if (isPending || bydPending || bluelinkPending)
     return (
       <>
@@ -146,7 +164,7 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     );
   return (
     <>
-      <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />
+      {!hero && <PageHeader title={one ? carTitle(one) : evTitle(cars)} sub={sub} />}
       <div className="flex flex-col gap-5">
         {bluelink?.error && hks.length > 0 && (
           <Notice tone="bad" className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">

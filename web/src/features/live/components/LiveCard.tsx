@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
 import { useBatteryView } from "~/features/battery/hooks";
@@ -6,6 +7,7 @@ import { useEffects } from "~/features/common/display/hooks";
 import { reducedMotion } from "~/features/common/display/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { HeaderClock } from "~/features/common/layout/components/TopBar";
+import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -18,7 +20,11 @@ import { SkyScene, useOnScreen, useSize } from "~/features/live/components/LiveS
 import { CrossFade, Swap } from "~/features/live/components/Swap";
 import type { ChartProps, LiveDay, LiveHero, Slim } from "~/features/live/types";
 import { lightAt, seriesAt, valueAt } from "~/features/live/utils/day";
+import { carsQuery } from "~/features/car/api";
+import { addDays } from "~/features/common/time/utils";
+import { levelsQuery } from "~/features/ev/api";
 import { houseOptions } from "~/features/overview/utils/house/options";
+import { houseCars } from "~/features/overview/utils/houseCars";
 import { place } from "~/features/solar/utils";
 import { atmosphere } from "~/features/solar/utils/atmosphere";
 import { weatherAt } from "~/features/solar/utils/sky";
@@ -150,10 +156,40 @@ export function LiveCard({ hero, day }: { hero: LiveHero; day: LiveDay }) {
       : seriesAt(day.series, "battery_soc", view);
   const share = Math.round((pv / arrayW) * 200) / 200;
   const on = pv > 50;
-  const house = useMemo(() => houseOptions(s), [s]);
+  const grid = !scrubbed ? (p?.grid_power ?? null) : ahead ? null : seriesAt(day.series, "grid_power", view);
+  // The car: the page's, else the first connected; where it parks and its paint as the Overview draws it, and
+  // whether it's home and what it's charging at, at the moment shown (a Tesla's from its day; else as it is now).
+  const evs = useLive()?.ev;
+  const { data: records } = useQuery(carsQuery);
+  const cars = useMemo(() => houseCars(evs, records), [evs, records]);
+  const ci = Math.max(0, evs?.findIndex((v) => v.vin === hero.car) ?? 0);
+  const ev = evs?.[ci] ?? null;
+  const { data: levels } = useQuery({
+    ...levelsQuery(ev?.vin ?? "", start, addDays(start, 1)),
+    enabled: ev?.make === "Tesla",
+  });
+  const homeNow = ev != null && ev.at_home !== false;
+  const carHome =
+    m.car?.home ??
+    (!scrubbed || ahead || !levels ? homeNow : !levels.away.some((a) => a.start <= view && view < a.end));
+  const carKw =
+    m.car?.kw ??
+    (!ev
+      ? 0
+      : !scrubbed
+        ? ev.status === "charging" && homeNow
+          ? (ev.power_kw ?? 0)
+          : 0
+        : ahead || !levels
+          ? 0
+          : (levels.power.find((r) => Math.abs(r.t + 150 - view) <= 150)?.w ?? 0) / 1000);
+  const park = cars[ci]?.park;
+  const paint = cars[ci]?.paint ?? "#e9ebee";
+  const house = useMemo(() => houseOptions(s, park ? [park] : []), [s, park]);
+  const parts = useMemo(() => ({ ev: !!ev, car: !!ev && carHome, paint }), [ev, carHome, paint]);
   const state = useMemo(
-    () => ({ light: sky.light, share, on, battery: { w: batteryW, level } }),
-    [sky.light, share, on, batteryW, level],
+    () => ({ share, on, battery: { w: batteryW, level }, grid, car: carKw }),
+    [share, on, batteryW, level, grid, carKw],
   );
 
   const playLabel = playing ? "Pause" : scrub != null && scrub >= start + DAY - 120 ? "Play again" : "Play the day";
@@ -207,7 +243,9 @@ export function LiveCard({ hero, day }: { hero: LiveHero; day: LiveDay }) {
           H={size.h}
           phone={phone}
           a={sky}
-          roof={<LiveHouse house={house} spot={page} phone={phone} light={light} state={state} lite={lite} />}
+          roof={
+            <LiveHouse house={house} spot={page} phone={phone} light={light} parts={parts} state={state} lite={lite} />
+          }
         />
         {/* The page's title and how it's going, up in the sky (never over its fade into the card) on the sky's own
             wash, and the weather in the other corner (beside the title on a phone). */}

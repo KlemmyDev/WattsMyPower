@@ -33,6 +33,9 @@ export type LiveMoment = {
   slim: Slim;
   second: Figure & { sub?: string; live: boolean; color: string };
   stats: Stat[];
+  /** The car as the page knows it at that moment (EV's, from its own readings): whether it's home, and what it's
+   * charging at (kW). Without it the scene goes by the live status. */
+  car?: { home: boolean; kw: number };
 };
 
 export type ChartProps = {
@@ -49,6 +52,8 @@ export type LiveHero = {
   title: string;
   /** Its colour, for the play button. */
   color: string;
+  /** The car it's about (EV's), by VIN: the one drawn in the scene. Else the first connected. */
+  car?: string;
   /** Its words and figures at `view` (scrubbed: a moment chosen along the chart, not now). */
   at: (view: number, scrubbed: boolean) => LiveMoment;
   chart: (p: ChartProps) => ReactNode;
@@ -60,7 +65,7 @@ export type LiveDay = {
   start: number;
   rise: number;
   set: number;
-  /** Every 5 minutes: pv_power, battery_power, battery_soc. */
+  /** Every 5 minutes: pv_power, battery_power, battery_soc, grid_power. */
   series: HistorySeries | undefined;
   weather: WeatherDay | undefined;
   /** Solar expected through the day (W), between the hours. */

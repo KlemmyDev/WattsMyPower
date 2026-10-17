@@ -47,14 +47,38 @@ registerSpot("solar-intro", (g, phone) => {
 /** Battery: close on the battery and inverter, on the side wall (or the garage's), or inside the garage. */
 registerSpot("battery", (g, phone) => {
   const M = g.mount;
+  // In the garage: from just outside the door, a little to the left, looking in at the back wall (clear of a car).
   if (M.inside)
     return phone
-      ? { eye: rel(M, 13.85, 3.0, 1.7), at: rel(M, 0.35, 0.9, 1.0), fov: 34, cx: 320, cy: 310 }
-      : { eye: rel(M, 14.45, 3.4, 1.75), at: rel(M, 0.35, 0.9, 1.0), fov: 30, cx: 700, cy: 338 };
+      ? { eye: rel(M, 8.65, 0.2, 1.9), at: rel(M, 0.25, 0.85, 1.05), fov: 50, cx: 330, cy: 290 }
+      : { eye: rel(M, 8.25, 0.2, 1.9), at: rel(M, 0.25, 0.85, 1.05), fov: 44, cx: 700, cy: 280 };
   return phone
     ? { eye: rel(M, 7.2, 8.65, 1.75), at: rel(M, 0.25, 0.95, 1.0), fov: 38, cx: 330, cy: 310 }
     : { eye: rel(M, 8.0, 9.25, 1.8), at: rel(M, 0.25, 0.9, 1.0), fov: 32, cx: 690, cy: 338 };
 });
+
+/** EV: on the driveway from out by the street, along the car's right side to its port; in the garage, from the
+ * doorway's right-hand side looking in along it. */
+registerSpot("ev", (g, phone) => {
+  const C = g.car;
+  if (C.inGarage) {
+    const dx = (g.garage?.x1 ?? 15.2) - 15.2;
+    return phone
+      ? { eye: [14.55 + dx, 14.2, 2.0], at: [13.5 + dx, 4.9, 0.9], fov: 48, cx: 320, cy: 300 }
+      : { eye: [14.55 + dx, 13.6, 2.0], at: [13.5 + dx, 4.9, 0.9], fov: 40, cx: 640, cy: 315 };
+  }
+  const dx = C.x0 - 11;
+  return phone
+    ? { eye: [20 + dx, 21, 2.3], at: [12 + dx, 11, 0.8], fov: 42, cx: 320, cy: 300 }
+    : { eye: [20.8 + dx, 21.6, 2.4], at: [12 + dx, 11, 0.8], fov: 34, cx: 640, cy: 330 };
+});
+
+/** Grid: from across the street to the west, the poles and wires in front, the line to the house and its meter. */
+registerSpot("grid", (_g, phone) =>
+  phone
+    ? { eye: [-8, 26, 2.0], at: [4, 10, 3.0], fov: 54, cx: 300, cy: 300 }
+    : { eye: [-8.5, 26.5, 2.1], at: [4.5, 10, 3.0], fov: 46, cx: 580, cy: 320 },
+);
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
