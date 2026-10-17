@@ -34,7 +34,7 @@ export function BatteryHealth({
         : `${L.cycles.toLocaleString("en-AU")}${perDay != null ? ` · about ${perDay.toFixed(1)} a day lately` : ""}`,
     ],
     ["Average daily depth of discharge", B.avg_swing != null ? pct(B.avg_swing) : null],
-    ["Round-trip efficiency", L.round_trip_pct != null ? pct(L.round_trip_pct) : null],
+    ["Round-trip efficiency, since install", L.round_trip_pct != null ? pct(L.round_trip_pct) : null],
     ["Time at full charge", B.avg_full_min != null ? `${duration(B.avg_full_min * 60)} a day` : null],
     ["Energy delivered since install", L.discharge_kwh != null ? kWhInt(L.discharge_kwh) : null],
   ];

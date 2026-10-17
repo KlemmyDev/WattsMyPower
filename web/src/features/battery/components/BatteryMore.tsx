@@ -372,7 +372,7 @@ export function BatteryDays({ s, now, className }: { s: SystemInfo | undefined; 
     ["Cycles a day", cap ? (out / days.length / cap).toFixed(2) : DASH],
     ["In", kWh(into)],
     ["Out", kWh(out)],
-    ["Round trip", into > 0 ? pct(Math.min(100, (out / into) * 100)) : DASH],
+    ["Round trip, last 30 days", into > 0 ? pct(Math.min(100, (out / into) * 100)) : DASH],
     ["Busiest", cap ? `${(max / cap).toFixed(2)} cycles` : kWh(max)],
   ];
   return (
