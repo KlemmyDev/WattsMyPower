@@ -369,6 +369,7 @@ class Memory:
 
     command: str | None = None  # "start" or "stop"
     command_at: int = 0
+    charged: bool = False  # it's been seen charging since the dashboard last started it
     amps: int | None = None
     amps_at: int = 0
     enough_since: int | None = None
@@ -396,7 +397,9 @@ def taken_over(car: CarState, mem: Memory, now: int) -> str | None:
         return None  # what's known of it is from before the dashboard's last command
     if mem.command == "stop" and car.charging:
         return "Charging was started outside the dashboard"
-    if mem.command == "start" and car.charging_state == "Stopped" and not car.full:
+    # Stopped once it had charged. A start it took but never began (it was still waking, say) isn't the household's
+    # doing: decide starts it again.
+    if mem.command == "start" and mem.charged and car.charging_state == "Stopped" and not car.full:
         return "Charging was stopped outside the dashboard"
     if (
         mem.command == "start"

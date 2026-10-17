@@ -27,8 +27,9 @@ Asleep, its last charge reading stands, a closed charge port says it's unplugged
 in (and an asleep car isn't charging, whatever it last said). A car with no charge reading yet (the dashboard has just
 started) is woken once to be read, unless its port is closed; so, by day, is one plugged in since its charge was read
 (it fell asleep before the dashboard read it, say with every connection taken by the phones around it as it was
-plugged in): its last reading is from before, its level and whether it's full along with it. A command wakes the car
-first, and it's given WAKE_SECONDS to wake. A car that doesn't wake isn't woken again for a while, longer each time
+plugged in): its last reading is from before, its level and whether it's full along with it. A read that's to wake the
+car wakes it before asking for its charge (asking alone never wakes it), as a command does, and it's given
+WAKE_SECONDS to wake. A car that doesn't wake isn't woken again for a while, longer each time
 it misses in a row (WAKE_BACKOFF): a driver's key can miss once (the car slow to come up after a long sleep), so it's
 tried again within a minute; a charging manager's key may not be allowed to wake it at all, so it soon settles at half
 an hour. Until then it's only checked without waking it, and its charge is read once it's awake anyway (charging, in
@@ -558,6 +559,9 @@ async def _talk(
         hkey, car = held
         if hkey == key and car.client is not None and car.client.is_connected:
             _step("talking over the link held open")
+            # As this conversation wants, not as the one that made the link did: a read that may not wake the car
+            # mustn't leave a command after it unable to (a start for spare solar would fail while the car slept).
+            car.wake_if_asleep = wake
             if talk is not None:
                 talk["via"] = "held link"
             try:
@@ -773,25 +777,31 @@ def _read_now(
                                "charge_state": None, "extras": {}, "refused": {}}  # fmt: skip
         if asleep and wake_for_extras:  # asked for: a refresh the household said may wake it
             _step("waking it")
-            await car.wake_up(wait=True)
+            await car.wake_up(wait=True, timeout=WAKE_SECONDS)
             asleep = out["asleep"] = False
             out["woke"] = True
         moved = port_open is not None and plugged is not None and port_open != plugged  # plugged in or out since
-        if (not asleep and (charge or moved)) or (asleep and wake and port_open is not False):
-            _step("waking it to read its charge" if asleep else "reading its charge")
+        read = charge or moved
+        if asleep and wake and port_open is not False:
+            # Woken first: reading its charge doesn't wake it (the library wakes a car only for a command), it only
+            # waits out the asleep car's silence and fails.
+            _step("waking it to read its charge")
             try:
-                cs = await car.charge_state()
-            except (x.BluetoothTimeout, x.BluetoothCommandFailed):
-                if not asleep:
-                    raise
+                await car.wake_up(wait=True, timeout=WAKE_SECONDS)
+            except x.BluetoothTransportError:
+                raise  # the link dropped: had again from the start (_converse)
+            except x.TeslaFleetError:
                 out["wake_failed"] = True  # it didn't wake: what its security computer said still counts
                 return out
+            asleep = out["asleep"] = False
+            out["woke"] = True
+            read = True
+        if not asleep and read:
+            _step("reading its charge")
+            cs = await car.charge_state()
             state = MessageToDict(cs, preserving_proto_field_name=True)
             state["charging_state"] = cs.charging_state.WhichOneof("type") or ""
             out["charge_state"] = state
-            if asleep:
-                out["woke"] = True  # it was asleep: reading its charge woke it
-            asleep = False
         if extras and not asleep:
             _step("reading its details")
             out["extras"], out["refused"] = await _extras(car, extras)

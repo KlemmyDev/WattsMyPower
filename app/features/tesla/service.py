@@ -740,9 +740,16 @@ class TeslaService:
     def _take(self, row: dict[str, Any], c: dict[str, Any]) -> None:
         """What was read of a car (as Client.vehicles gives it): its state, level, supply, details."""
         vin = row["vin"]
+        was = self._states.get(vin)
         self._raw[vin] = {"last_state": row.get("last_state") or {}, "in_range": row.get("in_range"),
                           "linked": bool(row.get("linked"))}  # fmt: skip
         self._states[vin] = self._parse(vin, c["vehicles"][vin])
+        if was is not None and was.asleep and not self._states[vin].asleep:
+            # Awake now (woken from the Tesla app, say): commands that failed while it slept are no reason to wait.
+            mem = self._memory(vin)
+            if mem.failures:
+                mem.failures = 0
+                self._remember(vin, mem)
         if row.get("in_range") is not False:  # heard (or read through Tessie)
             self._seen[vin] = int(self.clock())
         self._level(vin, c["vehicles"][vin])
@@ -1032,8 +1039,9 @@ class TeslaService:
             return
         mem.failures = 0
         self._samples.pop(vin, None)  # what was spare before the change doesn't say what's spare after it
+        again = d.action == "start" and mem.command == "start"  # the last start was taken, but it never charged
         if d.action in ("start", "stop"):
-            mem.command, mem.command_at = d.action, now
+            mem.command, mem.command_at, mem.charged = d.action, now, False
             mem.enough_since = mem.short_since = None
         elif mem.command is None:
             mem.command, mem.command_at = "start", now  # it started by itself on plugging in: it's the dashboard's now
@@ -1041,7 +1049,8 @@ class TeslaService:
             mem.amps, mem.amps_at = d.amps, now
         self._took(vin, "set_charging_amps" if d.amps is not None else d.action, {"amps": d.amps})
         text = {
-            "start": f"Started charging at {d.amps} A: {d.why}",
+            "start": f"Started charging at {d.amps} A: {d.why}"
+            + (". It didn't begin charging when it was last started" if again else ""),
             "stop": f"Stopped charging: {d.why}",
             "amps": f"{d.amps} A: {d.why}",
         }[d.action]
@@ -1068,6 +1077,8 @@ class TeslaService:
                 self._remember(vin, mem)
             return
         spare = self._spare(vin, s, cfg, mem, spec)
+        if mem.command == "start" and s.charging and not mem.charged:
+            mem.charged, changed = True, True  # the start took: stopped from here on is the household's doing
         if mem.hold is None and (why := control.taken_over(s, mem, now)):
             mem.hold, mem.hold_at = why, now
             self._note(vin, f"{why}. The dashboard takes over again once it's unplugged", "manual")
