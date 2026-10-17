@@ -43,6 +43,7 @@ from typing import Any
 from app.core.config import DEMO_LOCATION, Config
 from app.core.database import Database
 from app.features.car import service as car_service
+from app.features.car.service import HEX as PAINT_HEX
 from app.features.car.service import CarService, NoSuchCar
 from app.features.live.service import LiveService
 from app.features.settings.store import SettingsStore
@@ -477,7 +478,9 @@ class TeslaService:
     def configure(self, vin: str, body: dict[str, Any]) -> dict[str, Any]:
         """Change a car's mode, whether the home battery fills first, how far short it may run, the most it may draw
         (max_amps: the socket's limit; null: the car's own), which dashboard car
-        it is (null for none: its model's figures), or its home ({"home": "here"}: where it is now; null: the system's location). Raises TeslaSetupError."""
+        it is (null for none: its model's figures), its home ({"home": "here"}: where it is now; null: the system's location),
+        or the paint it's drawn in ({"paint": "#rrggbb"}; null: what Tesla says, else its model's usual). Raises
+        TeslaSetupError."""
         with self._lock:
             c = self._conn()
             v = c["vehicles"].get(vin)
@@ -505,6 +508,14 @@ class TeslaService:
                     v.pop("home", None)
                 else:
                     raise TeslaSetupError('Give "here" for where the car is now, or null for the system\'s location.')
+            if "paint" in body:
+                paint = body["paint"]
+                if paint is None:
+                    v.pop("paint", None)
+                elif isinstance(paint, str) and PAINT_HEX.fullmatch(paint):
+                    v["paint"] = paint.lower()
+                else:
+                    raise TeslaSetupError("The paint must be a colour like #1f3f78.")
             before = (self._conn()["vehicles"].get(vin) or {}).get("control", {}).get("mode")
             self._put(CONN_KEY, c)
             if before != v["control"]["mode"]:
@@ -1368,8 +1379,8 @@ class TeslaService:
             # Which model and its model year: what Tesla calls it, else from the VIN (as is the year).
             "model": control.MODEL_NAMES.get((s.model if s else None) or bluetooth.car_type(vin) or ""),
             "year": control.model_year(vin),
-            # Its paint, when Tesla says (through Tessie): the Overview draws it in it.
-            "colour": control.paint(self._raw.get(vin, {}).get("last_state") or {}),
+            # Its paint: as you chose it, else as Tesla says (through Tessie). The Overview and the sky draw it in it.
+            "colour": v.get("paint") or control.paint(self._raw.get(vin, {}).get("last_state") or {}),
             "name": v.get("name") or (s.name if s else None),
             "car": self._car_of(v),
             # With each timing (control.TIMING) as set, or its default.

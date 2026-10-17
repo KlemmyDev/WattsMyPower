@@ -2086,3 +2086,12 @@ def test_wakes_are_kept_as_long_as_levels(db: Database) -> None:
     h.add_wake(VIN, 1_000 + history.LEVELS_KEPT + 60, "solar")  # 90 days on: the first goes
     assert [w["reason"] for w in h.wakes(VIN, 0, 2**40)] == ["solar"]
     assert [w["reason"] for w in h.wakes("OTHERVIN", 0, 2**40)] == ["first"]  # each car's own
+
+
+def test_a_paint_chosen_is_drawn_until_its_cleared(svc: TeslaService) -> None:
+    connect(svc, "bluetooth")
+    assert svc.status()["vehicles"][0]["colour"] is None  # Bluetooth doesn't say
+    assert svc.configure(VIN, {"paint": "#1F3F78"})["vehicles"][0]["colour"] == "#1f3f78"
+    with pytest.raises(TeslaSetupError):
+        svc.configure(VIN, {"paint": "blue"})
+    assert svc.configure(VIN, {"paint": None})["vehicles"][0]["colour"] is None

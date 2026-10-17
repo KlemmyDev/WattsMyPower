@@ -6,8 +6,8 @@ import { lookOf } from "~/features/ev/utils/looks";
 import type { SceneCar } from "~/features/overview/components/HouseScene";
 import type { Park } from "~/features/overview/utils/house/layout";
 
-/** A car for the house, and where it would rather park. */
-export type HouseCar = SceneCar & { park: Park };
+/** A car for the house, where it would rather park, and its dashboard car (whose paint it's drawn in), if it has one. */
+export type HouseCar = SceneCar & { park: Park; id?: number };
 
 /**
  * The cars parked at the house: each EV connected through an integration, drawn as what it is (its make and model's
@@ -44,6 +44,7 @@ export function houseCars(evs: EvBrief[] | null | undefined, cars: CarView[] | u
       href: `/ev/${encodeURIComponent(v.vin)}`,
       charging,
       park: record?.car.car_park ?? "garage",
+      id: record?.id,
     };
   });
   const byHand = spare.map((c): HouseCar => ({
@@ -52,6 +53,7 @@ export function houseCars(evs: EvBrief[] | null | undefined, cars: CarView[] | u
     label: [carName(c), c.level && `${Math.round(c.level.soc)}%`].filter(Boolean).join(" · "),
     href: "/ev",
     park: c.car.car_park,
+    id: c.id,
   }));
   return [...connected, ...byHand];
 }

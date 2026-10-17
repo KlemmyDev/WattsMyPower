@@ -79,14 +79,10 @@ export function EvPage({ vin }: { vin?: string } = {}) {
     (bluelink?.connected ? bluelink.vehicles.length : 0) +
     (byd?.connected ? byd.vehicles.length : 0);
   const hero = useEvHero({ v: focus, brand: shownTeslas[0] ? "tesla" : "bluelink", alone: connectedCars === 1 });
-  useLiveHero(hero);
-  if (isPending || bydPending || bluelinkPending)
-    return (
-      <>
-        <PageHeader title="EV" sub="Checking the connection…" />
-        <Skeleton className="h-[420px] rounded-3xl" />
-      </>
-    );
+  // Still checking the cars: the top card stays as it is until it's known which car it's about.
+  const checking = isPending || bydPending || bluelinkPending;
+  useLiveHero(checking ? undefined : hero);
+  if (checking) return <Skeleton className="h-[420px] rounded-3xl" />;
   if (!data?.connected && !byd?.connected && !bluelink?.connected)
     return (
       <>
