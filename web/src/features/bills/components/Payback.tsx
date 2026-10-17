@@ -63,9 +63,7 @@ export function Payback({ className }: { className?: string }) {
                     : "Needs 30 days of readings"}
               </DataRow>
             ) : null}
-            {p.co2_t != null && (
-              <DataRow label="CO₂ avoided since it was installed">{p.co2_t.toLocaleString("en-AU")} t</DataRow>
-            )}
+            {p.co2_t != null && <DataRow label="CO₂ avoided, lifetime">{p.co2_t.toLocaleString("en-AU")} t</DataRow>}
           </div>
           {!p.cost && <Muted>Add what the system cost in {settings} to see when it pays for itself.</Muted>}
           {p.cost && !p.installed && (
