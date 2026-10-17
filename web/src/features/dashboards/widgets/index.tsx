@@ -22,7 +22,7 @@ export const METRICS: (Choice & { group: string })[] = [
   { value: "home-today", label: "Home used today", group: "Today" },
   { value: "bought-today", label: "Bought from the grid today", group: "Today" },
   { value: "sold-today", label: "Sold to the grid today", group: "Today" },
-  { value: "self-today", label: "Self-powered today", group: "Today" },
+  { value: "self-today", label: "Self-sufficiency today", group: "Today" },
   { value: "cost-today", label: "Cost today", group: "Today" },
   { value: "saved-today", label: "Saved today", group: "Today" },
 ];
@@ -83,7 +83,7 @@ function FigureWidget({ ctx, settings, h }: WidgetProps) {
     "bought-today": { label: "Bought today", value: kWh(e?.imp), color: COLOR.import },
     "sold-today": { label: "Sold today", value: kWh(e?.exp), color: COLOR.export },
     "self-today": {
-      label: "Self-powered today",
+      label: "Self-sufficiency today",
       value: e && e.home > 0 ? pct(Math.max(0, 1 - e.imp / e.home) * 100) : "—",
       color: COLOR.good,
     },
