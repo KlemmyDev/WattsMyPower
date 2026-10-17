@@ -62,3 +62,22 @@ export const dayLength = (hours: number, short = false) => {
   if (short) return m ? `${h}h ${m}m` : `${h}h`;
   return m ? `${h} h ${m} min` : `${h} h`;
 };
+
+/**
+ * Where the sun is at `ts` from `lat`, `lon`: its height (degrees above the horizon, negative below it) and its bearing
+ * (degrees clockwise from north), for lighting a picture by it.
+ */
+export function sunPlace(ts: number, lat: number, lon: number): { el: number; az: number } {
+  const d = ts / 86_400 + J1970 - J2000;
+  const m = (357.5291 + 0.98560028 * d) * RAD;
+  const c = (1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m)) * RAD;
+  const l = m + c + 102.9372 * RAD + Math.PI;
+  const dec = Math.asin(Math.sin(l) * Math.sin(TILT));
+  const ra = Math.atan2(Math.sin(l) * Math.cos(TILT), Math.cos(l));
+  const hour = (280.16 + 360.9856235 * d + lon) * RAD - ra;
+  const phi = lat * RAD;
+  const el = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(hour)) / RAD;
+  // From the south, westward; turned to a bearing from north.
+  const fromSouth = Math.atan2(Math.sin(hour), Math.cos(hour) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
+  return { el, az: (((fromSouth / RAD + 180) % 360) + 360) % 360 };
+}

@@ -24,9 +24,18 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
   card (controls, say) first.
 - Balance the columns by moving cards around, never by making anything sticky.
 
-## The sky hero (Solar)
+## The sky hero (the live pages)
 
-Solar has no page header. Its title, "Solar", and a line on how the day's going sit in the top left of its top card,
+The live pages (Solar and Battery so far; EV, Grid and Home to come) share one top card, `LiveCard` in
+`features/live`, owned by their layout route (`routes/_app/_live.tsx`), so moving between them never remounts it. Each
+page gives it its title, colour, camera spot, words, figures and chart (`useLiveHero`, as `useSolarHero` and
+`useBatteryHero` do), and draws its own cards under it. Changing page doesn't use the page's rise: the card stays put,
+its camera flies across your house to the new page's spot (about 1.9 s, cut straight there with motion turned down),
+the title and story cross-fade, the figures count to their new values (`Swap`), the slim bar slides, the chart draws
+in, and only the cards under it rise in one after another (`.live-enter`). The moment shown (scrubbed or now) carries
+over. A new page adds its camera spot with `registerSpot()` in `utils/spots.ts`.
+
+The live pages have no page header. The page's title ("Solar") and a line on how it's going sit in the top left of the card,
 over the sky, with the weather, the live clock and the account in the top right (the page corner steps aside for them;
 on a phone the clock and account stay in the top bar). The sky is drawn in the "Atmosphere" look: no drawn clouds, the
 weather felt as light and colour. Its base colours follow the real sunrise and sunset. Five soft colour fields drift
@@ -40,26 +49,34 @@ card's solid ground. Right under the sky comes the day's chart, then the figures
 where the night before sunrise leaves room. Maths in `features/solar/utils/atmosphere.ts` and `sky.ts`, styles at the
 end of `app.css`.
 
-Along the bottom of the sky sits your house (`SolarHouse`, built in `utils/house3d.ts`), seen in perspective from low
-on its front corner: the end of its roof in front of you, the street side with its panels running away across the
-sky. It's your house as Settings → Your house has it, like the Overview's: the style's own roof (a tiled gable or hip,
+Along the bottom of the sky sits your house (`LiveHouse`, built in `features/live/utils/house3d.ts`), seen in
+perspective through the page's camera: Solar's low on its front corner (the end of its roof in front of you, the
+street side with its panels running away across the sky), Battery's close on the battery and inverter on the side
+wall (the garage's side wall, or inside the garage, when Settings → Your house puts them there). It's your house as Settings → Your house has it, like the Overview's: the style's own roof (a tiled gable or hip,
 corrugated or Colorbond iron, a skillion, a flat roof with its panels on frames, a Federation chimney, a
 Queenslander's verandah and stumps, a townhouse's fire wall), the roof's colour and the walls' finish (yours, or the
 style's own), one or two storeys and as many panels as you have (spilling onto a hip roof's end when the street side
-is full). It keeps its own palette in either theme and is lit by the sky: darker towards night with its windows lit,
-cooler in rain, warm at the ends of the day, wet glass in rain, the moon in the glass at night. How hard the panels are
+is full), and the garage or carport and the battery and inverter. It keeps its own palette in either theme. It's lit by
+the real sun ("Lit"): each face its material's own colour, brighter the more squarely it meets the sun, warmer late in
+the day; shadows cast along the light (the house on the lawn, the eaves on the walls, the battery on its wall), softened
+by cloud; soft dark at the walls' feet and under the eaves; gutters, downpipes, sills and the eaves' undersides; and
+faceted trees (gums and shade trees, by your garden) out to the horizon, fading into its haze. Over that, the sky's
+light: darker towards night with its windows lit, cooler in rain, wet glass in rain, the moon in the glass at night.
+The battery shows its level on its face (blue charging, amber discharging), with power running along the conduit from
+the eave to the inverter and between the inverter and the battery. How hard the panels are
 working (a share of the array) is told by the orange lines along each row's top rail: more of them running, longer,
 brighter and quicker as power rises, with a band of light crossing the glass. They stop when the panels do. The first
-time the page opens in a visit the picture starts low on the house, at its wall and garden, and tilts up to the roof
-(by transform, once, and not with motion turned down). Home and Battery are meant to follow with close-ups of their
-own (the house's wall, the garage or side of the house).
+time Solar opens in a visit the camera starts low on the house, at its wall and garden, and tilts up to the roof (once,
+and not with motion turned down).
 
 It's built to stay smooth on a phone, Safari above all. Everything is a gradient: no blur filters, masks, blend modes
 or backdrop blur, which Safari draws slowly and, in layers that move, clips into hard lines at their edges. The
 colours only change every five minutes of sky (so a few times a second while the day plays), the sun and moon move by
 transform alone, and everything that moves for good (drift, fog, rain) moves by transform or opacity. Rain is two
-tiled layers, not a layer per drop, and the grain is a small noise tile drawn once. The whole sky stops while it's
-scrolled away, and holds still with motion turned down.
+tiled layers, not a layer per drop, and the grain is a small noise tile drawn once. The house is SVG markup written straight into
+the picture (React draws only its frame): redrawn every frame only while the camera flies, at rest once per change of
+camera or light, with the pictures for the last few cameras and lights kept. The whole sky stops while it's scrolled
+away, and holds still with motion turned down.
 
 ## Lite effects
 
@@ -67,7 +84,8 @@ scrolled away, and holds still with motion turned down.
 says it's saving data or has very little memory or very few cores, or one whose frames, timed for two seconds once the
 page has settled, mostly come slower than about 45 a second (remembered for a week). Lite drops what's costly to keep
 drawing: backdrop blur on `.glass` (it goes near-solid), the page light's drift and grain, and in the sky the colour
-fields' and fog's drift, the rain's sheen and nearer streaks, and plays the day at 30 frames a second.
+fields' and fog's drift, the rain's sheen and nearer streaks, half the trees, and plays the day and flies the camera at
+30 frames a second.
 Anything new that blurs what's behind it or animates without end needs a lite rule. Setting `wmp-effects` in local
 storage to `lite` or `full` forces either, for trying them.
 
