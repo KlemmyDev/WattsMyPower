@@ -673,7 +673,7 @@ function HomeSources({ from, home, ahead }: { from: Sources; home: number; ahead
     { key: "battery", label: "Battery", kwh: from.battery, color: COLOR.battery },
     { key: "grid", label: "Grid", kwh: from.grid, color: COLOR.fromGrid },
   ].filter((x) => x.kwh >= 0.01);
-  const total = parts.reduce((a, x) => a + x.kwh, 0) || home;
+  const total = home > 0 ? home : parts.reduce((a, x) => a + x.kwh, 0);
   return (
     <div className="@container flex min-w-0 flex-col gap-2.5">
       <span className="truncate text-xs leading-4 text-ink-dim">
