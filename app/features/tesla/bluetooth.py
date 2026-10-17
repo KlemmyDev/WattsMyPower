@@ -34,7 +34,8 @@ it misses in a row (WAKE_BACKOFF): a driver's key can miss once (the car slow to
 tried again within a minute; a charging manager's key may not be allowed to wake it at all, so it soon settles at half
 an hour. Until then it's only checked without waking it, and its charge is read once it's awake anyway (charging, in
 use, or woken from the Tesla app). A link held open is let go after a wake that failed over it, so the next try
-starts afresh. A car that isn't heard is out of range: not at home, or too far from the server.
+starts afresh. A car that isn't heard is out of range: not at home, or too far from the server. Listening for
+one (the scan) reaches nothing in it, so the service looks for an away car often, to read it soon after it's back.
 
 Each read or command is one conversation: find the car, connect, talk, disconnect; one at a time with anything else
 on the radio (app.core.bluetooth). One whose link couldn't be made, or dropped before anything reached the car, is had
@@ -225,7 +226,9 @@ class BluetoothClient:
         self._linked: set[str] = set()  # cars whose link was held open after their last read
 
     def vehicles(self, want: dict[str, str] | None = None) -> list[dict[str, Any]]:
-        return [self._vehicle(vin, (want or {}).get(vin, "quiet")) for vin in self.vins()]
+        """Each car, read as closely as `want` says (quiet when it doesn't say); one it says to "skip" isn't
+        talked to at all (the service looking only for the cars that are away)."""
+        return [self._vehicle(vin, w) for vin in self.vins() if (w := (want or {}).get(vin, "quiet")) != "skip"]
 
     def _due(self, vin: str, every: float) -> tuple[str, ...]:
         """The details groups to read with this read, if the car's awake: those not read for `every` seconds (and

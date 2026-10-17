@@ -36,6 +36,8 @@ const ROLLUP_KWH = 5 / 60 / 1000; // each of the car's power readings is five mi
 
 /** While it waits for spare solar: how closely it's followed, so it's clear why it's (not) being kept awake. */
 export function readiness(v: EvVehicle, provider: Reached | null): string | null {
+  if (provider === "bluetooth" && v.state?.in_range === false && v.status !== "charging")
+    return "Away. Listened for each minute, so it's back here soon after you get home.";
   if (v.night && v.status !== "charging")
     return "Left to sleep overnight. It's checked every half hour without waking it, or wake it to read it now.";
   if (v.status !== "waiting") return null;

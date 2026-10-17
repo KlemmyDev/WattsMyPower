@@ -9,7 +9,8 @@ charging from spare solar works the same through either.
                                     heard, and absent when the way it's reached says nothing about where it is.
                                     `want` is how closely each car is followed (control.readiness, by VIN): a
                                     way that reads the car itself (Bluetooth) lets a "quiet" car sleep and wakes a
-                                    "ready" one; Tessie's copy of the car's state is read the same either way
+                                    "ready" one, and leaves out a "skip" one (not talked to at all); Tessie's
+                                    copy of the car's state is read the same either way
                                     Each also has `details` (app.features.tesla.details): every group known of it,
                                     and `woke` (why) when reading it woke it (over Bluetooth: ready, first)
     command(vin, name, **params)    start_charging, stop_charging, set_charging_amps (amps), set_charge_limit (percent),
