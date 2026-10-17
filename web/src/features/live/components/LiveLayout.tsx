@@ -14,8 +14,8 @@ import type { LiveDay, LiveHero } from "~/features/live/types";
 import { expectedToday, place } from "~/features/solar/utils";
 import { weatherDayQuery } from "~/features/weather/api";
 
-/** What the scene needs of the day: the panels' power, and the battery's power and level. */
-const SCENE_FIELDS = ["pv_power", "battery_power", "battery_soc"];
+/** What the scene needs of the day: the panels' power, the battery's power and level, and the grid's. */
+const SCENE_FIELDS = ["pv_power", "battery_power", "battery_soc", "grid_power"];
 
 /**
  * The live pages (Solar, Battery; EV, Grid and Home to come), around one top card they share (LiveCard): opening one

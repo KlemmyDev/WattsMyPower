@@ -2,8 +2,8 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { reducedMotion } from "~/features/common/display/utils";
 import { cn } from "~/features/common/ui/utils";
 
-/** A figure as a number, its sign and its unit: "+12%", "4.6 kW", "74". */
-const NUM = /^([+−-]?)(\d+(?:\.\d+)?)(\s?(?:%|kW|kWh)?)$/;
+/** A figure as a number, its sign, a dollar sign and its unit: "+12%", "4.6 kW", "$2.35", "34c", "241 V", "74". */
+const NUM = /^([+−-]?)(\$?)(\d+(?:\.\d+)?)(\s?(?:%|kW|kWh|km|c|V)?)$/;
 
 /**
  * Text in the live pages' top card that changes with the page: a figure counts from its old value to its new one, and
@@ -27,16 +27,17 @@ export function Swap({ text, page, className }: { text: string; page: string; cl
     const b = NUM.exec(text);
     let raf = 0;
     let to = 0;
-    if (a && b) {
-      const num = (m: RegExpExecArray) => parseFloat(`${m[1] === "+" ? "" : m[1] ? "-" : ""}${m[2]}`);
+    if (a && b && a[2] === b[2]) {
+      const num = (m: RegExpExecArray) => parseFloat(`${m[1] === "+" ? "" : m[1] ? "-" : ""}${m[3]}`);
       const from = num(a);
       const end = num(b);
-      const dec = (b[2].split(".")[1] ?? "").length;
+      const dec = (b[3].split(".")[1] ?? "").length;
       const t0 = performance.now();
       const step = (ms: number) => {
         const k = Math.min(1, (ms - t0) / 650);
         const v = from + (end - from) * (1 - Math.pow(1 - k, 3));
-        node.textContent = k < 1 ? `${v < 0 ? "−" : b[1] === "+" ? "+" : ""}${Math.abs(v).toFixed(dec)}${b[3]}` : text;
+        node.textContent =
+          k < 1 ? `${v < 0 ? "−" : b[1] === "+" ? "+" : ""}${b[2]}${Math.abs(v).toFixed(dec)}${b[4]}` : text;
         if (k < 1) raf = requestAnimationFrame(step);
       };
       raf = requestAnimationFrame(step);

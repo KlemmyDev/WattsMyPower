@@ -11,6 +11,7 @@ import {
   type HouseState,
   type Light,
   type Pose,
+  type SceneParts,
 } from "~/features/live/utils/house3d";
 import { between, FLIGHT_MS, INTRO_MS, spotPose } from "~/features/live/utils/spots";
 
@@ -38,6 +39,7 @@ export const LiveHouse = memo(function LiveHouse({
   spot,
   phone,
   light,
+  parts,
   state,
   lite,
 }: {
@@ -45,6 +47,8 @@ export const LiveHouse = memo(function LiveHouse({
   spot: string;
   phone: boolean;
   light: Light;
+  /** Whether the car's home, and its paint. */
+  parts: SceneParts;
   state: Omit<HouseState, "now">;
   lite: boolean;
 }) {
@@ -56,9 +60,9 @@ export const LiveHouse = memo(function LiveHouse({
   const targetKey = `${spot}|${phone}|${hkey}`;
 
   // What the drawing needs, always the latest, for a flight's frames to read.
-  const latest = useRef({ house, phone, light, state, lite, target });
+  const latest = useRef({ house, phone, light, parts, state, lite, target });
   useLayoutEffect(() => {
-    latest.current = { house, phone, light, state, lite, target };
+    latest.current = { house, phone, light, parts, state, lite, target };
   });
   const pose = useRef<Pose | null>(null);
   const flight = useRef<Flight | null>(null);
@@ -67,7 +71,7 @@ export const LiveHouse = memo(function LiveHouse({
   /** Draws the house through `at`: its picture (kept, unless it's a flight's frame) and what moves over it. */
   const paint = (at: Pose, keep: boolean) => {
     const L = latest.current;
-    const art = houseArt(L.house, L.phone, at, L.light, L.lite, keep);
+    const art = houseArt(L.house, L.phone, at, L.light, L.parts, L.lite, keep);
     pose.current = at;
     if (still.current && drawn.current.svg !== art.svg) {
       still.current.innerHTML = art.svg;
@@ -75,7 +79,7 @@ export const LiveHouse = memo(function LiveHouse({
     }
     // What moves is written into its slots again only when it's changed (its comets carry on from where they were).
     const s = L.state;
-    const over = `${s.share.toFixed(3)}|${s.on}|${s.battery.w}|${s.battery.level?.toFixed(1)}`;
+    const over = `${s.share.toFixed(3)}|${s.on}|${s.battery.w}|${s.battery.level?.toFixed(1)}|${s.grid}|${s.car}`;
     if (still.current && (drawn.current.art !== art || drawn.current.over !== over)) {
       const now = performance.now();
       const groups = still.current.querySelectorAll<SVGGElement>("g[data-slot]");

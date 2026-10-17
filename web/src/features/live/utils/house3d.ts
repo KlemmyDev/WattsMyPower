@@ -54,7 +54,13 @@ export type Light = {
 
 /** What moves, drawn into a slot right after what it's on: a row of panels' glass (its warmth and sheen), the power
  * along a rail, and the battery and inverter (their level, lights and power). */
-export type Slot = { kind: "glass"; cells: string } | { kind: "rail"; d: string; i: number } | { kind: "kit" };
+export type Slot =
+  | { kind: "glass"; cells: string }
+  | { kind: "rail"; d: string; i: number }
+  | { kind: "kit" }
+  | { kind: "car"; flow: string; port: string }
+  | { kind: "drop"; d: string }
+  | { kind: "meter"; conduit: string; led: string };
 
 /**
  * One shape in drawing order; `clip` keeps it to another outline (a shadow to the wall it falls on). `inside` takes the
@@ -78,6 +84,10 @@ type Shape = {
   /** A row of panels' glass: its cell gaps, for when they glow. */
   cells?: string;
 };
+
+/** What's drawn of the moment besides the light: whether there's a car (its socket's on the wall), whether it's
+ * home, and its paint. */
+export type SceneParts = { ev: boolean; car: boolean; paint: string };
 
 /** The battery and inverter as drawn: their power lines, and the battery's level bar for a level (0 to 1). */
 export type Kit = {
@@ -294,7 +304,31 @@ export type Geometry = {
   /** Where the battery and inverter are, and whether there's a battery. */
   mount: Mount;
   battery: boolean;
+  /** Where the car parks and charges. */
+  car: CarPlace;
 };
+
+/** A frame on a wall: its foot `o`, along it `a`, out of it `n`. */
+type Frame = { o: P3; a: P3; n: P3 };
+
+/**
+ * Where the car parks, nose-in: on the driveway beside the house (its rear at the street, so its charge port, rear
+ * left, faces the camera), or in the garage by its right-hand wall when you park it there. `x0`..`x1` across it, `cy`
+ * its rear; the socket it charges from (on the house's side wall, the garage's front, or the garage's right-hand wall
+ * inside); and its layers.
+ */
+export type CarPlace = {
+  inGarage: boolean;
+  x0: number;
+  x1: number;
+  cy: number;
+  socket: Frame;
+  layer: number;
+  socketLayer: number;
+};
+
+const CAR_L = 4.75;
+const CAR_W = 1.92;
 
 const E = (storeys: number) => (storeys === 2 ? 5.5 : 2.6); // eave height
 
@@ -324,7 +358,25 @@ export function geometry(o: HouseOptions): Geometry {
   else if (garage && !garage.carport)
     mount = { o: [garage.x1, 3, 0], a: [0, 1, 0], n: [1, 0, 0], top: garage.h, inside: false };
   else mount = { o: [10, 4.55, 0], a: [0, 1, 0], n: [1, 0, 0], top: eave, inside: false };
-  return { storeys: o.storeys, raised, z0, eave, garage, mount, battery: o.batteries.length > 0 };
+  // The car parks in a garage with walls when you said it does (else on the driveway, also in front of a carport).
+  const walled = garage && !garage.carport ? garage : null;
+  const inGarage = !!walled && o.cars[0] === "garage";
+  const x0 = walled && inGarage ? walled.x1 - walled.t - 0.65 - CAR_W : garage ? 11.95 : 11.0;
+  const car: CarPlace = {
+    inGarage,
+    x0,
+    x1: x0 + CAR_W,
+    cy: walled && inGarage ? walled.y1 - 0.55 : 13.35,
+    socket:
+      walled && inGarage
+        ? { o: [walled.x1 - walled.t, 5.55, 0], a: [0, 1, 0], n: [-1, 0, 0] }
+        : walled
+          ? { o: [10.12, walled.y1, 0], a: [1, 0, 0], n: [0, 1, 0] }
+          : { o: [10, 7.38, z0], a: [0, 1, 0], n: [1, 0, 0] },
+    layer: inGarage ? 3.4 : walled ? 5 : 1.5,
+    socketLayer: inGarage ? 3 : walled ? 4.5 : 1,
+  };
+  return { storeys: o.storeys, raised, z0, eave, garage, mount, battery: o.batteries.length > 0, car };
 }
 
 // ------------------------------------------------------------------------------------------------- the builder
@@ -342,6 +394,8 @@ class Builder {
   /** Every roof face's corners (for the shadows they cast), and their eaves (for the undersides). */
   roofPts: P3[] = [];
   eaves: Plane[] = [];
+  /** What else casts a shadow on the lawn: the car, the street's poles. */
+  casters: P3[][] = [];
   /** The garage's outside wall, when the battery may hang on it. */
   garageSide: Item | null = null;
   /** Each fill's own colour before it's lit (the side shades a flat drawing bakes in go back to the face's). */
@@ -740,8 +794,8 @@ function groundAndWalls(B: Builder, g: Geometry) {
       [
         [garage.x0 + 0.3, garage.y1, 0.012],
         [garage.x1 - 0.2, garage.y1, 0.012],
-        [garage.x1 + 0.4, 16, 0.012],
-        [garage.x0 - 0.1, 16, 0.012],
+        [garage.x1 + 0.4, 18, 0.012],
+        [garage.x0 - 0.1, 18, 0.012],
       ],
       "#dedbd3",
       1e5,
@@ -750,12 +804,49 @@ function groundAndWalls(B: Builder, g: Geometry) {
     [
       [4.55, 8, 0.013],
       [5.65, 8, 0.013],
-      [5.65, 18, 0.013],
-      [4.55, 18, 0.013],
+      [5.65, 16, 0.013],
+      [4.55, 16, 0.013],
     ],
     "#d9d5cb",
     1e5,
   );
+  // The street out the front: the footpath, the kerb, the road and its centre line; and the driveway.
+  const strip = (y0: number, y1: number, z: number, fill: string) =>
+    ground(
+      [
+        [-500, y0, z],
+        [500, y0, z],
+        [500, y1, z],
+        [-500, y1, z],
+      ],
+      fill,
+      1e5,
+    );
+  strip(16, 18, 0.008, "#d3d0c8");
+  strip(18, 18.18, 0.007, "#b4b0a7");
+  strip(18.18, 26, 0.006, "#5a5d63");
+  for (let x = -200; x < 200; x += 9)
+    ground(
+      [
+        [x, 22, 0.009],
+        [x + 4.5, 22, 0.009],
+        [x + 4.5, 22.14, 0.009],
+        [x, 22.14, 0.009],
+      ],
+      "#d8d6cf",
+      1e5,
+    );
+  if (!garage)
+    ground(
+      [
+        [10.7, 8.2, 0.012],
+        [13.75, 8.2, 0.012],
+        [13.75, 18, 0.012],
+        [10.7, 18, 0.012],
+      ],
+      "#d6d2c8",
+      1e5,
+    );
   B.layer = 0;
   if (g.raised) B.box(0.2, 9.8, 0.2, 7.8, 0, z0, "#6b6f74", "#5c6065"); // a Queenslander stands on stumps
   B.box(0, 10, 0, 8, z0, g.eave + 0.1, f.face, f.side, undefined, true);
@@ -1374,6 +1465,358 @@ function kit(
   };
 }
 
+// ------------------------------------------------------------------------------------------------- the car and the street
+
+/** A box on a wall's frame, lit like everything else; the points of the frame, for what's on its front. */
+function boxOn(
+  B: Builder,
+  F: Frame,
+  u0: number,
+  u1: number,
+  o0: number,
+  o1: number,
+  z0: number,
+  z1: number,
+  front: string,
+  side: string,
+  top: string,
+  extra: Shape[] = [],
+) {
+  const q = (u: number, o: number, z: number): P3 => addk(addk(addk(F.o, F.a, u), F.n, o), [0, 0, z]);
+  const faces: [P3[], string, P3, Shape[]][] = [
+    [[q(u0, o1, z0), q(u1, o1, z0), q(u1, o1, z1), q(u0, o1, z1)], front, F.n, extra],
+    [[q(u1, o0, z0), q(u1, o1, z0), q(u1, o1, z1), q(u1, o0, z1)], side, F.a, []],
+    [[q(u0, o0, z0), q(u0, o1, z0), q(u0, o1, z1), q(u0, o0, z1)], side, neg(F.a), []],
+    [[q(u0, o0, z1), q(u1, o0, z1), q(u1, o1, z1), q(u0, o1, z1)], top, [0, 0, 1], []],
+  ];
+  for (const [pts, fill, n, ex] of faces) if (B.facing(mid(pts), n)) B.face(pts, fill, ex);
+  return q;
+}
+
+/** A round post or rod from `a` to `b`, tapering, its sunny side lighter. */
+function rod(B: Builder, a: P3, b: P3, w0: number, w1: number, col: string): Shape[] {
+  const c = B.cam;
+  const pa = c.p(a);
+  const pb = c.p(b);
+  if (!pa || !pb) return [];
+  const ka = c.focal / c.depth(a);
+  const kb = c.focal / c.depth(b);
+  const dx = pb[0] - pa[0];
+  const dy = pb[1] - pa[1];
+  const m = Math.hypot(dx, dy) || 1;
+  const nx = -dy / m;
+  const ny = dx / m;
+  const sp = c.p(addk(b, B.sun.dir, 1));
+  const sx = sp ? sp[0] - pb[0] : -1;
+  const sy = sp ? sp[1] - pb[1] : 0;
+  const side = nx * sx + ny * sy >= 0 ? 1 : -1;
+  const half = (f: number) =>
+    `M${n1(pa[0] + nx * w0 * ka * f)} ${n1(pa[1] + ny * w0 * ka * f)} L${n1(pb[0] + nx * w1 * kb * f)} ${n1(pb[1] + ny * w1 * kb * f)} L${n1(pb[0])} ${n1(pb[1])} L${n1(pa[0])} ${n1(pa[1])} Z`;
+  return [
+    { d: half(side), fill: css(mix(rgb(col), [255, 250, 236], 0.22 * B.sun.L)) },
+    { d: half(-side), fill: css(rgb(col).map((v) => v * 0.72) as Rgb) },
+  ];
+}
+
+/** A wire hanging between two points. */
+const sag = (a: P3, b: P3, s: number, n = 10): P3[] =>
+  Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n;
+    return addk(lerp3(a, b, t), [0, 0, -4 * s * t * (1 - t)]);
+  });
+
+// The car's side profile (along it from its rear, up), and its cabin's.
+const BODY: [number, number][] = [
+  [0, 0.42],
+  [0.04, 0.86],
+  [0.25, 1.0],
+  [1.0, 1.06],
+  [3.15, 1.0],
+  [3.85, 0.93],
+  [4.5, 0.84],
+  [4.72, 0.68],
+  [4.75, 0.45],
+  [4.6, 0.3],
+  [0.15, 0.3],
+];
+const CABIN: [number, number][] = [
+  [0.3, 1.0],
+  [0.66, 1.45],
+  [1.35, 1.63],
+  [2.55, 1.6],
+  [3.2, 1.0],
+];
+
+/**
+ * The car and the socket it charges from. The socket's always there (its light green while the car's home); the car,
+ * a low-poly Model Y in your car's paint, only while it's home: nose-in on the driveway (lit by the sun) or in the
+ * garage (under the garage's own light), its cable from the socket along its right side up to its charge port, rear
+ * left. Its sides show only where the camera can see them, so nothing on the far side shows through it.
+ */
+function carScene(B: Builder, g: Geometry, parts: SceneParts) {
+  const C = g.car;
+  const { inGarage, x0, x1, cy } = C;
+  const SF = C.socket;
+  if (!parts.ev) return;
+  B.layer = C.socketLayer;
+  if (B.facing(addk(SF.o, [0, 0, 1.1]), SF.n)) {
+    const sq = boxOn(B, SF, 0, 0.24, 0, 0.11, 0.95, 1.27, "#e1e4e7", "#c8cdd2", "#eef0f2");
+    const d = B.cam.poly([sq(0.15, 0.112, 1.15), sq(0.2, 0.112, 1.15), sq(0.2, 0.112, 1.2), sq(0.15, 0.112, 1.2)]);
+    if (d)
+      B.items.push({
+        layer: B.layer,
+        depth: -1e5,
+        shapes: [{ d: "", raw: `<path d="${d}" fill="${parts.car ? "#4ade80" : "#9aa1a9"}"/>` }],
+      });
+  }
+  B.layer = 0;
+  if (!parts.car) return;
+  B.layer = C.layer;
+  const P = (x: number, u: number, z: number): P3 => [x, cy - u, z];
+  const faces: (Shape & { depth: number })[] = [];
+  const put = (pts: P3[], fill: string, centre: P3) => {
+    let n = unit(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
+    const c = mid(pts);
+    if (dot(n, sub(c, centre)) < 0) n = neg(n);
+    if (!B.facing(c, n)) return;
+    const d = B.cam.poly(pts);
+    if (d) faces.push({ depth: B.cam.depth(c), d, fill: inGarage ? fill : B.light(fill, pts) });
+  };
+  const extrude = (prof: [number, number][], xa: number, xb: number, fill: string, centre: P3) => {
+    put(
+      prof.map(([u, z]) => P(xa, u, z)),
+      fill,
+      centre,
+    );
+    put(
+      prof.map(([u, z]) => P(xb, u, z)),
+      fill,
+      centre,
+    );
+    prof.forEach(([u, z], i) => {
+      const [u2, z2] = prof[(i + 1) % prof.length];
+      put([P(xa, u, z), P(xb, u, z), P(xb, u2, z2), P(xa, u2, z2)], fill, centre);
+    });
+  };
+  extrude(BODY, x0, x1, parts.paint, P((x0 + x1) / 2, 2.4, 0.7));
+  extrude(CABIN, x0 + 0.14, x1 - 0.14, "#1c2531", P((x0 + x1) / 2, 1.7, 1.2));
+  // The wheels and shut lines on the side the camera sees, the tail lights from behind, the charge port from its side.
+  const eye = B.cam.eye;
+  const right = eye[0] > x1;
+  const left = eye[0] < x0;
+  const rear = eye[1] > cy;
+  const sx = right ? x1 + 0.012 : x0 - 0.012;
+  const out = Math.sign(sx - (x0 + x1) / 2);
+  const ring = (u: number, z: number, r: number, x: number) =>
+    B.cam.poly(
+      Array.from({ length: 16 }, (_, i) =>
+        P(x, u + r * Math.cos((i / 16) * Math.PI * 2), z + r * Math.sin((i / 16) * Math.PI * 2)),
+      ),
+    );
+  const extras: Shape[] = [];
+  if (right || left) {
+    const hub = B.light("#9aa1a9", [P(sx, 0, 0), P(sx, 1, 0), P(sx, 0, 1)]);
+    for (const u of [0.95, 3.78])
+      extras.push(
+        { d: ring(u, 0.37, 0.37, sx), fill: "#1b1d21" },
+        { d: ring(u, 0.37, 0.25, sx + out * 0.01), fill: hub },
+        { d: ring(u, 0.37, 0.06, sx + out * 0.02), fill: "#3a3e44" },
+      );
+    for (const u of [1.32, 2.42])
+      extras.push({ d: B.cam.seg(P(sx, u, 0.48), P(sx, u, 0.99)), stroke: "#b8bcc2", width: 0.9 });
+  }
+  if (rear)
+    extras.push({
+      d: B.cam.poly([
+        P(x0 + 0.12, 0.028, 0.79),
+        P(x1 - 0.12, 0.028, 0.79),
+        P(x1 - 0.12, 0.036, 0.86),
+        P(x0 + 0.12, 0.036, 0.86),
+      ]),
+      fill: "#9e2229",
+    });
+  const port = right
+    ? B.cam.poly([
+        P(x1 + 0.014, 0.3, 0.82),
+        P(x1 + 0.014, 0.44, 0.82),
+        P(x1 + 0.014, 0.44, 0.93),
+        P(x1 + 0.014, 0.3, 0.93),
+      ])
+    : "";
+  // The cable from the socket down to the floor, along the car's right side and up into its port.
+  let run: P3[];
+  let last: P3[];
+  if (inGarage) {
+    const sock: P3 = [SF.o[0] - 0.06, 5.67, 0.95];
+    const lane = x1 + 0.25;
+    run = [sock, [sock[0], sock[1], 0.05], [lane, 5.6, 0.03]];
+    last = [
+      [lane, 5.6, 0.03],
+      [lane, cy - 0.45, 0.03],
+      [x1 + 0.1, cy - 0.4, 0.38],
+      [x1 + 0.02, cy - 0.37, 0.86],
+    ];
+  } else {
+    const walled = g.garage && !g.garage.carport;
+    const sock: P3 = walled ? [10.24, g.garage!.y1 + 0.06, 0.95] : [10.06, 7.5, 0.95 + g.z0];
+    const lane = x1 + 0.32;
+    run = [
+      sock,
+      [sock[0], sock[1], 0.05],
+      walled ? [10.6, 7.5, 0.03] : [10.45, 7.95, 0.03],
+      [lane, 8.55, 0.03],
+      [lane, 9.3, 0.03],
+    ];
+    last = [
+      [lane, 9.3, 0.03],
+      [lane, cy - 0.5, 0.03],
+      [x1 + 0.12, cy - 0.38, 0.38],
+      [x1 + 0.02, cy - 0.37, 0.86],
+    ];
+  }
+  const cable: (Shape & { depth: number })[] = [];
+  const all = [...run, ...last.slice(1)];
+  for (let i = 1; i < all.length; i++) {
+    const a = all[i - 1];
+    const q = all[i];
+    const m = lerp3(a, q, 0.5);
+    const d = B.cam.seg(a, q);
+    const dep = B.cam.depth(m);
+    if (d)
+      cable.push({ depth: dep, d, stroke: "#25282d", width: Math.max(1.4, Math.min(3.4, (0.03 * B.cam.focal) / dep)) });
+  }
+  const sorted = [...faces, ...cable].sort((a, b) => b.depth - a.depth).map(({ depth: _, ...x }) => x);
+  const foot = [
+    P(x0 - 0.06, -0.05, 0.004),
+    P(x1 + 0.06, -0.05, 0.004),
+    P(x1 + 0.06, CAR_L + 0.05, 0.004),
+    P(x0 - 0.06, CAR_L + 0.05, 0.004),
+  ];
+  const shapes: Shape[] = [{ d: B.cam.poly(foot), fill: SHADOW, opacity: 0.32 }, ...sorted, ...extras];
+  B.add(B.cam.depth(P((x0 + x1) / 2, 2.4, 0.7)), ...(inGarage ? shapes.map((x) => ({ ...x, inside: true })) : shapes));
+  // Its cable's power and its port's light, drawn right after it.
+  B.items.push({
+    layer: B.layer,
+    depth: -1e5,
+    shapes: [{ d: "", slot: { kind: "car", flow: right ? B.cam.line(last) : "", port } }],
+  });
+  if (!inGarage)
+    B.casters.push([
+      P(x0, 0, 0),
+      P(x1, 0, 0),
+      P(x0, CAR_L, 0),
+      P(x1, CAR_L, 0),
+      P(x0, 0.3, 1.0),
+      P(x1, 0.3, 1.0),
+      P(x0 + 0.14, 1.35, 1.63),
+      P(x1 - 0.14, 1.35, 1.63),
+      P(x0 + 0.14, 2.55, 1.6),
+      P(x1 - 0.14, 2.55, 1.6),
+      P(x0, 4.5, 0.84),
+      P(x1, 4.5, 0.84),
+    ]);
+  B.layer = 0;
+}
+
+// The street's power poles (one out the front with a transformer) along the footpath.
+const POLES = Array.from({ length: 11 }, (_, i) => -148 + 30 * i);
+const POLE_Y = 17.35;
+const ARM = 8.7;
+
+/**
+ * The street's power: timber poles every 30 m with a crossarm and insulators, a transformer on the one out the front,
+ * sagging wires between them, and the service line from that pole to a bracket on the eave, down a conduit to the meter
+ * box on the front wall. Its power's comets (violet buying, amber selling) go in slots right after the line and the
+ * conduit.
+ */
+function gridScene(B: Builder, g: Geometry) {
+  B.layer = 6;
+  const wire = (pts: P3[], w = 0.026) => {
+    const m = pts[Math.floor(pts.length / 2)];
+    const d = B.cam.line(pts);
+    if (!d) return 0;
+    const dep = B.cam.depth(m);
+    B.add(dep, { d, stroke: "#26292e", width: Math.max(0.6, Math.min(2.4, (w * B.cam.focal) / Math.max(1, dep))) });
+    return dep;
+  };
+  const ends = [-0.85, -0.3, 0.85];
+  POLES.forEach((x, i) => {
+    const base: P3 = [x, POLE_Y, 0];
+    if (B.cam.depth(base) < 1) return;
+    const shapes = [
+      ...rod(B, base, [x, POLE_Y, 9.3], 0.17, 0.11, "#8a7a66"),
+      ...rod(B, [x - 1.05, POLE_Y, ARM], [x + 1.05, POLE_Y, ARM], 0.07, 0.07, "#76685a"),
+    ];
+    for (const e of ends)
+      shapes.push(...rod(B, [x + e, POLE_Y, ARM], [x + e, POLE_Y, ARM + 0.16], 0.045, 0.035, "#c9cdd2"));
+    if (x === 2)
+      shapes.push(
+        ...rod(B, [x + 0.42, POLE_Y, 6.9], [x + 0.42, POLE_Y, 7.9], 0.3, 0.3, "#9aa0a6"),
+        ...rod(B, [x + 0.42, POLE_Y, 7.9], [x + 0.42, POLE_Y, 8.0], 0.24, 0.2, "#b9bec4"),
+      );
+    B.add(B.cam.depth(base), ...shapes);
+    B.casters.push([
+      [x - 0.15, POLE_Y, 0],
+      [x + 0.15, POLE_Y, 0],
+      [x - 1.05, POLE_Y, ARM],
+      [x + 1.05, POLE_Y, ARM],
+    ]);
+    if (i < POLES.length - 1)
+      for (const e of ends) wire(sag([x + e, POLE_Y, ARM + 0.16], [POLES[i + 1] + e, POLE_Y, ARM + 0.16], 0.55));
+  });
+  // The service line to the house: from the pole to a bracket on the eave.
+  const top = g.eave;
+  const drop = sag([2.85, POLE_Y, ARM + 0.16], [0.85, 8.5, top + 0.35], 0.5, 12);
+  const dropDepth = wire(drop, 0.03);
+  if (dropDepth)
+    B.items.push({
+      layer: 6,
+      depth: dropDepth - 1e-3,
+      shapes: [{ d: "", slot: { kind: "drop", d: B.cam.line(drop) } }],
+    });
+  B.layer = 0.95;
+  B.add(0, ...rod(B, [0.85, 8.5, top - 0.25], [0.85, 8.5, top + 0.4], 0.03, 0.03, "#9aa1a9"));
+  // The meter box on the front wall, and the conduit down to it: only when that wall faces the camera.
+  B.layer = 0;
+  if (!B.wallItems.front) return;
+  B.layer = 1;
+  const MF: Frame = { o: [0.46, 8, g.z0], a: [1, 0, 0], n: [0, 1, 0] };
+  const qm = (u: number, o: number, z: number): P3 => addk(addk(addk(MF.o, MF.a, u), MF.n, o), [0, 0, z]);
+  const door = B.cam.line([
+    qm(0.04, 0.172, 1.19),
+    qm(0.53, 0.172, 1.19),
+    qm(0.53, 0.172, 1.91),
+    qm(0.04, 0.172, 1.91),
+    qm(0.04, 0.172, 1.19),
+  ]);
+  const glass = B.cam.poly([qm(0.14, 0.173, 1.6), qm(0.42, 0.173, 1.6), qm(0.42, 0.173, 1.8), qm(0.14, 0.173, 1.8)]);
+  boxOn(B, MF, 0, 0.57, 0, 0.17, 1.15, 1.95, "#e7e2d3", "#d0cab8", "#f1ede2", [
+    { d: door, stroke: "#b9b19c", width: 1 },
+    { d: glass, fill: "#26303b" },
+  ]);
+  const conduit = [qm(0.39, 0.05, top - g.z0 - 0.05), qm(0.39, 0.05, 1.95)];
+  B.add(
+    -1e4,
+    { d: B.cam.line(conduit), stroke: "#aab1ba", width: 4.4 },
+    { d: B.cam.line(conduit), stroke: "#d6dbe1", width: 2 },
+  );
+  B.items.push({
+    layer: 1,
+    depth: -1e5,
+    shapes: [
+      {
+        d: "",
+        slot: {
+          kind: "meter",
+          conduit: B.cam.line([[0.85, 8.5, top + 0.35], [0.85, 8.06, top - 0.05], qm(0.39, 0.05, 1.95)]),
+          led: B.cam.poly([qm(0.2, 0.174, 1.66), qm(0.24, 0.174, 1.66), qm(0.24, 0.174, 1.7), qm(0.2, 0.174, 1.7)]),
+        },
+      },
+    ],
+  });
+  B.layer = 0;
+}
+
 // ------------------------------------------------------------------------------------------------- what makes it lit
 
 /**
@@ -1423,6 +1866,8 @@ function litExtras(B: Builder, K: ReturnType<typeof kit>, g: Geometry, mountWall
       [garage.x1, garage.y1, garage.h],
     );
   B.add(1e4, { d: shadowOn(mass, [0, 0, 0.015], [0, 0, 1]), fill: SHADOW, opacity: +(0.36 * day).toFixed(2) });
+  for (const pts of B.casters)
+    B.add(1e4, { d: shadowOn(pts, [0, 0, 0.017], [0, 0, 1]), fill: SHADOW, opacity: +(0.3 * day).toFixed(2) });
   for (const [w, op] of [
     [0.25, 0.16],
     [0.7, 0.07],
@@ -1770,6 +2215,7 @@ export function houseKey(o: HouseOptions) {
     o.garden,
     o.batteries.join(","),
     o.inverters.join(","),
+    o.cars[0] ?? "",
   ].join("|");
 }
 
@@ -1782,6 +2228,7 @@ export function houseArt(
   phone: boolean,
   pose: Pose,
   light: Light,
+  parts: SceneParts,
   lite: boolean,
   keep = true,
 ): HouseArt {
@@ -1804,6 +2251,9 @@ export function houseArt(
         ]
           .map(r2)
           .join(","),
+        parts.ev,
+        parts.car,
+        parts.paint,
         lite,
       ].join("/")
     : "";
@@ -1821,6 +2271,8 @@ export function houseArt(
     garageShell(B, g.garage);
   } else if (g.garage) carport(B, g.garage);
   const K = kit(B, g.mount, g.battery);
+  carScene(B, g, parts);
+  gridScene(B, g);
   const mountWall = g.mount.inside ? null : g.mount.o[0] === 10 ? (B.wallItems.side ?? null) : B.garageSide;
   litExtras(B, K, g, mountWall);
   trees(B, look.garden, w, lite);
@@ -1943,6 +2395,10 @@ export function houseArt(
 
 /** What the house shows at a moment, in its slots. */
 export type HouseState = {
+  /** The grid: W, buying positive. */
+  grid: number | null;
+  /** What the car's charging at (kW). */
+  car: number;
   /** How hard the panels are working, of the array (0 to 1), and whether they are. */
   share: number;
   on: boolean;
@@ -1952,10 +2408,13 @@ export type HouseState = {
   now: number;
 };
 
-/** The orange of the solar lines, the blue of charging, the amber of discharging. */
+/** The orange of the solar lines, the blue of charging, the amber of discharging (and selling), the car's teal, and
+ * the violet of buying. */
 const PV = "#ffb547";
 const CHARGE = "#7d97ff";
 const DRAIN = "#f2a65a";
+const EVC = "#4fd1c5";
+const IMPC = "#a3abff";
 
 /** Power along a line: a soft glow under it, and comets running along it, more, longer and quicker as `f` rises. */
 function flow(d: string, color: string, f: number, i: number, now: number) {
@@ -1993,6 +2452,26 @@ export function slotMarkup(art: HouseArt, slot: Slot, s: HouseState): string {
     return out;
   }
   if (slot.kind === "rail") return s.on ? flow(slot.d, PV, f, slot.i, s.now) : "";
+  if (slot.kind === "car") {
+    const charging = s.car > 0.05;
+    const pc = charging ? "#5ef0b0" : "#5b8cff";
+    return (
+      (charging ? flow(slot.flow, EVC, clamp01(s.car / 7), 7, s.now) : "") +
+      (slot.port ? `<path d="${slot.port}" fill="${pc}" stroke="${pc}" stroke-width="4" stroke-opacity=".3"/>` : "")
+    );
+  }
+  if (slot.kind === "drop" || slot.kind === "meter") {
+    const gk = (s.grid ?? 0) / 1000;
+    const flowing = Math.abs(gk) > 0.05;
+    const col = gk > 0 ? IMPC : DRAIN;
+    const gf = Math.max(0.15, clamp01(Math.abs(gk) / 5));
+    if (slot.kind === "drop") return flowing ? flow(gk > 0 ? slot.d : reverse(slot.d), col, gf, 9, s.now) : "";
+    const led = gk > 0.05 ? IMPC : gk < -0.05 ? DRAIN : "#4ade80";
+    return (
+      (flowing ? flow(gk > 0 ? slot.conduit : reverse(slot.conduit), col, gf, 10, s.now) : "") +
+      (slot.led ? `<path class="house-pulse" d="${slot.led}" fill="${led}"/>` : "")
+    );
+  }
   const K = art.kit;
   if (!K?.shown) return "";
   let out = s.on ? flow(K.dc, PV, f, 3, s.now) : "";

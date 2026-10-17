@@ -26,7 +26,7 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
 
 ## The sky hero (the live pages)
 
-The live pages (Solar and Battery so far; EV, Grid and Home to come) share one top card, `LiveCard` in
+The live pages (Solar, Battery, EV and Grid; Home to come) share one top card, `LiveCard` in
 `features/live`, owned by their layout route (`routes/_app/_live.tsx`), so moving between them never remounts it. Each
 page gives it its title, colour, camera spot, words, figures and chart (`useLiveHero`, as `useSolarHero` and
 `useBatteryHero` do), and draws its own cards under it. Changing page doesn't use the page's rise: the card stays put,
@@ -52,11 +52,15 @@ end of `app.css`.
 Along the bottom of the sky sits your house (`LiveHouse`, built in `features/live/utils/house3d.ts`), seen in
 perspective through the page's camera: Solar's low on its front corner (the end of its roof in front of you, the
 street side with its panels running away across the sky), Battery's close on the battery and inverter on the side
-wall (the garage's side wall, or inside the garage, when Settings → Your house puts them there). It's your house as Settings → Your house has it, like the Overview's: the style's own roof (a tiled gable or hip,
+wall (the garage's side wall, or inside the garage, when Settings → Your house puts them there), EV's out by the
+street looking along your car on the driveway (or in through the garage door when it parks there), Grid's from
+across the street to the west, the poles and wires in front of the house. It's your house as Settings → Your house has it, like the Overview's: the style's own roof (a tiled gable or hip,
 corrugated or Colorbond iron, a skillion, a flat roof with its panels on frames, a Federation chimney, a
 Queenslander's verandah and stumps, a townhouse's fire wall), the roof's colour and the walls' finish (yours, or the
 style's own), one or two storeys and as many panels as you have (spilling onto a hip roof's end when the street side
-is full), and the garage or carport and the battery and inverter. It keeps its own palette in either theme. It's lit by
+is full), and the garage or carport, the battery and inverter, your car (a low-poly Model Y in its paint, only while it's
+home, its cable to a socket on the wall), and the street: footpath, kerb, road, timber poles with a transformer out
+the front, and the service line down to the meter box on the front wall. It keeps its own palette in either theme. It's lit by
 the real sun ("Lit"): each face its material's own colour, brighter the more squarely it meets the sun, warmer late in
 the day; shadows cast along the light (the house on the lawn, the eaves on the walls, the battery on its wall), softened
 by cloud; soft dark at the walls' feet and under the eaves; gutters, downpipes, sills and the eaves' undersides; and
@@ -66,7 +70,8 @@ darker towards night, cooler in rain, warm at the ends of the day, the garage un
 light up from inside (brighter low down, a blind shading the top, light spilling on the wall), the porch light comes on,
 and warm light falls on the lawn in front of them. The glass gets wet in rain and catches the moon.
 The battery shows its level on its face (blue charging, amber discharging), with power running along the conduit from
-the eave to the inverter and between the inverter and the battery. How hard the panels are
+the eave to the inverter and between the inverter and the battery; the car's cable runs teal while it charges, and the
+service line and the meter's conduit violet while you buy, amber while you sell. How hard the panels are
 working (a share of the array) is told by the orange lines along each row's top rail: more of them running, longer,
 brighter and quicker as power rises, with a band of light crossing the glass. They stop when the panels do. The first
 time Solar opens in a visit the camera starts low on the house, at its wall and garden, and tilts up to the roof (once,

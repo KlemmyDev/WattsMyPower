@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { EvPage } from "~/features/ev/components/EvPage";
 
 /** One connected car's own page, as the side nav lists them under EV. */
-export const Route = createFileRoute("/_app/ev/$vin")({
+export const Route = createFileRoute("/_app/_live/ev/$vin")({
   head: () => ({ meta: [{ title: "EV · WattsMyPower" }] }),
   component: EvCarRoute,
 });

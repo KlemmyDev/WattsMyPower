@@ -297,7 +297,7 @@ function Pace({ bought, usual }: { bought: number | null; usual: { byNow: number
  * In the card when the grid's not normal, washed in its colour: what it means, the battery (how long it would last at
  * this use, and a way to charge it from the grid while there's still grid, when it's worth it), and each reason.
  */
-function Warnings({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: SystemInfo | undefined }) {
+export function Warnings({ grid, p, s }: { grid: GridView; p: Snapshot | null; s: SystemInfo | undefined }) {
   const { level, reasons } = grid.outlook;
   const l = LEVEL[level];
   const hasBattery = useHasBattery();

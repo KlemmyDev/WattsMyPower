@@ -9,12 +9,17 @@ import { clamp01, type Rgb, type SkyWeather } from "~/features/solar/utils/sky";
  */
 
 /** The live pages, which share one top card: going between them flies its camera rather than opening a new page. */
-export const LIVE_PAGES = ["solar", "battery"] as const;
+export const LIVE_PAGES = ["solar", "battery", "ev", "grid"] as const;
 export type LivePage = (typeof LIVE_PAGES)[number];
 
-/** The live page at an address, or null. */
-export const livePage = (path: string): LivePage | null =>
-  (LIVE_PAGES as readonly string[]).find((p) => path === `/${p}` || path === `/${p}/`) as LivePage | null;
+/** The live page at an address (EV's cars each have their own, under it), or null. */
+export function livePage(path: string): LivePage | null {
+  const [, first, second, ...rest] = path.split("/");
+  const page = (LIVE_PAGES as readonly string[]).includes(first) ? (first as LivePage) : null;
+  if (!page || rest.some(Boolean)) return null;
+  if (!second) return page;
+  return page === "ev" && second !== "setup" ? page : null;
+}
 
 /** The reading of `field` nearest `t` in a day's series (within 15 minutes), or null. */
 export function seriesAt(series: HistorySeries | undefined, field: string, t: number): number | null {
