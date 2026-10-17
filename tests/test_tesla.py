@@ -29,6 +29,7 @@ from app.features.tesla.control import Charger, Memory
 from app.features.tesla.service import (
     LEVEL_ASLEEP,
     POLL_ACTIVE,
+    POLL_AWAY,
     POLL_CHARGING,
     POLL_IDLE,
     TeslaService,
@@ -39,6 +40,7 @@ from app.features.tesla.tessie import TessieClient
 from app.main import create_app
 
 VIN = "7SAYGDEF1PA000001"
+VIN2 = "7SAYGDEF1PA000002"
 TOKEN = "tessie_0123456789abcdef"
 HOME = (-27.47, 153.02)
 THREE = Charger(phases=3, volts=230, min_amps=5, max_amps=16)  # 3.45 kW at 5 A, 690 W an amp
@@ -394,6 +396,13 @@ def test_bluetooth_reads_a_car_back_in_range_at_once() -> None:
     clock.t += 600
     client.vehicles({VIN: "quiet"})  # back, ten minutes later: read now, not in an hour
     assert radio.asked[2][0] is True
+
+
+def test_bluetooth_leaves_a_car_it_is_told_to_skip_alone() -> None:
+    radio = ScriptedRadio({"heard": False})
+    client = BluetoothClient("key", lambda: [VIN, VIN2], radio, Clock())  # type: ignore[arg-type]
+    rows = client.vehicles({VIN: "night", VIN2: "skip"})
+    assert [r["vin"] for r in rows] == [VIN] and len(radio.asked) == 1
 
 
 def test_bluetooth_reads_as_closely_as_the_car_is_followed() -> None:
@@ -1743,6 +1752,70 @@ def test_at_night_a_car_charging_at_home_is_still_read_often(ble: TeslaService, 
     minutes(ble, live, clock, 31, grid=11000)  # seen at the next half-hourly check: awake and plugged in, so read
     assert ble.status()["vehicles"][0]["follow"] == "active"
     assert ble.status()["next_read"] - int(clock()) <= POLL_CHARGING["bluetooth"]
+
+
+def test_a_car_thats_away_is_listened_for_each_minute_and_never_woken(ble: TeslaService, tessie: FakeTessie,
+                                                                     radio: FakeRadio, live: FakeLive,
+                                                                     clock: Clock) -> None:  # fmt: skip
+    clock.t += 4 * 3600  # 10 at night: a car at home is only checked every half hour
+    leave(tessie)
+    minutes(ble, live, clock, 1, grid=500)
+    assert ble.status()["vehicles"][0]["state"]["in_range"] is False
+    radio.asked.clear()
+    minutes(ble, live, clock, 30, grid=500)
+    # Listened for each minute, not every half hour, and never woken (nothing reaches a car that isn't heard).
+    assert len(radio.asked) == 30 and not any(wake for _, wake in radio.asked)
+    assert ble.status()["next_read"] - int(clock()) <= POLL_AWAY
+    # Home again: back on the dashboard within the minute, read as any car is at night (awake from the drive, so its
+    # charge is read; never woken), then left to the night's pace.
+    radio.asleep = False
+    come_home(tessie, 50, 1075)
+    minutes(ble, live, clock, 1, grid=500)
+    state = ble.status()["vehicles"][0]["state"]
+    assert state["in_range"] is True and state["soc"] == 50
+    assert ble.history.wakes(VIN, 0, 2**40) == []
+    assert ble.status()["next_read"] - int(clock()) > POLL_AWAY
+
+
+def test_listening_for_a_car_thats_away_leaves_the_cars_at_home_be(ble: TeslaService, tessie: FakeTessie,
+                                                                   radio: FakeRadio, live: FakeLive,
+                                                                   clock: Clock) -> None:  # fmt: skip
+    ble.pair(VIN2.lower())
+    assert ble.status()["bluetooth"]["pairing"]["step"] == "done"
+    read, asked = radio.read, []
+
+    def each_car(vin: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        asked.append(vin)
+        if vin == VIN2:  # parked at home, asleep and unplugged
+            return {"heard": True, "asleep": True, "port_open": False, "status": {}, "charge_state": None}
+        return read(vin, *args, **kwargs)
+
+    radio.read = each_car  # type: ignore[method-assign]
+    clock.t += 4 * 3600
+    leave(tessie)
+    minutes(ble, live, clock, 60, grid=500)
+    # The car that's away is listened for each minute; the one at home is still only checked every half hour.
+    assert asked.count(VIN) >= 59 and asked.count(VIN2) <= 3
+
+
+def test_through_tessie_a_car_thats_away_is_read_each_minute_only_while_its_awake(svc: TeslaService,
+                                                                                  tessie: FakeTessie, live: FakeLive,
+                                                                                  clock: Clock) -> None:  # fmt: skip
+    connect(svc, "tessie")
+    calls = []
+    real = tessie.vehicles
+    tessie.vehicles = lambda want=None: calls.append(want) or real(want)  # type: ignore[method-assign]
+    leave(tessie)  # driving: awake, and Tessie's copy of it moving
+    minutes(svc, live, clock, 6, grid=500)
+    calls.clear()
+    minutes(svc, live, clock, 10, grid=500)
+    assert len(calls) == 10 and svc.status()["next_read"] - int(clock()) <= POLL_AWAY
+    # Parked away and asleep: Tessie's copy holds until it wakes, so it's asked no more often than before.
+    tessie.state["state"] = "asleep"
+    minutes(svc, live, clock, 1, grid=500)
+    calls.clear()
+    minutes(svc, live, clock, 30, grid=500)
+    assert len(calls) <= 30 * 60 // POLL_IDLE + 1
 
 
 def test_while_asleep_its_level_is_logged_every_half_hour_as_it_holds(ble: TeslaService, radio: FakeRadio,

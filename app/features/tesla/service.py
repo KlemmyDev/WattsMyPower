@@ -20,7 +20,9 @@ A background loop reads the cars and, after each reading of the inverters, works
 car in solar mode what to do. How often depends on whether a car could charge soon (control.readiness): each minute
 while one is charging, or plugged in at home in solar mode with spare solar for it now or expected from the forecast
 within half an hour (then, over Bluetooth, it's woken and kept awake so it starts and follows the sun quickly);
-otherwise every five minutes, letting it sleep, and reading again in time to wake it before spare solar is expected. Commands go out at most one at a time per car; one that fails is retried after a pause that grows.
+otherwise every five minutes, letting it sleep, and reading again in time to wake it before spare solar is expected. While
+a car's away it's looked for each minute (POLL_AWAY), so it's back on the dashboard soon after it gets home. Commands go
+out at most one at a time per car; one that fails is retried after a pause that grows.
 
 The access token and the Bluetooth key are kept in the database and never sent back to the browser: status() shows
 the token masked, and the key by a short fingerprint.
@@ -87,6 +89,13 @@ POLL_IDLE = 300  # otherwise
 POLL_NIGHT = (
     1800  # over Bluetooth, with the sun down and no car charging: only checked whether it's asleep or plugged in
 )
+# Seconds between looks for a car while it's away, between the reads above, so it's back soon after it gets home. Only
+# the cars that are away are looked for, and only in ways that can't wake one or keep it awake. Over Bluetooth, a car
+# that isn't heard is only listened for (a scan of bluetooth.SCAN_SECONDS: nothing reaches it); once it's heard, it's
+# read as it would be at that hour (never woken at night), and the cars at home aren't read at all on a look. Through
+# Tessie, only while the car's awake away (driving, or just parked), when Tessie's copy of it moves: asleep, its copy
+# holds until it wakes, so it's read at the usual pace and Tessie isn't asked any more often than before.
+POLL_AWAY = 60
 NIGHT_ELEVATION = 0.0  # degrees: the sun below this is night (no car is woken or read in the background)
 AFTER_COMMAND = 25  # read the cars again this soon after a command, to see it take
 AHEAD_EVERY = 300  # seconds the forecast's spare solar is kept before it's worked out again
@@ -173,6 +182,7 @@ class TeslaService:
         self._retry_at = 0.0  # after a failed read: not read again before this, however closely a car's followed
         self._read_at: float | None = None
         self._next_read = 0.0
+        self._look_at = math.inf  # when the cars that are away are next looked for (POLL_AWAY); never while none is
         self._reading = False  # a read is under way (over Bluetooth, seconds)
         self._pairing: dict[str, Any] | None = None  # {vin, step (looking, tap, done, failed), error, at}
         self._ahead: tuple[int, list[dict[str, Any]], dict[str, Any]] | None = None
@@ -694,14 +704,36 @@ class TeslaService:
             return "night"
         return follow
 
-    def read(self) -> None:
-        """Read every car. Blocking: over Bluetooth, finding and talking to a car takes seconds, so that's done without
+    def _away(self, vin: str, c: dict[str, Any]) -> bool:
+        """Whether a car's away and looked for between reads (POLL_AWAY): over Bluetooth, not heard last time; through
+        Tessie, away and awake (Tessie's copy of an asleep car holds until it wakes). Not while it's charging (away,
+        that's read each minute anyway)."""
+        s = self._states.get(vin)
+        if s is None or s.charging:
+            return False
+        if c.get("provider") == "bluetooth":
+            return s.in_range is False
+        return s.at_home is False and not s.asleep
+
+    def _due_at(self) -> float:
+        """When the cars are next read, or the away ones looked for (never before a failed read's retry)."""
+        return min(self._next_read, max(self._look_at, self._retry_at))
+
+    def read(self, look: bool = False) -> None:
+        """Read every car; with `look`, only the ones that are away (POLL_AWAY: over Bluetooth, the cars at home aren't
+        read at all). Blocking: over Bluetooth, finding and talking to a car takes seconds, so that's done without
         holding the lock, and changes from the page don't wait on it."""
         with self._lock:
             c = self._conn()
             if not self._is_connected(c):
                 return
-            want = {vin: self._want(vin, v, c) for vin, v in c["vehicles"].items()}
+            away = {vin for vin in c["vehicles"] if self._away(vin, c)}
+            if look and not away:
+                self._look_at = math.inf
+                return
+            want = {
+                vin: self._want(vin, v, c) if not look or vin in away else "skip" for vin, v in c["vehicles"].items()
+            }
             try:
                 client = self._client(c)
             except TeslaError as e:
@@ -728,7 +760,10 @@ class TeslaService:
             for row in found:
                 if row["vin"] in c["vehicles"]:
                     self._take(row, c)
-            self._next_read = self.clock() + self._poll_after(c)
+            if not look:
+                self._next_read = self.clock() + self._poll_after(c)
+            away_now = any(self._away(vin, c) for vin in c["vehicles"])
+            self._look_at = self.clock() + POLL_AWAY if away_now else math.inf
 
     def _read_failed(self, e: TeslaError) -> None:
         """A read failed: tried again later, later each time it keeps failing (BUSY_BACKOFF, READ_BACKOFF), and not
@@ -1114,9 +1149,11 @@ class TeslaService:
                 return
             if c.get("provider") == "bluetooth" and self._pairing and self._pairing["step"] in ("looking", "tap"):
                 return  # the radio is busy pairing, for a couple of minutes at most
-            due = self.clock() >= self._next_read
-        if due:
-            self.read()
+            now = self.clock()
+            due = now >= self._next_read
+            look = not due and now >= max(self._look_at, self._retry_at)
+        if due or look:
+            self.read(look=not due)
         with self._lock:
             c = self._conn()
             if not self._is_connected(c):
@@ -1476,9 +1513,9 @@ class TeslaService:
             # connections (phones with its key near it); reads are eased off until it does (BUSY_BACKOFF).
             "error_kind": "busy" if self._error is not None and self._busy else None,
             "read_at": self._read_at,
-            # When the cars are next read (after a failed read: tried again), unix seconds; and whether a read is
-            # under way now. The loop turns every TICK seconds, so it's up to that much later.
-            "next_read": max(math.ceil(self._next_read), int(self.clock())) if connected else None,
+            # When the cars are next read, or a car that's away looked for (after a failed read: tried again), unix
+            # seconds; and whether a read is under way now. The loop turns every TICK seconds, so it's up to that much later.
+            "next_read": max(math.ceil(self._due_at()), int(self.clock())) if connected else None,
             "reading": self._reading,
             "tick": TICK,
             # Each timing a car's solar charging can be given (control.TIMING): its default, lowest and highest.
@@ -1532,6 +1569,6 @@ class TeslaService:
                 log.exception("Checking the Teslas failed")
             self._wake.clear()
             # Every TICK, or sooner when the next read's due sooner (every few seconds while a car charges at home).
-            due = self._next_read - self.clock()
+            due = self._due_at() - self.clock()
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._wake.wait(), min(TICK, due) if due > 0 else TICK)
