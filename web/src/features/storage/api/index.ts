@@ -12,13 +12,23 @@ export const storageQuery = queryOptions({
 export const measureAgain = () => apiGet<StorageReport>("storage", { fresh: true });
 
 /**
- * Download a backup: the dashboard's database, and with `everything` the collector's too, zipped. The server makes it
- * before sending a byte (a while, for a large collector database), then it comes down with its length, so `progress`
- * hears how far along it is. Once it's all here, the browser saves it under the name the server gave it.
+ * Download a backup: the dashboard's database, and with `everything` the collector's too, zipped and encrypted with
+ * `passphrase`. The passphrase goes in the request body, never the URL. The server makes it before sending a byte (a
+ * while, for a large collector database), then it comes down with its length, so `progress` hears how far along it is.
+ * Once it's all here, the browser saves it under the name the server gave it.
  */
-export async function downloadBackup(everything: boolean, progress: (p: BackupProgress) => void): Promise<BackupSaved> {
+export async function downloadBackup(
+  everything: boolean,
+  passphrase: string,
+  progress: (p: BackupProgress) => void,
+): Promise<BackupSaved> {
   progress({ stage: "making" });
-  const res = await fetch(apiUrl("storage/backup", { everything }), { credentials: "same-origin" });
+  const res = await fetch(apiUrl("storage/backup"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ everything, passphrase }),
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     if (res.status === 401) window.dispatchEvent(new CustomEvent("wmp:unauthorized"));
@@ -39,8 +49,8 @@ export async function downloadBackup(everything: boolean, progress: (p: BackupPr
   if (total != null && received < total) throw new ApiError(res.status, "The download stopped part way. Try again.");
 
   const name =
-    /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "wattsmypower-backup.zip";
-  const url = URL.createObjectURL(new Blob(chunks, { type: "application/zip" }));
+    /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "wattsmypower-backup.zip.enc";
+  const url = URL.createObjectURL(new Blob(chunks, { type: "application/octet-stream" }));
   const link = document.createElement("a");
   link.href = url;
   link.download = name;

@@ -1,6 +1,7 @@
 """
 A backup to download (Manage → Data): a zip of the dashboard's database and, when asked for and it can be had, the
-collector's, with a README.txt on putting them back.
+collector's, with a README.txt on putting them back. The zip is encrypted with a passphrase the person chooses, so the
+file on its own is no use to anyone who gets hold of it.
 
 Each database is copied with SQLite's online backup, not by copying its file: readings keep being written while it's
 made, and the file on its own misses whatever is still in the write-ahead log. Each copy is taken in one step, so it's
@@ -12,10 +13,15 @@ folder, sent, then deleted. One backup is made at a time: a large collector data
 from __future__ import annotations
 
 import asyncio
+import getpass
+import hashlib
+import hmac
 import http.client
 import os
+import secrets
 import shutil
 import sqlite3
+import sys
 import tempfile
 import threading
 import time
@@ -27,6 +33,9 @@ from datetime import datetime
 from glob import glob
 from typing import IO, Protocol
 
+from Cryptodome.Cipher import AES
+from Cryptodome.Hash import HMAC, SHA256
+
 from app.core.version import VERSION
 from app.features.live.client import CollectorError
 
@@ -35,6 +44,10 @@ PREFIX = "wattsmypower-backup-"
 CHUNK = 1 << 20  # bytes read and written at a time
 STALE = 3600  # seconds after which a temporary folder is a leftover from a backup cut short
 SQLITE = b"SQLite format 3\x00"  # how every SQLite database file starts
+MAGIC = b"WMPBACKUP1\n"  # starts every encrypted backup: its format and version
+SALT, NONCE, MAC = 16, 8, 32  # bytes: the key's salt, the counter's nonce, the HMAC-SHA256 at the end
+SCRYPT = {"n": 1 << 15, "r": 8, "p": 1}  # the passphrase's key stretching: about 32 MB and a fraction of a second
+MIN_PASSPHRASE = 8
 
 
 class Copies(Protocol):
@@ -45,6 +58,10 @@ class Copies(Protocol):
 
 class Busy(Exception):
     """Another backup is being made or sent."""
+
+
+class BackupError(ValueError):
+    """An encrypted backup that can't be opened: the wrong passphrase, or a damaged or unknown file."""
 
 
 @dataclass
@@ -102,9 +119,10 @@ class Backups:
         self.collector = collector
         self._lock = threading.Lock()
 
-    def make(self, everything: bool) -> Backup:
-        """A backup of the dashboard's database, and with `everything` the collector's too if it can be had. Raises
-        Busy while another is being made or sent, sqlite3.Error or OSError (e.g. the disk is full) if it can't be."""
+    def make(self, everything: bool, passphrase: str) -> Backup:
+        """A backup of the dashboard's database, and with `everything` the collector's too if it can be had, encrypted
+        with `passphrase`. Raises Busy while another is being made or sent, sqlite3.Error or OSError (e.g. the disk is
+        full) if it can't be."""
         if not self._lock.acquire(blocking=False):
             raise Busy
         done = once(self._lock.release)
@@ -114,10 +132,13 @@ class Backups:
             now = datetime.now()
             mine = os.path.join(where, DASHBOARD)
             snapshot(self.db_path, mine)
-            path = os.path.join(where, "backup.zip")
-            skipped = self._zip(path, mine, everything, now)
+            plain = os.path.join(where, "backup.zip")
+            skipped = self._zip(plain, mine, everything, now)
             os.remove(mine)
-            name = f"wattsmypower-backup-{VERSION}-{now:%Y-%m-%d}.zip"
+            path = os.path.join(where, "backup.zip.enc")
+            encrypt(plain, path, passphrase)
+            os.remove(plain)
+            name = f"wattsmypower-backup-{VERSION}-{now:%Y-%m-%d}.zip.enc"
             return Backup(path, name, os.path.getsize(path), skipped, done)
         except BaseException:
             done()
@@ -144,6 +165,66 @@ class Backups:
             except CollectorError as e:  # it stopped part way: the zip is made again, without it
                 _write(path, mine, None, e.detail, now)
                 return e.detail
+
+
+def _keys(passphrase: str, salt: bytes) -> tuple[bytes, bytes]:
+    """The cipher's key and the HMAC's key, both from the passphrase and its salt."""
+    keys = hashlib.scrypt(passphrase.encode(), salt=salt, dklen=64, maxmem=64 << 20, **SCRYPT)
+    return keys[:32], keys[32:]
+
+
+def encrypt(src: str, dest: str, passphrase: str) -> None:
+    """Encrypt `src` to `dest`, in chunks: AES-256 in counter mode, then an HMAC-SHA256 over everything before it. The
+    layout is MAGIC, salt, nonce, the ciphertext, then the HMAC."""
+    if len(passphrase) < MIN_PASSPHRASE:
+        raise BackupError(f"The passphrase needs at least {MIN_PASSPHRASE} characters.")
+    salt, nonce = secrets.token_bytes(SALT), secrets.token_bytes(NONCE)
+    key, mac_key = _keys(passphrase, salt)
+    header = MAGIC + salt + nonce
+    mac = HMAC.new(mac_key, digestmod=SHA256)
+    mac.update(header)
+    cipher = AES.new(key, AES.MODE_CTR, nonce=nonce)
+    with open(src, "rb") as source, open(dest, "wb") as out:
+        out.write(header)
+        while chunk := source.read(CHUNK):
+            part = cipher.encrypt(chunk)
+            mac.update(part)
+            out.write(part)
+        out.write(mac.digest())
+
+
+def decrypt(src: str, dest: str, passphrase: str) -> None:
+    """Decrypt a backup made by `encrypt` to `dest`. The HMAC is checked before anything is written, so a wrong
+    passphrase or a damaged file raises BackupError and leaves no output."""
+    size = os.path.getsize(src)
+    header_len = len(MAGIC) + SALT + NONCE
+    if size < header_len + MAC:
+        raise BackupError("That isn't a WattsMyPower backup.")
+    with open(src, "rb") as f:
+        header = f.read(header_len)
+    if not header.startswith(MAGIC):
+        raise BackupError("That isn't a WattsMyPower backup.")
+    salt, nonce = header[len(MAGIC) : len(MAGIC) + SALT], header[len(MAGIC) + SALT :]
+    key, mac_key = _keys(passphrase, salt)
+    mac = HMAC.new(mac_key, digestmod=SHA256)
+    with open(src, "rb") as f:
+        f.seek(0)
+        remaining = size - MAC
+        while remaining > 0:
+            chunk = f.read(min(CHUNK, remaining))
+            mac.update(chunk)
+            remaining -= len(chunk)
+        tag = f.read(MAC)
+    if not hmac.compare_digest(mac.digest(), tag):
+        raise BackupError("The passphrase is wrong, or the backup is damaged.")
+    cipher = AES.new(key, AES.MODE_CTR, nonce=nonce)
+    with open(src, "rb") as source, open(dest, "wb") as out:
+        source.seek(header_len)
+        remaining = size - MAC - header_len
+        while remaining > 0:
+            chunk = source.read(min(CHUNK, remaining))
+            out.write(cipher.decrypt(chunk))
+            remaining -= len(chunk)
 
 
 def _write(path: str, mine: str, collector: IO[bytes] | None, skipped: str | None, now: datetime) -> None:
@@ -189,7 +270,8 @@ Made {now.day} {now:%B %Y at %H:%M} by WattsMyPower {VERSION}.
 In this backup:
 {files}
 KEEP IT PRIVATE. It holds the passwords, keys and tokens saved in the dashboard (for example Tapo and EcoFlow
-passwords, Amber, Tessie and Home Assistant tokens, and the Tesla key). Anyone with this file can use them.
+passwords, Amber, Tessie and Home Assistant tokens, and the Tesla key). The passphrase you chose opens it: without
+it the backup can't be opened, so keep a copy of the passphrase somewhere safe.
 
 To restore it, in the folder WattsMyPower is installed in (where docker-compose.yml is):
   1. Stop WattsMyPower:  docker compose stop
@@ -200,3 +282,21 @@ To restore it, in the folder WattsMyPower is installed in (where docker-compose.
 
 Restore it to this version of WattsMyPower or a newer one. An older version may not be able to read it.
 """
+
+
+def main(argv: list[str]) -> int:
+    """`python -m app.features.storage.backup decrypt BACKUP OUT`: open an encrypted backup. Asks for the passphrase."""
+    if len(argv) != 3 or argv[0] != "decrypt":
+        print("usage: python -m app.features.storage.backup decrypt BACKUP.zip.enc OUT.zip", file=sys.stderr)
+        return 2
+    try:
+        decrypt(argv[1], argv[2], getpass.getpass("Passphrase: "))
+    except (BackupError, OSError) as e:
+        print(e, file=sys.stderr)
+        return 1
+    print(f"Decrypted to {argv[2]}. Unzip it, then follow the README inside.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
