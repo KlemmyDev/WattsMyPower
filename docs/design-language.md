@@ -40,14 +40,19 @@ card's solid ground. Right under the sky comes the day's chart, then the figures
 where the night before sunrise leaves room. Maths in `features/solar/utils/atmosphere.ts` and `sky.ts`, styles at the
 end of `app.css`.
 
-Along the bottom of the sky sits your roof (`SolarRoof`, geometry in `utils/roof.ts`): one Colorbond slope seen from
-eye level, its ridge low across the sky like a horizon, two rows of framed mono panels on it, a strip of bare roof
-around them so it reads as the top of a house. Only the slope and its ridge show, never the far pitch. It keeps its
-own palette in either theme and is lit by the sky: darker towards night, cooler in rain, warm at the ends of the day,
-cloud shadows drifting over, wet glass in rain, the moon caught in the glass at night. How hard the panels are working
-(a share of the array) is told by the orange lines along each row's top rail: more of them running, longer, brighter
-and quicker as power rises, with a band of light crossing the glass. They stop when the panels do. Home and Battery
-are meant to follow with close-ups of their own (the house's wall, the garage or side of the house).
+Along the bottom of the sky sits your house (`SolarHouse`, built in `utils/house3d.ts`), seen in perspective from low
+on its front corner: the end of its roof in front of you, the street side with its panels running away across the
+sky. It's your house as Settings → Your house has it, like the Overview's: the style's own roof (a tiled gable or hip,
+corrugated or Colorbond iron, a skillion, a flat roof with its panels on frames, a Federation chimney, a
+Queenslander's verandah and stumps, a townhouse's fire wall), the roof's colour and the walls' finish (yours, or the
+style's own), one or two storeys and as many panels as you have (spilling onto a hip roof's end when the street side
+is full). It keeps its own palette in either theme and is lit by the sky: darker towards night with its windows lit,
+cooler in rain, warm at the ends of the day, wet glass in rain, the moon in the glass at night. How hard the panels are
+working (a share of the array) is told by the orange lines along each row's top rail: more of them running, longer,
+brighter and quicker as power rises, with a band of light crossing the glass. They stop when the panels do. The first
+time the page opens in a visit the picture starts low on the house, at its wall and garden, and tilts up to the roof
+(by transform, once, and not with motion turned down). Home and Battery are meant to follow with close-ups of their
+own (the house's wall, the garage or side of the house).
 
 It's built to stay smooth on a phone, Safari above all. Everything is a gradient: no blur filters, masks, blend modes
 or backdrop blur, which Safari draws slowly and, in layers that move, clips into hard lines at their edges. The

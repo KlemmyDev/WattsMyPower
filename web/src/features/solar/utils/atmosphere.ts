@@ -153,7 +153,7 @@ export type Atmosphere = {
   /** The dark wash behind the title and its strength, and the weather chip's background. */
   wash: string;
   chip: string;
-  /** What lights the roof under the sky (SolarRoof): the sun's height (-1..1), how much the sun and moon show, the
+  /** What lights the house under the sky (SolarHouse): the sun's height (-1..1), how much the sun and moon show, the
    * colour low in the sky (which its glass reflects), and the weather. */
   light: { es: number; sun: number; moon: number; horizon: string; cover: number; rain: number };
 };
