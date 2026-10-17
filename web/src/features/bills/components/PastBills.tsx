@@ -169,7 +169,11 @@ function BillDetail({ e }: { e: Entry }) {
     ["Bought", money(e.import_cost), `${kWhInt(e.import_kwh)} in`],
     ["Feed-in credit", money(e.feed_in_credit ? -e.feed_in_credit : 0), `${kWhInt(e.export_kwh)} sent out`],
     ["Supply", money(e.supply), `${e.days} days`],
-    ["Saved", dollars(Math.max(0, e.without_solar - e.net_cost)), `On ${dollars(e.without_solar)} grid only`],
+    [
+      "Saved",
+      dollars(Math.max(0, Math.round(e.without_solar) - Math.round(e.net_cost))),
+      `On ${dollars(e.without_solar)} grid only`,
+    ],
   ];
   return (
     <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
