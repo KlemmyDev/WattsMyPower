@@ -1,54 +1,34 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { useEffects } from "~/features/common/display/hooks";
-import { reducedMotion } from "~/features/common/display/utils";
+import { useMemo, type ReactNode } from "react";
 import { hhmm, hourLabel } from "~/features/common/formatting/utils/date";
 import { DASH, kW, kWh, pct, signedPct } from "~/features/common/formatting/utils/number";
-import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
-import { InverterNotice } from "~/features/common/layout/components/InverterNotice";
-import { HeaderClock } from "~/features/common/layout/components/TopBar";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
+import { COLOR } from "~/features/common/theme/utils/colors";
 import { hourOf } from "~/features/common/time/utils";
-import { HeroFill, HeroTick } from "~/features/common/ui/components/Hero";
-import { Icon } from "~/features/common/ui/components/Icon";
-import { Figure, LiveDot } from "~/features/common/ui/components/Live";
-import { cn } from "~/features/common/ui/utils";
-import { useFahrenheit } from "~/features/common/weather/hooks";
-import { houseOptions } from "~/features/overview/utils/house/options";
 import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
-import { codeName, degrees, hourIcon } from "~/features/common/weather/utils";
-import { SOLAR } from "~/features/solar/components/parts";
-import { SolarHouse } from "~/features/solar/components/SolarHouse";
-import { expectedToday, place, solarNow, solarToday } from "~/features/solar/utils";
-import { atmosphere, orbits, ORBS, type Atmosphere, type Field } from "~/features/solar/utils/atmosphere";
-import { moonAge, moonFace, weatherAt } from "~/features/solar/utils/sky";
-import type { WeatherDay, WeatherHour } from "~/features/weather/types";
+import { codeName } from "~/features/common/weather/utils";
+import { useLiveDay } from "~/features/live/hooks";
+import type { LiveHero, Slim } from "~/features/live/types";
+import { seriesAt, valueAt, type Pt } from "~/features/live/utils/day";
+import { solarNow, solarToday } from "~/features/solar/utils";
+import type { WeatherHour } from "~/features/weather/types";
 
 type Today = ReturnType<typeof solarToday>;
 
-/** How long "Play the day" takes to run from midnight to midnight. */
-const PLAY_MS = 20_000;
 const DAY = 86_400;
 
 /**
- * The Solar page's title and its top card. The card's top is the sky as it is now (or at any moment of today, scrubbed
- * along the chart or played through): the sun or moon where they are, the day's cloud, rain and storms coming and
- * going, the weather in one top corner and, in the other on a dark wash so it reads in any weather and either theme, a
- * line on how the day's going.
- * The sky fades into the card's solid ground. First, right under the sky, the day's solar against what was expected:
- * dragging along it moves the sky and the figures under it (so all three show while you drag), with Play the day and
- * Back to now on it. Then the figures, as on every page's top card (the Hero kit): what's been made and what's being
- * made at the moment shown, four figures that round the day out, and its pace.
+ * Solar's part of the live pages' top card (LiveCard), with the sky and your house above it: its title, a line on how
+ * the day's going, the day's solar against what was expected as the chart (dragging along it moves the sky and the
+ * figures), and the figures, as on every page's top card (the Hero kit): what's been made and what's being made at the
+ * moment shown, with the day's pace in a slim bar, and four figures that round the day out.
  */
-export function SolarSky({
+export function useSolarHero({
   p,
   s,
   f,
   acc,
   series,
-  weather,
-  start,
-  now,
   usual,
 }: {
   p: Snapshot | null;
@@ -56,324 +36,95 @@ export function SolarSky({
   f: Forecast | null | undefined;
   acc: ForecastAccuracy | null | undefined;
   series: HistorySeries | undefined;
-  weather: WeatherDay | undefined;
-  start: number;
-  now: number;
   /** What the panels made on an average day lately, to say how today compares. */
   usual: number | null;
-}) {
-  const [scrub, setScrub] = useState<number | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const frame = useRef(0);
-  const root = useRef<HTMLElement>(null);
-  const skyRef = useRef<HTMLDivElement>(null);
-  const onScreen = useOnScreen(root);
-  const size = useSize(skyRef);
-  const phone = size.w < 600;
-  const lite = useEffects() === "lite";
-  const fahrenheit = useFahrenheit();
-
-  useEffect(() => () => cancelAnimationFrame(frame.current), []);
-  const stop = () => {
-    cancelAnimationFrame(frame.current);
-    setPlaying(false);
-  };
-  const play = () => {
-    if (playing) return stop();
-    cancelAnimationFrame(frame.current);
-    const from = scrub != null && scrub < start + DAY - 1800 ? scrub : start;
-    let began: number | null = null;
-    let shown = 0;
-    setPlaying(true);
-    const step = (ms: number) => {
-      began ??= ms;
-      // A device that can't keep up gets the day at 30 frames a second, so each one has time to be drawn.
-      if (lite && ms - shown < 32) {
-        frame.current = requestAnimationFrame(step);
-        return;
-      }
-      shown = ms;
-      const t = from + ((ms - began) / PLAY_MS) * DAY;
-      if (t >= start + DAY - 60) {
-        setScrub(start + DAY - 60);
-        setPlaying(false);
-        return;
-      }
-      setScrub(t);
-      frame.current = requestAnimationFrame(step);
-    };
-    frame.current = requestAnimationFrame(step);
-  };
-  // Back to now glides there (quicker the nearer it is) rather than jumping, unless motion's turned down.
-  const backToNow = () => {
-    stop();
-    if (scrub == null || reducedMotion()) return setScrub(null);
-    const from = scrub;
-    const ms = 450 + Math.min(1, Math.abs(now - from) / (DAY / 2)) * 650;
-    let began: number | null = null;
-    const step = (t: number) => {
-      began ??= t;
-      const k = Math.min(1, (t - began) / ms);
-      if (k >= 1) return setScrub(null);
-      setScrub(from + (now - from) * (1 - Math.pow(1 - k, 3)));
-      frame.current = requestAnimationFrame(step);
-    };
-    frame.current = requestAnimationFrame(step);
-  };
-
+}): LiveHero {
+  const { now, start, weather, expected, rise, set } = useLiveDay();
   // What doesn't change as the day's scrubbed is worked out once per reading, not on every frame of it.
   const live = useMemo(() => solarNow(p, s, f, now), [p, s, f, now]);
   const today = useMemo(() => solarToday({ p, s, f, acc, series, weather, now }), [p, s, f, acc, series, weather, now]);
-  const expected = useMemo(() => expectedToday(weather, f, now), [weather, f, now]);
   const best = useMemo(() => bestHour(series, now), [series, now]);
-  const at = place(s);
-  const view = scrub ?? now;
-  const ahead = view > now + 60;
-  const rise = today.sun?.rise ?? start + 6 * 3600;
-  const set = today.sun?.set ?? start + 18 * 3600;
-  const hour = weather?.hours.find((h) => h.ts <= view && view < h.ts + 3600);
-
-  // What the panels made (or were expected to) at the moment shown, and by then.
-  const pvAt = ahead ? valueAt(expected, view) : seriesAt(series, view);
-  const madeBy = ahead ? (today.made ?? 0) + expectedBetween(expected, now, view) : madeUntil(series, view);
-
-  // How hard the panels are working at the moment shown, as a share of the array: the roof in the sky shows it.
-  const pvShown = scrub == null ? (live.pv ?? pvAt ?? 0) : (pvAt ?? 0);
-  const arrayW = (s?.pv_kw ?? 0) * 1000 || Math.max(5000, today.peak?.w ?? 0);
-  // Your house as you've set it up (Settings → Your house), for the picture in the sky.
-  const house = useMemo(() => houseOptions(s), [s]);
-
-  const lead = leadFigure({ scrub, ahead, view, today, madeBy, now, rise });
-  const second = secondFigure({ scrub, ahead, view, live, today, pvAt, now, rise });
-  const [line, more] = story({ today, now, rise, set, hours: weather?.hours, usual });
-  // The sky's colours change every five minutes of the day shown, not on every frame of it playing.
-  const step = Math.round(view / 300) * 300;
-  const sky = useMemo(
-    () =>
-      atmosphere((step - start) / 3600, (rise - start) / 3600, (set - start) / 3600, weatherAt(weather?.hours, step), {
-        W: size.w,
-        H: size.h,
-        phone,
-        story: phone || !more ? line : `${line} ${more}`,
-      }),
-    [step, start, rise, set, weather?.hours, size.w, size.h, phone, line, more],
-  );
-  // Nothing more expected today: the sun's down, or the forecast has no more to come.
-  const done = today.made != null && today.heading != null && today.heading - today.made < 0.05;
-  const vsUsual =
-    usual && (now > set ? today.made : today.heading) != null
-      ? (now > set ? today.made! : today.heading!) / usual - 1
-      : null;
-  const playLabel = playing ? "Pause" : scrub != null && scrub >= start + DAY - 120 ? "Play again" : "Play the day";
-
-  return (
-    <>
-      <InverterNotice />
-      <section
-        ref={root}
-        aria-labelledby="h-solar"
-        data-still={onScreen ? undefined : ""}
-        className="sky relative isolate flex [transform:translateZ(0)] flex-col overflow-hidden rounded-[28px] border border-line-subtle bg-surface max-sm:rounded-3xl"
-      >
-        <div ref={skyRef} className="relative h-[480px] flex-none overflow-hidden text-white max-sm:h-[330px]">
-          <SkyScene
-            view={view}
-            start={start}
-            rise={rise}
-            set={set}
-            south={(at?.lat ?? -27) < 0}
-            lite={lite}
-            W={size.w}
-            H={size.h}
-            phone={phone}
-            a={sky}
-            roof={
-              <SolarHouse house={house} light={sky.light} share={pvShown / arrayW} on={pvShown > 50} phone={phone} />
-            }
-          />
-          {/* The page's title and how the day's going, up in the sky (never over its fade into the card) on the
-              sky's own wash, and the weather in the other corner (beside the title on a phone). */}
-          <div className="absolute top-[26px] right-[22px] left-7 flex items-start justify-between gap-4 max-sm:top-[18px] max-sm:right-5 max-sm:left-5 max-sm:flex-wrap max-sm:items-center max-sm:gap-y-1">
-            <div className="flex max-w-[600px] min-w-0 flex-col gap-0.5 max-sm:contents">
-              <h1
-                id="h-solar"
-                className="font-display text-[40px] leading-[46px] font-semibold text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.22)] max-sm:text-[30px] max-sm:leading-9"
-              >
-                Solar
-              </h1>
-              <p
-                aria-live="polite"
-                className="text-base leading-[22px] font-medium text-pretty text-white/90 tabular-nums [text-shadow:0_1px_12px_rgb(0_0_0/0.22)] max-sm:order-1 max-sm:w-full"
-              >
-                {line}
-                {more && <span className="max-sm:hidden"> {more}</span>}
-              </p>
-            </div>
-            <div className="flex flex-none items-center gap-2.5">
-              <div
-                className="flex min-h-9 items-center gap-2 rounded-full border border-white/14 py-1.5 pr-3.5 pl-2.5 text-[13px] whitespace-nowrap tabular-nums max-sm:min-h-[34px] max-sm:gap-1.5 max-sm:pr-3 max-sm:pl-2"
-                style={{ background: sky.chip }}
-              >
-                {hour?.code != null && (
-                  <Icon name={hourIcon({ code: hour.code, is_day: hour.is_day ?? 1 })} size={phone ? 16 : 18} />
-                )}
-                <span>{hour?.code != null ? codeName(hour.code) : "Sky"}</span>
-                {hour?.temp != null && <span className="text-zinc-200">{degrees(hour.temp, fahrenheit)}</span>}
-                {/* The time shown, once it isn't now (the live clock says now). */}
-                {scrub != null && <span className="text-zinc-300">· {hhmm(view)}</span>}
-              </div>
-              {/* From tablets up, the page's live clock and account, which sit in its top right corner elsewhere. */}
-              <HeaderClock className="max-md:hidden" />
-              <AccountAvatar className="max-md:hidden" />
-            </div>
-          </div>
-        </div>
-
-        <div className="relative flex flex-col gap-4 px-7 pt-3 pb-6 max-sm:gap-3 max-sm:px-5 max-sm:pt-2 max-sm:pb-5">
-          {/* First, right under the sky, the day's chart: dragging it moves the sky and the figures. */}
-          <div>
-            <SkyChart
-              series={series}
-              expected={expected}
-              start={start}
-              now={now}
-              view={view}
-              rise={rise}
-              set={set}
-              array={s?.pv_kw ?? null}
-              onScrub={(t) => {
-                stop();
-                setScrub(t);
-              }}
-              controls={
-                <>
-                  <button
-                    type="button"
-                    onClick={play}
-                    aria-label={playLabel}
-                    className="flex min-h-9 items-center gap-2 rounded-full border border-line bg-surface pr-3.5 pl-3 text-[13px] text-ink shadow-sm transition-colors hover:bg-surface-raised max-sm:size-9 max-sm:justify-center max-sm:p-0"
-                  >
-                    <Icon name={playing ? "pause" : "play"} size={13} className="text-solar" />
-                    <span className="max-sm:hidden">{playLabel}</span>
-                  </button>
-                  {scrub != null && (
-                    <button
-                      type="button"
-                      onClick={backToNow}
-                      className="min-h-9 rounded-full border border-line bg-surface px-3.5 text-[13px] whitespace-nowrap text-ink tabular-nums shadow-sm transition-colors hover:bg-surface-raised max-sm:px-3"
-                    >
-                      <span className="max-sm:hidden">Back to now · </span>
-                      <span className="sm:hidden">Now · </span>
-                      {hhmm(now)}
-                    </button>
-                  )}
-                </>
-              }
-            />
-          </div>
-          {/* The figures in one band under the chart, in as little height as reads well so the sky above gets the
-              room: what's been made (the day's pace in a slim bar under it) and what's being made, then four figures
-              that round the day out. Narrower, the two sit side by side over the four; on a phone the four go two by
-              two without their small print. */}
-          <div className="flex items-end gap-x-8 gap-y-3 max-lg:grid max-lg:grid-cols-2 max-lg:items-start max-lg:gap-x-4">
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-ink-muted">{lead.label}</span>
-              <span className="flex items-baseline gap-1 font-light text-ink tabular-nums">
-                <span className="text-[44px] leading-11 tracking-[-1.5px] max-sm:text-[36px] max-sm:leading-9">
-                  {lead.value}
-                </span>
-                {lead.unit && <span className="text-base text-ink-faint">{lead.unit}</span>}
-              </span>
-              <SlimPace today={today} done={done} />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1 self-start border-l border-line-subtle pl-6 max-lg:border-l-0 max-lg:pl-0 lg:self-end">
-              <span className="flex items-center gap-2 text-xs text-ink-muted">
-                <LiveDot on={second.live} color={SOLAR} />
-                {second.label}
-              </span>
-              <Figure value={second.value} unit={second.unit} />
-              {second.sub && <span className="truncate text-[11.5px] text-ink-faint max-sm:hidden">{second.sub}</span>}
-            </div>
-            <dl className="ml-auto grid max-w-[600px] flex-1 grid-cols-4 gap-x-6 max-lg:col-span-2 max-lg:ml-0 max-lg:max-w-none max-sm:grid-cols-2 max-sm:gap-x-4 max-sm:gap-y-2">
-              {(
-                [
-                  [
-                    "Peak today",
-                    today.peak ? kW(today.peak.w) : DASH,
-                    today.peak ? `At ${hhmm(today.peak.t)}` : "Not yet",
-                  ],
-                  [
-                    "Best hour",
-                    best ? `${hourLabel(best.h)}–${hourLabel(best.h + 1)}` : DASH,
-                    best ? `${kWh(best.kwh)} in the hour` : "Not yet",
-                  ],
-                  [
-                    "Against a usual day",
-                    vsUsual != null ? (Math.abs(vsUsual) < 0.04 ? "About usual" : signedPct(vsUsual)) : DASH,
-                    usual ? `Usual is ${kWh(usual)}` : "Needs a few days",
-                  ],
-                  [
-                    "Tomorrow",
-                    today.tomorrow ? kWh(today.tomorrow.pv_kwh) : DASH,
-                    today.tomorrow?.code != null ? codeName(today.tomorrow.code) : "Forecast",
-                  ],
-                ] as const
-              ).map(([label, value, sub]) => (
-                <div key={label} className="flex min-w-0 flex-col gap-0.5">
-                  <dt className="truncate text-xs text-ink-faint">{label}</dt>
-                  <dd className="text-lg leading-6 font-light tracking-[-0.3px] whitespace-nowrap tabular-nums max-sm:text-base max-sm:leading-5">
-                    {value}
-                  </dd>
-                  <dd className="truncate text-[11.5px] text-ink-faint max-sm:hidden">{sub}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-      </section>
-    </>
-  );
+  return useMemo(() => {
+    const [line, more] = story({ today, now, rise, set, hours: weather?.hours, usual });
+    // Nothing more expected today: the sun's down, or the forecast has no more to come.
+    const done = today.made != null && today.heading != null && today.heading - today.made < 0.05;
+    const vsUsual =
+      usual && (now > set ? today.made : today.heading) != null
+        ? (now > set ? today.made! : today.heading!) / usual - 1
+        : null;
+    const stats = [
+      {
+        label: "Peak today",
+        value: today.peak ? kW(today.peak.w) : DASH,
+        sub: today.peak ? `At ${hhmm(today.peak.t)}` : "Not yet",
+      },
+      {
+        label: "Best hour",
+        value: best ? `${hourLabel(best.h)}–${hourLabel(best.h + 1)}` : DASH,
+        sub: best ? `${kWh(best.kwh)} in the hour` : "Not yet",
+      },
+      {
+        label: "Against a usual day",
+        value: vsUsual != null ? (Math.abs(vsUsual) < 0.04 ? "About usual" : signedPct(vsUsual)) : DASH,
+        sub: usual ? `Usual is ${kWh(usual)}` : "Needs a few days",
+      },
+      {
+        label: "Tomorrow",
+        value: today.tomorrow ? kWh(today.tomorrow.pv_kwh) : DASH,
+        sub: today.tomorrow?.code != null ? codeName(today.tomorrow.code) : "Forecast",
+      },
+    ];
+    const slim = pace(today, done);
+    return {
+      page: "solar",
+      title: "Solar",
+      color: COLOR.solar,
+      at: (view, scrubbed) => {
+        const ahead = view > now + 60;
+        const scrub = scrubbed ? view : null;
+        // What the panels made (or were expected to) at the moment shown, and by then.
+        const pvAt = ahead ? valueAt(expected, view) : seriesAt(series, "pv_power", view);
+        const madeBy = ahead ? (today.made ?? 0) + expectedBetween(expected, now, view) : madeUntil(series, view);
+        const lead = leadFigure({ scrub, ahead, view, today, madeBy, now, rise });
+        const second = secondFigure({ scrub, ahead, view, live, today, pvAt, now, rise });
+        return { story: line, more, lead, slim, second: { ...second, color: COLOR.solar }, stats };
+      },
+      chart: (c) => (
+        <SkyChart
+          series={series}
+          expected={expected}
+          start={start}
+          now={now}
+          view={c.view}
+          rise={rise}
+          set={set}
+          array={s?.pv_kw ?? null}
+          onScrub={c.onScrub}
+          controls={c.controls}
+        />
+      ),
+    };
+  }, [today, now, rise, set, weather?.hours, usual, best, expected, series, live, start, s?.pv_kw]);
 }
 
 /**
- * The day's pace in a slim bar under what's been made: made so far, where it's heading by midnight (dashed), and a tick
- * for this morning's forecast. Its words are its label, so it reads aloud and on hover.
+ * The day's pace in the slim bar under what's been made: made so far, where it's heading by midnight (dashed), and a
+ * tick for this morning's forecast.
  */
-function SlimPace({ today: t, done }: { today: Today; done: boolean }) {
+function pace(t: Today, done: boolean): Slim {
   const whole = Math.max(t.heading ?? 0, t.planned ?? 0, t.likely?.high ?? 0, t.made ?? 0, 0.1);
   const at = (v: number) => Math.min(100, (v / whole) * 100);
   const heading = t.heading != null && !done;
-  const label = heading
-    ? `${kWh(t.made ?? 0)} so far, of about ${kWh(t.heading!)} by midnight`
-    : `${kWh(t.made ?? 0)} made today`;
-  return (
-    <div
-      role="img"
-      aria-label={label}
-      title={label}
-      className="relative mt-1.5 h-1.5 w-full min-w-40 rounded-full bg-track"
-    >
-      {heading && <HeroFill to={at(t.heading!)} color={SOLAR} variant="dashed" />}
-      <HeroFill to={at(t.made ?? 0)} color={SOLAR} />
-      {t.planned != null && <HeroTick at={at(t.planned)} title="This morning's forecast" />}
-    </div>
-  );
+  return {
+    label: heading
+      ? `${kWh(t.made ?? 0)} so far, of about ${kWh(t.heading!)} by midnight`
+      : `${kWh(t.made ?? 0)} made today`,
+    fill: at(t.made ?? 0),
+    color: COLOR.solar,
+    ahead: heading ? at(t.heading!) : undefined,
+    ticks: t.planned != null ? [{ at: at(t.planned), title: "This morning's forecast" }] : [],
+  };
 }
-
-/** Whether `ref` is on screen, so what moves in it can stop while it's scrolled away. */
-function useOnScreen(ref: RefObject<HTMLElement | null>): boolean {
-  const [on, setOn] = useState(true);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setOn(e.isIntersecting));
-    io.observe(el);
-    return () => io.disconnect();
-  }, [ref]);
-  return on;
-}
-
-// ------------------------------------------------------------------------------------------------- the figures
 
 const split = (s: string) => {
   const [value, unit] = s.split(" ");
@@ -499,22 +250,6 @@ function story({
 
 // ------------------------------------------------------------------------------------------- readings and maths
 
-/** The reading nearest `t` in a day's series (W), or null. */
-function seriesAt(series: HistorySeries | undefined, t: number): number | null {
-  const ts = series?.t ?? [];
-  const v = series?.pv_power ?? [];
-  let best: number | null = null;
-  let gap = Infinity;
-  for (let i = 0; i < ts.length; i++) {
-    const d = Math.abs(ts[i] - t);
-    if (d < gap && v[i] != null) {
-      gap = d;
-      best = v[i]!;
-    }
-  }
-  return gap <= 900 ? best : null;
-}
-
 /** kWh made up to `t`: the day's five-minute readings added up. */
 function madeUntil(series: HistorySeries | undefined, t: number): number {
   const ts = series?.t ?? [];
@@ -528,18 +263,6 @@ function madeUntil(series: HistorySeries | undefined, t: number): number {
   return wh / 1000;
 }
 
-type Pt = { t: number; v: number | null };
-
-/** What an hourly line says at `t` (W), between its points. */
-function valueAt(pts: Pt[], t: number): number | null {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i];
-    const b = pts[i + 1];
-    if (t >= a.t && t <= b.t && a.v != null && b.v != null) return a.v + ((b.v - a.v) * (t - a.t)) / (b.t - a.t);
-  }
-  return null;
-}
-
 /** kWh an hourly line adds up to between two moments. */
 function expectedBetween(pts: Pt[], from: number, to: number): number {
   let wh = 0;
@@ -547,263 +270,7 @@ function expectedBetween(pts: Pt[], from: number, to: number): number {
   return wh / 1000;
 }
 
-// ------------------------------------------------------------------------------------------------- the scene
-
-/**
- * The sky at `view` in its "Atmosphere" look (`a`, from utils/atmosphere): the base colours, the drifting colour fields, the sun
- * or moon, stars, fog, your house along the bottom, rain, a storm's flashes, grain, and the wash behind the title.
- *
- * Built to stay smooth on a phone. The colours (every gradient) only change every five minutes of sky, so while the
- * day plays they're repainted a few times a second, not on every frame; the sun and moon move every frame, but only
- * by transform. Everything that moves for good (the fields' drift, fog, rain) moves by transform or opacity alone, and
- * nothing uses blur, masks or blend modes. `lite` (a device that can't keep up) holds the fields and fog still and
- * drops the sheen.
- */
-function SkyScene({
-  view,
-  start,
-  rise,
-  set,
-  south,
-  lite,
-  W,
-  H,
-  phone,
-  a,
-  roof,
-}: {
-  view: number;
-  start: number;
-  rise: number;
-  set: number;
-  south: boolean;
-  lite: boolean;
-  W: number;
-  H: number;
-  phone: boolean;
-  a: Atmosphere;
-  /** Your house, low across the sky: over its light and fog, under its rain. */
-  roof: ReactNode;
-}) {
-  const o = orbits((view - start) / 3600, (rise - start) / 3600, (set - start) / 3600);
-  const G = phone ? ORBS.phone : ORBS.wide;
-  // An orb `size` across, centred on a point of the sky, moved only by transform.
-  const orb = (x: number, y: number, size: number, scale = 1): CSSProperties => ({
-    width: size,
-    height: size,
-    transform: `translate3d(${(x * W - size / 2).toFixed(1)}px, ${(y * H - size / 2).toFixed(1)}px, 0) scale(${scale.toFixed(3)})`,
-  });
-  const age = moonAge(view);
-
-  return (
-    <div aria-hidden className={cn("atm pointer-events-none absolute inset-0 overflow-hidden", lite && "atm-lite")}>
-      <div className="absolute inset-0" style={{ background: a.base }} />
-      {[...a.aurora, ...a.fields].map((f, i) => (
-        <AtmField key={i} f={f} aurora={i < a.aurora.length} />
-      ))}
-      {a.stars > 0.01 && <Stars opacity={a.stars} />}
-      <div className="atm-orb" style={orb(o.sun.x, o.sun.y, G.bloom, a.sun.bloomScale)}>
-        <div className="atm-bloom" style={{ background: a.sun.bloom }} />
-      </div>
-      <div className="atm-orb" style={{ ...orb(o.sun.x, o.sun.y, G.glow), background: a.sun.glow }} />
-      <div
-        className="atm-orb"
-        style={{ ...orb(o.sun.x, o.sun.y, G.core), background: a.sun.core, opacity: a.sun.coreOpacity }}
-      />
-      <div
-        className="atm-orb"
-        style={{ ...orb(o.moon.x, o.moon.y, G.halo, a.moon.haloScale), background: a.moon.halo }}
-      />
-      <div className="atm-orb atm-ring" style={{ ...orb(o.moon.x, o.moon.y, G.ring), opacity: a.moon.ringOpacity }} />
-      <div
-        className="atm-orb rounded-full"
-        style={{ ...orb(o.moon.x, o.moon.y, G.moon), opacity: a.moon.coreOpacity, ...moonFace(age, G.moon, south) }}
-      />
-      {a.fog.bands.length > 0 && (
-        <div className="atm-fade absolute inset-0" style={{ opacity: a.fog.opacity }}>
-          {a.fog.bands.map((b, i) => (
-            <div
-              key={i}
-              className="atm-fog"
-              style={{
-                top: `${((b.cy - b.ry) * 100).toFixed(1)}%`,
-                height: `${(b.ry * 200).toFixed(1)}%`,
-                background: b.background,
-                animationDuration: `${b.secs}s`,
-                animationDirection: b.reverse ? "alternate-reverse" : undefined,
-              }}
-            />
-          ))}
-        </div>
-      )}
-      {roof}
-      {a.rain > 0.005 && <Rain opacity={a.rain} lite={lite} />}
-      {a.storm > 0 && <Flashes opacity={a.storm} />}
-      <Grain />
-      {/* Everything sets into the card's ground. */}
-      <div className="absolute inset-x-0 bottom-0 h-[70px] bg-linear-to-b from-transparent via-surface/50 to-surface" />
-      {/* The wash behind the title: the sky's own top colour, deeper, only as strong as the words need. */}
-      <div className="absolute inset-0" style={{ background: a.wash }} />
-    </div>
-  );
-}
-
-/** One soft colour field, drifting slowly by transform (held still on a device that can't keep up). */
-const AtmField = memo(function AtmField({ f, aurora }: { f: Field; aurora: boolean }) {
-  return (
-    <div
-      className={cn("atm-field", aurora ? "atm-drift-aurora" : `atm-drift-${f.drift}`)}
-      style={{
-        left: `${((f.cx - f.rx) * 100).toFixed(2)}%`,
-        top: `${((f.cy - f.ry) * 100).toFixed(2)}%`,
-        width: `${(f.rx * 200).toFixed(2)}%`,
-        height: `${(f.ry * 200).toFixed(2)}%`,
-        background: f.background,
-        animationDuration: `${f.secs}s`,
-        animationDirection: f.reverse ? "alternate-reverse" : undefined,
-      }}
-    />
-  );
-});
-
-/** Rain: fine streaks of light falling at a slant in two depths, each one tiled layer moved by transform, and a slow sheen. */
-const Rain = memo(function Rain({ opacity, lite }: { opacity: number; lite: boolean }) {
-  return (
-    <div className="atm-fade absolute inset-0 overflow-hidden" style={{ opacity }}>
-      {!lite && <div className="atm-sheen" />}
-      <div className="atm-rain">
-        <div className="atm-streaks" style={{ backgroundImage: STREAKS_FAR }} />
-        {!lite && <div className="atm-streaks atm-streaks-near" style={{ backgroundImage: STREAKS_NEAR }} />}
-      </div>
-    </div>
-  );
-});
-
-/** A tile of rain streaks as an SVG image, the same every time: `n` lines of light fading in and out down their length. */
-function streakTile(seed: number, n: number, len: [number, number], alpha: [number, number]) {
-  let s = seed;
-  const r = () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-  const lines = Array.from({ length: n }, () => {
-    const x = (r() * 240).toFixed(1);
-    const y = (r() * 300).toFixed(1);
-    const l = (len[0] + r() * (len[1] - len[0])).toFixed(0);
-    const a = (alpha[0] + r() * (alpha[1] - alpha[0])).toFixed(2);
-    return `<rect x='${x}' y='${y}' width='1' height='${l}' rx='0.5' fill='url(%23g)' opacity='${a}'/>`;
-  }).join("");
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='240' height='300'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>` +
-    `<stop offset='0' stop-color='%23e2ecff' stop-opacity='0'/><stop offset='0.6' stop-color='%23e2ecff'/><stop offset='1' stop-color='%23e2ecff' stop-opacity='0'/>` +
-    `</linearGradient></defs>${lines}</svg>`;
-  return `url("data:image/svg+xml,${svg.replace(/</g, "%3C").replace(/>/g, "%3E")}")`;
-}
-const STREAKS_FAR = streakTile(11, 14, [40, 70], [0.25, 0.5]);
-const STREAKS_NEAR = streakTile(29, 8, [70, 120], [0.35, 0.65]);
-
-/** A storm's flashes, out of step with each other. */
-const Flashes = memo(function Flashes({ opacity }: { opacity: number }) {
-  return (
-    <div className="atm-fade absolute inset-0" style={{ opacity }}>
-      <div
-        className="sky-flash"
-        style={{
-          background:
-            "radial-gradient(ellipse 55% 60% at 64% 18%, rgba(226,232,255,0.6), rgba(190,205,255,0.14) 55%, rgba(190,205,255,0) 80%)",
-        }}
-      />
-      <div
-        className="sky-flash sky-later"
-        style={{
-          background:
-            "radial-gradient(ellipse 45% 50% at 22% 14%, rgba(226,232,255,0.45), rgba(190,205,255,0.1) 55%, rgba(190,205,255,0) 80%)",
-        }}
-      />
-    </div>
-  );
-});
-
-/**
- * A fine film grain over the sky, which also keeps its soft gradients from banding: a small tile of noise drawn once
- * on a canvas and repeated, with no filter or blend mode.
- */
-const Grain = memo(function Grain() {
-  const [tile] = useState(grainTile);
-  return tile ? <div className="atm-grain" style={{ backgroundImage: `url(${tile})` }} /> : null;
-});
-let grain: string | null | undefined;
-function grainTile(): string | null {
-  if (grain !== undefined) return grain;
-  try {
-    const c = document.createElement("canvas");
-    c.width = c.height = 128;
-    const x = c.getContext("2d");
-    if (!x) return (grain = null);
-    const img = x.createImageData(128, 128);
-    let s = 7;
-    for (let i = 0; i < img.data.length; i += 4) {
-      s = (s * 16807) % 2147483647;
-      const v = s / 2147483647;
-      const light = v > 0.5;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = light ? 255 : 0;
-      img.data[i + 3] = Math.round(Math.abs(v - 0.5) * 2 * 40);
-    }
-    x.putImageData(img, 0, 0);
-    grain = c.toDataURL("image/png");
-  } catch {
-    grain = null;
-  }
-  return grain;
-}
-
-/** How big `ref` is (px), following it as it resizes. */
-function useSize(ref: RefObject<HTMLElement | null>): { w: number; h: number } {
-  const [size, setSize] = useState({ w: 1100, h: 300 });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      const w = Math.round(e.contentRect.width);
-      const h = Math.round(e.contentRect.height);
-      setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return size;
-}
-
-/** Two layers of stars twinkling out of step, faded by daylight and cloud. */
-const Stars = memo(function Stars({ opacity }: { opacity: number }) {
-  return (
-    <div className="sky-fade absolute inset-0" style={{ opacity }}>
-      <div className="sky-twinkle" style={{ backgroundImage: STARS_A }} />
-      <div className="sky-twinkle" style={{ animationDelay: "-1.8s", backgroundImage: STARS_B }} />
-    </div>
-  );
-});
-const dots = (pts: [number, number, number][]) =>
-  pts.map(([x, y, r]) => `radial-gradient(${r}px ${r}px at ${x}% ${y}%, #fff, transparent)`).join(", ");
-const STARS_A = dots([
-  [8, 14, 1],
-  [31, 9, 1.5],
-  [58, 7, 1],
-  [81, 13, 1],
-  [13, 47, 1],
-  [66, 41, 1],
-  [37, 52, 1],
-]);
-const STARS_B = dots([
-  [19, 32, 1],
-  [44, 24, 1],
-  [69, 29, 1.5],
-  [92, 35, 1],
-  [52, 42, 1],
-  [76, 49, 1],
-  [25, 6, 1],
-  [88, 21, 1],
-]);
+// ------------------------------------------------------------------------------------------------- the chart
 
 // ------------------------------------------------------------------------------------------------- the chart
 
@@ -835,7 +302,7 @@ function SkyChart({
   rise: number;
   set: number;
   array: number | null;
-  onScrub: (t: number | null) => void;
+  onScrub: (t: number) => void;
   /** Play the day and the way back to now, over the chart's top left, where the night before sunrise leaves room. */
   controls: ReactNode;
 }) {
@@ -848,7 +315,7 @@ function SkyChart({
     const exp = expected.filter((p) => p.v != null);
     return { top, exp, lines: <ChartLines ts={ts} pv={pv} exp={exp} start={start} now={now} top={top} /> };
   }, [series, expected, start, now, array]);
-  const v = view > now + 60 ? valueAt(exp, view) : seriesAt(series, view);
+  const v = view > now + 60 ? valueAt(exp, view) : seriesAt(series, "pv_power", view);
   const Y = (x: number) => H - (x / top) * (H - 24);
 
   return (

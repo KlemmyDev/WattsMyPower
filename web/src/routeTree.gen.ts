@@ -14,8 +14,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppSplatRouteImport } from './routes/_app/$'
+import { Route as AppLiveRouteImport } from './routes/_app/_live'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
-import { Route as AppBatteryRouteImport } from './routes/_app/battery'
 import { Route as AppBillsRouteImport } from './routes/_app/bills'
 import { Route as AppDataRouteImport } from './routes/_app/data'
 import { Route as AppForecastRouteImport } from './routes/_app/forecast'
@@ -29,7 +29,8 @@ import { Route as AppPlanRouteImport } from './routes/_app/plan'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppSavingsRouteImport } from './routes/_app/savings'
 import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
-import { Route as AppSolarRouteImport } from './routes/_app/solar'
+import { Route as AppLiveBatteryRouteImport } from './routes/_app/_live/battery'
+import { Route as AppLiveSolarRouteImport } from './routes/_app/_live/solar'
 import { Route as AppBillsRatesRouteImport } from './routes/_app/bills_.rates'
 import { Route as AppEvIndexRouteImport } from './routes/_app/ev/index'
 import { Route as AppEvVinRouteImport } from './routes/_app/ev/$vin'
@@ -100,14 +101,13 @@ const AppSplatRoute = AppSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLiveRoute = AppLiveRouteImport.update({
+  id: '/_live',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAccountRoute = AppAccountRouteImport.update({
   id: '/account',
   path: '/account',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppBatteryRoute = AppBatteryRouteImport.update({
-  id: '/battery',
-  path: '/battery',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBillsRoute = AppBillsRouteImport.update({
@@ -175,10 +175,15 @@ const AppSettingsRouteRoute = AppSettingsRouteRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSolarRoute = AppSolarRouteImport.update({
+const AppLiveBatteryRoute = AppLiveBatteryRouteImport.update({
+  id: '/battery',
+  path: '/battery',
+  getParentRoute: () => AppLiveRoute,
+} as any)
+const AppLiveSolarRoute = AppLiveSolarRouteImport.update({
   id: '/solar',
   path: '/solar',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppLiveRoute,
 } as any)
 const AppBillsRatesRoute = AppBillsRatesRouteImport.update({
   id: '/bills_/rates',
@@ -428,7 +433,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRouteRouteWithChildren
   '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
-  '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
   '/data': typeof AppDataRoute
   '/forecast': typeof AppForecastRoute
@@ -440,7 +444,8 @@ export interface FileRoutesByFullPath {
   '/plan': typeof AppPlanRoute
   '/rates': typeof AppRatesRoute
   '/savings': typeof AppSavingsRoute
-  '/solar': typeof AppSolarRoute
+  '/battery': typeof AppLiveBatteryRoute
+  '/solar': typeof AppLiveSolarRoute
   '/bills/rates': typeof AppBillsRatesRoute
   '/ev/$vin': typeof AppEvVinRoute
   '/ev/setup': typeof AppEvSetupRoute
@@ -491,8 +496,8 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/welcome': typeof WelcomeRoute
   '/$': typeof AppSplatRoute
+  '/': typeof AppIndexRoute
   '/account': typeof AppAccountRoute
-  '/battery': typeof AppBatteryRoute
   '/bills': typeof AppBillsRoute
   '/data': typeof AppDataRoute
   '/forecast': typeof AppForecastRoute
@@ -504,8 +509,8 @@ export interface FileRoutesByTo {
   '/plan': typeof AppPlanRoute
   '/rates': typeof AppRatesRoute
   '/savings': typeof AppSavingsRoute
-  '/solar': typeof AppSolarRoute
-  '/': typeof AppIndexRoute
+  '/battery': typeof AppLiveBatteryRoute
+  '/solar': typeof AppLiveSolarRoute
   '/bills/rates': typeof AppBillsRatesRoute
   '/ev/$vin': typeof AppEvVinRoute
   '/ev/setup': typeof AppEvSetupRoute
@@ -560,8 +565,8 @@ export interface FileRoutesById {
   '/_app/integrations': typeof AppIntegrationsRouteRouteWithChildren
   '/_app/settings': typeof AppSettingsRouteRouteWithChildren
   '/_app/$': typeof AppSplatRoute
+  '/_app/_live': typeof AppLiveRouteWithChildren
   '/_app/account': typeof AppAccountRoute
-  '/_app/battery': typeof AppBatteryRoute
   '/_app/bills': typeof AppBillsRoute
   '/_app/data': typeof AppDataRoute
   '/_app/forecast': typeof AppForecastRoute
@@ -573,8 +578,9 @@ export interface FileRoutesById {
   '/_app/plan': typeof AppPlanRoute
   '/_app/rates': typeof AppRatesRoute
   '/_app/savings': typeof AppSavingsRoute
-  '/_app/solar': typeof AppSolarRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/_live/battery': typeof AppLiveBatteryRoute
+  '/_app/_live/solar': typeof AppLiveSolarRoute
   '/_app/bills_/rates': typeof AppBillsRatesRoute
   '/_app/ev/$vin': typeof AppEvVinRoute
   '/_app/ev/setup': typeof AppEvSetupRoute
@@ -631,7 +637,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/$'
     | '/account'
-    | '/battery'
     | '/bills'
     | '/data'
     | '/forecast'
@@ -643,6 +648,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/rates'
     | '/savings'
+    | '/battery'
     | '/solar'
     | '/bills/rates'
     | '/ev/$vin'
@@ -694,8 +700,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/welcome'
     | '/$'
+    | '/'
     | '/account'
-    | '/battery'
     | '/bills'
     | '/data'
     | '/forecast'
@@ -707,8 +713,8 @@ export interface FileRouteTypes {
     | '/plan'
     | '/rates'
     | '/savings'
+    | '/battery'
     | '/solar'
-    | '/'
     | '/bills/rates'
     | '/ev/$vin'
     | '/ev/setup'
@@ -762,8 +768,8 @@ export interface FileRouteTypes {
     | '/_app/integrations'
     | '/_app/settings'
     | '/_app/$'
+    | '/_app/_live'
     | '/_app/account'
-    | '/_app/battery'
     | '/_app/bills'
     | '/_app/data'
     | '/_app/forecast'
@@ -775,8 +781,9 @@ export interface FileRouteTypes {
     | '/_app/plan'
     | '/_app/rates'
     | '/_app/savings'
-    | '/_app/solar'
     | '/_app/'
+    | '/_app/_live/battery'
+    | '/_app/_live/solar'
     | '/_app/bills_/rates'
     | '/_app/ev/$vin'
     | '/_app/ev/setup'
@@ -867,18 +874,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSplatRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/_live': {
+      id: '/_app/_live'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppLiveRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/account': {
       id: '/_app/account'
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AppAccountRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/battery': {
-      id: '/_app/battery'
-      path: '/battery'
-      fullPath: '/battery'
-      preLoaderRoute: typeof AppBatteryRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/bills': {
@@ -972,12 +979,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/solar': {
-      id: '/_app/solar'
+    '/_app/_live/battery': {
+      id: '/_app/_live/battery'
+      path: '/battery'
+      fullPath: '/battery'
+      preLoaderRoute: typeof AppLiveBatteryRouteImport
+      parentRoute: typeof AppLiveRoute
+    }
+    '/_app/_live/solar': {
+      id: '/_app/_live/solar'
       path: '/solar'
       fullPath: '/solar'
-      preLoaderRoute: typeof AppSolarRouteImport
-      parentRoute: typeof AppRoute
+      preLoaderRoute: typeof AppLiveSolarRouteImport
+      parentRoute: typeof AppLiveRoute
     }
     '/_app/bills_/rates': {
       id: '/_app/bills_/rates'
@@ -1383,12 +1397,25 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
 const AppSettingsRouteRouteWithChildren =
   AppSettingsRouteRoute._addFileChildren(AppSettingsRouteRouteChildren)
 
+interface AppLiveRouteChildren {
+  AppLiveBatteryRoute: typeof AppLiveBatteryRoute
+  AppLiveSolarRoute: typeof AppLiveSolarRoute
+}
+
+const AppLiveRouteChildren: AppLiveRouteChildren = {
+  AppLiveBatteryRoute: AppLiveBatteryRoute,
+  AppLiveSolarRoute: AppLiveSolarRoute,
+}
+
+const AppLiveRouteWithChildren =
+  AppLiveRoute._addFileChildren(AppLiveRouteChildren)
+
 interface AppRouteChildren {
   AppIntegrationsRouteRoute: typeof AppIntegrationsRouteRouteWithChildren
   AppSettingsRouteRoute: typeof AppSettingsRouteRouteWithChildren
   AppSplatRoute: typeof AppSplatRoute
+  AppLiveRoute: typeof AppLiveRouteWithChildren
   AppAccountRoute: typeof AppAccountRoute
-  AppBatteryRoute: typeof AppBatteryRoute
   AppBillsRoute: typeof AppBillsRoute
   AppDataRoute: typeof AppDataRoute
   AppForecastRoute: typeof AppForecastRoute
@@ -1400,7 +1427,6 @@ interface AppRouteChildren {
   AppPlanRoute: typeof AppPlanRoute
   AppRatesRoute: typeof AppRatesRoute
   AppSavingsRoute: typeof AppSavingsRoute
-  AppSolarRoute: typeof AppSolarRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBillsRatesRoute: typeof AppBillsRatesRoute
   AppEvVinRoute: typeof AppEvVinRoute
@@ -1422,8 +1448,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppIntegrationsRouteRoute: AppIntegrationsRouteRouteWithChildren,
   AppSettingsRouteRoute: AppSettingsRouteRouteWithChildren,
   AppSplatRoute: AppSplatRoute,
+  AppLiveRoute: AppLiveRouteWithChildren,
   AppAccountRoute: AppAccountRoute,
-  AppBatteryRoute: AppBatteryRoute,
   AppBillsRoute: AppBillsRoute,
   AppDataRoute: AppDataRoute,
   AppForecastRoute: AppForecastRoute,
@@ -1435,7 +1461,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppPlanRoute: AppPlanRoute,
   AppRatesRoute: AppRatesRoute,
   AppSavingsRoute: AppSavingsRoute,
-  AppSolarRoute: AppSolarRoute,
   AppIndexRoute: AppIndexRoute,
   AppBillsRatesRoute: AppBillsRatesRoute,
   AppEvVinRoute: AppEvVinRoute,

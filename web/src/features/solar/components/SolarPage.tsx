@@ -5,41 +5,41 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { useNow } from "~/features/common/time/hooks";
 import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { exportCsvUrl } from "~/features/history/api";
+import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 import { useForecast, useForecastAccuracy } from "~/features/common/weather/hooks";
 import { solarInsightsQuery } from "~/features/solar/api";
 import { SolarDays } from "~/features/solar/components/SolarDays";
 import { SolarTrend } from "~/features/solar/components/SolarHealth";
 import { SolarOutlook } from "~/features/solar/components/SolarOutlook";
-import { SolarSky } from "~/features/solar/components/SolarSky";
+import { useSolarHero } from "~/features/solar/components/SolarSky";
 import { YourPanels } from "~/features/solar/components/YourPanels";
 import { useSolarDay } from "~/features/solar/hooks";
 import { pastDays } from "~/features/solar/utils";
 
 /**
  * Solar, on one page: the sky as it is now over what the panels are making and how the day's going (scrub or play
- * through the day); the last days (with how the panels are doing against the weather) and the days ahead (with how
+ * through the day), in the top card the live pages share (its part is useSolarHero); the last days (with how the panels are doing against the weather) and the days ahead (with how
  * close the forecast gets); where today's went, the panels' inverters and strings, and the year; and today's readings
  * to download. Nothing is a level down: each card says what it's about in plain words.
  */
 export function SolarPage() {
-  const now = useNow(30_000);
+  const { now } = useLiveDay();
   const p = useSnapshot();
   const s = useSystem();
   const f = useForecast();
   const acc = useForecastAccuracy();
-  const { start, series, weather } = useSolarDay(now);
+  const { start, series } = useSolarDay(now);
   const { data: insights } = useQuery(solarInsightsQuery);
   const past = pastDays(acc, insights?.performance, now);
   const usual = past.length >= 3 ? past.reduce((a, d) => a + d.kwh, 0) / past.length : null;
+  useLiveHero(useSolarHero({ p, s, f, acc, series, usual }));
   return (
     <>
-      <SolarSky p={p} s={s} f={f} acc={acc} series={series} weather={weather} start={start} now={now} usual={usual} />
-      <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
+      <div className="live-cols grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
         <div className="flex min-w-0 flex-col gap-5">
           <SolarDays acc={acc} performance={insights?.performance} now={now} />
           <SolarOutlook f={f} acc={acc} now={now} />

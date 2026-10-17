@@ -6,13 +6,17 @@ import { SectionPagesStrip } from "~/features/common/layout/components/SectionPa
 import { NavDrawer, SideNav } from "~/features/common/layout/components/SideNav";
 import { PageGlow } from "~/features/common/layout/components/PageGlow";
 import { HeaderClock, TopBar } from "~/features/common/layout/components/TopBar";
+import { livePage } from "~/features/live/utils/day";
+
+const sectionKey = (path: string) => (livePage(path) ? "live" : path.split("/")[1]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   // Keyed by section, so opening a page lets its sections rise into place (.page-rise), while moving
   // within one (a settings tab, a day in History) leaves the rest of the page where it is. It follows
   // the page being shown (resolvedLocation), not the address: while the next page loads, the one on
-  // screen stays put rather than starting its entrance again.
-  const section = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname.split("/")[1] });
+  // screen stays put rather than starting its entrance again. The live pages (Solar, Battery) count as one: they
+  // share a top card that stays put as you move between them (features/live).
+  const section = useRouterState({ select: (s) => sectionKey((s.resolvedLocation ?? s.location).pathname) });
   const [menu, setMenu] = useState(false);
   const openMenu = useCallback(() => setMenu(true), []);
   const closeMenu = useCallback(() => setMenu(false), []);

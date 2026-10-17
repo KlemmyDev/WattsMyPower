@@ -1739,16 +1739,104 @@
     transform: translateX(760px);
   }
 }
-/* The first showing of the Solar page in a visit: the house picture starts low on its wall and tilts up to the roof. */
-.house-tilt {
-  animation: houseTilt 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) 0.25s both;
+/* The battery's light on its face, breathing. */
+.house-pulse {
+  animation: housePulse 2.4s ease-in-out infinite;
 }
-@keyframes houseTilt {
+@keyframes housePulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/*
+ * The live pages' shared top card (features/live): changing page, the card stays put. The title and story cross-fade
+ * (the old one up and out as the new one rises in), text that isn't a figure fades out and back as the new text (the
+ * figures count, by script), the slim bar slides to the new page's, and the chart draws in from the left. Only the
+ * cards under it come and go: they rise in one after another.
+ */
+.live-in {
+  animation: liveIn 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.live-out {
+  opacity: 0;
+  animation: liveOut 0.42s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+@keyframes liveIn {
   from {
-    transform: translateY(var(--lift));
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes liveOut {
+  from {
+    opacity: 1;
+    transform: none;
   }
   to {
-    transform: none;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.live-swap {
+  display: inline-block;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.live-swap-out {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.live-slim {
+  transition:
+    width 0.65s cubic-bezier(0.22, 0.61, 0.36, 1),
+    left 0.65s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background-color 0.5s ease,
+    border-color 0.5s ease,
+    opacity 0.4s ease;
+}
+.live-draw > div > svg {
+  animation: liveDraw 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+@keyframes liveDraw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+/* The cards under the card rise in one after another: the page's own sections, and each card in its columns. */
+.page-rise > .live-enter {
+  animation: none;
+}
+.live-enter > :not(.live-cols),
+.live-enter > .live-cols > * > * {
+  animation: liveCardIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.live-enter .live-cols > * > :nth-child(2) {
+  animation-delay: 0.07s;
+}
+.live-enter .live-cols > * > :nth-child(3) {
+  animation-delay: 0.14s;
+}
+.live-enter .live-cols > * > :nth-child(n + 4) {
+  animation-delay: 0.21s;
+}
+.live-enter .live-cols > :nth-child(2) > * {
+  animation-delay: 0.04s;
+}
+.live-enter .live-cols > :nth-child(2) > :nth-child(2) {
+  animation-delay: 0.11s;
+}
+.live-enter .live-cols > :nth-child(2) > :nth-child(n + 3) {
+  animation-delay: 0.18s;
+}
+@keyframes liveCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
 }
 /* A device that can't keep up (lite effects): the fields and fog hold still, which leaves only the rain moving (and,

@@ -108,8 +108,8 @@ function levelAt(line: Line, t: number): number | null {
  * as a line), and from now on, through tomorrow, what's expected as things are set (`outlook`), what the control
  * being set up would make of it (`preview`), and while a control runs, what running as normal would (`without`).
  * The arrows step back through earlier days, and on to tomorrow; under the chart, each hour in and out and the rates
- * on its time scale, then the day's lowest level, grid energy and cost, each way. Part of the Battery card (BatteryHero),
- * so it has no card of its own.
+ * on its time scale, then the day's lowest level, grid energy and cost, each way. It has no card of its own: the
+ * Battery page puts it in one under the top card, and the Battery today widget (BatteryHero) in its card.
  */
 export function BatteryDayChart({
   s,
