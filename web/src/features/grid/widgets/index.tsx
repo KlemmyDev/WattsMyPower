@@ -7,7 +7,7 @@ import type { WidgetDef, WidgetProps } from "~/features/common/widgets/types";
 import { gridQuery } from "~/features/grid/api";
 import { GridOverviewCard } from "~/features/grid/components/GridOverviewCard";
 import { GridHero } from "~/features/grid/components/GridHero";
-import { MarketCard, NoticesCard, QualityCard } from "~/features/grid/components/GridPage";
+import { MarketCard, NoticesCard, QualityCard } from "~/features/grid/components/GridMore";
 import { HazardsCard } from "~/features/grid/components/HazardsCard";
 import { OutagesCard } from "~/features/grid/components/OutagesCard";
 import { useGridDay } from "~/features/grid/hooks";

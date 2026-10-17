@@ -28,8 +28,8 @@ const DEAR = 0.3;
  * Grid's part of the live pages' top card (LiveCard), under the sky with the street, its poles and the line to your
  * meter in it: its title, a line on what you're buying or selling and at what price, power to and from the grid through
  * the day as the chart (buying above the line, selling below, with the price of each half hour under it; dragging along
- * it moves the sky and the figures), and the figures: what today's cost you or earned you so far (counted up), what's
- * flowing now, what you bought and sold, the price now and the voltage at your house.
+ * it moves the sky and the figures), and the figures: what today's cost so far (counted up, with the supply charge, as
+ * Today so far has it), what's flowing now, what you bought and sold, the price now and the voltage at your house.
  *
  * `series` is the grid's day as the Grid page reads it (power and voltage every 5 minutes).
  */
@@ -84,6 +84,8 @@ export function useGridHero({
     const sold = p?.daily_export ?? sofar.exp;
     const cost = bill?.import_cost ?? sofar.cost;
     const earned = bill?.feed_in_credit ?? sofar.earn;
+    // The day's supply charge: the bill counts all of it from midnight.
+    const supply = bill?.supply ?? 0;
     const whole = Math.max(bought, usual.day ?? 0, 0.1) * 1.08;
     const pc = (v: number) => Math.min(100, (v / whole) * 100);
 
@@ -96,7 +98,8 @@ export function useGridHero({
       const rate = rateAt(rates, view);
       const feed = feedAt(view);
       const by = scrubbed ? byT(view) : { imp: bought, exp: sold, cost, earn: earned };
-      const net = by.cost - by.earn;
+      // What today's cost so far, as Today so far has it: bought, less what selling earned, with the supply charge.
+      const total = scrubbed ? by.cost - by.earn + supply : (bill?.net_cost ?? by.cost - by.earn);
       const volts = scrubbed ? seriesAt(series, "grid_voltage", view) : (p?.grid_voltage ?? null);
       const cheapTill = rate && rate.rate < CHEAP && (rates?.length ?? 0) > 1 ? nextDear(rates, view) : null;
       const [value, unit] = (w == null ? DASH : kW(Math.abs(w))).split(" ");
@@ -125,8 +128,8 @@ export function useGridHero({
       return {
         story: story({ scrubbed, level, reason, w, rate, feed, cheapTill, view }),
         lead: {
-          label: `${net >= 0 ? "Spent" : "Ahead"} ${scrubbed ? `by ${when}` : "today"}`,
-          value: money(Math.abs(net)),
+          label: `${total >= 0 ? "Cost" : "Credit"} ${scrubbed ? `by ${when}` : "today"}`,
+          value: money(Math.abs(total)),
           unit: "",
         },
         slim: {
