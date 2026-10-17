@@ -118,6 +118,30 @@ export type HouseArt = {
   sheen: { x: number; cx: number; cy: number; rot: number };
 };
 
+/**
+ * A flight's frame as drawing commands for a canvas (what the SVG markup says, without writing and parsing markup):
+ * `p` a path (filled, stroked, or seamed), `e` an ellipse, `c` a circle, `full` a flat wash over everything, `in`/`out`
+ * a clip opened with a path and closed again. Fills are colours, or a gradient's name (`g:glass`...).
+ */
+export type Op =
+  | {
+      t: "p";
+      d: string;
+      fill?: string;
+      stroke?: string;
+      w?: number;
+      seam?: number;
+      op?: number;
+      clip?: string;
+      win?: Shape["win"];
+    }
+  | { t: "e"; cx: number; cy: number; rx: number; ry: number; fill: string; op: number }
+  | { t: "c"; cx: number; cy: number; r: number; fill: string; op: number }
+  | { t: "full"; fill: string; a: number }
+  | { t: "haze"; y: number; h: number; col: string }
+  | { t: "in"; d: string }
+  | { t: "out" };
+
 /** The picture's size: a phone's sky, or a wider one. */
 export const FRAME = { phone: { w: 600, h: 440 }, wide: { w: 1100, h: 480 } };
 
@@ -2262,12 +2286,21 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
         continue;
       }
       const n: P3 = [sg, 0, 0];
+      // Its arch, then out along the body's bottom edge either side: under the sill the tyre's inner tread shows,
+      // as it does from behind or in front (a cut straight down from the arch clipped it).
+      const sill = (a: number, b: number) =>
+        Array.from({ length: 6 }, (_, i) => {
+          const u = a + ((b - a) * i) / 5;
+          const z = CAR.zb(u) + 0.015;
+          // Never in from its tyre's face, where the nose and tail narrow (it would cut into the wheel).
+          return [sg * Math.max(carWidth(u, z) + 0.01, WHEEL_W - 0.03), u, z] as P3;
+        });
       const arch = [
         ...ring(ua, TYRE, 0, ARCH + 0.01, -15, 195).map(([u, z]) => carAt(u, z, sg, 0.01)),
-        carAt(ua - 0.43, 0.24, sg, 0.01),
-        [sg * WHEEL_W, ua - 0.43, -0.4] as P3,
-        [sg * WHEEL_W, ua + 0.43, -0.4] as P3,
-        carAt(ua + 0.43, 0.24, sg, 0.01),
+        ...sill(ua - 0.43, ua - 0.68),
+        [sg * WHEEL_W, ua - 0.68, -0.4] as P3,
+        [sg * WHEEL_W, ua + 0.68, -0.4] as P3,
+        ...sill(ua + 0.68, ua + 0.43),
       ].map(W);
       const clip = B.cam.poly(arch);
       const cover = (r: number, w: number, fill: string, steps = 24) => ({
@@ -2791,7 +2824,8 @@ function forest(garden: Garden): Tree[] {
 
 /** The trees, far to near under everything built: each crown's faces lit one by one, hazier with distance, with a
  * shadow on the lawn. On a device that can't keep up (`lite`), every other tree. */
-function trees(B: Builder, garden: Garden, w: number, lite: boolean) {
+const FAST_BANDS = 4;
+function trees(B: Builder, garden: Garden, w: number, lite: boolean, fast = false) {
   const c = B.cam;
   const sun = B.sun;
   B.layer = -1;
@@ -2876,6 +2910,28 @@ function trees(B: Builder, garden: Garden, w: number, lite: boolean) {
       });
     }
     faces.sort((x, y) => y.depth - x.depth);
+    if (fast) {
+      // A flight's frame draws each crown's faces as FAST_BANDS paths (the faces from darkest to lightest, in bands),
+      // so a frame has the same few shapes whichever faces turn out to face the camera.
+      const lum = (f: string) => {
+        const m = /\d+/g;
+        return +m.exec(f)![0] + +m.exec(f)![0] + +m.exec(f)![0];
+      };
+      const bySh = faces.slice().sort((x, y) => lum(x.fill) - lum(y.fill));
+      const bands: { d: string; fill: string }[] = [];
+      for (let b = 0; b < FAST_BANDS; b++) {
+        const part = bySh.slice(
+          Math.floor((b * bySh.length) / FAST_BANDS),
+          Math.floor(((b + 1) * bySh.length) / FAST_BANDS),
+        );
+        bands.push({
+          d: part.map((x) => x.d).join(" ") || "M0 0",
+          fill: part.length ? part[part.length >> 1].fill : "#000",
+        });
+      }
+      B.add(dep, ...[...shapes, ...bands].map((x) => ({ ...x, own: true })));
+      continue;
+    }
     // The trees keep their own night (tone() darkens them), so the light of the moment isn't baked into them again.
     B.add(dep, ...[...shapes, ...faces].map((x) => ({ ...x, own: true })));
   }
@@ -2916,6 +2972,7 @@ export function houseArt(
   parts: SceneParts,
   lite: boolean,
   keep = true,
+  ops: Op[] | null = null,
 ): HouseArt {
   const key = keep
     ? [
@@ -2942,7 +2999,7 @@ export function houseArt(
         lite,
       ].join("/")
     : "";
-  const hit = keep ? cache.get(key) : undefined;
+  const hit = keep && !ops ? cache.get(key) : undefined;
   if (hit) return hit;
   const { w, h } = phone ? FRAME.phone : FRAME.wide;
   const cam = camera(pose, w);
@@ -2960,7 +3017,7 @@ export function houseArt(
   gridScene(B, g);
   const mountWall = g.mount.inside ? null : g.mount.o[0] === 10 ? (B.wallItems.side ?? null) : B.garageSide;
   litExtras(B, K, g, mountWall);
-  trees(B, look.garden, w, lite);
+  trees(B, look.garden, w, lite, !keep);
 
   // The garage stands against the house's side wall (x = 10). From that side it's drawn after the house; from the
   // other side (out west) before it, after the trees, so the house hides it. Its own parts keep their order.
@@ -2998,6 +3055,11 @@ export function houseArt(
   const hf = unit([cam.fwd[0], cam.fwd[1], 1e-9]);
   const h0 = cam.p(addk(cam.eye, hf, 5000))?.[1] ?? h / 2;
   const hor = css(light.horizon);
+  if (ops) {
+    ops.push({ t: "haze", y: h0 - 70, h: 76, col: hor });
+    houseOps(ops, shapes, bake, { w, h, light, L, shadeAmt, shadeCol, hor, lit, moon: cam.p([4, 6.5, g.eave + 1.0]) });
+    return { w, h, svg: "", layers: [], slots: [], kit: null, sheen: { x: 0, cx: 0, cy: 0, rot: 0 } };
+  }
   let svg =
     `<defs><linearGradient id="lh-haze" gradientUnits="userSpaceOnUse" x1="0" y1="${n1(h0 - 70)}" x2="0" y2="${n1(h0 + 6)}">` +
     `<stop offset="0" stop-color="${hor}" stop-opacity="0"/><stop offset="1" stop-color="${hor}" stop-opacity=".7"/></linearGradient></defs>` +
@@ -3082,6 +3144,77 @@ export function houseArt(
     if (cache.size > 24) cache.delete(cache.keys().next().value!);
   }
   return art;
+}
+
+type OpsCtx = {
+  w: number;
+  h: number;
+  light: Light;
+  L: number;
+  shadeAmt: number;
+  shadeCol: string;
+  hor: string;
+  lit: number;
+  moon: P2 | null | undefined;
+};
+
+/** The same walk over the shapes as the markup's, writing drawing commands (no slots: what moves waits for the landing). */
+function houseOps(ops: Op[], shapes: Shape[], bake: (c: string | undefined, s: Shape) => string, c: OpsCtx) {
+  const { light, L, shadeAmt, shadeCol, hor, lit, moon } = c;
+  const moonA = light.moon * (1 - 0.8 * light.cover) * 0.4;
+  for (const s of shapes) {
+    if (s.slot) continue;
+    if (s.raw != null) {
+      for (const m of s.raw.matchAll(/<(path|ellipse|circle)\s([^>]*?)\/>/g)) {
+        const a: Record<string, string> = {};
+        for (const q of m[2].matchAll(/([\w-]+)="([^"]*)"/g)) a[q[1]] = q[2];
+        const op = a.opacity != null ? +a.opacity : 1;
+        a.fill = a.fill?.replace(/^url\(#lh-(\w+)\)$/, "g:$1");
+        if (m[1] === "path") ops.push({ t: "p", d: a.d, fill: a.fill, op });
+        else if (m[1] === "ellipse") ops.push({ t: "e", cx: +a.cx, cy: +a.cy, rx: +a.rx, ry: +a.ry, fill: a.fill, op });
+        else ops.push({ t: "c", cx: +a.cx, cy: +a.cy, r: +a.r, fill: a.fill, op });
+      }
+      continue;
+    }
+    ops.push(
+      s.stroke
+        ? { t: "p", d: s.d, stroke: bake(s.stroke, s), w: s.width, op: s.opacity, clip: s.clip }
+        : {
+            t: "p",
+            d: s.d,
+            fill: s.fill === "url(#lh-glass)" ? "g:glass" : s.fill === "url(#lh-win)" ? "g:win" : bake(s.fill, s),
+            seam: s.seam,
+            op: s.opacity,
+            clip: s.clip,
+            win: s.win,
+          },
+    );
+    if (s.fill === "url(#lh-glass)") {
+      ops.push({ t: "in", d: s.d }, { t: "full", fill: hor, a: 0.16 + 0.3 * (1 - L) });
+      if (light.rain > 0.01) ops.push({ t: "full", fill: "#c8d4ea", a: 0.18 * light.rain * 0.9 });
+      if (moon && moonA > 0.01)
+        ops.push({ t: "e", cx: moon[0], cy: moon[1], rx: 92, ry: 14, fill: "g:moon", op: moonA });
+      ops.push({ t: "full", fill: shadeCol, a: shadeAmt }, { t: "out" });
+    }
+    if (s.fill === "url(#lh-win)") {
+      ops.push({ t: "p", d: s.d, fill: shadeCol, op: shadeAmt });
+      if (lit > 0.01) {
+        const k = s.win?.k ?? 1;
+        ops.push({ t: "p", d: s.d, fill: "g:winlit", op: lit * (0.55 + 0.45 * k), win: s.win });
+        ops.push({ t: "p", d: s.d, fill: "g:blind", op: lit, win: s.win });
+        if (s.win)
+          ops.push({
+            t: "e",
+            cx: s.win.x + s.win.w / 2,
+            cy: s.win.y + s.win.h * 0.6,
+            rx: s.win.w * 1.05,
+            ry: s.win.h * 1.15,
+            fill: "g:spill",
+            op: lit * 0.75 * k,
+          });
+      }
+    }
+  }
 }
 
 /** Slots this close together (in characters of what stands between them) share a layer: a few shapes repainted with

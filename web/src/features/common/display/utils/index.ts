@@ -8,6 +8,8 @@ import { store, STORE_DISPLAY } from "~/features/common/storage/utils";
  *   data-density   "compact" tightens cards, gaps and charts (the `compact:` variant)
  *   data-contrast  "more" brings muted text and lines closer to the main text colour
  *   data-motion    "reduce" stops animations and transitions, as the device's own setting does
+ * How the live pages move from one to the next (`transition`): the house's camera flies, the picture fades, or it just
+ * changes; "auto" flies on a device that keeps up and fades on one that can't (the live house reads it as it moves).
  * And the clock times are shown on: 24-hour ("14:05") or 12-hour ("2:05 pm"), which the time formatting
  * (formatting/utils/date) reads as it formats.
  */
@@ -15,12 +17,14 @@ import { store, STORE_DISPLAY } from "~/features/common/storage/utils";
 export type Size = "small" | "default" | "large" | "larger";
 export type Density = "comfortable" | "compact";
 export type Clock = "24" | "12";
+export type Transition = "auto" | "fly" | "fade" | "off";
 export type Display = {
   size: Size;
   density: Density;
   contrast: "default" | "more";
   motion: "system" | "reduce";
   clock: Clock;
+  transition: Transition;
 };
 
 export const DEFAULT_DISPLAY: Display = {
@@ -29,6 +33,7 @@ export const DEFAULT_DISPLAY: Display = {
   contrast: "default",
   motion: "system",
   clock: "24",
+  transition: "auto",
 };
 
 export const SIZE_OPTIONS: { value: Size; label: string }[] = [
@@ -48,12 +53,20 @@ export const CLOCK_OPTIONS: { value: Clock; label: string }[] = [
   { value: "12", label: "12-hour" },
 ];
 
+export const TRANSITION_OPTIONS: { value: Transition; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "fly", label: "Fly" },
+  { value: "fade", label: "Fade" },
+  { value: "off", label: "Off" },
+];
+
 const ALLOWED: { [K in keyof Display]: readonly Display[K][] } = {
   size: ["small", "default", "large", "larger"],
   density: ["comfortable", "compact"],
   contrast: ["default", "more"],
   motion: ["system", "reduce"],
   clock: ["24", "12"],
+  transition: ["auto", "fly", "fade", "off"],
 };
 
 let cached: { raw: string; value: Display } | null = null;
@@ -86,6 +99,7 @@ export function applyDisplay(d: Display = savedDisplay()) {
   root.contrast = d.contrast;
   root.motion = d.motion;
   root.clock = d.clock;
+  root.transition = d.transition;
 }
 
 const listeners = new Set<() => void>();
