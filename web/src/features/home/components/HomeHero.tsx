@@ -124,7 +124,7 @@ export function HomeHero({
         </HeroFigures>
         <HeroStats>
           <HeroStat
-            label="Peak today"
+            label="Highest draw today"
             value={today.peak ? kW(today.peak.w) : DASH}
             sub={today.peak ? `at ${hhmm(today.peak.t)}` : undefined}
           />

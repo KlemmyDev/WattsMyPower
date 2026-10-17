@@ -54,7 +54,7 @@ export function useSolarHero({
         : null;
     const stats = [
       {
-        label: "Peak today",
+        label: "Peak output today",
         value: today.peak ? kW(today.peak.w) : DASH,
         sub: today.peak ? `At ${hhmm(today.peak.t)}` : "Not yet",
       },
