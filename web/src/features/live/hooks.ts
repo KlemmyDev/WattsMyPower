@@ -6,11 +6,15 @@ export const DayContext = createContext<LiveDay | null>(null);
 
 /**
  * Gives the live pages' top card this page's title, words, figures and chart (memoise it: it's given again whenever it
- * changes). Null when the page has nothing for the card (Battery without a battery).
+ * changes). Null when the page has nothing for the card (Battery without a battery). Undefined while the page is still
+ * finding out: the card stays as it is (the last page's), so it flies on once the page has its own, rather than
+ * leaving and coming back.
  */
-export function useLiveHero(hero: LiveHero | null) {
+export function useLiveHero(hero: LiveHero | null | undefined) {
   const set = useContext(HeroContext);
-  useLayoutEffect(() => set?.(hero), [set, hero]);
+  useLayoutEffect(() => {
+    if (hero !== undefined) set?.(hero);
+  }, [set, hero]);
 }
 
 /** Today as the live pages share it (readings, weather, the sun's times); only inside the live pages' layout. */
