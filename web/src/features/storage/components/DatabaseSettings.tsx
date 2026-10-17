@@ -49,10 +49,14 @@ function Storage() {
       >
         <BackupCard report={report.data} />
       </SettingsSplit>
-      <h2 className="px-1 pt-3 text-[13px] leading-5 font-semibold text-ink-muted">Table by table</h2>
-      {report.data.databases.map((db) => (
-        <DatabaseCard key={db.id} db={db} />
-      ))}
+      <details className="group flex flex-col gap-4">
+        <summary className="cursor-pointer px-1 pt-3 text-[13px] leading-5 font-semibold text-ink-muted">
+          Table by table (advanced)
+        </summary>
+        {report.data.databases.map((db) => (
+          <DatabaseCard key={db.id} db={db} />
+        ))}
+      </details>
     </>
   );
 }
