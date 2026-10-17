@@ -57,3 +57,11 @@ export const NOTICE_HELP: Record<NoticeKind, string> = {
   msl2: "Very little demand on the grid. AEMO may act to keep the system secure.",
   msl3: "So little demand that networks may switch rooftop solar off (backstop) to keep the system secure.",
 };
+
+/** A wholesale price below this is cheap, at or above `WHOLESALE_DEAR` dear ($/MWh: 5c and 20c a kWh). */
+export const WHOLESALE_CHEAP = 50;
+export const WHOLESALE_DEAR = 200;
+
+/** Whether a wholesale price ($/MWh) is cheap, dear or in between, as the Grid page colours it. */
+export const wholesaleKind = (p: number | null) =>
+  p == null ? null : p < WHOLESALE_CHEAP ? "cheap" : p >= WHOLESALE_DEAR ? "dear" : "mid";
