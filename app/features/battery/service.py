@@ -646,7 +646,7 @@ class BatteryService:
             "time": "time's up",
             "target": f"reached {control.get('target')}%",
             "full": "the battery is full",
-            "stopped": "stopped",
+            "stopped": "you stopped it",
         }.get(control["ending"], control["ending"])
         if control["kind"] in FORCED_KINDS and who != "dashboard":
             # Something else took the battery over meanwhile: nothing of ours left to undo.
