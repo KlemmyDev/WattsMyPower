@@ -40,9 +40,9 @@ export function GridPage() {
     <>
       {grid && grid.outlook.level !== "normal" && <GridAlert grid={grid} p={p} s={s} />}
       {radius != null && <RadiusPicker radius={radius} />}
-      {/* Four cards: in a row on a wide page, two by two narrower, one under another on a phone. */}
+      {/* Four cards two by two (four across leaves each too narrow for its lines), one under another on a phone. */}
       <div className="@container">
-        <div className="grid grid-cols-2 gap-4 @max-xl:grid-cols-1 @6xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 @max-xl:grid-cols-1">
           {grid ? (
             <WholesaleCard grid={grid} start={start} now={now} f={f} />
           ) : (

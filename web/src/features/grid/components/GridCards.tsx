@@ -13,6 +13,7 @@ import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { sameDay } from "~/features/common/time/utils";
 import { Button, ButtonLink } from "~/features/common/ui/components/Button";
 import { Card } from "~/features/common/ui/components/Card";
+import { Icon } from "~/features/common/ui/components/Icon";
 import { dim, usePick } from "~/features/common/ui/components/Pick";
 import { Segmented } from "~/features/common/ui/components/Segmented";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
@@ -78,40 +79,55 @@ function Note({ children, className }: { children: ReactNode; className?: string
   return <p className={cn("m-0 text-[13.5px] leading-5 text-pretty text-ink-muted", className)}>{children}</p>;
 }
 
-/** A line in a card's list: what on the left, when or where on the right, with a dot in its colour. */
+/**
+ * A line in a card's list, kept to its height however long the names: what, on one line (cut short, in full on
+ * hover), with when or where on a second, small line under it; something short on the right; and a dot in its colour.
+ */
 function Line({
   dot,
   children,
+  sub,
   right,
+  full,
   href,
 }: {
   dot?: string;
   children: ReactNode;
+  sub?: ReactNode;
   right?: ReactNode;
+  /** The line in full, for when it's cut short. */
+  full?: string;
   href?: string | null;
 }) {
   const inner = (
     <>
-      <span className="flex min-w-0 items-center gap-2">
+      <span className="flex min-w-0 flex-1 items-center gap-2.5">
         {dot && <i aria-hidden className="size-2 flex-none rounded-full" style={{ background: dot }} />}
-        <span className="min-w-0 text-pretty">{children}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate">{children}</span>
+          {sub && <span className="truncate text-xs leading-4 text-ink-faint tabular-nums">{sub}</span>}
+        </span>
       </span>
-      {right && <span className="flex-none text-ink-faint tabular-nums">{right}</span>}
+      {right && <span className="flex-none text-xs text-ink-faint tabular-nums">{right}</span>}
+      {href && <Icon name="external" size={13} className="flex-none text-ink-faint" />}
     </>
   );
   const cls =
-    "flex items-center justify-between gap-3 rounded-xl border border-line-subtle bg-fg/4 px-3 py-2.5 text-[13px] text-ink no-underline";
+    "flex items-center justify-between gap-3 rounded-xl border border-line-subtle bg-fg/4 px-3 py-2 text-[13px] leading-5 text-ink no-underline";
   return href ? (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
+      title={full}
       className={cn(cls, "transition-colors hover:bg-fg/7 hover:text-ink")}
     >
       {inner}
     </a>
   ) : (
-    <div className={cls}>{inner}</div>
+    <div className={cls} title={full}>
+      {inner}
+    </div>
   );
 }
 
@@ -274,22 +290,27 @@ export function WholesaleCard({
             {busy ? "Trying…" : "Try again"}
           </Button>
         </Note>
-      ) : pick?.price != null ? (
-        <Note>
-          <span className="text-ink">{wholesaleCents(pick.price)} a kWh</span> from {hourLabel(pick.h)} to{" "}
-          {hourLabel(pick.h + 1)} ({perMWh(pick.price)}){pick.forecast ? ", as AEMO forecasts it" : ""}.
-          {likely(f, start + pick.h * HOUR, now)}
-        </Note>
       ) : priced.length ? (
-        <Note>
-          {price != null && (
-            <span className={cn("text-ink", price >= grid.limits.spike && "text-warn")}>
-              {wholesaleCents(price)} a kWh now.{" "}
-            </span>
+        // The day's sentence and the picked hour's share one cell, the one not shown kept invisible, so pointing along
+        // the bars never changes the card's height (the hour's is held to three lines, the room it's given).
+        <div className="grid min-h-[60px]" aria-live="polite">
+          <Note className={cn("[grid-area:1/1]", pick?.price != null && "invisible")}>
+            {price != null && (
+              <span className={cn("text-ink", price >= grid.limits.spike && "text-warn")}>
+                {wholesaleCents(price)} a kWh now.{" "}
+              </span>
+            )}
+            Cheapest at {wholesaleCents(list[low].price)} {run(list, low)}, dearest at{" "}
+            {wholesaleCents(list[high].price)} {run(list, high)}.
+          </Note>
+          {pick?.price != null && (
+            <Note className="line-clamp-3 [grid-area:1/1]">
+              <span className="text-ink">{wholesaleCents(pick.price)} a kWh</span> from {hourLabel(pick.h)} to{" "}
+              {hourLabel(pick.h + 1)} ({perMWh(pick.price)}){pick.forecast ? ", as AEMO forecasts it" : ""}.
+              {likely(f, start + pick.h * HOUR, now)}
+            </Note>
           )}
-          Cheapest at {wholesaleCents(list[low].price)} {run(list, low)}, dearest at {wholesaleCents(list[high].price)}{" "}
-          {run(list, high)}.
-        </Note>
+        </div>
       ) : (
         <Note>Waiting for AEMO's prices.</Note>
       )}
@@ -302,6 +323,7 @@ export function WholesaleCard({
                 n.level === "critical" ? COLOR.danger : n.level === "warning" ? COLOR.warn : "var(--color-ink-faint)"
               }
               right={hhmm(n.at)}
+              full={n.title}
             >
               {n.title}
             </Line>
@@ -340,7 +362,7 @@ function planned(o: Outage, now: number): string {
 const away = (o: Outage) =>
   o.distance_km < 1 ? "Under 1 km away" : `${+o.distance_km.toFixed(1)} km ${o.direction}`.trim();
 
-const SHOWN = 4;
+const SHOWN = 3;
 
 /**
  * The network's outages around the house as a short list, outages now (orange) before planned work (purple), each
@@ -396,15 +418,18 @@ export function OutagesNearby({ view, now }: { view: OutagesView; now: number })
             </Line>
           )}
           {shown.map((o) => (
-            <Line key={o.id} dot={o.planned ? PLANNED : UNPLANNED} right={shortWhen(o, now)} href={o.url}>
+            <Line
+              key={o.id}
+              dot={o.planned ? PLANNED : UNPLANNED}
+              sub={`${o.affects ? (o.affects === "street" ? "Your street" : "Your area") : away(o)} · ${shortWhen(o, now)}`}
+              full={`${o.planned ? "Planned work" : "Outage"}, ${o.suburbs.map(title).join(", ") || placeOf(o)}`}
+              href={o.url}
+            >
               {o.planned ? "Planned work" : "Outage"}
               {o.affects ? (
                 <span className="text-warn"> {o.affects === "street" ? "on your street" : "in your area"}</span>
               ) : (
-                <>
-                  , {placeOf(o)}
-                  <span className="text-ink-faint tabular-nums"> · {away(o)}</span>
-                </>
+                `, ${placeOf(o)}`
               )}
             </Line>
           ))}
@@ -590,7 +615,13 @@ export function WarningsNow({ view, now }: { view: HazardsView; now: number }) {
           <Line
             key={w.id}
             dot={w.level === "warning" ? COLOR.warn : COLOR.solar}
-            right={w.expires ? until(w.expires) : undefined}
+            sub={[
+              w.here ? "Your area" : w.areas.map((a) => a.replace(/^[^:]+:\s*/, "")).join(", "),
+              w.expires ? until(w.expires) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            full={w.headline || w.event}
             href={w.url}
           >
             {w.headline || w.event}
@@ -602,7 +633,10 @@ export function WarningsNow({ view, now }: { view: HazardsView; now: number }) {
             dot={
               f.level === "Emergency Warning" ? COLOR.danger : f.level === "Watch and Act" ? COLOR.warn : COLOR.solar
             }
-            right={f.here ? "Your area" : `${f.distance_km} km ${f.direction ?? ""}`.trim()}
+            sub={[f.here ? "Your area" : `${f.distance_km} km ${f.direction ?? ""}`.trim(), f.status]
+              .filter(Boolean)
+              .join(" · ")}
+            full={`${f.level}: ${f.area || "Area not given"}`}
           >
             {f.level}: {f.area || "Area not given"}
           </Line>
@@ -652,9 +686,14 @@ export function GridAlert({ grid, p, s }: { grid: GridView; p: Snapshot | null; 
       {reasons.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-2">
           {reasons.map((r, i) => (
-            <Line key={`${r.kind}${i}`} dot={LEVEL[r.level].color} right={r.at ? hhmm(r.at) : undefined}>
+            <Line
+              key={`${r.kind}${i}`}
+              dot={LEVEL[r.level].color}
+              sub={r.detail}
+              right={r.at ? hhmm(r.at) : undefined}
+              full={`${r.title}. ${r.detail}`}
+            >
               <span className="font-medium">{r.title}</span>
-              <span className="text-ink-muted"> · {r.detail}</span>
             </Line>
           ))}
         </div>
