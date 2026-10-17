@@ -2238,12 +2238,16 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
   const byDepth = (gs: Drawn[][]) => gs.sort((a, b) => b[0].depth - a[0].depth).flat();
 
   // Its wheels: the tyre's tread and sidewall, the 19-inch aero cover (silver, ten fine curved vanes round a small hub).
-  // On a side you can see, in front of it, through its arch; on the other, behind it.
-  const near: Shape[] = [];
-  const far: Shape[] = [];
+  // On a side you can see, in front of it, through its arch; on the other, behind it. Each side's furthest first, so
+  // from behind its front wheels don't show over its back ones.
+  const nearWheels: Drawn[][] = [];
+  const farWheels: Drawn[][] = [];
   const path = (pts: P2[]) => (pts.length > 2 ? `M${pts.map((q) => q.map(n1).join(" ")).join(" L")} Z` : "");
   for (const sg of [-1, 1])
     for (const ua of AXLES) {
+      const depth = B.cam.depth(W([sg * WHEEL_W, ua, TYRE]));
+      const wheel: Drawn[] = [];
+      const push = (...xs: Shape[]) => wheel.push(...xs.map((x) => ({ ...x, depth })));
       const disc = (r: number, w: number, steps = 24) =>
         Array.from({ length: steps }, (_, i) => {
           const a = (i / steps) * Math.PI * 2;
@@ -2253,7 +2257,8 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
       if (flat.some((q) => !q)) continue;
       const tread = { d: path(hull(flat as P2[])), fill: "#222428" };
       if (!sees(sg, WHEEL_W)) {
-        far.push({ ...tread, fill: "#33363c" });
+        push(tread);
+        farWheels.push(wheel);
         continue;
       }
       const n: P3 = [sg, 0, 0];
@@ -2270,7 +2275,7 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
         fill,
         clip,
       });
-      near.push({ ...tread, clip }, cover(TYRE, WHEEL_W, "#2a2c31"), cover(0.235, WHEEL_W + 0.004, lit("#c3c7cc", n)));
+      push({ ...tread, clip }, cover(TYRE, WHEEL_W, "#2a2c31"), cover(0.235, WHEEL_W + 0.004, lit("#c3c7cc", n)));
       for (let k = 0; k < 10; k++) {
         const a0 = (k / 10) * Math.PI * 2 + 0.4;
         const vane = (side: number) =>
@@ -2279,9 +2284,10 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
             const a = a0 + sg * t * 0.55 + (side * (0.015 - 0.005 * t)) / r;
             return W([sg * (WHEEL_W + 0.006), ua + r * Math.cos(a), TYRE + r * Math.sin(a)]);
           });
-        near.push({ d: B.cam.poly([...vane(1), ...vane(-1).reverse()]), fill: "#4a4f57", clip });
+        push({ d: B.cam.poly([...vane(1), ...vane(-1).reverse()]), fill: "#4a4f57", clip });
       }
-      near.push(cover(0.06, WHEEL_W + 0.008, lit("#9da3aa", n), 14), cover(0.03, WHEEL_W + 0.01, "#2a2d32", 10));
+      push(cover(0.06, WHEEL_W + 0.008, lit("#9da3aa", n), 14), cover(0.03, WHEEL_W + 0.01, "#2a2d32", 10));
+      nearWheels.push(wheel);
     }
 
   // The lines over its paint, on whichever sides the camera sees: on its side, its doors' shut lines (the back one
@@ -2363,13 +2369,21 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
     P(x1 + 0.06, CAR_L + 0.05, 0.004),
     P(x0 - 0.06, CAR_L + 0.05, 0.004),
   ];
+  // Under it, deeper shade between its wheels, so what shows of its far wheels sits in it rather than floating.
+  const under = [
+    P(x0 + 0.03, AXLES[0] - 0.3, 0.005),
+    P(x1 - 0.03, AXLES[0] - 0.3, 0.005),
+    P(x1 - 0.03, AXLES[1] + 0.3, 0.005),
+    P(x0 + 0.03, AXLES[1] + 0.3, 0.005),
+  ];
   const shapes: Shape[] = [
     { d: B.cam.poly(foot), fill: SHADOW, opacity: 0.32 },
-    ...far,
+    { d: B.cam.poly(under), fill: SHADOW, opacity: 0.45 },
+    ...strip(byDepth(farWheels)),
     ...strip(byDepth(mirrors.far)),
     ...sorted,
     ...strip(byDepth(mirrors.near)),
-    ...near,
+    ...strip(byDepth(nearWheels)),
     ...lines,
   ];
   B.add(B.cam.depth(P((x0 + x1) / 2, 2.4, 0.7)), ...(inGarage ? shapes.map((x) => ({ ...x, inside: true })) : shapes));
