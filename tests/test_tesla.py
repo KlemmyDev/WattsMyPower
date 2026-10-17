@@ -276,6 +276,9 @@ def test_the_household_taking_over_is_noticed() -> None:
     assert control.taken_over(charging, mem, 1000 + control.GRACE - 1) is None
     assert "started outside" in (control.taken_over(charging, mem, 1000 + control.GRACE) or "")
     mem = Memory(command="start", command_at=1000, amps=8, amps_at=1000)
+    # Taken but never begun (the car still waking, say): not the household's doing, so it's started again.
+    assert control.taken_over(car(timestamp=1_900_000), mem, 2000) is None
+    mem.charged = True
     assert "stopped outside" in (control.taken_over(car(timestamp=1_900_000), mem, 2000) or "")
     changed = car(charging_state="Charging", charge_current_request=12, timestamp=1_900_000)
     assert "to 12 A" in (control.taken_over(changed, mem, 2000) or "")
@@ -810,6 +813,36 @@ def test_starting_in_the_tesla_app_puts_it_on_hold_until_unplugged(svc: TeslaSer
     tessie.charge(charging_state="Disconnected")
     minutes(svc, live, clock, 1, grid=0)
     assert svc.status()["vehicles"][0]["hold"] is None
+
+
+def test_a_start_the_car_took_but_never_began_is_tried_again_not_held(svc: TeslaService, provider: str,
+                                                                     tessie: FakeTessie, live: FakeLive,
+                                                                     clock: Clock) -> None:  # fmt: skip
+    connect(svc, provider)
+    svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 3, "car_min_amps": 5, "car_amps": 16})
+    svc.configure(VIN, {"mode": "solar"})
+    takes = tessie.command
+
+    def lazy(vin: str, name: str, **params: Any) -> bool:  # says yes to the start, and doesn't begin
+        if name == "start_charging":
+            tessie.commands.append((name, params))
+            return True
+        return takes(vin, name, **params)
+
+    tessie.command = lazy  # type: ignore[method-assign]
+    minutes(svc, live, clock, 5, spare=5000)
+    assert tessie.commands.count(("start_charging", {})) == 1
+    tessie.command = takes  # type: ignore[method-assign]
+    minutes(svc, live, clock, 10, spare=5000)
+    v = svc.status()["vehicles"][0]
+    # Not on hold for the rest of the day: started again, and charging.
+    assert v["hold"] is None and v["state"]["charging"]
+    assert tessie.commands.count(("start_charging", {})) == 2
+    assert any("didn't begin charging" in e["text"] for e in svc.log())
+    # Once it's charged, a stop in the Tesla app is the household's: held.
+    tessie.charge(charging_state="Stopped")
+    minutes(svc, live, clock, 5, spare=5000)
+    assert "stopped outside" in (svc.status()["vehicles"][0]["hold"] or "")
 
 
 def test_charging_away_from_home_is_left_alone(svc: TeslaService, provider: str, tessie: FakeTessie,
@@ -1554,6 +1587,94 @@ def test_an_asleep_car_isnt_charging_whatever_it_last_said() -> None:
     clock.t += 60
     state = control.parse(VIN, client.vehicles({VIN: "active"})[0]["last_state"], HOME, in_range=True)
     assert state.asleep and state.plugged and not state.charging
+
+
+class SleepyCar:
+    """A car asleep and plugged in, as tesla-fleet-api gives it: asking for its charge never wakes it (the library
+    wakes a car only for a command); it waits out the car's silence and fails. wake_up wakes it, if it will."""
+
+    def __init__(self, wakes: bool = True) -> None:
+        self.wakes, self.awake = wakes, False
+        self.said: list[Any] = []
+
+    async def vehicle_state(self) -> Any:
+        from tesla_protocol.command import vcsec_pb2 as vc
+
+        s = vc.VehicleStatus(vehicleSleepStatus=vc.VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_AWAKE if self.awake
+                             else vc.VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP)  # fmt: skip
+        s.closureStatuses.chargePort = vc.ClosureState_E.CLOSURESTATE_OPEN
+        return s
+
+    async def wake_up(self, wait: bool = False, timeout: float = 30.0) -> None:
+        from tesla_fleet_api.exceptions import BluetoothTimeout
+
+        self.said.append(("wake", wait, timeout))
+        if not self.wakes:
+            raise BluetoothTimeout()
+        self.awake = True
+
+    async def charge_state(self) -> Any:
+        from tesla_fleet_api.exceptions import BluetoothTimeout
+        from tesla_protocol.command import vehicle_pb2
+
+        self.said.append("charge")
+        if not self.awake:
+            raise BluetoothTimeout()
+        cs = vehicle_pb2.ChargeState(battery_level=61)
+        cs.charging_state.Stopped.SetInParent()
+        return cs
+
+
+def read_sleepy(monkeypatch: pytest.MonkeyPatch, car: SleepyCar, wake: bool) -> dict[str, Any]:
+    import asyncio
+
+    monkeypatch.setattr(bluetooth, "_talk", lambda vin, key, then, wake, hold=None: then(car))
+    monkeypatch.setattr(bluetooth, "_converse", lambda make: asyncio.run(make()))
+    return bluetooth._read_now(VIN, "key", True, wake, True)
+
+
+def test_a_read_that_may_wake_the_car_wakes_it_before_asking_for_its_charge(monkeypatch: pytest.MonkeyPatch) -> None:
+    car = SleepyCar()
+    out = read_sleepy(monkeypatch, car, wake=True)
+    assert car.said == [("wake", True, bluetooth.WAKE_SECONDS), "charge"]
+    assert out["woke"] and not out["asleep"] and out["charge_state"]["battery_level"] == 61
+    assert out["charge_state"]["charging_state"] == "Stopped" and not out.get("wake_failed")
+    # It won't wake: its charge isn't asked for (it would only time out), and it's left asleep for a while.
+    car = SleepyCar(wakes=False)
+    out = read_sleepy(monkeypatch, car, wake=True)
+    assert car.said == [("wake", True, bluetooth.WAKE_SECONDS)] and out["wake_failed"] and out["asleep"]
+    # Not to be woken: left asleep, nothing asked of it.
+    car = SleepyCar()
+    out = read_sleepy(monkeypatch, car, wake=False)
+    assert car.said == [] and out["asleep"] and out["charge_state"] is None and not out.get("woke")
+
+
+def test_a_held_link_wakes_the_car_for_a_command_even_if_a_read_made_it_without(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = bluetooth.new_key()
+    car = SimpleNamespace(client=SimpleNamespace(is_connected=True), wake_if_asleep=False)  # made by a quiet read
+    monkeypatch.setattr(bluetooth, "_HELD", {VIN: (key, car)})
+    seen: list[bool] = []
+
+    async def then(c: Any) -> dict[str, Any]:
+        seen.append(c.wake_if_asleep)
+        return {}
+
+    bluetooth._run(lambda: bluetooth._talk(VIN, key, then, wake=True))
+    bluetooth._run(lambda: bluetooth._talk(VIN, key, then, wake=False))
+    assert seen == [True, False]
+
+
+def test_a_car_that_wakes_is_started_without_waiting_out_failed_tries(ble: TeslaService, radio: FakeRadio,
+                                                                      live: FakeLive, clock: Clock) -> None:  # fmt: skip
+    # Starts failed while it slept: tried again only after a while. Woken from the Tesla app, it's tried at once.
+    ble._remember(VIN, Memory(failures=4, failed_at=int(clock())))
+    minutes(ble, live, clock, 5, grid=500)
+    assert ble.status()["vehicles"][0]["state"]["asleep"] and ble._memory(VIN).failures == 4
+    radio.asleep = False
+    minutes(ble, live, clock, 5, grid=500)
+    assert ble._memory(VIN).failures == 0
 
 
 def test_a_command_that_doesnt_wake_the_car_says_so() -> None:
