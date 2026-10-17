@@ -1715,8 +1715,8 @@
 .atm-fade {
   transition: opacity 1s ease;
 }
-/* The roof in Solar's sky (SolarRoof): power running along each row of panels, a band of light crossing the glass,
-   cloud shadows drifting over the sheet. All by transform or dash offset. */
+/* The house in Solar's sky (SolarHouse): power running along each row of panels, a band of light crossing the glass. All by
+   transform or dash offset. */
 .roof-comet {
   animation: roofComet var(--dur) cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
@@ -1739,20 +1739,21 @@
     transform: translateX(760px);
   }
 }
-.roof-cloud {
-  animation: roofCloud 46s ease-in-out infinite alternate;
+/* The first showing of the Solar page in a visit: the house picture starts low on its wall and tilts up to the roof. */
+.house-tilt {
+  animation: houseTilt 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) 0.25s both;
 }
-@keyframes roofCloud {
+@keyframes houseTilt {
   from {
-    transform: translateX(-220px);
+    transform: translateY(var(--lift));
   }
   to {
-    transform: translateX(260px);
+    transform: none;
   }
 }
 /* A device that can't keep up (lite effects): the fields and fog hold still, which leaves only the rain moving (and,
    on the roof, the power along its panels). */
-.atm-lite :is(.roof-sheen, .roof-cloud) {
+.atm-lite .roof-sheen {
   animation: none;
 }
 .atm-lite :is(.atm-field, .atm-fog, .atm-bloom) {
