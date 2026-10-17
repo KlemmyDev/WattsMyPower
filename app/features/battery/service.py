@@ -60,6 +60,15 @@ MIN_CHARGE_W = 500
 LABELS = {"standby": "Standby", "floor": "Reserve", "charge": "Grid charge"}
 
 
+def _wording(event: dict[str, Any]) -> dict[str, Any]:
+    """A logged event with its text in today's wording. Older events were saved with "(stopped)", which doesn't say who
+    stopped it, so they read the way new ones do."""
+    text = event.get("text")
+    if isinstance(text, str) and "ended (stopped)" in text:
+        return {**event, "text": text.replace("ended (stopped)", "ended (you stopped it)")}
+    return event
+
+
 class BatteryError(ValueError):
     """A control that can't be done, in words; `status` is the HTTP status to answer with."""
 
@@ -283,7 +292,7 @@ class BatteryService:
     def log(self, limit: int = 50) -> list[dict[str, Any]]:
         """What the controls did (and what was seen of other controllers), newest first: at most `limit`."""
         events: list[dict[str, Any]] = self._kv(LOG_KEY) or []
-        return list(reversed(events))[: max(1, min(limit, LOG_KEPT))]
+        return [_wording(e) for e in reversed(events)][: max(1, min(limit, LOG_KEPT))]
 
     def _recorded(self) -> None:
         """Make sure the control in effect has its row: one started before controls were recorded (or whose row
@@ -423,7 +432,7 @@ class BatteryService:
     # -- what the dashboard shows ----------------------------------------------------------------
     def view(self) -> dict[str, Any]:
         driver = self._driver()
-        events = list(reversed(self._kv(LOG_KEY) or []))[:10]
+        events = [_wording(e) for e in reversed(self._kv(LOG_KEY) or [])][:10]
         if driver is None:
             reason = (
                 "Connect the inverter first (Manage → Integrations)."
