@@ -120,7 +120,7 @@ export function BillHero({
           />
           <HeroStat
             label="Saved"
-            value={dollars(Math.max(0, s.without_solar - s.net_cost))}
+            value={dollars(Math.max(0, Math.round(s.without_solar) - Math.round(s.net_cost)))}
             sub={`On ${dollars(s.without_solar)} grid only`}
           />
         </HeroStats>
