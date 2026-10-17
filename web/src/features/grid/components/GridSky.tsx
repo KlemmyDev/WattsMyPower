@@ -147,7 +147,7 @@ export function useGridHero({
         { label: ahead ? "Likely bought" : "Bought", value: kWh(by.imp), sub: `Cost ${money(by.cost)}` },
         { label: ahead ? "Likely sold" : "Sold", value: kWh(by.exp), sub: `Earned ${money(by.earn)}` },
         {
-          label: scrubbed ? `Price at ${when}` : "Price now",
+          label: scrubbed ? `Your rate at ${when}` : "Your rate now",
           value: rate ? centsShort(rate.rate) : DASH,
           sub: !rate
             ? "Set your rates"
