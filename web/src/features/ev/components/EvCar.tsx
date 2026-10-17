@@ -1,19 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { ApiError, errorMessage } from "~/features/common/api/utils";
+import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, minutesLabel, shortDay } from "~/features/common/formatting/utils/date";
 import { sameDay } from "~/features/common/time/utils";
-import { pct } from "~/features/common/formatting/utils/number";
+import { kW, pct } from "~/features/common/formatting/utils/number";
 import { useNow } from "~/features/common/time/hooks";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card, TitleBlock } from "~/features/common/ui/components/Card";
+import { Collapse } from "~/features/common/ui/components/Collapse";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
+import { CardText, Facts, SmallCard } from "~/features/common/ui/components/SmallCard";
 import { cn } from "~/features/common/ui/utils";
 import { detailsQuery } from "~/features/ev/api";
-import { useRefreshDetails } from "~/features/ev/hooks";
-import type { DetailGroup, EvDetailGroups, EvDetails as Details, SoftwareUpdate } from "~/features/ev/types";
+import { CarSteps } from "~/features/ev/components/CarSteps";
+import { freshness, readiness } from "~/features/ev/components/EvHero";
+import type { Reached } from "~/features/ev/components/ProviderChip";
+import { useEvChange, useRefreshDetails } from "~/features/ev/hooks";
+import type { DetailGroup, EvDetailGroups, EvDetails as Details, EvVehicle, SoftwareUpdate } from "~/features/ev/types";
+import { carMood, carTitle } from "~/features/ev/utils";
 
 const yes = (v: boolean | null | undefined, on = "Yes", off = "No") => (v == null ? "—" : v ? on : off);
 const temp = (c: number | null | undefined) => (c == null ? "—" : `${c.toFixed(1)} °C`);
@@ -60,7 +65,9 @@ function Group<T>({
   children: (data: T) => ReactNode;
 }) {
   return (
-    <section className={cn("flex min-w-0 flex-col rounded-2xl border border-line-subtle p-4", className)}>
+    <section
+      className={cn("flex min-w-0 flex-col rounded-xl border border-line-subtle bg-fg/3 px-3 py-2.5", className)}
+    >
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="m-0 text-sm font-semibold">{title}</h3>
         <span
@@ -107,7 +114,7 @@ function parked(g: Partial<EvDetailGroups>): DetailGroup<object> | undefined {
 function Groups({ d, now }: { d: Details; now: number }) {
   const g: Partial<EvDetailGroups> = d.groups;
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3">
+    <div className="flex flex-col gap-2.5">
       <Group title="Doors and security" group={g.status} now={now} free>
         {(s) => (
           <>
@@ -230,87 +237,113 @@ function Groups({ d, now }: { d: Details; now: number }) {
   );
 }
 
-/**
- * Everything else the car says about itself, group by group, each with when it was read. Its status (locked, doors,
- * someone in it) is read without waking it; the rest only while it's awake (over Bluetooth every 15 minutes, through
- * Tessie as Tessie has it). Refresh reads it all now, and asks first when that would wake the car.
- */
-export function EvDetails({ vin, name, className }: { vin: string; name: string; className?: string }) {
-  const now = useNow(30_000);
-  const { data: d, error, isPending } = useQuery(detailsQuery(vin));
-  const refresh = useRefreshDetails();
-  const [asking, setAsking] = useState(false);
-  const run = (wake: boolean) =>
-    refresh.mutate(
-      { vin, wake },
-      {
-        onSuccess: () => setAsking(false),
-        // Asleep after all (it fell asleep since): ask.
-        onError: (e) => e instanceof ApiError && e.status === 409 && !wake && setAsking(true),
-      },
-    );
-  const sleepy = !!d?.refresh_wakes;
-  const askingNow = asking || (refresh.isError && refresh.error instanceof ApiError && refresh.error.status === 409);
+/** Its tyres in a few words: all fine, or which to check. */
+function tyres(d: Details): string | null {
+  const t = d.groups.tyres?.data;
+  if (!t) return null;
+  const check = TYRES.filter(([k]) => t.warnings.includes(k)).map(([, label]) => label.toLowerCase());
+  return check.length ? `Check ${check.join(", ")}` : "All fine";
+}
 
+/**
+ * The car itself, as a small card: where it is between asleep, awake and charging, what it's doing in a sentence (and
+ * while it waits for spare solar, how closely it's followed), how fresh that is, a few facts about it (odometer, locks,
+ * cabin, tyres, software), and one button to read it now (waking it when it's asleep: the button says so) or hand it
+ * back to the dashboard. Everything else it says about itself is folded away under "Everything else", group by group.
+ */
+export function EvCar({ v, provider, className }: { v: EvVehicle; provider: Reached | null; className?: string }) {
+  const now = useNow(30_000);
+  const { data: d, error } = useQuery(detailsQuery(v.vin));
+  const refresh = useRefreshDetails();
+  const { command } = useEvChange("tesla");
+  const [open, setOpen] = useState(false);
+  const s = v.state;
+  const mood = carMood({ status: v.status, mode: v.control.mode, asleep: s?.asleep, charging: s?.charging });
+  const ready = readiness(v, provider);
+  const g: Partial<EvDetailGroups> = d?.groups ?? {};
+  const odometer = g.driving?.data?.odometer_km ?? null;
+  const asleep = !!s?.asleep && s.in_range !== false;
   return (
-    <Card aria-labelledby={`h-td-${vin}`} className={cn("gap-4", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <TitleBlock
-          id={`h-td-${vin}`}
-          title="Car details"
-          sub={
-            d?.provider === "bluetooth"
-              ? "Read every 15 minutes while the car's awake. It's never woken just for these."
-              : "From Tessie's latest read. The car's never woken just for these."
-          }
-        />
-        {!askingNow && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={refresh.isPending || !d}
-            onClick={() => (sleepy ? setAsking(true) : run(false))}
-            title={sleepy ? "The car's asleep. You'll be asked before it's woken." : "Read everything now"}
-          >
-            {refresh.isPending ? "Reading…" : sleepy ? "Refresh…" : "Refresh"}
-          </Button>
-        )}
+    <SmallCard
+      id={`h-td-${v.vin}`}
+      title={v.name ?? carTitle(v)}
+      note={[v.year, v.name ? carTitle(v) : null].filter(Boolean).join(" · ") || undefined}
+      className={className}
+    >
+      <CarSteps
+        step={mood.step}
+        color={mood.color}
+        detail={mood.step === "charging" && s?.power_kw ? kW(s.power_kw * 1000) : null}
+      />
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm text-pretty">{v.doing}</span>
+        {ready && <span className="text-[13px] text-pretty text-ink-muted">{ready}</span>}
+        <span className="text-xs text-ink-faint tabular-nums">{freshness(v, provider)}</span>
       </div>
-      {askingNow && (
-        <Notice tone="warn" className="flex flex-wrap items-center justify-between gap-3">
-          <span className="min-w-0 flex-1 text-pretty">
-            <b className="font-semibold">{name} is asleep.</b> Reading its details wakes it, and it stays awake for a
-            while using a little power. Its locks and doors (below) are already up to date.
-          </span>
-          <span className="flex items-center gap-3">
-            <Button size="sm" disabled={refresh.isPending} onClick={() => run(true)}>
-              {refresh.isPending ? "Waking…" : "Wake and refresh"}
-            </Button>
-            <Button
-              variant="muted-link"
-              size="sm"
-              onClick={() => {
-                setAsking(false);
-                refresh.reset();
-              }}
-            >
-              Cancel
-            </Button>
-          </span>
-        </Notice>
-      )}
-      {refresh.isError && !(refresh.error instanceof ApiError && refresh.error.status === 409) && (
-        <HelpText tone="bad">{errorMessage(refresh.error)}</HelpText>
-      )}
+      <Facts
+        rows={[
+          odometer != null && ["Odometer", `${Math.round(odometer).toLocaleString("en-AU")} km`],
+          g.status?.data?.locked != null && ["Locked", yes(g.status.data.locked)],
+          g.climate?.data?.inside_c != null && ["Inside", temp(g.climate.data.inside_c)],
+          d && tyres(d) != null && ["Tyres", tyres(d)],
+          g.software?.data && [
+            "Software",
+            update(g.software.data.update) === "Up to date"
+              ? (g.software.data.version ?? "Up to date")
+              : update(g.software.data.update),
+          ],
+          g.charging?.data?.pilot_amps != null && ["The charger offers", `${g.charging.data.pilot_amps} A`],
+        ]}
+      />
       {d?.overrides_solar && (
         <Notice tone="warn">
           {d.overrides_solar}. When it does, the dashboard leaves it charging and takes over again once it's unplugged.
           Turn it off in the car (Charging → Schedule) to charge from spare solar only.
         </Notice>
       )}
-      {isPending && <p className="m-0 text-sm text-ink-muted">Loading…</p>}
-      {error && <p className="m-0 text-sm text-bad">{errorMessage(error)}</p>}
-      {d && <Groups d={d} now={now} />}
-    </Card>
+      <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={refresh.isPending || s?.in_range === false}
+          title={asleep ? "Wakes it and reads it now. It stays awake a while after." : "Reads everything now"}
+          onClick={() => refresh.mutate({ vin: v.vin, wake: asleep })}
+        >
+          {refresh.isPending ? (asleep ? "Waking the car…" : "Reading…") : asleep ? "Wake and read" : "Refresh"}
+        </Button>
+        {v.hold && v.control.mode !== "off" && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={command.isPending}
+            onClick={() => command.mutate({ vin: v.vin, action: "resume" })}
+          >
+            Let the dashboard take over
+          </Button>
+        )}
+        <Button
+          variant="muted-link"
+          size="sm"
+          aria-expanded={open}
+          aria-controls={`more-${v.vin}`}
+          className="ml-auto"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Less" : "Everything else"}
+        </Button>
+      </div>
+      {(refresh.isError || command.isError || error) && (
+        <HelpText tone="bad">{errorMessage(refresh.error ?? command.error ?? error)}</HelpText>
+      )}
+      {refresh.isSuccess && asleep && <HelpText>Woken and read. It stays awake a while, then sleeps again.</HelpText>}
+      <Collapse open={open} id={`more-${v.vin}`} className="flex flex-col gap-3 pt-1">
+        <CardText>
+          {d?.provider === "bluetooth"
+            ? "Read every 15 minutes while the car's awake. It's never woken just for these."
+            : "From Tessie's latest read. The car's never woken just for these."}
+        </CardText>
+        {d && <Groups d={d} now={now} />}
+      </Collapse>
+    </SmallCard>
   );
 }

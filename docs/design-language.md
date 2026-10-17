@@ -23,6 +23,9 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
   `flex min-w-0 flex-col gap-5`. On one column, use `max-3xl:contents` and `max-3xl:order-N` to put the most useful
   card (controls, say) first.
 - Balance the columns by moving cards around, never by making anything sticky.
+- Simple cards, three across (Grid's, in `features/grid/components/GridCards.tsx`): a small title with a word on it
+  in the corner, one picture (hour bars, a short list, a range bar) and a sentence on what it means. Two across on a
+  narrower page and one on a phone (an `@container` grid). The fuller versions stay dashboard widgets.
 
 ## The sky hero (the live pages)
 
@@ -115,6 +118,22 @@ The hero has two widget forms: `chart={false}` ("X at a glance") and `chart` ("X
 On a dashboard, `HeroCard` names its page and links there (from the widget's group, via `WidgetFrame`), and it lays
 itself out by its own width (a container), so phone stacking inside a hero uses `@max-xl:` and two-across stats
 `@max-2xl:`, not viewport breakpoints.
+
+## Small cards (the live pages, EV first)
+
+Under the sky card, a live page can lay its cards out as a grid of small cards instead of two columns (EV does; the
+other live pages move over as they're touched). The kit is `common/ui/components/SmallCard`:
+
+- `CardGrid`: three across where the page has room, two, then one (container queries, so it fits beside the side nav).
+  Cards in a row share its height, and each rises in after the one before as the page opens (`.card-grid` in app.css).
+- `SmallCard`: a short title (16 px, semibold) and, on its right, a faint note that frames it ("Last 30 days",
+  "Share sun on", "62% now"). Then what answers it, and a line or two of `CardText`. Radius 22 px, padding 20 × 22.
+- `ChoiceTiles` for a choice of two to four (how it charges, timing presets, who gets the sun first): an icon, a name
+  and a few words each, the chosen one lit in its colour. `null` lights none (a setting of your own).
+- `Facts` for a few name–value rows.
+- One question per card, and fewer things in each: split a big card into several small ones rather than stacking
+  rows inside one. A card that only matters in one mode (solar charging's) leaves itself out otherwise. Rare detail
+  goes in a `Collapse` behind a quiet link ("Everything else"); a heat strip reads a day out in the note as you point.
 
 ## Cards below the hero
 

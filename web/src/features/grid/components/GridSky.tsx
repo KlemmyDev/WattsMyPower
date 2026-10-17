@@ -11,8 +11,9 @@ import type { RateRun } from "~/features/common/tariffs/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
 import { dateKey, midnight } from "~/features/common/time/utils";
 import { useUsualImport } from "~/features/grid/hooks";
+import type { ForecastHour, Forecast } from "~/features/common/weather/types";
 import type { GridView } from "~/features/grid/types";
-import { LEVEL } from "~/features/grid/utils";
+import { LEVEL, wholesaleKind } from "~/features/grid/utils";
 import { rateAt } from "~/features/home/components/RateStrip";
 import { useRates } from "~/features/home/hooks";
 import { useLiveDay } from "~/features/live/hooks";
@@ -20,6 +21,8 @@ import type { LiveHero, LiveMoment, Stat } from "~/features/live/types";
 import { seriesAt } from "~/features/live/utils/day";
 
 const DAY = 86_400;
+const HOUR = 3600;
+const HALF = 1800;
 /** Below this a price is cheap, at or above `DEAR` it's the peak (dollars a kWh). */
 const CHEAP = 0.18;
 const DEAR = 0.3;
@@ -27,9 +30,10 @@ const DEAR = 0.3;
 /**
  * Grid's part of the live pages' top card (LiveCard), under the sky with the street, its poles and the line to your
  * meter in it: its title, a line on what you're buying or selling and at what price, power to and from the grid through
- * the day as the chart (buying above the line, selling below, with the price of each half hour under it; dragging along
- * it moves the sky and the figures), and the figures: what today's cost you or earned you so far (counted up), what's
- * flowing now, what you bought and sold, the price now and the voltage at your house.
+ * the day as the chart (buying above the line, selling below, the rest of today as the forecast has it dashed, with
+ * the wholesale price of each half hour under it, or your rates while AEMO isn't followed; dragging along
+ * it moves the sky and the figures), and the figures: what today's cost so far (counted up, with the supply charge, as
+ * Today so far has it), what's flowing now, what you bought and sold, the price now and the voltage at your house.
  *
  * `series` is the grid's day as the Grid page reads it (power and voltage every 5 minutes).
  */
@@ -38,11 +42,13 @@ export function useGridHero({
   p,
   s,
   series,
+  f,
 }: {
   grid: GridView | undefined;
   p: Snapshot | null;
   s: SystemInfo | undefined;
   series: HistorySeries | undefined;
+  f?: Forecast | null;
 }): LiveHero {
   const { now, start, rise, set } = useLiveDay();
   const { data: costs } = useQuery(costsQuery(midnight(now)));
@@ -78,33 +84,70 @@ export function useGridHero({
       }
       return { imp, exp, cost, earn };
     };
+    // The rest of today as the forecast has it (its solar, the house's usual use and the battery between them): each
+    // hour's grid energy, as power over the part of the hour still to come.
+    const hours = (f?.hours ?? []).filter((h) => h.ts + HOUR > now && h.ts < start + DAY);
+    const span = (h: ForecastHour) => Math.max(60, h.ts + HOUR - Math.max(h.start, now));
+    const estAt = (t: number) => {
+      const h = hours.find((x) => x.ts <= t && t < x.ts + HOUR);
+      return h ? (h.grid_kwh * 1000 * HOUR) / span(h) : null;
+    };
+    // What's likely bought and sold between now and `t`, and what it costs and earns, at the prices of the time.
+    const likelyBy = (t: number) => {
+      let imp = 0;
+      let exp = 0;
+      let cost = 0;
+      let earn = 0;
+      for (const h of hours) {
+        const a = Math.max(h.start, now);
+        const b = Math.min(h.ts + HOUR, t);
+        if (b <= a) continue;
+        const k = (h.grid_kwh * (b - a)) / span(h);
+        const mid = (a + b) / 2;
+        if (k > 0) {
+          imp += k;
+          cost += k * (rateAt(rates, mid)?.rate ?? 0);
+        } else {
+          exp -= k;
+          earn -= k * (feedAt(mid) ?? 0);
+        }
+      }
+      return { imp, exp, cost, earn };
+    };
     // Today so far, live: the inverter's counters and the bill's figures when there are; else from the readings.
     const sofar = byT(now);
     const bought = p?.daily_import ?? sofar.imp;
     const sold = p?.daily_export ?? sofar.exp;
     const cost = bill?.import_cost ?? sofar.cost;
     const earned = bill?.feed_in_credit ?? sofar.earn;
+    // The day's supply charge: the bill counts all of it from midnight.
+    const supply = bill?.supply ?? 0;
     const whole = Math.max(bought, usual.day ?? 0, 0.1) * 1.08;
     const pc = (v: number) => Math.min(100, (v / whole) * 100);
 
     const at = (view: number, scrubbed: boolean): LiveMoment => {
       const ahead = view > now + 60;
       const when = hhmm(view);
-      const w = scrubbed ? (ahead ? null : seriesAt(series, "grid_power", view)) : (p?.grid_power ?? null);
+      const w = scrubbed ? (ahead ? estAt(view) : seriesAt(series, "grid_power", view)) : (p?.grid_power ?? null);
       const buying = w != null && w > ON;
       const selling = w != null && w < -ON;
       const rate = rateAt(rates, view);
       const feed = feedAt(view);
-      const by = scrubbed ? byT(view) : { imp: bought, exp: sold, cost, earn: earned };
-      const net = by.cost - by.earn;
+      const was = scrubbed ? byT(view) : { imp: bought, exp: sold, cost, earn: earned };
+      const will = ahead ? likelyBy(view) : null;
+      const by = will
+        ? { imp: was.imp + will.imp, exp: was.exp + will.exp, cost: was.cost + will.cost, earn: was.earn + will.earn }
+        : was;
+      // What today's cost so far, as Today so far has it: bought, less what selling earned, with the supply charge.
+      const total = scrubbed ? by.cost - by.earn + supply : (bill?.net_cost ?? by.cost - by.earn);
       const volts = scrubbed ? seriesAt(series, "grid_voltage", view) : (p?.grid_voltage ?? null);
       const cheapTill = rate && rate.rate < CHEAP && (rates?.length ?? 0) > 1 ? nextDear(rates, view) : null;
       const [value, unit] = (w == null ? DASH : kW(Math.abs(w))).split(" ");
       const stats: Stat[] = [
-        { label: "Bought", value: kWh(by.imp), sub: `Cost ${money(by.cost)}` },
-        { label: "Sold", value: kWh(by.exp), sub: `Earned ${money(by.earn)}` },
+        { label: ahead ? "Likely bought" : "Bought", value: kWh(by.imp), sub: `Cost ${money(by.cost)}` },
+        { label: ahead ? "Likely sold" : "Sold", value: kWh(by.exp), sub: `Earned ${money(by.earn)}` },
         {
-          label: "Price now",
+          label: scrubbed ? `Price at ${when}` : "Price now",
           value: rate ? centsShort(rate.rate) : DASH,
           sub: !rate
             ? "Set your rates"
@@ -123,10 +166,10 @@ export function useGridHero({
         },
       ];
       return {
-        story: story({ scrubbed, level, reason, w, rate, feed, cheapTill, view }),
+        story: story({ scrubbed, ahead, level, reason, w, rate, feed, cheapTill, view }),
         lead: {
-          label: `${net >= 0 ? "Spent" : "Ahead"} ${scrubbed ? `by ${when}` : "today"}`,
-          value: money(Math.abs(net)),
+          label: `${ahead ? "Likely " : ""}${total >= 0 ? (ahead ? "cost" : "Cost") : ahead ? "credit" : "Credit"} ${scrubbed ? `by ${when}` : "today"}`,
+          value: money(Math.abs(total)),
           unit: "",
         },
         slim: {
@@ -136,18 +179,21 @@ export function useGridHero({
           ticks: usual.byNow != null ? [{ at: pc(usual.byNow), title: "What a usual day's bought by now" }] : [],
         },
         second: {
-          label: `${buying ? "Buying" : selling ? "Selling" : "Balanced"} ${scrubbed ? `at ${when}` : "now"}`,
+          label: `${ahead ? "Likely " : ""}${buying ? (ahead ? "buying" : "Buying") : selling ? (ahead ? "selling" : "Selling") : ahead ? "balanced" : "Balanced"} ${scrubbed ? `at ${when}` : "now"}`,
           value,
           unit,
-          sub: buying
-            ? rate
-              ? `At ${centsShort(rate.rate)} a kWh`
-              : "From the grid"
-            : selling
-              ? feed != null
-                ? `Earning ${centsShort(Math.max(0, feed))} a kWh`
-                : "To the grid"
-              : "Solar and battery have it covered",
+          sub:
+            ahead && w == null
+              ? "No forecast for then yet"
+              : buying
+                ? rate
+                  ? `At ${centsShort(rate.rate)} a kWh`
+                  : "From the grid"
+                : selling
+                  ? feed != null
+                    ? `Earning ${centsShort(Math.max(0, feed))} a kWh`
+                    : "To the grid"
+                  : "Solar and battery have it covered",
           live: !scrubbed && (buying || selling),
           color: buying ? COLOR.import : selling ? COLOR.solar : alpha(COLOR.fg, 0.4),
         },
@@ -169,12 +215,36 @@ export function useGridHero({
           set={set}
           view={k.view}
           live={k.scrubbed ? null : (p?.grid_power ?? null)}
+          ahead={hours.map((h) => ({
+            t: Math.max(h.start, now),
+            to: h.ts + HOUR,
+            w: (h.grid_kwh * 1000 * HOUR) / span(h),
+          }))}
+          estAt={estAt}
+          prices={halfHours(grid, start)}
           onScrub={k.onScrub}
           controls={k.controls}
         />
       ),
     };
-  }, [s, amber, series, now, p, bill, usual, rates, level, reason, start, rise, set]);
+  }, [s, amber, series, now, p, bill, usual, rates, level, reason, start, rise, set, f, grid]);
+}
+
+/** A half hour's wholesale price ($/MWh): the five-minute prices in it where there are, else AEMO's forecast. */
+type HalfHour = { from: number; price: number; forecast: boolean };
+
+/** Today half hour by half hour at the wholesale price, or nothing while AEMO isn't followed or has given no prices. */
+function halfHours(grid: GridView | undefined, start: number): HalfHour[] {
+  if (!grid?.enabled || !grid.prices.length) return [];
+  const out: HalfHour[] = [];
+  for (let a = start; a < start + DAY; a += HALF) {
+    const inside = grid.prices.filter((x) => x.price != null && x.at > a && x.at <= a + HALF);
+    const actual = inside.filter((x) => !x.forecast);
+    const use = actual.length ? actual : inside;
+    if (use.length)
+      out.push({ from: a, price: use.reduce((t, x) => t + x.price!, 0) / use.length, forecast: !actual.length });
+  }
+  return out;
 }
 
 /** When the price next reaches the usual or the peak after `t`, or null today. */
@@ -188,6 +258,7 @@ function nextDear(rates: RateRun[] | undefined, t: number): number | null {
  */
 function story(x: {
   scrubbed: boolean;
+  ahead: boolean;
   level: GridView["outlook"]["level"];
   reason: string | null;
   w: number | null;
@@ -198,7 +269,14 @@ function story(x: {
 }): string {
   if (!x.scrubbed && x.level === "outage") return LEVEL.outage.sub;
   if (!x.scrubbed && x.level !== "normal") return x.reason ?? LEVEL[x.level].sub;
-  if (x.w == null) return "Waiting for the grid's first reading.";
+  if (x.w == null) return x.ahead ? "No forecast for then yet." : "Waiting for the grid's first reading.";
+  if (x.ahead) {
+    const kw = kW(Math.abs(x.w));
+    if (x.w < -ON)
+      return `Likely sending about ${kw} to the grid${x.feed != null && x.feed > 0 ? ` at ${centsShort(x.feed)} a kWh` : ""}.`;
+    if (x.w > ON) return `Likely buying about ${kw}${x.rate ? ` at ${centsShort(x.rate.rate)} a kWh` : ""}.`;
+    return "Likely barely touching the grid, with your solar and battery covering the house.";
+  }
   const kw = kW(Math.abs(x.w)).replace(" ", " "); // kept on one line
   if (x.w < -ON) {
     const at = x.feed != null && x.feed > 0 ? ` at ${centsShort(x.feed)} a kWh` : "";
@@ -227,9 +305,17 @@ function GridChart({
   set,
   view,
   live,
+  ahead,
+  estAt,
+  prices,
   onScrub,
   controls,
 }: {
+  /** The rest of today as the forecast has it: grid power (W, + buying) from `t` to `to`. */
+  ahead: { t: number; to: number; w: number }[];
+  estAt: (t: number) => number | null;
+  /** The wholesale price each half hour, drawn under the chart in place of your rates while there are any. */
+  prices: HalfHour[];
   series: HistorySeries | undefined;
   rates: RateRun[] | undefined;
   start: number;
@@ -245,7 +331,7 @@ function GridChart({
   const { lines, Y } = useMemo(() => {
     const ts = series?.t ?? [];
     const v = series?.grid_power ?? [];
-    const top = Math.max(1500, ...v.map((x) => Math.abs(x ?? 0))) * 1.1;
+    const top = Math.max(1500, ...v.map((x) => Math.abs(x ?? 0)), ...ahead.map((x) => Math.abs(x.w))) * 1.1;
     const zero = (H - 24) * 0.55;
     const Y = (w: number) => zero - (w / top) * zero * (w > 0 ? 0.92 : 0.7);
     const X = (t: number) => ((t - start) / DAY) * W;
@@ -265,6 +351,40 @@ function GridChart({
     }
     const close = (d: string) => (d ? `${d} L${X(last).toFixed(1)},${zero} L${X(first).toFixed(1)},${zero} Z` : "");
     const dear = (r: number) => (r < CHEAP / 1.8 ? COLOR.good : r >= DEAR ? COLOR.warn : alpha(COLOR.fg, 0.22));
+    // The rest of today, likely: the forecast's hours eased into one another every five minutes, buying and selling
+    // each as its own faint areas with a dashed edge, only where there's something to draw.
+    const mids = ahead.map((x) => ({ t: (x.t + x.to) / 2, w: x.w }));
+    const eased = (t: number) => {
+      if (!mids.length) return 0;
+      if (t <= mids[0].t) return mids[0].w;
+      const i = mids.findIndex((m) => m.t > t);
+      if (i < 0) return mids[mids.length - 1].w;
+      const a = mids[i - 1];
+      const b = mids[i];
+      return a.w + ((b.w - a.w) * (t - a.t)) / (b.t - a.t);
+    };
+    const runs = (sign: 1 | -1) => {
+      const fill: string[] = [];
+      const edge: string[] = [];
+      let run: [number, number][] = [];
+      const end = () => {
+        if (run.length > 1) {
+          const d = `M${run.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" L")}`;
+          edge.push(d);
+          fill.push(`${d} L${run[run.length - 1][0].toFixed(1)},${zero} L${run[0][0].toFixed(1)},${zero} Z`);
+        }
+        run = [];
+      };
+      for (let t = ahead[0]?.t ?? start + DAY; t <= start + DAY; t += 300) {
+        const w = eased(t);
+        if (w * sign > ON) run.push([X(t), Y(w)]);
+        else end();
+      }
+      end();
+      return { fill: fill.join(" "), edge: edge.join(" ") };
+    };
+    const likelyIn = runs(1);
+    const likelyOut = runs(-1);
     const lines = (
       <svg
         aria-hidden
@@ -282,27 +402,71 @@ function GridChart({
         />
         {imp && <path d={close(imp)} style={{ fill: alpha(COLOR.import, 0.45) }} />}
         {exp && <path d={close(exp)} style={{ fill: alpha(COLOR.solar, 0.4) }} />}
-        {(rates ?? []).map((r, i) => {
-          const a = Math.max(start, r.from);
-          const b = Math.min(start + DAY, r.to);
-          if (b <= a) return null;
-          return (
-            <rect
-              key={i}
-              x={X(a) + 1}
-              width={Math.max(1, X(b) - X(a) - 2)}
-              y={H - 12}
-              height={10}
-              rx={3}
-              style={{ fill: dear(r.rate), opacity: 0.8 }}
+        {likelyIn.fill && (
+          <>
+            <path d={likelyIn.fill} style={{ fill: alpha(COLOR.import, 0.14) }} />
+            <path
+              d={likelyIn.edge}
+              fill="none"
+              strokeWidth={1.5}
+              strokeDasharray="4 5"
+              vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.import, 0.8) }}
             />
-          );
-        })}
+          </>
+        )}
+        {likelyOut.fill && (
+          <>
+            <path d={likelyOut.fill} style={{ fill: alpha(COLOR.solar, 0.12) }} />
+            <path
+              d={likelyOut.edge}
+              fill="none"
+              strokeWidth={1.5}
+              strokeDasharray="4 5"
+              vectorEffect="non-scaling-stroke"
+              style={{ stroke: alpha(COLOR.solar, 0.75) }}
+            />
+          </>
+        )}
+        {prices.length > 0
+          ? prices.map((x) => {
+              const k = wholesaleKind(x.price);
+              return (
+                <rect
+                  key={x.from}
+                  x={X(x.from) + 1}
+                  width={Math.max(1, X(x.from + HALF) - X(x.from) - 2)}
+                  y={H - 12}
+                  height={10}
+                  rx={3}
+                  style={{
+                    fill: k === "cheap" ? COLOR.teal : k === "dear" ? COLOR.export : alpha(COLOR.fg, 0.22),
+                    opacity: x.forecast ? 0.45 : 0.85,
+                  }}
+                />
+              );
+            })
+          : (rates ?? []).map((r, i) => {
+              const a = Math.max(start, r.from);
+              const b = Math.min(start + DAY, r.to);
+              if (b <= a) return null;
+              return (
+                <rect
+                  key={i}
+                  x={X(a) + 1}
+                  width={Math.max(1, X(b) - X(a) - 2)}
+                  y={H - 12}
+                  height={10}
+                  rx={3}
+                  style={{ fill: dear(r.rate), opacity: 0.8 }}
+                />
+              );
+            })}
       </svg>
     );
     return { lines, Y };
-  }, [series, rates, start, now]);
-  const w = live ?? (view > now + 60 ? null : seriesAt(series, "grid_power", view));
+  }, [series, rates, start, now, ahead, prices]);
+  const w = live ?? (view > now + 60 ? estAt(view) : seriesAt(series, "grid_power", view));
   const dot = w != null && w < -ON ? COLOR.solar : COLOR.import;
 
   return (
@@ -322,6 +486,9 @@ function GridChart({
           style={{ top: `${(Y(0) / H) * 100}%` }}
         >
           Buying above, selling below
+        </span>
+        <span className="absolute right-0 bottom-[14px] text-[10.5px] text-ink-faint max-sm:hidden">
+          {prices.length ? "Wholesale price each half hour" : "Your rates"}
         </span>
         <span className="absolute inset-y-0 w-px bg-ink/55" style={{ left: pc(view) }} />
         {w != null && (

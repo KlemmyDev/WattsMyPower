@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
+import { CardGrid } from "~/features/common/ui/components/SmallCard";
 import { PageHeader } from "~/features/common/layout/components/PageHeader";
 import { ButtonLink } from "~/features/common/ui/components/Button";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
@@ -10,81 +11,52 @@ import { bluelinkQuery, bydQuery, teslaQuery } from "~/features/ev/api";
 import { BluelinkReads } from "~/features/ev/components/BluelinkReads";
 import { BydHero } from "~/features/ev/components/BydHero";
 import { Connection } from "~/features/ev/components/Connection";
-import { EvCharging } from "~/features/ev/components/EvCharging";
-import { EvDetails } from "~/features/ev/components/EvDetails";
+import { EvCar } from "~/features/ev/components/EvCar";
+import { EvCharging, EvLimits, EvSpareSun, EvSunFirst } from "~/features/ev/components/EvCharging";
+import { EvDays, EvTrips } from "~/features/ev/components/EvDays";
 import { EvHero } from "~/features/ev/components/EvHero";
-import { EvInOut } from "~/features/ev/components/EvInOut";
+import { EvLimit } from "~/features/ev/components/EvLimit";
+import { EvTiming } from "~/features/ev/components/EvTiming";
 import { useEvHero } from "~/features/ev/components/EvSky";
 import { NextRead } from "~/features/ev/components/NextRead";
 import type { BluelinkCar, EvVehicle, TeslaProvider } from "~/features/ev/types";
 import { carTitle, evTitle } from "~/features/ev/utils";
 import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 
-/** The columns under a car's hero, as Solar's, Home's and Battery's: the deeper story on the left, how it charges on
- * the right. On one column, how it charges comes first. */
-function Columns({ left, right }: { left: ReactNode; right: ReactNode }) {
+/** One Tesla's cards, under the top card (which has its charge, its day and its figures): how it charges and the
+ * sun there is for it, its limit, how its solar charging is timed and shared, its limits at home, its last 30 days, its
+ * trips and charges, and the car itself. Those only for solar charging leave themselves out otherwise. */
+function TeslaCards({ v, provider, now }: { v: EvVehicle; provider: TeslaProvider | null; now: number }) {
+  const hasBattery = useHasBattery();
   return (
-    <div className="live-cols grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
-      <div className="flex min-w-0 flex-col gap-5 max-3xl:order-2">{left}</div>
-      <div className="flex min-w-0 flex-col gap-5 max-3xl:order-1">{right}</div>
-    </div>
+    <CardGrid>
+      <EvCharging v={v} />
+      <EvSpareSun v={v} />
+      <EvLimit v={v} now={now} />
+      <EvTiming v={v} hasBattery={hasBattery} />
+      <EvSunFirst v={v} />
+      <EvLimits v={v} />
+      <EvDays vin={v.vin} now={now} />
+      <EvTrips vin={v.vin} now={now} />
+      <EvCar v={v} provider={provider} />
+    </CardGrid>
   );
 }
 
-/** One Tesla, in full: its charge limit, where it is and its day (its figures are in the top card), then its in and
- * out and everything else it says about itself beside how it charges. */
-function TeslaCar({
-  v,
-  provider,
-  alone,
-  now,
-}: {
-  v: EvVehicle;
-  provider: TeslaProvider | null;
-  alone: boolean;
-  now: number;
-}) {
+/** A Hyundai or Kia's cards, as a Tesla's, with how it's read in place of its days and details (its cloud keeps no
+ * day of it, nor details beyond its charge). */
+function BluelinkCards({ v, choices, now }: { v: BluelinkCar; choices: number[]; now: number }) {
+  const hasBattery = useHasBattery();
   return (
-    <>
-      <EvHero v={v} provider={provider} alone={alone} now={now} figures={false} />
-      <Columns
-        left={
-          <>
-            <EvInOut vin={v.vin} now={now} />
-            <EvDetails vin={v.vin} name={v.name ?? "The car"} />
-          </>
-        }
-        right={<EvCharging v={v} />}
-      />
-    </>
-  );
-}
-
-/** A Hyundai or Kia, as a Tesla is shown (its hero, then how it charges from the sun), beside how it's read and what
- * the dashboard did with it lately. Its cloud keeps no day of it to chart, nor details beyond its charge. */
-function BluelinkCarView({
-  v,
-  choices,
-  alone,
-  now,
-}: {
-  v: BluelinkCar;
-  choices: number[];
-  alone: boolean;
-  now: number;
-}) {
-  return (
-    <>
-      <EvHero
-        v={v}
-        provider={v.make === "Kia" ? "kia" : "hyundai"}
-        brand="bluelink"
-        alone={alone}
-        now={now}
-        figures={false}
-      />
-      <Columns left={<BluelinkReads v={v} choices={choices} />} right={<EvCharging v={v} brand="bluelink" />} />
-    </>
+    <CardGrid>
+      <EvCharging v={v} brand="bluelink" />
+      <EvSpareSun v={v} brand="bluelink" />
+      <EvLimit v={v} brand="bluelink" now={now} />
+      <EvTiming v={v} hasBattery={hasBattery} brand="bluelink" />
+      <EvSunFirst v={v} brand="bluelink" />
+      <EvLimits v={v} brand="bluelink" />
+      <BluelinkReads v={v} choices={choices} />
+    </CardGrid>
   );
 }
 
@@ -138,8 +110,6 @@ export function EvPage({ vin }: { vin?: string } = {}) {
   const byds = vin ? allByds.filter((v) => v.vin === vin) : allByds;
   const hks = vin ? allBluelink.filter((v) => v.vin === vin) : allBluelink;
   const cars = [...teslas, ...hks, ...byds];
-  // Only one car connected at all: what the house saw go to cars today is all its own.
-  const alone = allTeslas.length + allBluelink.length + allByds.length === 1;
   // One car shown: it's named for what it is (its own name is on its panel), with its model year.
   const one = cars.length === 1 ? cars[0] : null;
   // The Teslas' reach leads while any are shown, then a Hyundai or Kia's (a BYD panel says how fresh it is itself).
@@ -198,9 +168,9 @@ export function EvPage({ vin }: { vin?: string } = {}) {
         )}
         {one ? (
           teslas.length ? (
-            <TeslaCar v={teslas[0]} provider={data?.provider ?? null} alone={alone} now={now} />
+            <TeslaCards v={teslas[0]} provider={data?.provider ?? null} now={now} />
           ) : hks.length ? (
-            <BluelinkCarView v={hks[0]} choices={bluelink?.force_choices ?? []} alone={alone} now={now} />
+            <BluelinkCards v={hks[0]} choices={bluelink?.force_choices ?? []} now={now} />
           ) : (
             <BydHero v={byds[0]} />
           )

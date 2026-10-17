@@ -2,10 +2,9 @@ import { errorMessage } from "~/features/common/api/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { useNow } from "~/features/common/time/hooks";
 import { Button } from "~/features/common/ui/components/Button";
-import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { HelpText } from "~/features/common/ui/components/Field";
 import { Segmented } from "~/features/common/ui/components/Segmented";
-import { cn } from "~/features/common/ui/utils";
+import { CardText, SmallCard } from "~/features/common/ui/components/SmallCard";
 import { useBluelinkChange, useEvChange } from "~/features/ev/hooks";
 import type { BluelinkCar } from "~/features/ev/types";
 import { appName, EVENT_COLOR } from "~/features/ev/utils";
@@ -24,16 +23,15 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
   const app = appName(v.make);
   const wait = v.force_from != null && v.force_from > now;
   return (
-    <Card aria-labelledby={`h-bl-${v.vin}`} className={cn("gap-4", className)}>
-      <TitleBlock id={`h-bl-${v.vin}`} title="Reading the car" sub={`Through the ${app} cloud`} />
-      <Muted>
+    <SmallCard id={`h-bl-${v.vin}`} title="Reading the car" note={`Through ${app}`} className={className}>
+      <CardText>
         Every 15 minutes (every 5 while it could charge from solar), the dashboard reads what {app} last heard from the
-        car. This doesn't touch the car. The car only sends its state when it's plugged in or out, starts or stops
-        charging, or takes a command, so its charge can lag in between.
-      </Muted>
-      <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-4">
+        car, without touching the car. The car only sends its state when it's plugged in or out, starts or stops, or
+        takes a command, so its charge can lag in between.
+      </CardText>
+      <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-3.5">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <span className="text-sm font-semibold">Ask the car itself</span>
+          <span className="text-sm font-medium">Ask the car itself</span>
           <Segmented
             label="Ask the car itself"
             options={choices.map((c) => ({ value: String(c), label: EVERY[c] ?? `${c / 3600} h` }))}
@@ -42,11 +40,11 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
             buttonClassName="px-3 py-1.5 text-[13px]"
           />
         </div>
-        <Muted>
+        <CardText>
           {v.control.force_every
             ? `By day in Solar only mode, if what ${app} has is older than this, the car's asked for its state, so the dashboard knows it's plugged in and how full it is. Each ask wakes the car's modem and draws a little on its 12 V battery.`
             : `The dashboard never asks the car. It goes on what the car sends ${app} by itself, so plugging in may not show until the car next sends an update.`}
-        </Muted>
+        </CardText>
         <div className="flex flex-wrap items-center gap-3">
           <Button
             size="sm"
@@ -68,8 +66,8 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
         </div>
       </div>
       {configure.isError && <HelpText tone="bad">{errorMessage(configure.error)}</HelpText>}
-      <div className="flex flex-col gap-2 border-t border-line-subtle pt-4">
-        <span className="text-sm font-semibold">Lately</span>
+      <div className="flex flex-col gap-2 border-t border-line-subtle pt-3.5">
+        <span className="text-sm font-medium">Lately</span>
         {v.events.length ? (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
             {v.events.map((e) => (
@@ -84,9 +82,9 @@ export function BluelinkReads({ v, choices, className }: { v: BluelinkCar; choic
             ))}
           </ul>
         ) : (
-          <Muted>Nothing yet. Anything the dashboard does with the car will show up here.</Muted>
+          <CardText>Nothing yet. Anything the dashboard does with the car will show up here.</CardText>
         )}
       </div>
-    </Card>
+    </SmallCard>
   );
 }
