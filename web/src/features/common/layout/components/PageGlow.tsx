@@ -33,6 +33,8 @@ export function PageGlow() {
   useEffect(() => {
     const el = root.current;
     if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Where the browser ties an animation to the scroll, the CSS moves the shapes with it (app.css), off this thread.
+    if (CSS.supports?.("animation-timeline: scroll()")) return;
     let frame = 0;
     const set = () => {
       frame = 0;

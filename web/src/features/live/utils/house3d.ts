@@ -107,6 +107,11 @@ export type HouseArt = {
   h: number;
   /** Everything that stands still, as SVG markup, with an empty `<g data-slot>` for each of `slots`. */
   svg: string;
+  /**
+   * The same markup in layers, each drawn as its own SVG: those with slots (`live`) are what moves, the rest stand
+   * still, so what moves repaints only its own layer, never the thousands of shapes around it.
+   */
+  layers: { svg: string; live: boolean }[];
   slots: Slot[];
   kit: Kit | null;
   /** Where the sheen crosses the glass. */
@@ -2984,8 +2989,13 @@ export function houseArt(
     `<stop offset="0" stop-color="${hor}" stop-opacity="0"/><stop offset="1" stop-color="${hor}" stop-opacity=".7"/></linearGradient></defs>` +
     `<rect x="-600" y="${n1(h0 - 70)}" width="${w + 1200}" height="76" fill="url(#lh-haze)"/>`;
   const slots: Slot[] = [];
+  // Where each slot is in the markup, and the panel's clip it's inside (if it is), for cutting it into layers.
+  const marks: { at: number; end: number; open: string }[] = [];
+  let open = "";
   const slot = (x: Slot) => {
+    const at = svg.length;
     svg += `<g data-slot="${slots.length}"></g>`;
+    marks.push({ at, end: svg.length, open });
     slots.push(x);
   };
   const full = (fill: string, a: number) =>
@@ -3014,12 +3024,14 @@ export function houseArt(
     if (s.fill === "url(#lh-glass)") {
       // What a row of panels' glass shows: the sky's colour (more of it towards night), the warmth of making power and
       // a band of light crossing it (in its slot), wet in rain, the moon in it, then the light of the moment.
-      svg += `<clipPath id="lh-k${ci}"><path d="${s.d}"/></clipPath><g clip-path="url(#lh-k${ci++})">${full(hor, 0.16 + 0.3 * (1 - L))}`;
+      open = `<g clip-path="url(#lh-k${ci})">`;
+      svg += `<clipPath id="lh-k${ci++}"><path d="${s.d}"/></clipPath>${open}${full(hor, 0.16 + 0.3 * (1 - L))}`;
       slot({ kind: "glass", cells: s.cells ?? "" });
       if (light.rain > 0.01) svg += full("#c8d4ea", 0.18 * light.rain * 0.9);
       if (moon && moonA > 0.01)
         svg += `<ellipse cx="${n1(moon[0])}" cy="${n1(moon[1])}" rx="92" ry="14" fill="url(#lh-moon)" opacity="${moonA.toFixed(2)}"/>`;
       svg += `${full(shadeCol, shadeAmt)}</g>`;
+      open = "";
     }
     if (s.fill === "url(#lh-win)") {
       // A window darkens with the evening and lights up from inside: brighter low down, a blind shading its top, and a
@@ -3041,6 +3053,7 @@ export function houseArt(
     w,
     h,
     svg,
+    layers: layered(svg, marks),
     slots,
     kit: K,
     sheen: {
@@ -3055,6 +3068,38 @@ export function houseArt(
     if (cache.size > 24) cache.delete(cache.keys().next().value!);
   }
   return art;
+}
+
+/** Slots this close together (in characters of what stands between them) share a layer: a few shapes repainted with
+ * them cost less than another layer. */
+const NEAR_SLOTS = 12_000;
+
+/**
+ * The picture's markup cut into layers at its slots: what stands still before the first, the first slot to the last
+ * of those near it (and what's between them), what stands still after, and so on. A cut inside a panel's clip closes
+ * it on one side and opens it again on the other (its clip path is named across the page, so the next layer finds it).
+ */
+function layered(svg: string, marks: { at: number; end: number; open: string }[]): HouseArt["layers"] {
+  const out: HouseArt["layers"] = [];
+  let from = 0;
+  let open = "";
+  const push = (to: number, closeWith: string, live: boolean) => {
+    const body = svg.slice(from, to);
+    if (body) out.push({ svg: `${open}${body}${closeWith ? "</g>" : ""}`, live });
+  };
+  for (let i = 0; i < marks.length;) {
+    let j = i;
+    while (j + 1 < marks.length && marks[j + 1].at - marks[j].end < NEAR_SLOTS) j++;
+    push(marks[i].at, marks[i].open, false);
+    from = marks[i].at;
+    open = marks[i].open;
+    push(marks[j].end, marks[j].open, true);
+    from = marks[j].end;
+    open = marks[j].open;
+    i = j + 1;
+  }
+  push(svg.length, "", false);
+  return out;
 }
 
 // ------------------------------------------------------------------------------------------------- what moves over it
@@ -3081,10 +3126,20 @@ const CHARGE = "#7d97ff";
 const DRAIN = "#f2a65a";
 const EVC = "#4fd1c5";
 const IMPC = "#a3abff";
+/** The battery's and meter's lights' breath (s), as .house-pulse has it. */
+const PULSE = 2.4;
+
+/** How finely what moves follows the power: in twentieths, so a reading a few watts off another draws the same (its
+ * comets and sheen carry on rather than starting over). */
+const step20 = (f: number) => Math.round(f * 20) / 20;
+
+/** How far into a loop of `secs` an animation is at `now` (ms), as a delay that starts it there. */
+const into = (now: number, secs: number) => `animation-delay:-${((now / 1000) % secs).toFixed(3)}s`;
 
 /** Power along a line: a soft glow under it, and comets running along it, more, longer and quicker as `f` rises. */
-function flow(d: string, color: string, f: number, i: number, now: number) {
+function flow(d: string, color: string, raw: number, i: number, now: number) {
   if (!d) return "";
+  const f = step20(raw);
   const dur = 3.6 - 2.2 * f;
   const len = 4 + 7 * f;
   const n = f > 0.02 ? 1 + +(f > 0.25) + +(f > 0.5) + +(f > 0.75) : 0;
@@ -3105,13 +3160,13 @@ const reverse = (d: string) => (d ? `M${d.slice(1).split(" L").reverse().join(" 
  * and in or out of the battery, and its level on its face (blue charging, amber discharging) with its lights.
  */
 export function slotMarkup(art: HouseArt, slot: Slot, s: HouseState): string {
-  const f = s.on ? clamp01(s.share) : 0;
+  const f = s.on ? step20(clamp01(s.share)) : 0;
   if (slot.kind === "glass") {
     if (!s.on) return "";
     let out = `<rect x="-600" y="-600" width="${art.w + 1200}" height="${art.h + 1200}" fill="${PV}" fill-opacity="${(0.03 + 0.2 * f).toFixed(3)}"/>`;
     if (f > 0.06)
       out +=
-        `<g opacity="${(0.08 + 0.4 * f).toFixed(2)}"><g class="roof-sheen" style="animation-duration:${(10 - 5 * f).toFixed(1)}s">` +
+        `<g opacity="${(0.08 + 0.4 * f).toFixed(2)}"><g class="roof-sheen" style="animation-duration:${(10 - 5 * f).toFixed(2)}s;${into(s.now, 10 - 5 * f)}">` +
         `<rect x="${n1(art.sheen.x)}" y="-300" width="108" height="${art.h + 600}" fill="url(#lh-sheen)" fill-opacity=".4" transform="rotate(${art.sheen.rot.toFixed(1)} ${n1(art.sheen.cx)} ${n1(art.sheen.cy)})"/></g></g>`;
     if (slot.cells)
       out += `<path d="${slot.cells}" fill="none" stroke="#ffd08a" stroke-width=".8" opacity="${(0.03 + 0.15 * f).toFixed(2)}"/>`;
@@ -3135,7 +3190,7 @@ export function slotMarkup(art: HouseArt, slot: Slot, s: HouseState): string {
     const led = gk > 0.05 ? IMPC : gk < -0.05 ? DRAIN : "#4ade80";
     return (
       (flowing ? flow(gk > 0 ? slot.conduit : reverse(slot.conduit), col, gf, 10, s.now) : "") +
-      (slot.led ? `<path class="house-pulse" d="${slot.led}" fill="${led}"/>` : "")
+      (slot.led ? `<path class="house-pulse" d="${slot.led}" fill="${led}" style="${into(s.now, PULSE)}"/>` : "")
     );
   }
   const K = art.kit;
@@ -3159,7 +3214,7 @@ export function slotMarkup(art: HouseArt, slot: Slot, s: HouseState): string {
   const col = draining ? DRAIN : CHARGE;
   out += `<path d="${bar.track}" fill="#1c2430" opacity=".85"/><path d="${bar.fill}" fill="${col}" stroke="${col}" stroke-width="6" stroke-opacity=".25"/><path d="${bar.fill}" fill="${col}"/>`;
   if (charging && bar.up)
-    out += `<g style="--dur:1.8s" fill="none" stroke="#e3e9ff" stroke-width="3" stroke-linecap="round"><path class="roof-comet" d="${bar.up}" pathLength="100" stroke-dasharray="14 86" style="animation-delay:-${((s.now / 1000) % 1.8).toFixed(2)}s"/></g>`;
-  out += `<path class="house-pulse" d="${bar.led}" fill="${col}"/><path d="${bar.status}" fill="#4ade80"/>`;
+    out += `<g style="--dur:1.8s" fill="none" stroke="#e3e9ff" stroke-width="3" stroke-linecap="round"><path class="roof-comet" d="${bar.up}" pathLength="100" stroke-dasharray="14 86" style="${into(s.now, 1.8)}"/></g>`;
+  out += `<path class="house-pulse" d="${bar.led}" fill="${col}" style="${into(s.now, PULSE)}"/><path d="${bar.status}" fill="#4ade80"/>`;
   return out;
 }
