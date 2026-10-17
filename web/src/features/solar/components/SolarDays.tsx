@@ -44,8 +44,8 @@ export function SolarDays({
     ["Average", kWh(total / days.length)],
     ["Best", kWh(max)],
     ["Lowest", kWh(min)],
-    ["Forecast out by", acc?.mae_kwh != null ? kWh(acc.mae_kwh) : DASH],
-    ["Of what the weather allowed", weather != null ? pct(weather * 100) : DASH],
+    ["Usually off by", acc?.mae_kwh != null ? kWh(acc.mae_kwh) : DASH],
+    ["Of what the sun allowed", weather != null ? pct(weather * 100) : DASH],
   ];
   return (
     <Card>
@@ -70,7 +70,7 @@ export function SolarDays({
         {h != null && (
           <div className="flex items-end justify-between gap-x-6 gap-y-4 [grid-area:1/1]">
             <TitleBlock
-              title={shortDay.format(parseYmd(days[h].date))}
+              title={`${shortDay.format(parseYmd(days[h].date))}: ${kWh(days[h].kwh)}`}
               sub={[
                 days[h].forecast != null ? `Forecast ${kWh(days[h].forecast)}` : null,
                 days[h].ratio != null ? `${pct(days[h].ratio! * 100)} of what the weather allowed` : null,
