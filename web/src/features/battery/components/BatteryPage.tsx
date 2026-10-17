@@ -26,6 +26,7 @@ import { Card } from "~/features/common/ui/components/Card";
 import { EmptyState } from "~/features/common/ui/components/EmptyState";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
 import { homeQuery } from "~/features/home/api";
+import { sameDay } from "~/features/common/time/utils";
 import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 
 /** What the battery's up to, in a few words, for under the page's title. */
@@ -65,7 +66,16 @@ export function BatteryPage() {
   const { start, series } = useBatteryDay(now);
   const { data: home } = useQuery(homeQuery);
   const rooms = roomBatteries(home?.devices);
-  const hero = useBatteryHero({ v, p, s, mode, series, preview, draft });
+  const hero = useBatteryHero({
+    v,
+    p,
+    s,
+    mode,
+    series,
+    preview,
+    draft,
+    forecastFull: f?.summary.full_at && sameDay(f.summary.full_at, now) ? f.summary.full_at : null,
+  });
   useLiveHero(s && none ? null : hero);
   // Still reachable by its address on a solar-only system (it's left out of the navigation): say why it's empty.
   if (s && none)

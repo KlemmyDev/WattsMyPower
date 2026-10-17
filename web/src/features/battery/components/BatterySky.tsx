@@ -36,6 +36,7 @@ export function useBatteryHero({
   series,
   preview,
   draft,
+  forecastFull,
 }: {
   v: Supported | undefined;
   p: Snapshot | null;
@@ -45,6 +46,8 @@ export function useBatteryHero({
   /** What the control being set up would do, and its settings this moment (the Control card's), for the chart. */
   preview: BatteryPlan | null;
   draft: ControlRequest | null;
+  /** When today's forecast says the battery fills (the forecast's summary, as Overview and Plan show it). */
+  forecastFull: number | null;
 }): LiveHero {
   const day = useLiveDay();
   const { now, start, rise, set, expected } = day;
@@ -128,7 +131,8 @@ export function useBatteryHero({
       const full = st !== "charge" && st !== "discharge" && isFull(soc, top);
       const tint = st === "discharge" ? batteryTone(w) : ctl ? KIND_COLOR[ctl.kind] : COLOR.battery;
       const low = lowest(view, soc);
-      const fb = full ? null : fullBy(view);
+      // The same time Overview and Plan give, from the forecast, when it's still ahead; the chart's own line otherwise.
+      const fb = full ? null : !scrubbed && forecastFull != null && forecastFull > view ? forecastFull : fullBy(view);
       const pv = scrubbed ? pvAt(view) : (p?.pv_power ?? 0);
       const [value, unit] = (w == null ? DASH : kW(Math.abs(w))).split(" ");
       const doing =
