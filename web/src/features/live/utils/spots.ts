@@ -57,20 +57,21 @@ registerSpot("battery", (g, phone) => {
     : { eye: rel(M, 8.0, 9.25, 1.8), at: rel(M, 0.25, 0.9, 1.0), fov: 32, cx: 690, cy: 338 };
 });
 
-/** EV: on the driveway from out by the street, along the car's right side to its port; in the garage, from the
- * doorway's right-hand side looking in along it. */
+/** EV: the car three-quarters from behind, so its shape shows. On the driveway, low from out by the street on its
+ * right, along its side to its port; in the garage, from the left of the doorway, looking in along its left side. */
 registerSpot("ev", (g, phone) => {
   const C = g.car;
   if (C.inGarage) {
-    const dx = (g.garage?.x1 ?? 15.2) - 15.2;
+    // Never west of the house's side wall (x = 10): from there the house is drawn over the garage.
+    const dx = C.x0 - 10.88;
     return phone
-      ? { eye: [14.55 + dx, 14.2, 2.0], at: [13.5 + dx, 4.9, 0.9], fov: 48, cx: 320, cy: 300 }
-      : { eye: [14.55 + dx, 13.6, 2.0], at: [13.5 + dx, 4.9, 0.9], fov: 40, cx: 640, cy: 315 };
+      ? { eye: [Math.max(10.05, 8.6 + dx), 15.6, 2.1], at: [12.0 + dx, 4.5, 0.95], fov: 40, cx: 300, cy: 235 }
+      : { eye: [Math.max(10.05, 9.0 + dx), 18.0, 2.2], at: [12.1 + dx, 4.5, 0.95], fov: 33, cx: 560, cy: 245 };
   }
-  const dx = C.x0 - 11;
+  const dx = C.x0 - 11.95;
   return phone
-    ? { eye: [20 + dx, 21, 2.3], at: [12 + dx, 11, 0.8], fov: 42, cx: 320, cy: 300 }
-    : { eye: [20.8 + dx, 21.6, 2.4], at: [12 + dx, 11, 0.8], fov: 34, cx: 640, cy: 330 };
+    ? { eye: [20.5 + dx, 21.5, 2.5], at: [12.4 + dx, 10.6, 0.95], fov: 36, cx: 300, cy: 235 }
+    : { eye: [20.5 + dx, 20.5, 2.5], at: [12.4 + dx, 10.6, 0.95], fov: 33, cx: 590, cy: 250 };
 });
 
 /** Grid: from across the street to the west, the poles and wires in front, the line to the house and its meter. */
