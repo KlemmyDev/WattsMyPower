@@ -609,6 +609,7 @@ export function EvCharging({
             <Icon name="bolt" size={15} /> Start charging
           </Button>
         )}
+        {!s?.plugged && !s?.charging && <HelpText>Plug the car in at home to start charging.</HelpText>}
         {fixed ? (
           <span className="text-xs text-ink-faint tabular-nums">Charges at {kW(fixed.min_w ?? 0)}</span>
         ) : auto ? (
