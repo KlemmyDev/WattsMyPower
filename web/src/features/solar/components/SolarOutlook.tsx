@@ -126,8 +126,8 @@ export function SolarOutlook({
       {acc?.mae_kwh != null && <p className="text-[13px] text-ink-muted">{closeness(acc)}</p>}
       <Footnote>
         {range
-          ? `Sunlight is kWh/m² on flat ground. The shaded range is where 8 in 10 of the last ${range.days} days landed against their forecast.`
-          : "Sunlight is kWh/m² on flat ground."}
+          ? `Dot: the forecast. Shaded band: the likely range, where 8 in 10 of the last ${range.days} days landed against their forecast. Sunlight is kWh/m², the sun's energy on a flat square metre.`
+          : "Sunlight is kWh/m², the sun's energy on a flat square metre."}
       </Footnote>
     </Card>
   );
