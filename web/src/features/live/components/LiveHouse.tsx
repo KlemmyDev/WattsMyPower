@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
-import { reducedMotion } from "~/features/common/display/utils";
+import { reducedMotion, savedDisplay } from "~/features/common/display/utils";
 import type { HouseOptions } from "~/features/overview/utils/house/layout";
 import {
   FRAME,
@@ -9,17 +9,37 @@ import {
   slotMarkup,
   type HouseArt,
   type HouseState,
+  type Op,
   type Light,
   type Pose,
   type SceneParts,
 } from "~/features/live/utils/house3d";
+import { drawOps } from "~/features/live/utils/houseCanvas";
 import { pacer } from "~/features/live/utils/pace";
 import { between, FLIGHT_MS, INTRO_MS, spotPose } from "~/features/live/utils/spots";
+
+/** The most pixels per CSS pixel a flight's canvas draws at. */
+const FLIGHT_DPR = 2;
+/** How long the flight's canvas takes to fade in over the house's picture as it takes off, and off it as it lands (ms). */
+const SWAP_MS = 200;
 
 /** Once a visit: Solar's tilt up from the house to its roof. */
 const TILTED = "wmp-solar-tilt";
 
 type Flight = { from: Pose; to: Pose; t0: number; ms: number; raf: number; frame: FrameRequestCallback };
+
+/** How long the old picture takes to fade out over the new one (ms), when the page fades rather than flies. */
+const FADE_MS = 380;
+
+/**
+ * How this browser moves between the live pages (Settings → Account → Appearance): the camera flies, the picture
+ * fades, or it just changes. "Auto" flies, or fades on a device that can't keep up (`lite`); less motion always cuts.
+ */
+function moveBy(lite: boolean): "fly" | "fade" | "off" {
+  if (reducedMotion()) return "off";
+  const t = savedDisplay().transition;
+  return t === "auto" ? (lite ? "fade" : "fly") : t;
+}
 
 /** At rest, the house is drawn again at most this often (ms) as the day's scrubbed or played (lite: half as often). */
 const REST_MS = 100;
@@ -32,8 +52,9 @@ const REST_MS = 100;
  * of the sky) and is lit by the real sun and the sky (house3d.ts), with what moves (the power, the battery's level, the
  * light over it all) laid over it.
  *
- * The first time Solar opens in a visit, the camera starts low on the wall and the garden and tilts up to the roof (not
- * with motion turned down).
+ * The first time Solar opens in a visit, the camera starts low on the wall and the garden and tilts up to the roof (only
+ * when the pages fly). Set to fade (or on a device that can't keep up), the new spot is drawn once under the old
+ * picture, which fades out over it.
  *
  * React draws the frame and nothing in it: the house is SVG markup written straight into layers of their own (house3d's
  * `layers`), so a flight or a scrub never re-renders thousands of paths. What moves (the power, the glass's sheen,
@@ -59,6 +80,9 @@ export const LiveHouse = memo(function LiveHouse({
   lite: boolean;
 }) {
   const box = useRef<HTMLDivElement>(null);
+  const cvs = useRef<HTMLCanvasElement>(null);
+  const onCanvas = useRef(false);
+  const swap = useRef<Animation | null>(null);
   const hkey = houseKey(house);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the house as drawn, by what makes it differ
   const g = useMemo(() => geometry(house), [hkey]);
@@ -81,6 +105,18 @@ export const LiveHouse = memo(function LiveHouse({
   /** Draws the house through `at`: its picture (kept, unless it's a flight's frame) and what moves over it. */
   const paint = (at: Pose, keep: boolean) => {
     const L = latest.current;
+    if (onCanvas.current && keep) {
+      // Landed: the SVG picture (with what moves, and the trees' every face) shows again under the flight's canvas,
+      // which fades off it.
+      onCanvas.current = false;
+      if (box.current) box.current.style.visibility = "";
+      const cv = cvs.current;
+      if (cv) {
+        swap.current?.cancel();
+        swap.current = cv.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SWAP_MS, easing: "ease-out" });
+        swap.current.onfinish = () => (cv.style.display = "none");
+      }
+    }
     const art = houseArt(L.house, L.phone, at, L.light, L.parts, L.lite, keep);
     pose.current = at;
     const el = box.current;
@@ -137,6 +173,36 @@ export const LiveHouse = memo(function LiveHouse({
     paint(latest.current.target, true);
   };
 
+  /** A flight's frame, drawn straight to the canvas from the projected shapes (no markup written or parsed). */
+  const flightFrame = (at: Pose) => {
+    const L = latest.current;
+    const cv = cvs.current;
+    const el = cv?.parentElement;
+    if (!cv || !el || !box.current) return paint(at, false);
+    const ops: Op[] = [];
+    const art = houseArt(L.house, L.phone, at, L.light, L.parts, L.lite, false, ops);
+    pose.current = at;
+    const dpr = Math.min(window.devicePixelRatio || 1, FLIGHT_DPR);
+    const W = Math.round(el.clientWidth * dpr);
+    const H = Math.round(el.clientHeight * dpr);
+    if (cv.width !== W || cv.height !== H) {
+      cv.width = W;
+      cv.height = H;
+    }
+    drawOps(cv, ops, art.w, art.h);
+    if (!onCanvas.current) {
+      // Taking off: the canvas fades in over the SVG picture, which then hides (its moving parts stop repainting).
+      onCanvas.current = true;
+      cv.style.display = "block";
+      const el = box.current;
+      swap.current?.cancel();
+      swap.current = cv.animate([{ opacity: 0 }, { opacity: 1 }], { duration: SWAP_MS, easing: "ease-out" });
+      swap.current.onfinish = () => {
+        if (onCanvas.current) el.style.visibility = "hidden";
+      };
+    }
+  };
+
   const fly = (from: Pose, ms: number, delay = 0) => {
     if (flight.current) cancelAnimationFrame(flight.current.raf);
     const f: Flight = {
@@ -163,35 +229,58 @@ export const LiveHouse = memo(function LiveHouse({
         paint(f.to, true);
         return;
       }
-      paint(between(f.from, f.to, k), false);
+      flightFrame(between(f.from, f.to, k));
       f.raf = requestAnimationFrame(frame);
     };
     f.frame = frame;
-    paint(from, false);
+    flightFrame(from);
     f.raf = requestAnimationFrame(frame);
   };
 
-  // A new spot (another page, or your house changed): fly there, or cut there with motion turned down.
+  // The new spot drawn once under the old picture, which fades out over it: its layers move to a cover of their own
+  // (nothing's copied), and the house is drawn into new ones.
+  const fade = () => {
+    const el = box.current;
+    if (flight.current) cancelAnimationFrame(flight.current.raf);
+    flight.current = null;
+    if (!el?.parentElement || !el.firstChild) return paint(latest.current.target, true);
+    el.parentElement.querySelector(".lh-fade")?.remove();
+    const cover = document.createElement("div");
+    cover.className = "lh-fade";
+    cover.style.animationDuration = `${FADE_MS}ms`;
+    while (el.firstChild) cover.appendChild(el.firstChild);
+    drawn.current = { art: null, layers: [], looks: [] };
+    el.parentElement.appendChild(cover);
+    paint(latest.current.target, true);
+    const done = () => cover.remove();
+    cover.addEventListener("animationend", done, { once: true });
+    window.setTimeout(done, FADE_MS + 200);
+  };
+
+  // A new spot (another page, or your house changed): fly there, fade there or cut there, as this browser's set to.
   const firstKey = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (firstKey.current == null) {
       firstKey.current = targetKey;
-      if (spot === "solar" && firstVisit()) fly(spotPose("solar-intro", g, phone), INTRO_MS, 250);
+      if (spot === "solar" && moveBy(lite) === "fly" && firstVisit())
+        fly(spotPose("solar-intro", g, phone), INTRO_MS, 250);
       else paint(target, true);
       return;
     }
     const from = pose.current;
     const samePage = firstKey.current.split("|")[0] === spot;
     firstKey.current = targetKey;
+    const move = moveBy(lite);
     // Only the size changed (a phone turned, a window resized), or there's nowhere to fly from: no flight.
-    if (!from || samePage || reducedMotion()) {
+    if (!from || samePage || move === "off") {
       if (flight.current && samePage) return; // a flight under way just lands on the new spot
       if (flight.current) cancelAnimationFrame(flight.current.raf);
       flight.current = null;
       paint(target, true);
       return;
     }
-    fly(from, FLIGHT_MS);
+    if (move === "fade") fade();
+    else fly(from, FLIGHT_MS);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- flies on a new spot only
   }, [targetKey]);
 
@@ -222,6 +311,7 @@ export const LiveHouse = memo(function LiveHouse({
         <HouseDefs w={w} h={h} />
       </svg>
       <div ref={box} className="contents" />
+      <canvas ref={cvs} className="absolute inset-0 size-full" style={{ display: "none" }} />
     </div>
   );
 });

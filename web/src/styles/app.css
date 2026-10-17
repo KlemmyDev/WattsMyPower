@@ -1779,6 +1779,18 @@
 .lh-live {
   will-change: transform;
 }
+/* The old picture fading out over the new one, when the live pages fade rather than fly. */
+.lh-fade {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+  animation: lhFade 380ms ease-out both;
+}
+@keyframes lhFade {
+  to {
+    opacity: 0;
+  }
+}
 /* The battery's light on its face, breathing. */
 .house-pulse {
   animation: housePulse 2.4s ease-in-out infinite;

@@ -17,8 +17,8 @@ import type { ThemeChoice } from "~/features/common/theme/utils";
 import { THEME_OPTIONS } from "~/features/common/theme/utils";
 import { useDisplay } from "~/features/common/display/hooks";
 import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
-import type { Clock, Density, Size } from "~/features/common/display/utils";
-import { CLOCK_OPTIONS, DENSITY_OPTIONS, SIZE_OPTIONS } from "~/features/common/display/utils";
+import type { Clock, Density, Size, Transition } from "~/features/common/display/utils";
+import { CLOCK_OPTIONS, DENSITY_OPTIONS, SIZE_OPTIONS, TRANSITION_OPTIONS } from "~/features/common/display/utils";
 import {
   ChoiceTiles,
   OptionList,
@@ -241,8 +241,62 @@ function Appearance() {
             }))}
           />
         </Choice>
+        <Choice
+          title="Moving between live pages"
+          help="Auto flies the house's camera to each page, or fades on a device that can't keep up."
+        >
+          <ChoiceTiles
+            label="Moving between live pages"
+            min="6rem"
+            phone={2}
+            value={display.transition}
+            onChange={(transition: Transition) => setDisplay({ transition })}
+            options={TRANSITION_OPTIONS.map((o) => ({
+              value: o.value,
+              title: o.label,
+              preview: (
+                <Plate wide>
+                  <TransitionPreview move={o.value} />
+                </Plate>
+              ),
+            }))}
+          />
+        </Choice>
       </div>
     </SettingsSection>
+  );
+}
+
+/** A small picture of a way between pages: two frames, and the camera's path between them (or their fade). */
+function TransitionPreview({ move }: { move: Transition }) {
+  const frame = (x: number, o = 1) => (
+    <rect x={x} y={9} width={30} height={19} rx={3} fill="currentColor" opacity={o * 0.85} />
+  );
+  return (
+    <svg viewBox="0 0 96 32" className="h-8 w-24 text-ink-muted" aria-hidden>
+      {move === "fade" ? (
+        <>
+          {frame(22, 0.35)}
+          {frame(44)}
+        </>
+      ) : (
+        <>
+          {frame(6)}
+          {frame(60)}
+        </>
+      )}
+      {(move === "fly" || move === "auto") && (
+        <path
+          d="M30 12 Q48 0 66 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeDasharray={move === "auto" ? "2 3" : undefined}
+        />
+      )}
+      {move === "off" && <path d="M48 11 V26" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />}
+    </svg>
   );
 }
 
