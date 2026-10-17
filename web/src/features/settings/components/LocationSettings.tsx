@@ -14,7 +14,14 @@ import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader
 
 const zoneLabel = (tz: string) => tz.replace(/_/g, " ");
 
-/** Every time zone the browser knows, Australia's first. */
+/** Old names for zones that browsers still list alongside the current ones (Asia/Calcutta is Asia/Kolkata now). */
+// prettier-ignore
+const LEGACY = new Set([
+  "Africa/Asmera", "Africa/Dar_es_Salaam", "America/Godthab", "Asia/Calcutta", "Asia/Rangoon", "Asia/Saigon",
+  "Europe/Kiev", "Pacific/Ponape", "Pacific/Truk",
+]);
+
+/** The time zones the browser knows, Australia's first, without the old names. */
 const ZONES = (() => {
   let all: string[] = [];
   try {
@@ -28,7 +35,7 @@ const ZONES = (() => {
     "Australia/Adelaide", "Australia/Broken_Hill", "Australia/Darwin", "Australia/Perth", "Australia/Eucla",
     "Australia/Lord_Howe",
   ];
-  return { aus, rest: all.filter((z) => !aus.includes(z)) };
+  return { aus, rest: all.filter((z) => !aus.includes(z) && !LEGACY.has(z)) };
 })();
 
 /** The time zone: the location's own (automatic), or one chosen. */
