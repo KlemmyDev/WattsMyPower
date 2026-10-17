@@ -13,11 +13,12 @@ set -eu
 
 umask 077  # databases, backups and anything else it makes are only the service's to read
 
-# Days roll over (and daily totals are added up) at midnight in TZ. install.sh sets it in .env; without it,
+# Days roll over (and daily totals are added up) at midnight in TZ until the location is set in the dashboard; then in
+# its time zone, or the one chosen in Settings → Location (app.core.timezone). install.sh sets TZ in .env; without it,
 # docker-compose.yml falls back to Brisbane and says so with an empty TZ_CHOSEN.
 export TZ="${TZ:-Australia/Brisbane}"
 if [ "${TZ_CHOSEN-unset}" = "" ]; then
-  echo "TZ isn't set in .env, so days roll over at midnight in $TZ. Set your time zone with bash install.sh --configure (or TZ=Australia/Perth, say, in .env)." >&2
+  echo "TZ isn't set in .env, so days roll over at midnight in $TZ until your location is set in the dashboard (then it's the location's time zone, or the one chosen in Settings → Location)." >&2
 elif [ ! -f "/usr/share/zoneinfo/$TZ" ]; then
   echo "TZ=$TZ isn't a time zone (they're named like Australia/Sydney), so times are UTC. Fix it with bash install.sh --configure (or in .env)." >&2
 fi

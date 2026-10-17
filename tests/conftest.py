@@ -26,3 +26,11 @@ def db(config: Config) -> Database:
 @pytest.fixture
 def readings(db: Database, config: Config) -> ReadingsRepository:
     return ReadingsRepository(db, config.poll_interval, config.raw_retention_days)
+
+
+@pytest.fixture(autouse=True)
+def _no_zone_lookups(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Saving a location looks up its time zone on the network: not in tests (they fake an answer where it matters)."""
+    from app.features.settings import router
+
+    monkeypatch.setattr(router, "zone_at", lambda lat, lon: None)

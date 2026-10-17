@@ -55,6 +55,8 @@ def test_defaults_come_from_the_config(db: Database, config: Config) -> None:
         "power_network": "auto",
         "inverter_places": [],
         "battery_places": [],
+        "time_zone": "auto",
+        "location_zone": None,
     }
 
 

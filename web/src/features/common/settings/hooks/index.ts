@@ -37,6 +37,8 @@ export function useSaveSettings() {
     mutationFn: (changes: Partial<Settings>) => apiSend<Settings>("PUT", "settings", changes),
     onSuccess: (saved, changes) => {
       patchSystem(qc, saved);
+      // Another time zone (chosen, or the new location's): every day and total was worked out in the old one.
+      if ("time_zone" in changes || "latitude" in changes) qc.invalidateQueries();
       if (WEATHER_SETTINGS.some((k) => k in changes)) {
         qc.invalidateQueries({ queryKey: ["forecast"] });
         qc.invalidateQueries({ queryKey: ["weather"] });
