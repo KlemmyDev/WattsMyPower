@@ -180,7 +180,7 @@ export function RunningNowCard({
   if (!running.length && !quiet) return null;
   const colors = deviceColors(devices, data?.rooms);
   return (
-    <Card aria-labelledby="h-running" className={cn("h-full gap-3", className)}>
+    <Card aria-labelledby="h-running" className={cn(running.length ? "h-full gap-3" : "gap-3 self-start", className)}>
       <div className="flex items-center justify-between gap-3">
         {compact ? (
           <span id="h-running" className="text-[13px] text-ink-muted">
