@@ -38,7 +38,6 @@ export function HomeSourcesCard({
     { key: "battery", label: "The battery", kwh: s.battery * k, color: SOURCES.battery },
     { key: "grid", label: "The grid", kwh: s.grid * k, color: SOURCES.grid },
   ];
-  const self = home > 0 ? 1 - (s.grid * k) / home : null;
   const whole = days.filter((d) => !d.partial);
   const month = whole.length
     ? whole.reduce((a, d) => a + d.home * d.ss, 0) /
@@ -51,12 +50,6 @@ export function HomeSourcesCard({
     <Card>
       <div className="flex items-end justify-between gap-3">
         <TitleBlock className="min-w-0 flex-1" title="Where it came from" sub="Today's home use so far" />
-        {self != null && (
-          <div className="flex flex-none flex-col items-end gap-0.5">
-            <span className="text-xs text-ink-faint">Self-sufficiency</span>
-            <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{pct(self * 100)}</span>
-          </div>
-        )}
       </div>
       {home > 0 ? (
         <Breakdown parts={parts} total={home} />
