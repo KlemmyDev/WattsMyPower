@@ -104,7 +104,7 @@ export function YourPanels({ p, s, now }: { p: Snapshot | null; s: SystemInfo | 
                 {strings.apart == null
                   ? "Both strings are resting."
                   : uneven && weak && strong
-                    ? `String ${weak.n} is about ${pct(strings.apart * 100)} behind string ${strong.n} right now. Strings that face different ways always differ, but if it's well behind in full sun, look for shade, dirt or a fault.`
+                    ? `String ${weak.n} is about ${pct((1 - (weak.w ?? 0) / Math.max(strong.w ?? 0, 1)) * 100)} behind string ${strong.n} right now. Strings that face different ways always differ, but if it's well behind in full sun, look for shade, dirt or a fault.`
                     : "Both strings are working evenly."}
               </span>
             </p>
