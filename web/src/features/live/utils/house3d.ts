@@ -83,6 +83,8 @@ type Shape = {
   win?: { x: number; y: number; w: number; h: number; k: number };
   /** A row of panels' glass: its cell gaps, for when they glow. */
   cells?: string;
+  /** Edged in its own colour this wide, so the faces of something curved meet without a hairline between them. */
+  seam?: number;
 };
 
 /** What's drawn of the moment besides the light: whether there's a car (its socket's on the wall), whether it's
@@ -236,19 +238,20 @@ const SKYLIGHT = unit([0.35, 0.55, 0.76]);
 
 /**
  * A colour in the light: brighter the more squarely its face meets the sun, warmer late in the day, darker and cooler
- * turned away. With the sun down, the soft light from the sky still tells the faces apart.
+ * turned away. With the sun down, the soft light from the sky still tells the faces apart. `wrap` lets the light reach
+ * a little past side-on, for something rounded.
  */
-function litRGB(c: Rgb, n: P3, sun: Light): Rgb {
+function litRGB(c: Rgb, n: P3, sun: Light, wrap = 0): Rgb {
   const dir = unit(lerp3(SKYLIGHT, sun.dir, sun.L));
   const str = 0.4 + 0.6 * sun.L;
-  const lam = Math.max(0, dot(n, dir));
+  const lam = Math.max(0, (dot(n, dir) + wrap) / (1 + wrap));
   const sky = 0.5 + 0.5 * n[2];
   const k = str * (0.7 * lam - 0.3 + 0.12 * sky);
   c = k >= 0 ? mix(c, [255, 251, 242], k * 0.6) : (c.map((v) => v * (1 + k)) as Rgb);
   c = mix(c, [255, 168, 104], sun.L * sun.warm * lam * 0.24);
   return mix(c, [104, 124, 170], str * (1 - lam) * 0.08);
 }
-const litColour = (fill: string, n: P3, sun: Light) => css(litRGB(rgb(fill), n, sun));
+const litColour = (fill: string, n: P3, sun: Light, wrap = 0) => css(litRGB(rgb(fill), n, sun, wrap));
 
 /** The outline around 2D points (monotone chain). */
 function hull(pts: P2[]): P2[] {
@@ -1526,133 +1529,649 @@ const sag = (a: P3, b: P3, s: number, n = 10): P3[] =>
   });
 
 /*
- * The car, a Model Y, as cross-sections along it from its rear bumper (u, metres) to its nose, measured off photos of
- * one side-on. Each has its sill's height (zb), its belt line, where the paint meets the side glass or the bonnet meets
- * the wings (zs), its top along the middle (zt), and how much of the car's full width it is there (f, rounding its ends
- * in plan). `k` is what's between it and the next: "paint" all over; "rear" the tailgate's glass between painted
- * pillars; "quarter" and "cabin" glass on top and at the sides; "screen" the windscreen beside the front doors' glass;
- * "pillar" the windscreen's foot between the black quarter lights; "hood" the bonnet. The key ones are eased between
- * (twice as many), so its curves read as curves.
+ * The car, a 2022 Model Y, drawn from Tesla's own side and plan drawings and its numbers: 4.751 m long, 2.89 between
+ * its axles, 1.624 high and 1.921 wide. Its body is cross-sections along it, from its rear bumper (u, metres) to its
+ * nose, each made from the curves below: its underside (zb), how wide it is at its widest (hw, its plan) and how high
+ * that is (zh), its belt line (zbelt) and roof rail (zr) and how far in each leans (fb, fr, parts of hw), and its top
+ * along the middle (zt, its side-on outline). Each runs up from the sill round its hips, over a rounded shoulder to the
+ * belt line, up the glass to the rail, then across the roof (or the bonnet, or the tailgate's lip) to the middle.
  */
-type CarKind = "paint" | "rear" | "quarter" | "cabin" | "screen" | "pillar" | "hood";
-type Station = { u: number; zb: number; zs: number; zt: number; f: number; k: CarKind };
-const KEY_STATIONS: Station[] = [
-  { u: 0, zb: 0.4, zs: 0.98, zt: 1.0, f: 0.8, k: "paint" },
-  { u: 0.035, zb: 0.33, zs: 1.13, zt: 1.16, f: 0.91, k: "paint" },
-  { u: 0.09, zb: 0.31, zs: 1.21, zt: 1.245, f: 0.955, k: "paint" },
-  { u: 0.16, zb: 0.3, zs: 1.235, zt: 1.275, f: 0.975, k: "rear" },
-  { u: 0.4, zb: 0.29, zs: 1.25, zt: 1.44, f: 0.99, k: "rear" },
-  { u: 0.7, zb: 0.28, zs: 1.262, zt: 1.55, f: 1, k: "quarter" },
-  { u: 1.0, zb: 0.27, zs: 1.252, zt: 1.6, f: 1, k: "cabin" },
-  { u: 1.45, zb: 0.27, zs: 1.228, zt: 1.64, f: 1, k: "cabin" },
-  { u: 1.9, zb: 0.27, zs: 1.205, zt: 1.65, f: 1, k: "cabin" },
-  { u: 2.3, zb: 0.27, zs: 1.182, zt: 1.59, f: 1, k: "screen" },
-  { u: 2.7, zb: 0.27, zs: 1.165, zt: 1.42, f: 1, k: "pillar" },
-  { u: 3.1, zb: 0.27, zs: 1.15, zt: 1.21, f: 0.995, k: "hood" },
-  { u: 3.5, zb: 0.27, zs: 1.045, zt: 1.1, f: 0.99, k: "hood" },
-  { u: 3.95, zb: 0.28, zs: 0.975, zt: 1.04, f: 0.985, k: "hood" },
-  { u: 4.3, zb: 0.28, zs: 0.925, zt: 0.995, f: 0.965, k: "hood" },
-  { u: 4.52, zb: 0.29, zs: 0.875, zt: 0.95, f: 0.92, k: "paint" },
-  { u: 4.66, zb: 0.3, zs: 0.79, zt: 0.85, f: 0.82, k: "paint" },
-  { u: 4.75, zb: 0.38, zs: 0.62, zt: 0.66, f: 0.62, k: "paint" },
-];
-/** Catmull-Rom between b and c, a and d either side. */
-const spline = (a: number, b: number, c: number, d: number, t: number) =>
-  b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
-const STATIONS: Station[] = KEY_STATIONS.flatMap((s, i, all) => {
-  if (i === all.length - 1) return [s];
-  const a = all[Math.max(0, i - 1)];
-  const c = all[i + 1];
-  const d = all[Math.min(all.length - 1, i + 2)];
-  const at = (key: "zb" | "zs" | "zt" | "f", t: number) => spline(a[key], s[key], c[key], d[key], t);
-  const half: Station = {
-    u: (s.u + c.u) / 2,
-    zb: at("zb", 0.5),
-    zs: at("zs", 0.5),
-    zt: 0,
-    f: Math.min(1, at("f", 0.5)),
-    k: s.k,
+type Curve = (u: number) => number;
+/** Numbers two at a time, as points. */
+const pairs = (xs: number[]): P2[] => Array.from({ length: xs.length / 2 }, (_, i) => [xs[2 * i], xs[2 * i + 1]]);
+/** A smooth curve through points (u, value, u, value...) that never overshoots them (a monotone cubic). */
+function curve(flat: number[]): Curve {
+  const keys = pairs(flat);
+  const n = keys.length;
+  const h = keys.slice(1).map(([u], i) => u - keys[i][0]);
+  const d = keys.slice(1).map(([, v], i) => (v - keys[i][1]) / h[i]);
+  const m = keys.map((_, i) => {
+    if (i === 0) return d[0];
+    if (i === n - 1) return d[n - 2];
+    if (d[i - 1] * d[i] <= 0) return 0;
+    const w1 = 2 * h[i] + h[i - 1];
+    const w2 = h[i] + 2 * h[i - 1];
+    return (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
+  });
+  return (u) => {
+    if (u <= keys[0][0]) return keys[0][1];
+    if (u >= keys[n - 1][0]) return keys[n - 1][1];
+    let i = 0;
+    while (keys[i + 1][0] < u) i++;
+    const t = (u - keys[i][0]) / h[i];
+    const [a, b] = [keys[i][1], keys[i + 1][1]];
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return (
+      (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * h[i] * m[i] + (-2 * t3 + 3 * t2) * b + (t3 - t2) * h[i] * m[i + 1]
+    );
   };
-  half.zt = Math.max(half.zs + 0.015, at("zt", 0.5));
-  return [s, half];
-});
-/** Where its wheels are along it, their tyres' radius, and their arches' (m). */
-const AXLES = [0.88, 3.8];
-const TYRE = 0.37;
-const ARCH = 0.5;
+}
+const CAR = {
+  zb: curve([
+    0, 0.47, 0.015, 0.41, 0.035, 0.375, 0.07, 0.345, 0.13, 0.31, 0.3, 0.27, 0.5, 0.235, 0.62, 0.22, 1.45, 0.185, 3.35,
+    0.185, 4.2, 0.205, 4.45, 0.215, 4.55, 0.225, 4.62, 0.26, 4.67, 0.31, 4.705, 0.38, 4.73, 0.46, 4.745, 0.53, 4.751,
+    0.6,
+  ]),
+  zt: curve([
+    0, 0.8, 0.015, 0.95, 0.035, 1.12, 0.052, 1.225, 0.065, 1.25, 0.1, 1.245, 0.16, 1.247, 0.28, 1.285, 0.44, 1.335,
+    0.61, 1.385, 0.77, 1.433, 0.94, 1.473, 1.09, 1.511, 1.24, 1.542, 1.39, 1.571, 1.54, 1.593, 1.69, 1.611, 1.87, 1.621,
+    2.0, 1.624, 2.13, 1.621, 2.28, 1.608, 2.43, 1.59, 2.58, 1.558, 2.73, 1.514, 2.88, 1.461, 3.02, 1.398, 3.17, 1.325,
+    3.32, 1.238, 3.47, 1.144, 3.56, 1.105, 3.66, 1.097, 3.77, 1.078, 3.92, 1.039, 4.09, 0.996, 4.25, 0.945, 4.42, 0.882,
+    4.52, 0.84, 4.6, 0.8, 4.65, 0.775, 4.69, 0.75, 4.718, 0.727, 4.737, 0.703, 4.751, 0.67,
+  ]),
+  hw: curve([
+    0, 0.12, 0.1, 0.43, 0.18, 0.65, 0.27, 0.762, 0.35, 0.826, 0.44, 0.864, 0.53, 0.893, 0.61, 0.916, 0.7, 0.936, 0.78,
+    0.946, 0.87, 0.954, 1.0, 0.961, 1.19, 0.957, 1.35, 0.948, 1.5, 0.929, 1.66, 0.916, 1.89, 0.913, 2.2, 0.907, 2.5,
+    0.904, 2.9, 0.916, 3.36, 0.936, 3.6, 0.951, 3.9, 0.961, 4.16, 0.951, 4.25, 0.945, 4.33, 0.925, 4.42, 0.884, 4.51,
+    0.797, 4.59, 0.666, 4.68, 0.5, 4.72, 0.4, 4.74, 0.32, 4.751, 0.18,
+  ]),
+  zh: curve([
+    0, 0.62, 0.05, 0.7, 0.18, 0.84, 0.45, 0.9, 0.98, 0.9, 1.45, 0.8, 2.2, 0.7, 3.2, 0.7, 3.87, 0.72, 4.4, 0.68, 4.6,
+    0.65, 4.7, 0.64, 4.751, 0.63,
+  ]),
+  zbelt: curve([
+    0, 0.71, 0.015, 0.86, 0.035, 1.03, 0.052, 1.17, 0.07, 1.205, 0.16, 1.21, 0.5, 1.2, 0.88, 1.19, 1.14, 1.188, 2.2,
+    1.124, 3.26, 1.068, 3.45, 1.05, 3.6, 1.045, 3.9, 1.0, 4.2, 0.925, 4.42, 0.855, 4.58, 0.79, 4.66, 0.755, 4.71, 0.725,
+    4.74, 0.7, 4.751, 0.688,
+  ]),
+  zr: curve([
+    0, 0.76, 0.015, 0.9, 0.035, 1.075, 0.052, 1.2, 0.07, 1.232, 0.16, 1.236, 0.3, 1.258, 0.6, 1.3, 0.871, 1.342, 1.082,
+    1.407, 1.33, 1.47, 1.64, 1.527, 1.949, 1.548, 2.197, 1.545, 2.383, 1.523, 2.631, 1.46, 2.879, 1.351, 3.095, 1.21,
+    3.26, 1.09, 3.42, 1.07, 3.6, 1.065, 3.9, 1.02, 4.2, 0.945, 4.42, 0.872, 4.58, 0.805, 4.66, 0.77, 4.71, 0.74, 4.74,
+    0.715, 4.751, 0.7,
+  ]),
+  fb: curve([0, 0.9, 0.1, 0.9, 0.4, 0.86, 0.8, 0.82, 1.05, 0.815, 1.4, 0.85, 1.8, 0.89, 2.4, 0.9, 4.751, 0.9]),
+  round: curve([0, 0.6, 0.06, 0.45, 0.2, 0.22, 0.45, 0, 4.1, 0, 4.35, 0.12, 4.55, 0.35, 4.68, 0.62, 4.751, 1]),
+  fr: curve([
+    0, 0.86, 0.1, 0.84, 0.3, 0.75, 0.6, 0.7, 1.0, 0.69, 1.4, 0.72, 2.0, 0.77, 2.3, 0.78, 2.7, 0.8, 3.1, 0.83, 3.4, 0.86,
+    3.6, 0.87, 4.751, 0.87,
+  ]),
+};
+/** Where its wheels are along it, their tyres' radius (255/45 R19), their arches' and their outer faces' (m). */
+const AXLES = [0.98, 3.87];
+const TYRE = 0.356;
+const ARCH = 0.44;
+const WHEEL_W = 0.93;
 const GLASS = "#161d26";
 const ROOF_GLASS = "#1c2531";
 const TRIM = "#131518";
-
-/** Its cross-section at `u`, between the stations either side. */
-function stationAt(u: number): Station {
-  const i = Math.max(0, STATIONS.findIndex((s) => s.u > u) - 1);
-  const a = STATIONS[i];
-  const b = STATIONS[Math.min(STATIONS.length - 1, i + 1)];
-  const t = b.u > a.u ? clamp01((u - a.u) / (b.u - a.u)) : 0;
-  return { u, zb: lerp(a.zb, b.zb, t), zs: lerp(a.zs, b.zs, t), zt: lerp(a.zt, b.zt, t), f: lerp(a.f, b.f, t), k: a.k };
-}
+const BLACK = "#1b1d21";
+const WELL = "#0d0e10";
+const PAINT = "paint";
+/** What stays dark whatever the light: it only catches a little of the sky. */
+const LAMP = "#1a1f27";
+const DARK = new Set([GLASS, ROOF_GLASS, TRIM, BLACK, WELL, LAMP]);
 
 /**
- * Its side at a station, [out from the middle, up]: the sill and its rounded foot, the widest (its hips, over the
- * wheels), the shoulder rolling in to the belt line, then the glass leaning in to a rounded roof (or, over the bonnet
- * and the tailgate's lip, the surface curving across).
+ * Its side at `u`, [out from the middle, up], from the sill up: the sill and its rounded foot, the hips (its widest),
+ * the shoulder rolling in to the belt line (point 7), the glass leaning in to the roof rail (10), then the roof (or the
+ * bonnet, or the lip) rounding over towards the middle.
  */
-function carSide(s: Station): [number, number][] {
-  const h = (CAR_W / 2) * s.f;
-  const g = s.zt - s.zs;
-  const zw = Math.min(s.zs - 0.14, Math.max(s.zb + 0.14, 0.7));
-  const glass = g > 0.12;
-  return (
-    [
-      [0.86, s.zb],
-      [0.94, s.zb + 0.07],
-      [1, zw],
-      [0.985, zw + 0.55 * (s.zs - zw)],
-      [0.94, s.zs - 0.03],
-      [0.88, s.zs + 0.012],
-      ...(glass
-        ? [
-            [0.8, s.zs + 0.5 * g],
-            [0.66, s.zt - 0.07],
-            [0.4, s.zt - 0.018],
-          ]
-        : [
-            [0.8, s.zs + 0.3 * g],
-            [0.62, s.zs + 0.68 * g],
-            [0.34, s.zt - 0.004],
-          ]),
-    ] as [number, number][]
-  ).map(([w, z]) => [w * h, z]);
+function carSide(u: number): P2[] {
+  const hw = CAR.hw(u);
+  const zb = CAR.zb(u);
+  const zt = CAR.zt(u);
+  const zr = Math.min(CAR.zr(u), zt - 0.008);
+  const zbelt = Math.min(CAR.zbelt(u), zr - 0.012);
+  const zh = Math.min(CAR.zh(u), zbelt - 0.06);
+  const wb = hw * CAR.fb(u);
+  const wr = hw * Math.min(CAR.fr(u), CAR.fb(u) - 0.02);
+  const pts: P2[] = [
+    [0.84 * hw, zb],
+    [0.94 * hw, zb + Math.min(0.045, 0.3 * (zh - zb))],
+    [0.985 * hw, zb + 0.45 * (zh - zb)],
+    [hw, zh],
+  ];
+  // The shoulder: straight up from the hips, then rolling in to the belt line.
+  const cz = zh + 0.7 * (zbelt - zh);
+  for (const t of [0.25, 0.5, 0.75, 1]) {
+    const s = 1 - t;
+    pts.push([s * s * hw + 2 * s * t * hw + t * t * wb, s * s * zh + 2 * s * t * cz + t * t * zbelt]);
+  }
+  // The glass, bowed out a little.
+  for (const t of [1 / 3, 2 / 3, 1])
+    pts.push([lerp(wb, wr, t) + 0.05 * (wb - wr) * Math.sin(Math.PI * t), lerp(zbelt, zr, t)]);
+  // Over the top: a quarter of a rounded square, from the rail to the middle.
+  for (const deg of [16, 34, 52, 71]) {
+    const a = (deg * Math.PI) / 180;
+    pts.push([wr * Math.pow(Math.cos(a), 0.8), zr + (zt - zr) * Math.pow(Math.sin(a), 0.8)]);
+  }
+  // Towards its nose and tail, each section rounds into a full oval about its widest, so both ends are smooth and
+  // bulge most around the height of the lights.
+  const e = CAR.round(u);
+  if (e <= 0) return pts;
+  return pts.map(([w, z], i): P2 => {
+    const a = (OVAL[i] * Math.PI) / 180;
+    const ow = hw * Math.pow(Math.cos(a), 0.75);
+    const oz = zh + (a < 0 ? zh - zb : zt - zh) * Math.sin(a);
+    return [lerp(w, ow, e), lerp(z, oz, e)];
+  });
+}
+/** Where each of a section's points sits round its oval (degrees up from its widest). */
+const OVAL = [-80, -66, -40, 0, 16, 30, 43, 53, 61, 68, 74, 79, 83, 86, 88.5];
+const SIDE_N = 15;
+/** How far out its surface is at `u` and height `z` (from the sill over the top), or -1 off it. */
+function carWidth(u: number, z: number): number {
+  const pts = [...carSide(u), [0, CAR.zt(u)] as P2];
+  if (z < pts[0][1] || z > pts[pts.length - 1][1]) return -1;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [w0, z0] = pts[i];
+    const [w1, z1] = pts[i + 1];
+    if (z <= z1) return z1 > z0 ? lerp(w0, w1, (z - z0) / (z1 - z0)) : w1;
+  }
+  return 0;
+}
+/** A point on its side (out from the middle `w`, along it `u`, up `z`), a little proud of it. */
+const carAt = (u: number, z: number, sg: number, out = 0.004): P3 => [sg * (carWidth(u, z) + out), u, z];
+/** A point on its tail (or nose) at `w` across and `z` up: the first of its cross-sections there. */
+function carEnd(w: number, z: number, nose: boolean): P3 {
+  let lo = nose ? 3.9 : 0;
+  let hi = nose ? CAR_L : 1.2;
+  for (let i = 0; i < 24; i++) {
+    const m = (lo + hi) / 2;
+    const inside = carWidth(m, z) >= Math.abs(w);
+    if (inside === nose) lo = m;
+    else hi = m;
+  }
+  return [w, nose ? lo + 0.004 : hi - 0.004, z];
 }
 
-/** A whole cross-section, from the sill on its left over the top to the sill on its right. */
-function carRing(s: Station): [number, number][] {
-  const side = carSide(s);
-  return [...side.map(([w, z]) => [-w, z] as [number, number]), [0, s.zt], ...[...side].reverse()];
+/*
+ * What's painted on its body, each as an outline flat in one of four views of it: side-on (along it, up), from above
+ * (along it, out from the middle), and wrapped round its tail or its nose (out from the middle plus how far round the
+ * corner, up), on the parts of its sections it belongs to: low (sill to belt line), the glass's (belt to rail) or the
+ * top. Each face of the body is cut by them, so they keep their shape across the faces without ever leaving them.
+ */
+type View = "side" | "plan" | "tail" | "nose";
+const LOW = 1;
+const SIDES = 2;
+const TOP = 4;
+type Decal = { view: View; on: number; fill: string; pts: P2[]; sg?: number };
+const ring = (cu: number, cz: number, r0: number, r1: number, from: number, to: number, n = 18): P2[] => {
+  const arc = (r: number) =>
+    Array.from({ length: n + 1 }, (_, i): P2 => {
+      const a = ((from + ((to - from) * i) / n) * Math.PI) / 180;
+      return [cu + r * Math.cos(a), cz + r * Math.sin(a)];
+    });
+  return r0 > 0 ? [...arc(r1), ...arc(r0).reverse()] : arc(r1);
+};
+const DECALS: Decal[] = [
+  // Its side windows, black-framed, back to the rear quarter window's point; the pillars between them gloss black.
+  {
+    view: "side",
+    on: SIDES,
+    fill: GLASS,
+    pts: pairs([
+      3.43,
+      0.9,
+      3.43,
+      2,
+      0.875,
+      2,
+      0.875,
+      CAR.zr(0.875) - 0.012,
+      0.96,
+      1.293,
+      1.06,
+      1.25,
+      1.17,
+      1.196,
+      1.18,
+      0.9,
+    ]),
+  },
+  {
+    view: "side",
+    on: SIDES,
+    fill: TRIM,
+    pts: pairs([2.1, 1, 2.22, 1, 2.11, 1.7, 1.99, 1.7]),
+  },
+  {
+    view: "side",
+    on: SIDES,
+    fill: TRIM,
+    pts: pairs([1.165, 1, 1.2, 1, 1.205, 1.7, 1.17, 1.7]),
+  },
+  // Its windscreen and glass roof, the rear glass narrower between painted pillars, down to the tailgate's lip.
+  {
+    view: "plan",
+    on: TOP,
+    fill: GLASS,
+    pts: pairs([3.565, 0, 3.55, 0.3, 3.51, 0.5, 3.45, 0.68, 3.39, 0.9, 2.31, 0.9, 2.27, 0.45, 2.25, 0]),
+  },
+  {
+    view: "plan",
+    on: TOP,
+    fill: ROOF_GLASS,
+    pts: pairs([2.25, 0, 2.27, 0.45, 2.31, 0.95, 1.05, 0.95, 1.05, 0]),
+  },
+  {
+    view: "plan",
+    on: TOP,
+    fill: GLASS,
+    pts: pairs([1.05, 0, 1.05, 0.95, 0.2, 0.95, 0.19, 0.5, 0.17, 0.25, 0.165, 0]),
+  },
+  // The black along its sills, then its wheel arches, dark inside with black lips.
+  {
+    view: "side",
+    on: LOW,
+    fill: BLACK,
+    pts: pairs([1.4, -0.1, 3.45, -0.1, 3.45, 0.25, 1.4, 0.262]),
+  },
+  ...AXLES.flatMap((ua): Decal[] => [
+    {
+      view: "side",
+      on: LOW,
+      fill: WELL,
+      pts: [...ring(ua, TYRE, 0, ARCH, -15, 195), [ua - 0.43, -0.3], [ua + 0.43, -0.3]],
+    },
+    { view: "side", on: LOW, fill: BLACK, pts: ring(ua, TYRE, ARCH - 0.004, ARCH + 0.032, -14, 194) },
+  ]),
+  // Its flush door handles, the camera on its front wing.
+  ...[
+    [2.27, 2.45, 0.968],
+    [1.3, 1.46, 1.006],
+  ].map(([u0, u1, z]): Decal => ({
+    view: "side",
+    on: LOW,
+    fill: TRIM,
+    pts: pairs([u0, z, u1, z, u1, z + 0.02, u0, z + 0.024]),
+  })),
+  {
+    view: "side",
+    on: LOW,
+    fill: TRIM,
+    pts: pairs([3.58, 0.866, 3.42, 0.866, 3.44, 0.842, 3.52, 0.815]),
+  },
+  // From behind: the tail lights, fullest at the corners, pointed on the tailgate and a short way round onto its sides
+  // (a bright line along their tops), the plate, the badge, and the black lower bumper with its reflectors.
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#5c0a10",
+    pts: pairs([
+      0.32, 1.12, 0.37, 1.114, 0.6, 1.126, 0.9, 1.133, 1.08, 1.131, 1.15, 1.124, 1.17, 1.13, 1.19, 1.11, 1.16, 1.06,
+      1.07, 1.0, 0.92, 0.978, 0.75, 0.99, 0.55, 1.04, 0.32, 1.106,
+    ]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#e2333b",
+    pts: pairs([
+      0.37, 1.1225, 0.6, 1.135, 0.9, 1.142, 1.08, 1.14, 1.15, 1.133, 1.15, 1.124, 1.08, 1.131, 0.9, 1.133, 0.6, 1.126,
+      0.37, 1.114,
+    ]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#24272c",
+    pts: pairs([0, 0.81, 0.168, 0.81, 0.168, 0.82, 0, 0.82]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#24272c",
+    pts: pairs([0, 0.97, 0.168, 0.97, 0.168, 0.98, 0, 0.98]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#24272c",
+    pts: pairs([0.156, 0.82, 0.168, 0.82, 0.168, 0.97, 0.156, 0.97]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#efefea",
+    pts: pairs([0, 0.82, 0.156, 0.82, 0.156, 0.97, 0, 0.97]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#d9dde2",
+    pts: pairs([0, 1.163, 0.055, 1.166, 0.05, 1.177, 0.009, 1.174, 0.009, 1.12, 0, 1.12]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#15171a",
+    pts: pairs([0, -0.1, 1.42, -0.1, 1.42, 0.33, 1.15, 0.4, 0.9, 0.44, 0.6, 0.46, 0, 0.47]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#22252a",
+    pts: pairs([0, 0.33, 0.32, 0.33, 0.3, 0.42, 0, 0.42]),
+  },
+  {
+    view: "tail",
+    on: LOW | SIDES | TOP,
+    fill: "#7a1016",
+    pts: pairs([0.78, 0.468, 0.97, 0.455, 0.97, 0.47, 0.78, 0.484]),
+  },
+  // From in front: almond headlights on the corners, pointed inside and fuller out where they wrap back into the
+  // wings (their slim light along the top), a wide low intake and the fog lights in the corners of a rounded nose, and
+  // the badge.
+  {
+    view: "nose",
+    on: LOW | SIDES | TOP,
+    fill: LAMP,
+    pts: pairs([
+      0.36, 0.738, 0.45, 0.749, 0.55, 0.771, 0.8, 0.821, 1.05, 0.861, 1.3, 0.891, 1.4, 0.9, 1.52, 0.92, 1.42, 0.88, 1.2,
+      0.815, 1.0, 0.765, 0.8, 0.738, 0.6, 0.724, 0.45, 0.722,
+    ]),
+  },
+  {
+    view: "nose",
+    on: LOW | SIDES | TOP,
+    fill: "#dfe7f5",
+    pts: pairs([
+      0.45, 0.758, 0.55, 0.78, 0.8, 0.83, 1.05, 0.87, 1.3, 0.9, 1.4, 0.909, 1.4, 0.9, 1.3, 0.891, 1.05, 0.861, 0.8,
+      0.821, 0.55, 0.771, 0.45, 0.749,
+    ]),
+  },
+  {
+    view: "nose",
+    on: LOW | SIDES | TOP,
+    fill: "#15171a",
+    pts: pairs([0, 0.29, 0.52, 0.29, 0.58, 0.32, 0.56, 0.38, 0, 0.38]),
+  },
+  {
+    view: "nose",
+    on: LOW | SIDES | TOP,
+    fill: "#2a2e35",
+    pts: pairs([0.66, 0.42, 0.86, 0.43, 0.86, 0.452, 0.66, 0.446]),
+  },
+  {
+    view: "nose",
+    on: LOW | SIDES | TOP,
+    fill: "#d9dde2",
+    pts: pairs([0, 0.762, 0.03, 0.763, 0.027, 0.77, 0.006, 0.769, 0.006, 0.742, 0, 0.742]),
+  },
+];
+/** Where a point of the body is in a decal's view. */
+function viewOf(v: View, [w, u, z]: P3): P2 {
+  const a = Math.abs(w);
+  if (v === "side") return [u, z];
+  if (v === "plan") return [u, a];
+  if (v === "tail") return [a + Math.max(0, u - 0.06), z];
+  return [a + Math.max(0, CAR_L - u - 0.06), z];
+}
+const area2 = (p: P2[]) =>
+  p.reduce((s, a, i) => s + a[0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * a[1], 0) / 2;
+/** The part of `pts` inside a convex outline that turns anticlockwise (Sutherland-Hodgman). */
+function clipTo(pts: P2[], win: P2[]): P2[] {
+  let out = pts;
+  for (let i = 0; i < win.length && out.length; i++) {
+    const a = win[i];
+    const b = win[(i + 1) % win.length];
+    const side = (q: P2) => (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]);
+    const next: P2[] = [];
+    out.forEach((p, j) => {
+      const q = out[(j + 1) % out.length];
+      const sp = side(p);
+      const sq = side(q);
+      if (sp >= 0) next.push(p);
+      if (sp >= 0 !== sq >= 0) {
+        const t = sp / (sp - sq);
+        next.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+      }
+    });
+    out = next;
+  }
+  return out;
 }
 
-/**
- * What each strip between two cross-sections is, by the edge of the ring it's on (counted from the sill up either
- * side): its sill black between the wheels, its side glass, the glass roof (the windscreen and tailgate glass too), and
- * the paint everywhere else.
- */
-function carFill(k: number, kind: CarKind, paint: string, u: number): string {
-  const e = k <= 8 ? k : 17 - k;
-  const glassy = kind === "quarter" || kind === "cabin" || kind === "screen" || kind === "pillar";
-  if (e === 8 && (glassy || kind === "rear")) return kind === "cabin" ? ROOF_GLASS : GLASS;
-  if (e === 7 && glassy) return kind === "cabin" ? ROOF_GLASS : GLASS;
-  if ((e === 5 || e === 6) && (kind === "quarter" || kind === "cabin" || kind === "screen")) return GLASS;
-  if ((e === 5 || e === 6) && kind === "pillar") return TRIM;
-  if (e === 0 && u > 1.3 && u < 3.32) return TRIM;
-  return paint;
+/** A face of the car, its own way round (out from the middle `w`, along it `u`, up `z`): which way it faces, the way
+ * its light falls on it (its corners' normals, smoothed across its neighbours, so a curve shades evenly), what it's
+ * painted, and what's painted on it. Mirrors' faces say which side they're on. */
+type CarFace = { pts: P3[]; n: P3; light: P3; fill: string; on: { pts: P3[]; fill: string }[]; mirror?: number };
+let carFaces: CarFace[] | null = null;
+/** Where its cross-sections are along it: closer at its ends, so they round off. */
+const CAR_U = [
+  0,
+  0.012,
+  0.028,
+  0.045,
+  0.06,
+  0.08,
+  0.11,
+  0.15,
+  0.2,
+  0.26,
+  0.33,
+  0.41,
+  0.5,
+  0.6,
+  0.72,
+  0.85,
+  0.98,
+  1.12,
+  1.27,
+  1.43,
+  1.6,
+  1.78,
+  1.96,
+  2.12,
+  2.28,
+  2.44,
+  2.6,
+  2.76,
+  2.92,
+  3.08,
+  3.24,
+  3.4,
+  3.54,
+  3.68,
+  3.82,
+  3.96,
+  4.1,
+  4.23,
+  4.35,
+  4.4,
+  4.45,
+  4.49,
+  4.53,
+  4.565,
+  4.6,
+  4.625,
+  4.65,
+  4.67,
+  4.69,
+  4.705,
+  4.718,
+  4.728,
+  4.737,
+  4.743,
+  4.747,
+  CAR_L,
+];
+
+/** The car's faces: its body cut by what's painted on it, then its mirrors. The same every time, so made once. */
+function carMesh(): CarFace[] {
+  if (carFaces) return carFaces;
+  const faces: CarFace[] = [];
+  /** Newell's normal, its length the face's area (so a face with two corners in one place still has one). */
+  const newell = (pts: P3[]) =>
+    pts.reduce(
+      (n, a, i) => {
+        const b = pts[(i + 1) % pts.length];
+        return [
+          n[0] + (a[1] - b[1]) * (a[2] + b[2]),
+          n[1] + (a[2] - b[2]) * (a[0] + b[0]),
+          n[2] + (a[0] - b[0]) * (a[1] + b[1]),
+        ] as P3;
+      },
+      [0, 0, 0] as P3,
+    );
+  const outward = (n: P3, c: P3, inner: P3) => (dot(n, sub(c, inner)) < 0 ? neg(n) : n);
+  const add = (pts: P3[], fill: string, part: number, n: P3, light: P3, mirror?: number) => {
+    const f: CarFace = { pts, n: unit(n), light: unit(light), fill, on: [], mirror };
+    if (part) paintOn(f, part);
+    faces.push(f);
+  };
+  /** The faces between loops of points, each lit by its corners' normals (the average of the faces round each). */
+  const loft = (
+    loops: P3[][],
+    inner: (c: P3) => P3,
+    look: (i: number, j: number) => [string, number],
+    mirror?: number,
+  ) => {
+    const N = loops[0].length;
+    const quad = (i: number, j: number) => [
+      loops[i][j],
+      loops[i][(j + 1) % N],
+      loops[i + 1][(j + 1) % N],
+      loops[i + 1][j],
+    ];
+    const fn = loops.slice(1).map((_, i) =>
+      Array.from({ length: N }, (_, j) => {
+        const pts = quad(i, j);
+        const c = mid(pts);
+        return outward(newell(pts), c, inner(c));
+      }),
+    );
+    const vn = (i: number, j: number) =>
+      [i - 1, i]
+        .filter((k) => k >= 0 && k < fn.length)
+        .flatMap((k) => [fn[k][(j + N - 1) % N], fn[k][j % N]])
+        .reduce((s, n) => addk(s, n), [0, 0, 0] as P3);
+    for (let i = 0; i < fn.length; i++)
+      for (let j = 0; j < N; j++) {
+        if (Math.hypot(...fn[i][j]) < 1e-7) continue;
+        const light = [vn(i, j), vn(i, j + 1), vn(i + 1, j), vn(i + 1, j + 1)].reduce((s, n) => addk(s, unit(n)), [
+          0, 0, 0,
+        ] as P3);
+        const [fill, part] = look(i, j);
+        add(quad(i, j), fill, part, fn[i][j], dot(light, fn[i][j]) > 0 ? light : fn[i][j], mirror);
+      }
+  };
+  const paintOn = (f: CarFace, part: number) => {
+    const sg = Math.sign(f.pts.reduce((s, p) => s + p[0], 0));
+    for (const d of DECALS) {
+      if (!(d.on & part) || (d.sg && d.sg !== sg)) continue;
+      const u = mid(f.pts)[1];
+      if ((d.view === "tail" && u > 1.0) || (d.view === "nose" && u < 3.7)) continue;
+      let win = f.pts.map((p) => viewOf(d.view, p));
+      win = win.filter(
+        (p, i) => Math.hypot(p[0] - win[(i + 1) % win.length][0], p[1] - win[(i + 1) % win.length][1]) > 1e-6,
+      );
+      const fa = area2(win);
+      if (win.length < 3 || Math.abs(fa) < 1e-7) continue;
+      if (fa < 0) win.reverse();
+      const cut = clipTo(d.pts, win);
+      if (cut.length < 3) continue;
+      const a = Math.abs(area2(cut));
+      if (a >= 0.995 * Math.abs(fa)) {
+        f.fill = d.fill;
+        f.on = [];
+      } else if (a > 1e-6) {
+        // Back onto the face, by where each point is in the face's two triangles.
+        const wv = f.pts.map((p) => viewOf(d.view, p));
+        const lift = (q: P2): P3 => {
+          let best: { k: number[]; t: number[] } | null = null;
+          for (let i = 1; i < f.pts.length - 1; i++) {
+            const t = [0, i, i + 1];
+            const [p0, p1, p2] = t.map((j) => wv[j]);
+            const det = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1]);
+            if (Math.abs(det) < 1e-12) continue;
+            const l1 = ((q[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (q[1] - p0[1])) / det;
+            const l2 = ((p1[0] - p0[0]) * (q[1] - p0[1]) - (q[0] - p0[0]) * (p1[1] - p0[1])) / det;
+            const k = [1 - l1 - l2, l1, l2];
+            if (!best || Math.min(...k) > Math.min(...best.k)) best = { k, t };
+          }
+          if (!best) return f.pts[0];
+          const { k, t } = best;
+          return [0, 1, 2].reduce((s, i) => addk(s, f.pts[t[i]], k[i]), [0, 0, 0] as P3);
+        };
+        f.on.push({ pts: cut.map(lift), fill: d.fill });
+      }
+    }
+  };
+  // Its body: each strip between one cross-section and the next, round from its underside up one side, over the
+  // top and down the other; then its two ends.
+  const rings = CAR_U.map((u) => {
+    const side = carSide(u);
+    return [
+      [0, u, CAR.zb(u)] as P3,
+      ...side.map(([w, z]): P3 => [-w, u, z]),
+      [0, u, CAR.zt(u)] as P3,
+      ...[...side].reverse().map(([w, z]): P3 => [w, u, z]),
+    ];
+  });
+  const body = (c: P3): P3 => [0, Math.min(3.8, Math.max(0.9, c[1])), 0.72];
+  loft(rings, body, (_, j) => {
+    // Which of its side's points it starts from (counted from the sill up), or its underside's.
+    const k = j === 0 || j === 2 * SIDE_N + 1 ? -1 : j <= SIDE_N ? j - 1 : 2 * SIDE_N - j;
+    return [PAINT, k < 7 ? LOW : k < 10 ? SIDES : TOP];
+  });
+  for (const r of [rings[0], rings[rings.length - 1]]) {
+    const n = outward(newell(r), mid(r), body(mid(r)));
+    add(r, PAINT, LOW, n, n);
+  }
+  // Its mirrors on the front doors, at the windows' front corners: a short black stalk, then a teardrop cap in its
+  // paint, rounded in front and flat behind, where its glass faces back.
+  const SECTIONS: [number, number, number, number, number][] = [
+    [0.82, 3.13, 1.11, 0.026, 0.018],
+    [0.885, 3.12, 1.118, 0.026, 0.018],
+    [0.89, 3.11, 1.126, 0.045, 0.032],
+    [0.93, 3.1, 1.137, 0.08, 0.048],
+    [0.985, 3.09, 1.146, 0.104, 0.058],
+    [1.035, 3.085, 1.149, 0.1, 0.056],
+    [1.06, 3.083, 1.148, 0.075, 0.044],
+    [1.072, 3.082, 1.147, 0.032, 0.024],
+  ];
+  for (const sg of [-1, 1]) {
+    const loops = SECTIONS.map(([w, uc, zc, au, az]) =>
+      Array.from({ length: 12 }, (_, i): P3 => {
+        const a = (i * Math.PI) / 6;
+        const c = Math.cos(a);
+        return [sg * w, uc + au * (c > 0 ? c : 0.35 * c), zc + az * Math.sin(a)];
+      }),
+    );
+    loft(
+      loops,
+      () => [sg * 0.95, 3.09, 1.135],
+      (i, j) => [i < 2 ? TRIM : Math.cos(((j + 0.5) * Math.PI) / 6) < -0.5 && i > 2 && i < 6 ? GLASS : PAINT, 0],
+      sg,
+    );
+    const tip = loops[loops.length - 1];
+    const n = outward(newell(tip), mid(tip), [sg * 0.95, 3.09, 1.14]);
+    add(tip, PAINT, 0, n, n, sg);
+  }
+  carFaces = faces;
+  return faces;
 }
 
 /**
  * The car and the socket it charges from. The socket's always there (its light green while the car's home); the car,
  * a low-poly Model Y in your car's paint, only while it's home: nose-in on the driveway (lit by the sun) or in the
- * garage (under the garage's own light), its cable from the socket along its right side up to its charge port, rear
- * left. Its sides show only where the camera can see them, so nothing on the far side shows through it.
+ * garage (under the garage's own light), its cable from the socket along its left side up to its charge port, in its
+ * left tail light. Its faces show only where the camera can see them, so nothing on the far side shows through it; the
+ * wheels and mirrors on a side you can't see go behind it, the ones on a side you can in front.
  */
 function carScene(B: Builder, g: Geometry, parts: SceneParts) {
   const C = g.car;
@@ -1675,420 +2194,139 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
   B.layer = C.layer;
   const P = (x: number, u: number, z: number): P3 => [x, cy - u, z];
   const mx = (x0 + x1) / 2;
-  const Q = (w: number, u: number, z: number): P3 => [mx + w, cy - u, z];
-  const faces: (Shape & { depth: number })[] = [];
-  /** A face of it, if it faces the camera: lit by the sun outside (not in the garage), its outside away from `centre`. */
-  const put = (pts: P3[], fill: string, centre: P3) => {
-    // Newell's normal, so a face with two corners in one place (where the glass closes up) still has one.
-    let n: P3 = [0, 0, 0];
-    pts.forEach((a, i) => {
-      const b = pts[(i + 1) % pts.length];
-      n = [
-        n[0] + (a[1] - b[1]) * (a[2] + b[2]),
-        n[1] + (a[2] - b[2]) * (a[0] + b[0]),
-        n[2] + (a[0] - b[0]) * (a[1] + b[1]),
-      ];
-    });
-    if (Math.hypot(...n) < 1e-6) return;
-    n = unit(n);
-    const c = mid(pts);
-    if (dot(n, sub(c, centre)) < 0) n = neg(n);
-    if (!B.facing(c, n)) return;
-    const d = B.cam.poly(pts);
-    // Paint takes the light; the glass stays dark, catching a little of the sky where it faces up.
-    const glass = fill === GLASS || fill === ROOF_GLASS || fill === TRIM;
-    const shade = glass ? css(mix(rgb(fill), [150, 170, 195], clamp01(n[2]) * 0.18 * B.sun.sky)) : fill;
-    // In the garage, its paint's shaded by the light overhead, so its shape still shows.
-    const lamp = 0.6 + 0.4 * Math.max(0, dot(n, [0.24, 0.34, 0.91]));
-    const paint = inGarage ? css(rgb(fill).map((v) => v * lamp) as Rgb) : litColour(fill, n, B.sun);
-    if (d) faces.push({ depth: B.cam.depth(c), d, fill: glass ? shade : paint });
-  };
-  // Its body: each strip between one cross-section and the next, then its two ends.
-  const rings = STATIONS.map(carRing);
-  for (let i = 0; i < STATIONS.length - 1; i++) {
-    const a = STATIONS[i];
-    const b = STATIONS[i + 1];
-    for (let k = 0; k < rings[i].length - 1; k++) {
-      const [wa, za] = rings[i][k];
-      const [wa2, za2] = rings[i][k + 1];
-      const [wb, zb] = rings[i + 1][k];
-      const [wb2, zb2] = rings[i + 1][k + 1];
-      put(
-        [Q(wa, a.u, za), Q(wa2, a.u, za2), Q(wb2, b.u, zb2), Q(wb, b.u, zb)],
-        carFill(k, a.k, parts.paint, (a.u + b.u) / 2),
-        Q(0, (a.u + b.u) / 2, 0.7),
-      );
-    }
-  }
-  const centre = Q(0, CAR_L / 2, 0.7);
-  put(
-    rings[0].map(([w, z]) => Q(w, 0, z)),
-    parts.paint,
-    centre,
-  );
-  put(
-    rings[rings.length - 1].map(([w, z]) => Q(w, CAR_L, z)),
-    parts.paint,
-    centre,
-  );
-  // Its mirrors, on the front doors at the foot of the windscreen: a black stalk, then a cap in its paint.
-  for (const side of [-1, 1]) {
-    const s = stationAt(3.08);
-    const h = (CAR_W / 2) * s.f;
-    const box = (u0: number, u1: number, w0: number, w1: number, z0: number, z1: number, fill: string) => {
-      const c = Q((side * (w0 + w1)) / 2, (u0 + u1) / 2, (z0 + z1) / 2);
-      const q = (u: number, w: number, z: number) => Q(side * w, u, z);
-      for (const f of [
-        [q(u0, w0, z0), q(u0, w1, z0), q(u0, w1, z1), q(u0, w0, z1)],
-        [q(u1, w0, z0), q(u1, w1, z0 + 0.02), q(u1, w1, z1 - 0.02), q(u1, w0, z1)],
-        [q(u0, w1, z0), q(u1, w1, z0 + 0.02), q(u1, w1, z1 - 0.02), q(u0, w1, z1)],
-        [q(u0, w0, z1), q(u1, w0, z1), q(u1, w1, z1 - 0.02), q(u0, w1, z1)],
-        [q(u0, w0, z0), q(u1, w0, z0), q(u1, w1, z0 + 0.02), q(u0, w1, z0)],
-      ])
-        put(f, fill, c);
-    };
-    box(3.04, 3.16, h * 0.84, h * 0.95, s.zs - 0.01, s.zs + 0.06, TRIM);
-    box(2.97, 3.13, h * 0.93, h * 1.12, s.zs + 0.04, s.zs + 0.15, parts.paint);
-  }
-
-  // The details, on whichever sides the camera sees: on its side, its wheels in their arches, its doors' shut lines
-  // and flush handles, the window pillar between them, its shoulder catching the light, the tail light wrapping round
-  // and the camera on its front wing; from behind, the tail lights across its tailgate, the badge, the plate on the
-  // tailgate and the black diffuser; from in front, its slim headlights over a smooth nose and a low intake. The charge
-  // port's in its left tail light.
+  /** From the car's own way round to the scene's. */
+  const W = ([w, u, z]: P3): P3 => [mx + w, cy - u, z];
   const eye = B.cam.eye;
-  const right = eye[0] > x1;
-  const left = eye[0] < x0;
-  const rear = eye[1] > cy;
-  const front = eye[1] < cy - CAR_L;
-  const extras: Shape[] = [];
-  const lit = (fill: string, n: P3) => (inGarage ? fill : litColour(fill, n, B.sun));
-  /** How far out its side is at `u` and height `z` (from its sill up to its belt line). */
-  const sideOf = (u: number, z: number, out: number) => {
-    const pts = carSide(stationAt(u)).slice(0, 6);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [w0, z0] = pts[i];
-      const [w1, z1] = pts[i + 1];
-      if (z >= z0 && z <= z1) return lerp(w0, w1, (z - z0) / (z1 - z0)) + out;
+  const out = eye[0] - mx;
+  /** Whether the camera's out past a side of it (+1 its left, the scene's east; -1 its right). */
+  const sees = (sg: number, w: number) => sg * out > w;
+  const lit = (fill: string, n: P3) => {
+    if (DARK.has(fill)) return css(mix(rgb(fill), [150, 170, 195], clamp01(n[2]) * 0.18 * B.sun.sky));
+    const c = fill === PAINT ? parts.paint : fill;
+    // In the garage, its paint's shaded by the light overhead, so its shape still shows.
+    if (inGarage) return css(rgb(c).map((v) => v * (0.6 + 0.4 * Math.max(0, dot(n, [0.24, 0.34, 0.91])))) as Rgb);
+    // The paint's light wraps a little round it, so it shades off evenly where it turns from the sun.
+    return fill === PAINT ? litColour(c, n, B.sun, 0.35) : css(mix(rgb(c), litRGB(rgb(c), n, B.sun), 0.5));
+  };
+  type Drawn = Shape & { depth: number };
+  const body: Drawn[][] = [];
+  const mirrors: Record<string, Drawn[][]> = { near: [], far: [] };
+  for (const f of carMesh()) {
+    const pts = f.pts.map(W);
+    const n: P3 = [f.n[0], -f.n[1], f.n[2]];
+    const ln: P3 = [f.light[0], -f.light[1], f.light[2]];
+    const c = mid(pts);
+    if (!B.facing(c, n)) continue;
+    const d = B.cam.poly(pts);
+    if (!d) continue;
+    const depth = B.cam.depth(c);
+    // Edged in its own colour; what's painted on it a little more, so it covers its face's edge and its neighbours'
+    // where it runs on across them.
+    const group: Drawn[] = [{ depth, d, fill: lit(f.fill, ln), seam: f.on.length ? 0.8 : 1 }];
+    for (const o of f.on) {
+      const od = B.cam.poly(o.pts.map(W));
+      if (od) group.push({ depth, d: od, fill: lit(o.fill, ln), seam: 1.5 });
     }
-    return pts[z < pts[0][1] ? 0 : pts.length - 1][0] + out;
-  };
-  /** How far in from its rear bumper (or its nose) the surface is at `w` across and height `z`, near enough. */
-  const endU = (w: number, z: number, nose: boolean) => {
-    const ends = nose ? [...STATIONS].reverse().filter((s) => s.u > 4.4) : STATIONS.filter((s) => s.u < 0.2);
-    const ok = (s: Station) => s.zt >= z && (CAR_W / 2) * s.f * 0.97 >= Math.abs(w);
-    const s = ends.find(ok) ?? ends[ends.length - 1];
-    return nose ? s.u + 0.012 : s.u - 0.012;
-  };
-  if (right || left) {
-    const sg = right ? 1 : -1;
-    const n: P3 = [sg, 0, 0];
-    const at = (u: number, z: number, out = 0.006) => Q(sg * sideOf(u, z, out), u, z);
-    const disc = (u: number, z: number, r: number, w: number, from = 0, to = Math.PI * 2, steps = 28) =>
-      Array.from({ length: steps + 1 }, (_, i) => {
-        const a = from + ((to - from) * i) / steps;
-        return Q(sg * w, u + r * Math.cos(a), z + r * Math.sin(a));
+    if (f.mirror) mirrors[sees(f.mirror, 0.86) ? "near" : "far"].push(group);
+    else body.push(group);
+  }
+  const byDepth = (gs: Drawn[][]) => gs.sort((a, b) => b[0].depth - a[0].depth).flat();
+
+  // Its wheels: the tyre's tread and sidewall, the 19-inch aero cover (silver, ten fine curved vanes round a small hub).
+  // On a side you can see, in front of it, through its arch; on the other, behind it.
+  const near: Shape[] = [];
+  const far: Shape[] = [];
+  const path = (pts: P2[]) => (pts.length > 2 ? `M${pts.map((q) => q.map(n1).join(" ")).join(" L")} Z` : "");
+  for (const sg of [-1, 1])
+    for (const ua of AXLES) {
+      const disc = (r: number, w: number, steps = 24) =>
+        Array.from({ length: steps }, (_, i) => {
+          const a = (i / steps) * Math.PI * 2;
+          return W([sg * w, ua + r * Math.cos(a), TYRE + r * Math.sin(a)]);
+        });
+      const flat = [...disc(TYRE, WHEEL_W), ...disc(TYRE, WHEEL_W - 0.245)].map((q) => B.cam.p(q));
+      if (flat.some((q) => !q)) continue;
+      const tread = { d: path(hull(flat as P2[])), fill: "#222428" };
+      if (!sees(sg, WHEEL_W)) {
+        far.push({ ...tread, fill: "#33363c" });
+        continue;
+      }
+      const n: P3 = [sg, 0, 0];
+      const arch = [
+        ...ring(ua, TYRE, 0, ARCH + 0.01, -15, 195).map(([u, z]) => carAt(u, z, sg, 0.01)),
+        carAt(ua - 0.43, 0.24, sg, 0.01),
+        [sg * WHEEL_W, ua - 0.43, -0.4] as P3,
+        [sg * WHEEL_W, ua + 0.43, -0.4] as P3,
+        carAt(ua + 0.43, 0.24, sg, 0.01),
+      ].map(W);
+      const clip = B.cam.poly(arch);
+      const cover = (r: number, w: number, fill: string, steps = 24) => ({
+        d: B.cam.poly(disc(r, w, steps)),
+        fill,
+        clip,
       });
-    for (const u of AXLES) {
-      const w = sideOf(u, 0.6, 0.004);
-      // The arch: dark inside, with its black lip.
-      const arch = disc(u, TYRE, ARCH, w, -0.12, Math.PI + 0.12);
-      extras.push(
-        { d: B.cam.poly(arch), fill: "#0d0e10" },
-        { d: B.cam.line(arch), stroke: "#1d2024", width: 2.2 },
-        { d: B.cam.poly(disc(u, TYRE, TYRE, w + 0.004)), fill: "#1a1c20" },
-        // The 19-inch aero cover: silver, five curved vanes round a small hub.
-        { d: B.cam.poly(disc(u, TYRE, 0.285, w + 0.01)), fill: lit("#c3c7cc", n) },
-        { d: B.cam.line(disc(u, TYRE, 0.285, w + 0.011)), stroke: "rgba(0,0,0,.35)", width: 0.8 },
-      );
-      for (let k = 0; k < 5; k++) {
-        const a0 = (k / 5) * Math.PI * 2 + 0.4;
+      near.push({ ...tread, clip }, cover(TYRE, WHEEL_W, "#2a2c31"), cover(0.235, WHEEL_W + 0.004, lit("#c3c7cc", n)));
+      for (let k = 0; k < 10; k++) {
+        const a0 = (k / 10) * Math.PI * 2 + 0.4;
         const vane = (side: number) =>
           [0, 0.25, 0.5, 0.75, 1].map((t) => {
-            const r = 0.1 + t * 0.165;
-            const a = a0 + sg * t * 0.45 + (side * (0.028 - 0.008 * t)) / r;
-            return Q(sg * (w + 0.013), u + r * Math.cos(a), TYRE + r * Math.sin(a));
+            const r = 0.075 + t * 0.15;
+            const a = a0 + sg * t * 0.55 + (side * (0.015 - 0.005 * t)) / r;
+            return W([sg * (WHEEL_W + 0.006), ua + r * Math.cos(a), TYRE + r * Math.sin(a)]);
           });
-        extras.push({ d: B.cam.poly([...vane(1), ...vane(-1).reverse()]), fill: "#4a4f57" });
+        near.push({ d: B.cam.poly([...vane(1), ...vane(-1).reverse()]), fill: "#4a4f57", clip });
       }
-      extras.push(
-        { d: B.cam.poly(disc(u, TYRE, 0.07, w + 0.014, 0, Math.PI * 2, 14)), fill: lit("#9da3aa", n) },
-        { d: B.cam.poly(disc(u, TYRE, 0.035, w + 0.016, 0, Math.PI * 2, 10)), fill: "#2a2d32" },
-      );
+      near.push(cover(0.06, WHEEL_W + 0.008, lit("#9da3aa", n), 14), cover(0.03, WHEEL_W + 0.01, "#2a2d32", 10));
     }
-    // Shut lines: the front door's leading edge behind the front arch, between the doors, and the rear door's back
-    // edge, down to the rear arch and round it.
-    const belt = (u: number) => stationAt(u).zs - 0.01;
-    const shut = (pts: [number, number][]) =>
-      extras.push({ d: B.cam.line(pts.map(([u, z]) => at(u, z))), stroke: "rgba(0,0,0,.3)", width: 0.9 });
-    shut([
-      [3.33, belt(3.33)],
-      [3.31, 0.85],
-      [3.27, 0.36],
+
+  // The lines over its paint, on whichever sides the camera sees: on its side, its doors' shut lines (the back one
+  // round its rear arch); from behind, the tailgate's.
+  const lines: Shape[] = [];
+  const line = (pts: P3[], width = 0.9) => lines.push({ d: B.cam.line(pts.map(W)), stroke: "rgba(0,0,0,.24)", width });
+  for (const sg of [-1, 1]) {
+    if (!sees(sg, 0.9)) continue;
+    const at = (u: number, z: number) => carAt(u, z, sg);
+    const belt = (u: number) => CAR.zbelt(u) - 0.008;
+    line([at(3.375, belt(3.375)), at(3.36, 0.7), at(3.345, 0.27)]);
+    line([at(2.15, belt(2.15)), at(2.13, 0.27)]);
+    line([
+      at(1.17, belt(1.17)),
+      at(1.19, 1.0),
+      ...ring(AXLES[0], TYRE, 0, ARCH + 0.06, 64, 0, 8).map(([u, z]) => at(u, z)),
+      at(AXLES[0] + ARCH + 0.06, 0.27),
     ]);
-    shut([
-      [2.08, belt(2.08)],
-      [2.08, 0.36],
-    ]);
-    shut([
-      [0.93, belt(0.93)],
-      [0.92, 0.95],
-      ...[80, 60, 40, 20].map((deg): [number, number] => {
-        const a = (deg * Math.PI) / 180;
-        return [AXLES[0] + (ARCH + 0.02) * Math.cos(a), TYRE + (ARCH + 0.02) * Math.sin(a)];
-      }),
-      [AXLES[0] + ARCH + 0.02, 0.36],
-    ]);
-    // The flush handles, black, near the top of each door's back.
-    for (const [u0, u1] of [
-      [1.06, 1.24],
-      [2.16, 2.34],
-    ]) {
-      const z = belt(u0) - 0.15;
-      extras.push({ d: B.cam.poly([at(u0, z), at(u1, z), at(u1, z + 0.022), at(u0, z + 0.03)]), fill: "#17191c" });
-    }
-    // The pillar between the doors' windows.
-    const s2 = stationAt(2.08);
-    const top = carSide(s2)[7];
-    extras.push({
-      d: B.cam.seg(Q(sg * (carSide(s2)[5][0] + 0.004), 2.08, s2.zs + 0.02), Q(sg * (top[0] + 0.004), 2.08, top[1])),
-      stroke: "#08090b",
-      width: 2.4,
-    });
-    // The shoulder catching the light, and where the side glass meets the roof's.
-    const along = (from: number, to: number, f: (s: Station) => P3) =>
-      Array.from({ length: 25 }, (_, i) => f(stationAt(from + ((to - from) * i) / 24)));
-    extras.push({
-      d: B.cam.line(along(0.2, 4.45, (s) => Q(sg * (carSide(s)[4][0] + 0.003), s.u, carSide(s)[4][1]))),
-      stroke: "rgba(255,255,255,.3)",
-      width: 1,
-    });
-    extras.push({
-      d: B.cam.line(along(0.72, 2.7, (s) => Q(sg * (carSide(s)[7][0] + 0.004), s.u, carSide(s)[7][1]))),
-      stroke: "rgba(255,255,255,.14)",
-      width: 1,
-    });
-    // The rear quarter window, tapering back to a point.
-    const sideAt = (u: number, i: number, out = 0.004) => {
-      const [w, z] = carSide(stationAt(u))[i];
-      return Q(sg * (w + out), u, z);
-    };
-    extras.push({
-      d: B.cam.poly([
-        sideAt(0.74, 7),
-        sideAt(0.62, 7),
-        Q(sg * (carSide(stationAt(0.47))[5][0] + 0.006), 0.47, stationAt(0.47).zs + 0.05),
-        sideAt(0.6, 5),
-        sideAt(0.74, 5),
-      ]),
-      fill: GLASS,
-    });
-    // The tail light, round onto its side.
-    extras.push({
-      d: B.cam.poly([at(0.02, 1.07, 0.008), at(0.36, 1.12, 0.008), at(0.37, 1.15, 0.008), at(0.05, 1.155, 0.008)]),
-      fill: "#7e0d14",
-    });
-    extras.push({ d: B.cam.seg(at(0.04, 1.14, 0.01), at(0.34, 1.142, 0.01)), stroke: "#e2333b", width: 1 });
-    // The camera on its front wing, behind the arch.
-    extras.push({
-      d: B.cam.poly([at(3.43, 0.86), at(3.56, 0.885), at(3.43, 0.925)]),
-      fill: "#121417",
-    });
   }
-  if (rear) {
-    const R = (w: number, z: number) => Q(w, endU(w, z, false), z);
-    const line = (pts: [number, number][], stroke: string, width: number) =>
-      extras.push({ d: B.cam.line(pts.map(([w, z]) => R(w, z))), stroke, width });
-    const poly = (pts: [number, number][], fill: string) =>
-      extras.push({ d: B.cam.poly(pts.map(([w, z]) => R(w, z))), fill });
-    // The black lower bumper with its diffuser and reflectors.
-    poly(
-      [
-        [-0.9, 0.31],
-        [0.9, 0.31],
-        [0.88, 0.5],
-        [0.62, 0.56],
-        [-0.62, 0.56],
-        [-0.88, 0.5],
-      ],
-      "#15171a",
-    );
-    poly(
-      [
-        [-0.3, 0.33],
-        [0.3, 0.33],
-        [0.28, 0.42],
-        [-0.28, 0.42],
-      ],
-      "#22252a",
-    );
-    for (const sg of [-1, 1]) {
-      poly(
-        [
-          [sg * 0.64, 0.585],
-          [sg * 0.84, 0.575],
-          [sg * 0.84, 0.6],
-          [sg * 0.64, 0.605],
-        ],
-        "#7a1016",
-      );
-      // The tail lights: smoked red, a bright line along the top, wrapping round the corner.
-      poly(
-        [
-          [sg * 0.44, 1.04],
-          [sg * 0.88, 1.02],
-          [sg * 0.94, 1.09],
-          [sg * 0.5, 1.125],
-        ],
-        "#5c0a10",
-      );
-      line(
-        [
-          [sg * 0.48, 1.105],
-          [sg * 0.92, 1.075],
-        ],
-        "#ff3a44",
-        1.3,
-      );
-      line(
-        [
-          [sg * 0.46, 1.05],
-          [sg * 0.86, 1.035],
-        ],
-        "#b0161e",
-        0.9,
-      );
-    }
-    // The tailgate's shut line, the badge over the plate, and the plate.
-    line(
-      [
-        [-0.46, 1.13],
-        [-0.6, 1.02],
-        [-0.63, 0.73],
-        [-0.56, 0.64],
-        [0.56, 0.64],
-        [0.63, 0.73],
-        [0.6, 1.02],
-        [0.46, 1.13],
-      ],
-      "rgba(0,0,0,.35)",
-      0.9,
-    );
-    line(
-      [
-        [-0.05, 1.205],
-        [0.05, 1.205],
-      ],
-      "#e4e7eb",
-      1.4,
-    );
-    line(
-      [
-        [0, 1.205],
-        [0, 1.15],
-      ],
-      "#e4e7eb",
-      1.3,
-    );
-    poly(
-      [
-        [-0.2, 0.855],
-        [0.2, 0.855],
-        [0.2, 1.0],
-        [-0.2, 1.0],
-      ],
-      "#24272c",
-    );
-    poly(
-      [
-        [-0.186, 0.865],
-        [0.186, 0.865],
-        [0.186, 0.99],
-        [-0.186, 0.99],
-      ],
-      "#efefea",
-    );
-    poly(
-      [
-        [-0.13, 0.91],
-        [0.13, 0.91],
-        [0.13, 0.95],
-        [-0.13, 0.95],
-      ],
-      "#3a3f48",
-    );
+  if (eye[1] > cy) {
+    const tg: P2[] = [
+      [0.56, 1.2],
+      [0.545, 1.12],
+      [0.54, 1.0],
+      [0.545, 0.87],
+      [0.51, 0.775],
+      [0.42, 0.745],
+      [0.2, 0.74],
+    ];
+    line([...tg.map(([w, z]) => carEnd(w, z, false)), ...[...tg].reverse().map(([w, z]) => carEnd(-w, z, false))]);
   }
-  if (front) {
-    const F = (w: number, z: number) => Q(w, endU(w, z, true), z);
-    const poly = (pts: [number, number][], fill: string) =>
-      extras.push({ d: B.cam.poly(pts.map(([w, z]) => F(w, z))), fill });
-    for (const sg of [-1, 1]) {
-      // A slim headlight swept back round the corner, its light along the top.
-      poly(
+  const port = sees(1, 0.9)
+    ? B.cam.poly(
         [
-          [sg * 0.36, 0.81],
-          [sg * 0.84, 0.845],
-          [sg * 0.95, 0.9],
-          [sg * 0.9, 0.925],
-          [sg * 0.5, 0.875],
-        ],
-        "#1a1f27",
-      );
-      extras.push({
-        d: B.cam.line(
-          (
-            [
-              [sg * 0.42, 0.85],
-              [sg * 0.68, 0.875],
-              [sg * 0.92, 0.915],
-            ] as [number, number][]
-          ).map(([w, z]) => F(w, z)),
-        ),
-        stroke: "#f4f7ff",
-        width: 1.6,
-      });
-      poly(
-        [
-          [sg * 0.7, 0.4],
-          [sg * 0.86, 0.42],
-          [sg * 0.85, 0.47],
-          [sg * 0.7, 0.46],
-        ],
-        "#16181b",
-      );
-    }
-    poly(
-      [
-        [-0.55, 0.36],
-        [0.55, 0.36],
-        [0.52, 0.45],
-        [-0.52, 0.45],
-      ],
-      "#15171a",
-    );
-    extras.push({ d: B.cam.seg(F(-0.04, 0.9), F(0.04, 0.9)), stroke: "#d8dce1", width: 1.2 });
-  }
-  const port = right
-    ? B.cam.poly([
-        Q(sideOf(0.14, 0.98, 0.012), 0.14, 0.98),
-        Q(sideOf(0.28, 0.98, 0.012), 0.28, 0.98),
-        Q(sideOf(0.28, 1.06, 0.012), 0.28, 1.06),
-        Q(sideOf(0.14, 1.06, 0.012), 0.14, 1.06),
-      ])
+          carAt(0.17, 1.0, 1, 0.012),
+          carAt(0.29, 1.0, 1, 0.012),
+          carAt(0.29, 1.075, 1, 0.012),
+          carAt(0.17, 1.075, 1, 0.012),
+        ].map(W),
+      )
     : "";
-  // The cable from the socket down to the floor, along the car's right side and up into its port.
+  const portAt = W(carAt(0.23, 1.04, 1, 0.012));
+  // The cable from the socket down to the floor, along the car's left side and up into its port.
   let run: P3[];
   let last: P3[];
   if (inGarage) {
     const sock: P3 = [SF.o[0] - 0.06, 5.67, 0.95];
     const lane = x1 + 0.25;
     run = [sock, [sock[0], sock[1], 0.05], [lane, 5.6, 0.03]];
-    last = [
-      [lane, 5.6, 0.03],
-      [lane, cy - 0.45, 0.03],
-      [x1 + 0.1, cy - 0.4, 0.38],
-      [x1 - 0.02, cy - 0.21, 1.02],
-    ];
+    last = [[lane, 5.6, 0.03], [lane, cy - 0.45, 0.03], [x1 + 0.1, cy - 0.4, 0.38], portAt];
   } else {
     const walled = g.garage && !g.garage.carport;
     const sock: P3 = walled ? [10.24, g.garage!.y1 + 0.06, 0.95] : [10.06, 7.5, 0.95 + g.z0];
@@ -2100,44 +2338,47 @@ function carScene(B: Builder, g: Geometry, parts: SceneParts) {
       [lane, 8.55, 0.03],
       [lane, 9.3, 0.03],
     ];
-    last = [
-      [lane, 9.3, 0.03],
-      [lane, cy - 0.5, 0.03],
-      [x1 + 0.12, cy - 0.38, 0.38],
-      [x1 - 0.02, cy - 0.21, 1.02],
-    ];
+    last = [[lane, 9.3, 0.03], [lane, cy - 0.5, 0.03], [x1 + 0.12, cy - 0.38, 0.38], portAt];
   }
-  const cable: (Shape & { depth: number })[] = [];
+  const cable: Drawn[] = [];
   const all = [...run, ...last.slice(1)];
   for (let i = 1; i < all.length; i++) {
     const a = all[i - 1];
     const q = all[i];
-    const m = lerp3(a, q, 0.5);
     const d = B.cam.seg(a, q);
-    const dep = B.cam.depth(m);
+    const dep = B.cam.depth(lerp3(a, q, 0.5));
     if (d)
       cable.push({ depth: dep, d, stroke: "#25282d", width: Math.max(1.4, Math.min(3.4, (0.03 * B.cam.focal) / dep)) });
   }
-  const sorted = [...faces, ...cable].sort((a, b) => b.depth - a.depth).map(({ depth: _, ...x }) => x);
+  const sorted = byDepth([...body, ...cable.map((c) => [c])]).map(({ depth: _, ...x }) => x);
+  const strip = (xs: Drawn[]) => xs.map(({ depth: _, ...x }) => x);
   const foot = [
     P(x0 - 0.06, -0.05, 0.004),
     P(x1 + 0.06, -0.05, 0.004),
     P(x1 + 0.06, CAR_L + 0.05, 0.004),
     P(x0 - 0.06, CAR_L + 0.05, 0.004),
   ];
-  const shapes: Shape[] = [{ d: B.cam.poly(foot), fill: SHADOW, opacity: 0.32 }, ...sorted, ...extras];
+  const shapes: Shape[] = [
+    { d: B.cam.poly(foot), fill: SHADOW, opacity: 0.32 },
+    ...far,
+    ...strip(byDepth(mirrors.far)),
+    ...sorted,
+    ...strip(byDepth(mirrors.near)),
+    ...near,
+    ...lines,
+  ];
   B.add(B.cam.depth(P((x0 + x1) / 2, 2.4, 0.7)), ...(inGarage ? shapes.map((x) => ({ ...x, inside: true })) : shapes));
   // Its cable's power and its port's light, drawn right after it.
   B.items.push({
     layer: B.layer,
     depth: -1e5,
-    shapes: [{ d: "", slot: { kind: "car", flow: right ? B.cam.line(last) : "", port } }],
+    shapes: [{ d: "", slot: { kind: "car", flow: sees(1, 0.9) ? B.cam.line(last) : "", port } }],
   });
   if (!inGarage)
     B.casters.push(
-      STATIONS.filter((_, i) => i % 3 === 0).flatMap((st) => {
-        const side = carSide(st);
-        return [side[2], side[7]].flatMap(([w, z]) => [Q(-w, st.u, z), Q(w, st.u, z)]);
+      CAR_U.filter((_, i) => i % 4 === 0).flatMap((u) => {
+        const side = carSide(u);
+        return [side[3], side[10]].flatMap(([w, z]) => [W([-w, u, z]), W([w, u, z])]);
       }),
     );
   B.layer = 0;
@@ -2769,7 +3010,7 @@ export function houseArt(
     const op = s.opacity != null ? ` opacity="${s.opacity}"` : "";
     svg += s.stroke
       ? `<path d="${s.d}" fill="none" stroke="${bake(s.stroke, s)}" stroke-width="${s.width}" stroke-linecap="round"${op}${clip}/>`
-      : `<path d="${s.d}" fill="${bake(s.fill, s)}"${op}${clip}/>`;
+      : `<path d="${s.d}" fill="${bake(s.fill, s)}"${s.seam ? ` stroke="${bake(s.fill, s)}" stroke-width="${s.seam}" stroke-linejoin="round"` : ""}${op}${clip}/>`;
     if (s.fill === "url(#lh-glass)") {
       // What a row of panels' glass shows: the sky's colour (more of it towards night), the warmth of making power and
       // a band of light crossing it (in its slot), wet in rain, the moon in it, then the light of the moment.
