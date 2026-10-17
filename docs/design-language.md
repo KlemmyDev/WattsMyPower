@@ -23,6 +23,9 @@ Two columns      7fr | 5fr, items-start, gap-5; one column below 3xl
   `flex min-w-0 flex-col gap-5`. On one column, use `max-3xl:contents` and `max-3xl:order-N` to put the most useful
   card (controls, say) first.
 - Balance the columns by moving cards around, never by making anything sticky.
+- Simple cards, three across (Grid's, in `features/grid/components/GridCards.tsx`): a small title with a word on it
+  in the corner, one picture (hour bars, a short list, a range bar) and a sentence on what it means. Two across on a
+  narrower page and one on a phone (an `@container` grid). The fuller versions stay dashboard widgets.
 
 ## The sky hero (the live pages)
 
