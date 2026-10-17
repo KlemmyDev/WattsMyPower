@@ -186,7 +186,7 @@ export function NavPower({ full }: { full: boolean }) {
       color={COLOR.gridSoft}
       lit={Math.abs(g) > ON}
       v={f.grid}
-      k={f.verb.replace(/ing$/, "")}
+      k={f.verb === "Nothing flowing" ? "No flow" : f.verb.replace(/ing$/, "")}
       on={f.g}
     />,
   ].filter(Boolean);
