@@ -100,7 +100,9 @@ function BatteryMonths({ months }: { months: BatteryMonth[] }) {
           {shown.map((m) => (
             <tr key={m.month} className="border-t border-line-subtle">
               <td className="py-1.5">{monthYear.format(parseYmd(m.month))}</td>
-              <td className="py-1.5 text-right">{pct(m.soh)}</td>
+              <td className="py-1.5 text-right">
+                {m.soh == null ? <span className="text-ink-muted">Not reported</span> : pct(m.soh)}
+              </td>
               <td className="py-1.5 text-right">{pct(m.efficiency)}</td>
               <td className="py-1.5 text-right">{m.cycles ?? DASH}</td>
             </tr>
