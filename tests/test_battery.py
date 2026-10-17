@@ -131,7 +131,7 @@ def test_standby_forces_a_stop_and_stopping_puts_self_consumption_back(
     v = svc.stop()
     assert regs.writes == [(13051, 0xCC), (13050, 0)]
     assert v["control"] is None and v["owner"] == "normal"
-    assert v["log"][0]["text"].startswith("Standby ended (stopped)")
+    assert v["log"][0]["text"].startswith("Standby ended (you stopped it)")
 
 
 def test_a_floor_sets_min_soc_and_its_end_puts_the_usual_one_back(
