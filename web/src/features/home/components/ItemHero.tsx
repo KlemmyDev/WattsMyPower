@@ -322,7 +322,7 @@ export function itemStats({
     stats.push(
       <HeroStat
         key="peak"
-        label="Peak today"
+        label="Highest draw today"
         value={kW(peak.w)}
         sub={`At ${hhmm(peak.ts)}${many ? `, ${name(peak.device)}` : ""}`}
       />,
