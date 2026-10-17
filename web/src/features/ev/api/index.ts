@@ -50,8 +50,14 @@ export const configureEv = ({
   vin,
   brand = "tesla",
   ...body
-}: EvControlChange & { vin: string; brand?: EvBrand; car?: number | null; home?: "here" | null }) =>
-  apiSend<TeslaStatus | BluelinkStatus>("PUT", `${brand}/vehicles/${vin}`, body);
+}: EvControlChange & {
+  vin: string;
+  brand?: EvBrand;
+  car?: number | null;
+  home?: "here" | null;
+  /** A Tesla's paint (#rrggbb), when it has no dashboard car to keep it; null: what Tesla says. */
+  paint?: string | null;
+}) => apiSend<TeslaStatus | BluelinkStatus>("PUT", `${brand}/vehicles/${vin}`, body);
 
 export const commandEv = ({ vin, brand = "tesla", ...body }: EvCommand & { vin: string; brand?: EvBrand }) =>
   apiSend<TeslaStatus | BluelinkStatus>("POST", `${brand}/vehicles/${vin}/command`, body);

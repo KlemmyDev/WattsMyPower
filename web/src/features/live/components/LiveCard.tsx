@@ -23,6 +23,7 @@ import { lightAt, seriesAt, valueAt } from "~/features/live/utils/day";
 import { carsQuery } from "~/features/car/api";
 import { addDays } from "~/features/common/time/utils";
 import { levelsQuery } from "~/features/ev/api";
+import { CarPaint } from "~/features/ev/components/CarPaint";
 import { houseOptions } from "~/features/overview/utils/house/options";
 import { houseCars } from "~/features/overview/utils/houseCars";
 import { place } from "~/features/solar/utils";
@@ -184,7 +185,12 @@ export function LiveCard({ hero, day }: { hero: LiveHero; day: LiveDay }) {
           ? 0
           : (levels.power.find((r) => Math.abs(r.t + 150 - view) <= 150)?.w ?? 0) / 1000);
   const park = cars[ci]?.park;
-  const paint = cars[ci]?.paint ?? "#e9ebee";
+  // A paint being tried from the EV page's picker shows on the car before it's saved.
+  const [trial, setTrial] = useState<string | null>(null);
+  const saved = cars[ci]?.paint ?? "#e9ebee";
+  const paint = trial ?? saved;
+  // Once what's saved says it (the live status takes a moment to catch up), the trial's done.
+  if (trial && trial.toLowerCase() === saved.toLowerCase()) setTrial(null);
   const house = useMemo(() => houseOptions(s, park ? [park] : []), [s, park]);
   const parts = useMemo(() => ({ ev: !!ev, car: !!ev && carHome, paint }), [ev, carHome, paint]);
   const state = useMemo(
@@ -247,6 +253,17 @@ export function LiveCard({ hero, day }: { hero: LiveHero; day: LiveDay }) {
             <LiveHouse house={house} spot={page} phone={phone} light={light} parts={parts} state={state} lite={lite} />
           }
         />
+        {/* On EV, the car's paint, picked over the car itself. */}
+        {page === "ev" && ev && carHome && (cars[ci]?.id != null || ev.make === "Tesla") && (
+          <CarPaint
+            id={cars[ci]?.id}
+            vin={ev.vin}
+            hex={paint}
+            tesla={ev.make === "Tesla"}
+            onTry={setTrial}
+            className="absolute right-[22px] bottom-[72px] z-2 max-sm:right-5 max-sm:bottom-14"
+          />
+        )}
         {/* The page's title and how it's going, up in the sky (never over its fade into the card) on the sky's own
             wash, and the weather in the other corner (beside the title on a phone). */}
         <div className="absolute top-[26px] right-[22px] left-7 flex items-start justify-between gap-4 max-sm:top-[18px] max-sm:right-5 max-sm:left-5 max-sm:flex-wrap max-sm:items-center max-sm:gap-y-1">
