@@ -28,6 +28,7 @@ from app.features.bluelink.router import router as bluelink_router
 from app.features.byd.router import router as byd_router
 from app.features.car.router import router as car_router
 from app.features.dashboards.router import router as dashboards_router
+from app.features.embed.router import router as embed_router
 from app.features.forecast.router import router as forecast_router
 from app.features.grid.router import router as grid_router
 from app.features.home.router import router as home_router
@@ -51,6 +52,7 @@ log = logging.getLogger(__name__)
 
 ROUTERS = [
     auth_router,
+    embed_router,
     live_router,
     readings_router,
     tariffs_router,

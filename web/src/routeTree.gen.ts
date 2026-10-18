@@ -28,6 +28,7 @@ import { Route as AppPlanRouteImport } from './routes/_app/plan'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppSavingsRouteImport } from './routes/_app/savings'
 import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
+import { Route as EmbedPowerRouteImport } from './routes/embed.power'
 import { Route as AppLiveBatteryRouteImport } from './routes/_app/_live/battery'
 import { Route as AppLiveGridRouteImport } from './routes/_app/_live/grid'
 import { Route as AppLiveSolarRouteImport } from './routes/_app/_live/solar'
@@ -43,6 +44,7 @@ import { Route as AppSettingsSplatRouteImport } from './routes/_app/settings/$'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsCostRouteImport } from './routes/_app/settings/cost'
 import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
+import { Route as AppSettingsEmbedRouteImport } from './routes/_app/settings/embed'
 import { Route as AppSettingsHouseRouteImport } from './routes/_app/settings/house'
 import { Route as AppSettingsLocationRouteImport } from './routes/_app/settings/location'
 import { Route as AppSettingsSolarBatteryRouteImport } from './routes/_app/settings/solar-battery'
@@ -170,6 +172,11 @@ const AppSettingsRouteRoute = AppSettingsRouteRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const EmbedPowerRoute = EmbedPowerRouteImport.update({
+  id: '/embed/power',
+  path: '/embed/power',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppLiveBatteryRoute = AppLiveBatteryRouteImport.update({
   id: '/battery',
   path: '/battery',
@@ -243,6 +250,11 @@ const AppSettingsCostRoute = AppSettingsCostRouteImport.update({
 const AppSettingsDataRoute = AppSettingsDataRouteImport.update({
   id: '/data',
   path: '/data',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSettingsEmbedRoute = AppSettingsEmbedRouteImport.update({
+  id: '/embed',
+  path: '/embed',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
 const AppSettingsHouseRoute = AppSettingsHouseRouteImport.update({
@@ -443,6 +455,7 @@ export interface FileRoutesByFullPath {
   '/plan': typeof AppPlanRoute
   '/rates': typeof AppRatesRoute
   '/savings': typeof AppSavingsRoute
+  '/embed/power': typeof EmbedPowerRoute
   '/battery': typeof AppLiveBatteryRoute
   '/grid': typeof AppLiveGridRoute
   '/solar': typeof AppLiveSolarRoute
@@ -456,6 +469,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/cost': typeof AppSettingsCostRoute
   '/settings/data': typeof AppSettingsDataRoute
+  '/settings/embed': typeof AppSettingsEmbedRoute
   '/settings/house': typeof AppSettingsHouseRoute
   '/settings/location': typeof AppSettingsLocationRoute
   '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
@@ -508,6 +522,7 @@ export interface FileRoutesByTo {
   '/plan': typeof AppPlanRoute
   '/rates': typeof AppRatesRoute
   '/savings': typeof AppSavingsRoute
+  '/embed/power': typeof EmbedPowerRoute
   '/battery': typeof AppLiveBatteryRoute
   '/grid': typeof AppLiveGridRoute
   '/solar': typeof AppLiveSolarRoute
@@ -521,6 +536,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/cost': typeof AppSettingsCostRoute
   '/settings/data': typeof AppSettingsDataRoute
+  '/settings/embed': typeof AppSettingsEmbedRoute
   '/settings/house': typeof AppSettingsHouseRoute
   '/settings/location': typeof AppSettingsLocationRoute
   '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
@@ -577,6 +593,7 @@ export interface FileRoutesById {
   '/_app/plan': typeof AppPlanRoute
   '/_app/rates': typeof AppRatesRoute
   '/_app/savings': typeof AppSavingsRoute
+  '/embed/power': typeof EmbedPowerRoute
   '/_app/': typeof AppIndexRoute
   '/_app/_live/battery': typeof AppLiveBatteryRoute
   '/_app/_live/grid': typeof AppLiveGridRoute
@@ -591,6 +608,7 @@ export interface FileRoutesById {
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/cost': typeof AppSettingsCostRoute
   '/_app/settings/data': typeof AppSettingsDataRoute
+  '/_app/settings/embed': typeof AppSettingsEmbedRoute
   '/_app/settings/house': typeof AppSettingsHouseRoute
   '/_app/settings/location': typeof AppSettingsLocationRoute
   '/_app/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
@@ -647,6 +665,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/rates'
     | '/savings'
+    | '/embed/power'
     | '/battery'
     | '/grid'
     | '/solar'
@@ -660,6 +679,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/cost'
     | '/settings/data'
+    | '/settings/embed'
     | '/settings/house'
     | '/settings/location'
     | '/settings/solar-battery'
@@ -712,6 +732,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/rates'
     | '/savings'
+    | '/embed/power'
     | '/battery'
     | '/grid'
     | '/solar'
@@ -725,6 +746,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/cost'
     | '/settings/data'
+    | '/settings/embed'
     | '/settings/house'
     | '/settings/location'
     | '/settings/solar-battery'
@@ -780,6 +802,7 @@ export interface FileRouteTypes {
     | '/_app/plan'
     | '/_app/rates'
     | '/_app/savings'
+    | '/embed/power'
     | '/_app/'
     | '/_app/_live/battery'
     | '/_app/_live/grid'
@@ -794,6 +817,7 @@ export interface FileRouteTypes {
     | '/_app/settings/account'
     | '/_app/settings/cost'
     | '/_app/settings/data'
+    | '/_app/settings/embed'
     | '/_app/settings/house'
     | '/_app/settings/location'
     | '/_app/settings/solar-battery'
@@ -835,6 +859,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   WelcomeRoute: typeof WelcomeRoute
+  EmbedPowerRoute: typeof EmbedPowerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -972,6 +997,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteRouteImport
       parentRoute: typeof AppRoute
     }
+    '/embed/power': {
+      id: '/embed/power'
+      path: '/embed/power'
+      fullPath: '/embed/power'
+      preLoaderRoute: typeof EmbedPowerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/_live/battery': {
       id: '/_app/_live/battery'
       path: '/battery'
@@ -1075,6 +1107,13 @@ declare module '@tanstack/react-router' {
       path: '/data'
       fullPath: '/settings/data'
       preLoaderRoute: typeof AppSettingsDataRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/embed': {
+      id: '/_app/settings/embed'
+      path: '/embed'
+      fullPath: '/settings/embed'
+      preLoaderRoute: typeof AppSettingsEmbedRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
     '/_app/settings/house': {
@@ -1375,6 +1414,7 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
   AppSettingsCostRoute: typeof AppSettingsCostRoute
   AppSettingsDataRoute: typeof AppSettingsDataRoute
+  AppSettingsEmbedRoute: typeof AppSettingsEmbedRoute
   AppSettingsHouseRoute: typeof AppSettingsHouseRoute
   AppSettingsLocationRoute: typeof AppSettingsLocationRoute
   AppSettingsSolarBatteryRoute: typeof AppSettingsSolarBatteryRoute
@@ -1387,6 +1427,7 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
   AppSettingsCostRoute: AppSettingsCostRoute,
   AppSettingsDataRoute: AppSettingsDataRoute,
+  AppSettingsEmbedRoute: AppSettingsEmbedRoute,
   AppSettingsHouseRoute: AppSettingsHouseRoute,
   AppSettingsLocationRoute: AppSettingsLocationRoute,
   AppSettingsSolarBatteryRoute: AppSettingsSolarBatteryRoute,
@@ -1484,6 +1525,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   WelcomeRoute: WelcomeRoute,
+  EmbedPowerRoute: EmbedPowerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

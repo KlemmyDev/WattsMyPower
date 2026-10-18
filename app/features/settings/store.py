@@ -35,6 +35,8 @@ TEXT: dict[str, int] = {
     "home_street": 80,
     "home_suburb": 60,
 }
+# kv: the token for the shared power summary page (app.features.embed), or none while sharing is off.
+EMBED_TOKEN = "embed_token"
 # The time zone chosen in Settings → Location, by IANA name ("Australia/Perth"), or "auto" (the default): the location's.
 ZONE = "time_zone"
 # kv: the location's own time zone, looked up when it's chosen (app.features.settings.router.zone_location).
@@ -195,7 +197,7 @@ class SettingsStore:
     def load(self) -> None:
         with self.db.reading() as conn:
             rows = conn.execute("SELECT key, value FROM settings").fetchall()
-            keys = [*TEXT, *CHOICES, *LISTS, ZONE, LOCATION_ZONE]
+            keys = [*TEXT, *CHOICES, *LISTS, ZONE, LOCATION_ZONE, EMBED_TOKEN]
             marks = ",".join("?" * len(keys))
             text = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({marks})", keys).fetchall()
         with self._lock:
@@ -265,6 +267,13 @@ class SettingsStore:
     def get_text(self, key: str) -> str | None:
         with self._lock:
             return self._text.get(key)
+
+    def embed_token(self) -> str | None:
+        """The token the shared power summary needs, or None while sharing is off."""
+        return self.get_text(EMBED_TOKEN) or None
+
+    def set_embed_token(self, token: str | None) -> None:
+        self._store({EMBED_TOKEN: token})
 
     def zone_choice(self) -> str:
         """The time zone chosen in Settings, or "auto" for the location's."""
