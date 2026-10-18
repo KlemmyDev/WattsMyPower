@@ -170,7 +170,11 @@ function Circuit({
         "/solar": kW(p.pv_power),
         "/home": kW(p.load_power),
         "/battery": pct(p.battery_soc),
-        "/grid": p.grid_power == null ? undefined : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
+        "/grid": live?.off_grid
+          ? "Off grid"
+          : p.grid_power == null
+            ? undefined
+            : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
         // Each car's charge.
         "/ev": ev?.length ? ev.map((c) => pct(c.soc)).join(" · ") : undefined,
       }
@@ -257,6 +261,7 @@ function Circuit({
                 icon={i.icon}
                 label={i.label}
                 value={LIVE_PAGES.has(i.to) ? value[i.to] : undefined}
+                ok={i.to === "/grid" && live?.grid_healthy === true}
                 color={i.color}
                 full={full}
                 on={current === i.to}
@@ -282,6 +287,7 @@ function Circuit({
                       icon={i.icon}
                       label={i.label}
                       value={LIVE_PAGES.has(i.to) ? value[i.to] : undefined}
+                      ok={i.to === "/grid" && live?.grid_healthy === true}
                       color={i.color}
                       full={full}
                       on={current === i.to}
@@ -308,6 +314,7 @@ function CircuitLink({
   icon,
   label,
   value,
+  ok,
   color,
   full,
   on,
@@ -318,6 +325,8 @@ function CircuitLink({
   icon: IconName;
   label: string;
   value?: string;
+  /** A small green dot by the value: all is well (the grid is connected and its supply normal). */
+  ok?: boolean;
   /** The section's colour: its node glows in it, and the row takes a wash of it, once it's the current page. */
   color: string;
   full: boolean;
@@ -346,6 +355,9 @@ function CircuitLink({
       {full ? (
         <>
           <span className="circuit-label min-w-0 flex-1 truncate">{label}</span>
+          {value && ok && (
+            <i aria-hidden title="Connected, supply normal" className="size-1.5 flex-none rounded-full bg-good/80" />
+          )}
           {value && (
             <Glint value={value} className="circuit-value flex-none text-xs font-normal text-ink-faint tabular-nums" />
           )}

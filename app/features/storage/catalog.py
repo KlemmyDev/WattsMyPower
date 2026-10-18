@@ -200,6 +200,14 @@ DASHBOARD: dict[str, Table] = {
         grows=True,
         retention=90,
     ),
+    "grid_events": Table(
+        "readings",
+        "Off-grid events",
+        "Each time your inverter ran the house without the grid, a blackout usually, and when the grid came back. The "
+        "Grid page lists them.",
+        "Kept for good",
+        Spec("start"),
+    ),
     "ev_events": Table(
         "cars",
         "Activity",

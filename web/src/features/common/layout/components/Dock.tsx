@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Glint } from "~/features/common/ui/components/Glint";
 import { Icon, type IconName } from "~/features/common/ui/components/Icon";
+import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { batteryState, gridVerb, ON } from "~/features/common/energy/utils";
 import { kW } from "~/features/common/formatting/utils/number";
@@ -16,6 +17,7 @@ import { cn } from "~/features/common/ui/utils";
 /** The power flow right now, for the dock and the side nav: the readings (gliding to each minute's), and how to say them. */
 function usePowerNow() {
   const p = useSnapshot();
+  const off = useLive()?.off_grid;
   const batMode = useBatteryMode();
   const none = useNoBattery();
   const now = useNow(30_000);
@@ -31,7 +33,7 @@ function usePowerNow() {
   const { pv_power: pv, grid_power: g, battery_power: b, load_power: l } = p;
   const soc = p.battery_soc ?? 0;
   const st = batteryState(b);
-  const verb = gridVerb(g);
+  const verb = gridVerb(g, off);
   const batVerb = st === "charge" ? "Charging" : st === "discharge" ? "Discharging" : "Idle";
   // What it's set to do, when that's anything but normal (standby, a floor, a charge, iSolarCloud…).
   const mode = batMode ? describeMode(batMode, now) : null;
@@ -53,7 +55,7 @@ function usePowerNow() {
     verb,
     solar: kW(t.pv),
     home: `${l != null && l < 0 ? "−" : ""}${kW(t.l)}`,
-    grid: kW(t.g),
+    grid: off ? "Off" : kW(t.g),
     ring: `${(Math.max(0, Math.min(100, t.soc ?? soc)) * 3.6).toFixed(1)}deg`,
     battery: moving ? kW(t.b) : special?.label === "Standby" ? "Standby" : "Idle",
     arrow: st === "charge" ? "↑ " : st === "discharge" ? "↓ " : "",

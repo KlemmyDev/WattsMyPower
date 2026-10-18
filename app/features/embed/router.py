@@ -53,5 +53,6 @@ async def power(svc: ServicesDep, token: str = ""):
         "grid_w": p.get("grid_power"),
         "battery_w": p.get("battery_power"),
         "battery_pct": p.get("battery_soc"),
+        **{k: v for k, v in svc.live.grid_connection().items() if k in ("off_grid", "grid_healthy")},
         "updated": svc.live.last_success,
     }

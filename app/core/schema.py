@@ -482,6 +482,16 @@ def _drop_alerts(conn: sqlite3.Connection) -> None:
     conn.execute("DELETE FROM kv WHERE key = 'webpush_vapid'")
 
 
+def _grid_events(conn: sqlite3.Connection) -> None:
+    """Each time the inverter ran the house without the grid (kind "off_grid"): when it began and, once the grid was
+    back, when it ended (NULL while it's still going). Kept for good: they're few, and worth looking back on."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS grid_events (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,"
+        " start INTEGER NOT NULL, end INTEGER)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS grid_events_by_start ON grid_events (kind, start)")
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -512,6 +522,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _ev_levels,
     _drop_alerts,
     _home_looks,
+    _grid_events,
 ]
 
 

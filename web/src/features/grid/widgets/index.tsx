@@ -5,6 +5,7 @@ import { Icon } from "~/features/common/ui/components/Icon";
 import { Quiet, WidgetCard } from "~/features/common/widgets/parts";
 import type { WidgetDef, WidgetProps } from "~/features/common/widgets/types";
 import { gridQuery } from "~/features/grid/api";
+import { useGridConnection } from "~/features/grid/components/GridConnection";
 import { GridOverviewCard } from "~/features/grid/components/GridOverviewCard";
 import { GridHero } from "~/features/grid/components/GridHero";
 import { MarketCard, NoticesCard, QualityCard } from "~/features/grid/components/GridMore";
@@ -22,7 +23,9 @@ const loading = (title: string) => (
 /** The grid's outlook as the Overview's banner (outages, warnings, a price spike); while all's normal, a quiet line. */
 function Status({ ctx, h }: WidgetProps) {
   const { data } = useQuery(gridQuery);
+  const { offGrid, healthy } = useGridConnection();
   const quiet =
+    !offGrid &&
     data &&
     data.outlook.level === "normal" &&
     !(data.outages?.now.some((o) => !o.planned) || data.outages?.planned.some((o) => o.affects));
@@ -34,7 +37,10 @@ function Status({ ctx, h }: WidgetProps) {
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="text-[15px] font-semibold">The grid's running normally</span>
-        <span className="truncate text-[13px] text-ink-muted">No outages or warnings near you</span>
+        <span className="truncate text-[13px] text-ink-muted">
+          {offGrid === false ? (healthy ? "On the grid, supply normal. " : "On the grid. ") : ""}No outages or warnings
+          near you
+        </span>
       </span>
     </WidgetCard>
   );

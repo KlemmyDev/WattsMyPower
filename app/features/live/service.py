@@ -6,16 +6,19 @@ Fed by the ingest loop (or the simulator in mock mode) and fanned out to the eve
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from app.core.config import Config
 from app.core.timezone import site_zone
 from app.core.version import about
+from app.features.grid.events import supply_healthy
 from app.features.inverters.types import Snapshot
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
 
 Status = dict[str, Any]
+FRESH = 300  # seconds a reading still counts as now
 
 
 class LiveService:
@@ -42,6 +45,10 @@ class LiveService:
         self._ev: dict[str, list[dict[str, Any]] | None] = {}  # each integration's cars (None: not connected)
         # The second inverter, when the collector has one configured.
         self.pv2: dict[str, Any] | None = None
+        # While the inverter runs the house without the grid: when that began (set by app.features.grid.events). And
+        # whether any reading has said either way yet: not every inverter reports it.
+        self.off_grid_since: int | None = None
+        self.off_grid_known = False
         self._subscribers: set[asyncio.Queue[Status]] = set()
 
     def set_ev(self, source: str, cars: list[dict[str, Any]] | None) -> bool:
@@ -127,4 +134,16 @@ class LiveService:
             # The zone the days above are kept in, so the dashboard draws times in it whatever the browser's is.
             "time_zone": site_zone(),
             "ev": self.ev,
+            **self.grid_connection(),
         }
+
+    def grid_connection(self) -> dict[str, Any]:
+        """Whether the house is running without the grid, from the latest readings: true or false, or None when this
+        inverter doesn't say or it hasn't been heard from lately. And since when, while it is."""
+        fresh = self.last_success is not None and time.time() - self.last_success < FRESH
+        if not (fresh and self.off_grid_known):
+            return {"off_grid": None, "off_grid_since": None, "grid_healthy": None}
+        off = self.off_grid_since is not None
+        # Healthy: connected, and the supply's voltage and frequency in their normal range.
+        healthy = None if off else supply_healthy(self.latest)
+        return {"off_grid": off, "off_grid_since": self.off_grid_since, "grid_healthy": healthy}

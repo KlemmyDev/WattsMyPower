@@ -107,4 +107,10 @@ export type LiveStatus = {
   time_zone?: string | null;
   /** Each EV in brief (app.features.tesla); null when none is connected. */
   ev?: EvBrief[] | null;
+  /** Whether the inverter is running the house without the grid (a blackout, usually); null when this inverter doesn't
+   * say, or it hasn't been heard from lately. And since when (unix seconds), while it is. */
+  off_grid?: boolean | null;
+  off_grid_since?: number | null;
+  /** On the grid, with its voltage and frequency in their normal range; null when that is not known. */
+  grid_healthy?: boolean | null;
 };

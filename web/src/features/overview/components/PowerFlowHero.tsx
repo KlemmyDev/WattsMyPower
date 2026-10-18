@@ -714,6 +714,7 @@ function Readout({
         tone={tone}
       />
     ) : null;
+  const offGrid = useLive()?.off_grid;
   const sun = (p.pv_power ?? 0) > ON;
   const dir = g == null ? null : g > ON ? "in" : g < -ON ? "out" : null;
   const gridColor = dir === "in" ? COLOR.import : dir === "out" ? COLOR.export : COLOR.ink;
@@ -769,7 +770,7 @@ function Readout({
               icon={<Icon name="grid" size={18} />}
               // tinted by which way the power's going: in from the grid, or out to it
               iconStyle={{ background: dir ? alpha(gridColor, 0.18) : alpha(COLOR.fg, 0.08), color: gridColor }}
-              k={gridVerb(g)}
+              k={gridVerb(g, offGrid)}
               v={grid[0]}
               unit={grid[1]}
             />
