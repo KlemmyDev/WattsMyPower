@@ -4,7 +4,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { reducedMotion } from "~/features/common/display/utils";
 import { ON } from "~/features/common/energy/utils";
-import { kW, kWh, pct } from "~/features/common/formatting/utils/number";
+import { kW, pct } from "~/features/common/formatting/utils/number";
 import { NavPower } from "~/features/common/layout/components/Dock";
 import { NAV_DOCKED, useMedia, useNavItems, useSectionPages } from "~/features/common/layout/hooks";
 import { NAV_GROUPS, sectionOf, type SectionPages } from "~/features/common/layout/utils";
@@ -168,7 +168,6 @@ function Circuit({
         "/home": kW(p.load_power),
         "/battery": pct(p.battery_soc),
         "/grid": p.grid_power == null ? undefined : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
-        "/history": kWh(p.daily_pv),
         // Each car's charge.
         "/ev": ev?.length ? ev.map((c) => pct(c.soc)).join(" · ") : undefined,
       }
