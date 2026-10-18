@@ -363,7 +363,7 @@ function linesOf(c: CostDay, t: Tariff, now: number): { rows: Line[]; note: stri
     rows.push(supply, {
       key: "solar",
       dot: COLOR.solar,
-      label: c.feed_in_credit < 0 ? "Solar export cost" : "Solar credit",
+      label: c.feed_in_credit < 0 ? "Solar export cost" : "Exported",
       sub: fit != null ? `Exported at an average ${priceLabel(fit)} per kWh` : "Nothing exported yet",
       cost: money(-c.feed_in_credit),
       saved: money(c.feed_in_credit),
@@ -419,7 +419,7 @@ function linesOf(c: CostDay, t: Tariff, now: number): { rows: Line[]; note: stri
   rows.push(supply, {
     key: "solar",
     dot: COLOR.solar,
-    label: "Solar credit",
+    label: "Exported",
     sub: `Exported at ${centsShort(tariffNumber(t.feed_in_rate))} per kWh`,
     cost: money(-c.feed_in_credit),
     saved: money(c.feed_in_credit),
