@@ -89,12 +89,13 @@ export function WaysToSave({
 }) {
   const tips = bills.tips;
   const days = bills.current.so_far.days;
-  const worth = tips.reduce((a, t) => a + (t.saving ?? 0), 0);
+  // The headline adds up the tips as they're shown (each rounded to whole dollars), so the two agree.
+  const worth = tips.reduce((a, t) => a + Math.round(t.saving ?? 0), 0);
   return (
     <Card aria-labelledby="h-ways" className={className}>
       <div className="flex items-end justify-between gap-4">
         <TitleBlock id="h-ways" title="Ways to pay less" sub="From your last 30 days at today's rates" />
-        {worth >= 1 && <Corner label="Worth about" value={dollars(worth)} sub="a bill, roughly" />}
+        {worth >= 1 && <Corner label="Worth up to" value={dollars(worth)} sub="a bill, from the tips below" />}
       </div>
       {tips.length === 0 ? (
         <Muted>
