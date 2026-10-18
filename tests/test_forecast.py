@@ -15,7 +15,7 @@ from app.features.readings.repository import ReadingsRepository
 from app.features.settings.store import SettingsStore
 from app.features.weather.service import WeatherService
 
-DAYS = 14
+DAYS = 15
 NOW = int(time.mktime(time.strptime("2026-10-02 20:00", "%Y-%m-%d %H:%M")))
 
 
@@ -69,7 +69,7 @@ def test_the_home_use_basis_lists_whole_days_and_the_typical_day(db: Database, s
     assert time.strftime("%Y-%m-%d", time.localtime(NOW)) not in dates  # today isn't over
     assert len(dates) == DAYS - 2 and all(d["kwh"] == pytest.approx(24 * 0.8) for d in basis["days"])
     assert basis["hours_known"] == 24 and basis["typical_kwh"] == pytest.approx(24 * 0.8)
-    assert basis["window_days"] == 14
+    assert basis["window_days"] == 15
     assert basis["profile_kw"] == [pytest.approx(0.8)] * 24
 
 

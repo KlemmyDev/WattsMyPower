@@ -50,7 +50,7 @@ DEFAULT_LOAD = [0.4, 0.35, 0.35, 0.35, 0.35, 0.4, 0.8, 1.5, 1.2, 0.7, 0.6, 0.6,
                 0.7, 0.8, 0.7, 0.7, 0.9, 1.4, 2.2, 2.4, 2.0, 1.4, 0.8, 0.5]  # fmt: skip
 
 OUTLOOK_DAYS = 3  # today and the next two: as far as the stored weather forecast reaches
-LOAD_DAYS = 14  # days of home use the forecast's typical day is worked out from
+LOAD_DAYS = 15  # days of home use the forecast's typical day is worked out from
 MIN_LOAD_HOURS = 20  # hours of a day with readings before its home use is shown as a whole day
 # Solar power readings run a little above the energy the inverters count (an SH5.0RS 2% over, an SG5K-D 4%: power
 # read before the inverter's own losses), so what the panels made is the readings scaled to the day's count.
