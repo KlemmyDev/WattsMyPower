@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { billsQuery, paybackQuery } from "~/features/bills/api";
+import { yearlySaving } from "~/features/bills/utils";
 import { Corner } from "~/features/bills/components/BillParts";
 import { useNow } from "~/features/common/time/hooks";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
@@ -17,7 +18,7 @@ export function Payback({ className }: { className?: string }) {
   // The year's saving is the one Your bills shows for the next 12 months, so the two agree; the payback date
   // follows from it. Until that's worked out, the rate the readings so far give.
   const ny = bills?.next_year;
-  const perYear = ny ? Math.round(ny.without_solar - ny.net_cost) : p.per_year;
+  const perYear = yearlySaving(ny, p.per_year);
   const left = p.cost && p.saved_total != null ? p.cost - p.saved_total : null;
   const payback_at =
     ny && perYear != null && perYear > 0 && left != null && left > 0

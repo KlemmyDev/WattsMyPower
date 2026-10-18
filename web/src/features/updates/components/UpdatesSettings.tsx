@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "~/features/common/api/utils";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { plural } from "~/features/common/formatting/utils/number";
@@ -128,6 +128,17 @@ function UpdatesBody() {
   const s = status.data;
   const on = save.isPending ? !!save.variables?.update_check : !!s?.enabled;
   const underWay = !!s && UNDER_WAY.has(s.install.state);
+  // Straight after a restart (an update, say) nothing has been checked yet: look once on opening the page, quietly,
+  // rather than saying "Not checked yet" beside a button.
+  const autoChecked = useRef(false);
+  const needsCheck = !!s && s.enabled && !s.checked_at && !s.error && !underWay;
+  useEffect(() => {
+    if (!needsCheck || autoChecked.current) return;
+    autoChecked.current = true;
+    checkForUpdates()
+      .then((fresh) => qc.setQueryData(updatesQuery.queryKey, fresh))
+      .catch(() => {});
+  }, [needsCheck, qc]);
   const following = channel.isPending ? channel.variables : s?.channel;
   const older = s?.move === "older";
   // Once the new version answers, load its dashboard: the page here is the old one's.

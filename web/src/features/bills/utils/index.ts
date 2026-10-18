@@ -6,6 +6,15 @@ import { fromDateKey, partsOf, siteTime } from "~/features/common/time/utils";
 /** A bill in whole dollars, with credits saying so: "$412", "$38 credit". */
 export const billAmount = (v: number) => (v < 0 ? `${dollars(-v)} credit` : dollars(v));
 /** A running total to the cent, with credits saying so: "$41.20", "$3.80 credit". */
+/**
+ * What the system saves a year: the next 12 months' bills against the grid alone (what Your bills shows), so every
+ * yearly figure agrees; until that's worked out, the rate the readings so far give (`fallback`).
+ */
+export const yearlySaving = (
+  ny: { net_cost: number; without_solar: number } | null | undefined,
+  fallback: number | null | undefined,
+) => (ny ? Math.round(ny.without_solar - ny.net_cost) : (fallback ?? null));
+
 export const billCents = (v: number) => (v < 0 ? `${money(-v)} credit` : money(v));
 
 /** "1 Sep" from "2026-09-01". */

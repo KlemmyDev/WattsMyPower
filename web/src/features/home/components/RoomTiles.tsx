@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useState, type ReactNode } from "react";
-import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
+import { hhmm } from "~/features/common/formatting/utils/date";
 import { dollars, kW, kWh, money, pct } from "~/features/common/formatting/utils/number";
 import { STORE_HOME_VIEW, store } from "~/features/common/storage/utils";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -293,7 +293,6 @@ export function ItemTile({
   const drawW = reading.reduce((a, d) => a + (d.now!.power_w ?? 0), 0);
   const estimated = reading.some((d) => d.now!.estimated && (d.now!.power_w ?? 0) > 0);
   const offline = !reading.length;
-  const lastRead = Math.max(0, ...m.map((d) => d.now?.at ?? 0));
   const lit = reading.some((d) => d.now!.running || drawing(d) != null);
   const run = runningOf(m);
   const used = today?.devices.find((u) => u.id === item.id);
@@ -355,9 +354,7 @@ export function ItemTile({
       }
       foot={
         offline
-          ? lastRead
-            ? `Not read since ${lastRead >= midnight(now) ? "" : `${shortDay.format(lastRead * 1000)}, `}${hhmm(lastRead)}`
-            : "Not read yet. Check its connection in Integrations"
+          ? "Not reachable. Check it in Integrations"
           : run
             ? `${item.group ? `${run.device.name} · ` : ""}${run.phase}`
             : item.group

@@ -102,7 +102,9 @@ export function YourPanels({ p, s, now }: { p: Snapshot | null; s: SystemInfo | 
               <span className={cn("mt-1.5 size-2 flex-none rounded-full", uneven ? "bg-solar" : "bg-good")} />
               <span>
                 {strings.apart == null
-                  ? "Both strings are resting."
+                  ? strings.list.every((x) => (x.w ?? 0) <= 20)
+                    ? "Both strings are resting."
+                    : "Not enough sun yet to compare the strings."
                   : uneven && weak && strong
                     ? `String ${weak.n} is about ${pct((1 - (weak.w ?? 0) / Math.max(strong.w ?? 0, 1)) * 100)} behind string ${strong.n} right now. Strings that face different ways always differ, but if it's well behind in full sun, look for shade, dirt or a fault.`
                     : "Both strings are working evenly."}

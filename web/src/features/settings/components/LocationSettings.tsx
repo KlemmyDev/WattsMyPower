@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { locationLabel } from "~/features/common/energy/utils";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useSaveSettings } from "~/features/common/settings/hooks";
 import { saveSettingsError } from "~/features/common/settings/utils";
-import { Select } from "~/features/common/ui/components/Field";
+import { Input, Select } from "~/features/common/ui/components/Field";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { gridQuery } from "~/features/grid/api";
 import { DaylightVisual } from "~/features/settings/components/DaylightVisual";
@@ -44,40 +44,57 @@ function TimeZone({ chosen, found }: { chosen: string; found: string | null }) {
   const toast = useToast();
   const value = (save.isPending ? save.variables?.time_zone : chosen) ?? "auto";
   const known = value === "auto" || ZONES.aus.includes(value) || ZONES.rest.includes(value);
+  // Typing narrows the list to the zones whose name has it ("syd", "new york"); the chosen one always stays in.
+  const [find, setFind] = useState("");
+  const q = find.trim().toLowerCase().replace(/\s+/g, "_");
+  const shown = (zones: string[]) => (q ? zones.filter((z) => z === value || z.toLowerCase().includes(q)) : zones);
+  const aus = shown(ZONES.aus);
+  const rest = shown(ZONES.rest);
   return (
-    <Select
-      aria-label="Time zone"
-      value={value}
-      onChange={(e) =>
-        save.mutate(
-          { time_zone: e.target.value },
-          {
-            onSuccess: () => toast("Saved. Days and times follow it now."),
-            onError: (err) => toast(saveSettingsError(err)),
-          },
-        )
-      }
-      className="h-9 max-w-[260px] text-sm"
-    >
-      <option value="auto">{found ? `Automatic (${zoneLabel(found)})` : "Automatic (from your location)"}</option>
-      {!known && <option value={value}>{zoneLabel(value)}</option>}
-      <optgroup label="Australia">
-        {ZONES.aus.map((z) => (
-          <option key={z} value={z}>
-            {zoneLabel(z.replace("Australia/", ""))}
-          </option>
-        ))}
-      </optgroup>
-      {ZONES.rest.length > 0 && (
-        <optgroup label="Everywhere else">
-          {ZONES.rest.map((z) => (
-            <option key={z} value={z}>
-              {zoneLabel(z)}
-            </option>
-          ))}
-        </optgroup>
-      )}
-    </Select>
+    <div className="flex flex-col items-end gap-2">
+      <Input
+        aria-label="Find a time zone"
+        placeholder="Find a time zone"
+        value={find}
+        onChange={(e) => setFind(e.target.value)}
+        className="h-9 w-[260px] max-w-full text-sm"
+      />
+      <Select
+        aria-label="Time zone"
+        value={value}
+        onChange={(e) =>
+          save.mutate(
+            { time_zone: e.target.value },
+            {
+              onSuccess: () => toast("Saved. Days and times follow it now."),
+              onError: (err) => toast(saveSettingsError(err)),
+            },
+          )
+        }
+        className="h-9 max-w-[260px] text-sm"
+      >
+        <option value="auto">{found ? `Automatic (${zoneLabel(found)})` : "Automatic (from your location)"}</option>
+        {!known && <option value={value}>{zoneLabel(value)}</option>}
+        {aus.length > 0 && (
+          <optgroup label="Australia">
+            {aus.map((z) => (
+              <option key={z} value={z}>
+                {zoneLabel(z.replace("Australia/", ""))}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {rest.length > 0 && (
+          <optgroup label="Everywhere else">
+            {rest.map((z) => (
+              <option key={z} value={z}>
+                {zoneLabel(z)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </Select>
+    </div>
   );
 }
 

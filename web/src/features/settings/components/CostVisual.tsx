@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { insightsQuery } from "~/features/battery/api";
-import { paybackQuery } from "~/features/bills/api";
+import { billsQuery, paybackQuery } from "~/features/bills/api";
+import { yearlySaving } from "~/features/bills/utils";
 import { monthYear } from "~/features/common/formatting/utils/date";
 import { dollars } from "~/features/common/formatting/utils/number";
 import { alpha, COLOR } from "~/features/common/theme/utils/colors";
@@ -158,7 +159,7 @@ export function CostVisual({ figures: f }: { figures: CostFigures }) {
   const now = nowS();
   const saved = p?.saved_total ?? null;
   const pct = f.cost && saved != null ? (saved / f.cost) * 100 : null;
-  const perYear = p?.per_year ?? null;
+  const perYear = yearlySaving(useQuery(billsQuery).data?.next_year, p?.per_year);
   // When it pays off at the rate it's saving: from what's left of the cost, as typed.
   const paysAt =
     f.cost && saved != null
