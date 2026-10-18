@@ -5,9 +5,11 @@ import { Button } from "~/features/common/ui/components/Button";
 import { Field, HelpText, Input } from "~/features/common/ui/components/Field";
 import { Notice } from "~/features/common/ui/components/Notice";
 import { Skeleton } from "~/features/common/ui/components/Skeleton";
+import { Switch } from "~/features/common/ui/components/Switch";
 import { useToast } from "~/features/common/ui/components/Toast";
 import { createEmbed, embedQuery, revokeEmbed } from "~/features/embed/api";
-import { OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
+import { VARIANT_HEIGHT, type EmbedTheme, type EmbedVariant } from "~/features/embed/types";
+import { ChoiceTiles, OptionList, OptionRow, SettingsSection } from "~/features/settings/components/SettingsSection";
 import { SettingsPageHeader } from "~/features/settings/components/SubPageHeader";
 
 /** Settings → Embed: a secret link to the power summary, and the code to show it in a page on another website. */
@@ -40,11 +42,19 @@ function Sharing() {
   // (say a public name here, and the server's address on the network there).
   const [base, setBase] = useState(() => window.location.origin);
   const origin = base.trim().replace(/\/+$/, "");
+  const [variant, setVariant] = useState<EmbedVariant>("tiles");
+  const [theme, setTheme] = useState<EmbedTheme>("auto");
+  const [transparent, setTransparent] = useState(false);
 
   if (isPending) return <Skeleton className="h-64" />;
   if (error) return <Notice>{errorMessage(error)}</Notice>;
-  const link = data.token ? `${origin}/embed/power?token=${encodeURIComponent(data.token)}` : "";
-  const code = `<iframe src="${link}" width="100%" height="190" style="border:0" title="Power now" loading="lazy"></iframe>`;
+  const height = VARIANT_HEIGHT[variant];
+  const query = new URLSearchParams({ token: data.token ?? "" });
+  if (variant !== "tiles") query.set("variant", variant);
+  if (theme !== "auto") query.set("theme", theme);
+  if (transparent) query.set("transparent", "1");
+  const link = data.token ? `${origin}/embed/power?${query}` : "";
+  const code = `<iframe src="${link}" width="100%" height="${height}" style="border:0" title="Power now" loading="lazy"></iframe>`;
   const busy = turnOn.isPending || turnOff.isPending;
   const copy = async (text: string, what: string) => {
     try {
@@ -90,7 +100,34 @@ function Sharing() {
             >
               <Input value={base} onChange={(e) => setBase(e.target.value)} spellCheck={false} inputMode="url" />
             </Field>
+            <ChoiceTiles<EmbedVariant>
+              label="Look"
+              value={variant}
+              onChange={setVariant}
+              min="10rem"
+              options={[
+                { value: "tiles", title: "Tiles", sub: "Four cards in a row", icon: "layout" },
+                { value: "compact", title: "Strip", sub: "One thin line", icon: "minus" },
+                { value: "circuit", title: "Circuit", sub: "Joined by a wire", icon: "plug" },
+                { value: "stack", title: "Stack", sub: "A column, for a sidebar", icon: "menu" },
+              ]}
+            />
+            <ChoiceTiles<EmbedTheme>
+              label="Colours"
+              value={theme}
+              onChange={setTheme}
+              min="8rem"
+              phone={3}
+              options={[
+                { value: "auto", title: "Automatic", sub: "Follows the viewer", icon: "settings" },
+                { value: "dark", title: "Dark", sub: "On a dark page", icon: "moon" },
+                { value: "light", title: "Light", sub: "On a light page", icon: "sun" },
+              ]}
+            />
             <OptionList>
+              <OptionRow label="See-through background" help="Lets the page behind show, so it blends in.">
+                <Switch on={transparent} onChange={setTransparent} label="See-through background" />
+              </OptionRow>
               <OptionRow label="Link" help="Opens the summary on its own.">
                 <div className="flex w-full min-w-0 items-center gap-2 max-sm:flex-col max-sm:items-stretch">
                   <code className="min-w-0 flex-1 text-xs break-all text-ink-muted">{link}</code>
@@ -111,9 +148,11 @@ function Sharing() {
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-semibold">Preview</span>
               <iframe
+                key={link}
                 src={link}
                 title="Power summary preview"
-                className="h-[190px] w-full rounded-2xl border border-line-subtle"
+                style={{ height }}
+                className="w-full rounded-2xl border border-line-subtle bg-surface"
               />
             </div>
             <div className="flex flex-wrap items-center gap-3">
