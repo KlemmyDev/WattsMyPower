@@ -308,6 +308,7 @@ function SkyChart({
   controls: ReactNode;
 }) {
   const pct = (t: number) => `${((t - start) / DAY) * 100}%`;
+  const { sunKnown } = useLiveDay(); // no sunrise or sunset to mark until it knows where the panels are
   const { top, exp, lines } = useMemo(() => {
     const ts = series?.t ?? [];
     const pv = series?.pv_power ?? [];
@@ -321,7 +322,7 @@ function SkyChart({
 
   return (
     <div className="relative h-[134px] max-sm:h-[112px]">
-      {[rise, set].map((t, i) => (
+      {(sunKnown ? [rise, set] : []).map((t, i) => (
         <span
           key={i}
           aria-hidden
@@ -356,13 +357,17 @@ function SkyChart({
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[26px] text-xs text-ink-faint tabular-nums"
       >
         <span className="absolute top-[7px] left-0 max-sm:hidden">Midnight</span>
-        <span className="absolute top-[7px] -translate-x-1/2 text-solar" style={{ left: pct(rise) }}>
-          Sunrise {hhmm(rise)}
-        </span>
+        {sunKnown && (
+          <span className="absolute top-[7px] -translate-x-1/2 text-solar" style={{ left: pct(rise) }}>
+            Sunrise {hhmm(rise)}
+          </span>
+        )}
         <span className="absolute top-[7px] left-1/2 -translate-x-1/2 max-sm:hidden">Noon</span>
-        <span className="absolute top-[7px] -translate-x-1/2 text-solar-deep" style={{ left: pct(set) }}>
-          Sunset {hhmm(set)}
-        </span>
+        {sunKnown && (
+          <span className="absolute top-[7px] -translate-x-1/2 text-solar-deep" style={{ left: pct(set) }}>
+            Sunset {hhmm(set)}
+          </span>
+        )}
         <span className="absolute top-[7px] right-0 max-sm:hidden">Midnight</span>
       </div>
     </div>

@@ -65,6 +65,8 @@ export type LiveDay = {
   start: number;
   rise: number;
   set: number;
+  /** Whether rise and set are worked out for where the panels are, rather than a 6 am and 6 pm stand-in. */
+  sunKnown: boolean;
   /** Every 5 minutes: pv_power, battery_power, battery_soc, grid_power. */
   series: HistorySeries | undefined;
   weather: WeatherDay | undefined;
