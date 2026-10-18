@@ -125,7 +125,7 @@ export function PlanHero({
                         <Icon name={icon} size={16} />
                       </span>
                     )}
-                    {codeName(d.day.code)}
+                    {`Forecast: ${codeName(d.day.code).toLowerCase()}`}
                     {d.day.temp_max != null && (
                       <span className="text-ink-faint">
                         {degrees(d.day.temp_max, fahrenheit)}
