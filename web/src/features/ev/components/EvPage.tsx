@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
 import { useHasBattery } from "~/features/battery/hooks";
 import { errorMessage } from "~/features/common/api/utils";
 import { CardGrid } from "~/features/common/ui/components/SmallCard";
@@ -23,6 +24,26 @@ import type { BluelinkCar, EvVehicle, TeslaProvider } from "~/features/ev/types"
 import { carTitle, evTitle } from "~/features/ev/utils";
 import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 
+/** Timing, priority and limits: the settings most people leave as they are, so they're behind a Show button. */
+function AdvancedCards({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="col-span-full">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="cursor-pointer rounded-full border-0 bg-transparent p-0 text-[13px] font-medium text-brand hover:underline"
+        >
+          {open ? "Hide timing, priority and limits" : "Show timing, priority and limits"}
+        </button>
+      </div>
+      {open && children}
+    </>
+  );
+}
+
 /** One Tesla's cards, under the top card (which has its charge, its day and its figures): how it charges and the
  * sun there is for it, its limit, how its solar charging is timed and shared, its limits at home, its last 30 days, its
  * trips and charges, and the car itself. Those only for solar charging leave themselves out otherwise. */
@@ -33,9 +54,11 @@ function TeslaCards({ v, provider, now }: { v: EvVehicle; provider: TeslaProvide
       <EvCharging v={v} />
       <EvSpareSun v={v} />
       <EvLimit v={v} now={now} />
-      <EvTiming v={v} hasBattery={hasBattery} />
-      <EvSunFirst v={v} />
-      <EvLimits v={v} />
+      <AdvancedCards>
+        <EvTiming v={v} hasBattery={hasBattery} />
+        <EvSunFirst v={v} />
+        <EvLimits v={v} />
+      </AdvancedCards>
       <EvDays vin={v.vin} now={now} />
       <EvTrips vin={v.vin} now={now} />
       <EvCar v={v} provider={provider} />
@@ -52,9 +75,11 @@ function BluelinkCards({ v, choices, now }: { v: BluelinkCar; choices: number[];
       <EvCharging v={v} brand="bluelink" />
       <EvSpareSun v={v} brand="bluelink" />
       <EvLimit v={v} brand="bluelink" now={now} />
-      <EvTiming v={v} hasBattery={hasBattery} brand="bluelink" />
-      <EvSunFirst v={v} brand="bluelink" />
-      <EvLimits v={v} brand="bluelink" />
+      <AdvancedCards>
+        <EvTiming v={v} hasBattery={hasBattery} brand="bluelink" />
+        <EvSunFirst v={v} brand="bluelink" />
+        <EvLimits v={v} brand="bluelink" />
+      </AdvancedCards>
       <BluelinkReads v={v} choices={choices} />
     </CardGrid>
   );
