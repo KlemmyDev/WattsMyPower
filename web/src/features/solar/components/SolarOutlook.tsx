@@ -1,25 +1,22 @@
 import { parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { DASH, kWh } from "~/features/common/formatting/utils/number";
+import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { LocationPrompt } from "~/features/common/settings/components/LocationPrompt";
 import { useLocationSet } from "~/features/common/settings/hooks";
-import { alpha } from "~/features/common/theme/utils/colors";
-import { useBarHover } from "~/features/common/ui/components/ChartHover";
 import { dateKey } from "~/features/common/time/utils";
-import { Card, Footnote, TitleBlock } from "~/features/common/ui/components/Card";
+import { alpha, COLOR } from "~/features/common/theme/utils/colors";
+import { ButtonLink } from "~/features/common/ui/components/Button";
+import { Card, Footnote, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { dim, usePick } from "~/features/common/ui/components/Pick";
 import { cn } from "~/features/common/ui/utils";
 import { useFahrenheit } from "~/features/common/weather/hooks";
-import type { Forecast, ForecastAccuracy } from "~/features/common/weather/types";
-import { codeIcon, codeName, degrees } from "~/features/common/weather/utils";
-import { SOLAR } from "~/features/solar/components/parts";
-
-const TH = "pb-2 text-left text-[11.5px] font-normal text-ink-faint";
-const TD = "border-t border-line-subtle py-2.5 text-[13px] tabular-nums";
+import type { Forecast, ForecastAccuracy, ForecastDay } from "~/features/common/weather/types";
+import { codeIcon, codeName, degrees, hourIconColor } from "~/features/common/weather/utils";
 
 /**
- * The rest of today and the next two days, a line each: the sky, the sunlight expected, the solar the forecast
- * expects and the range it usually lands in. Pointing at a day puts its likely range in the corner, where tomorrow's
- * sits otherwise. Under it, how close the forecast usually gets.
+ * The rest of today and the next two days, a card each: the day, the sky and temperatures, the solar the forecast
+ * expects and the range it usually lands in. Pointing at or choosing a day lights it and reads its detail out under
+ * the heading. The link in the corner opens that day on the Plan page, where the battery and the grid are.
  */
 export function SolarOutlook({
   f,
@@ -32,112 +29,112 @@ export function SolarOutlook({
 }) {
   const fahrenheit = useFahrenheit();
   const located = useLocationSet();
-  const range = acc?.range;
-  const { hover, plot, bar } = useBarHover<string>();
-  const title = <TitleBlock title="Days ahead" sub="Solar the forecast expects, today and the next two days" />;
+  const { picked, plot, item } = usePick<number>();
   if (located === false)
     return (
       <Card className="h-full">
-        {title}
+        <TitleBlock title="Days ahead" sub="Solar the forecast expects, today and the next two days" />
         <LocationPrompt>The forecast needs to know where your panels are.</LocationPrompt>
       </Card>
     );
   if (!f) return null;
-  const top = Math.max(0.1, ...f.days.map((d) => d.pv_kwh * (range?.high ?? 1)));
-  const shown = f.days.find((d) => d.date === hover) ?? f.days.find((d) => d.date !== dateKey(now)) ?? f.days[0];
-  const dayName = (date: string) => (date === dateKey(now) ? "Rest of today" : shortDay.format(parseYmd(date)));
+  const days = f.days;
+  const range = acc?.range ?? null;
+  const top = Math.max(0.1, ...days.map((d) => d.pv_kwh * (range?.high ?? 1)));
+  const name = (d: ForecastDay) => (d.date === dateKey(now) ? "Today" : shortDay.format(parseYmd(d.date)));
+  const likely = (d: ForecastDay) =>
+    range ? `Likely ${(d.pv_kwh * range.low).toFixed(1)} to ${kWh(d.pv_kwh * range.high)}` : "Range builds up in time";
+  const temps = (d: ForecastDay) =>
+    d.temp_min != null && d.temp_max != null
+      ? `${degrees(d.temp_min, fahrenheit)} to ${degrees(d.temp_max, fahrenheit)}`
+      : null;
+  const detail = (d: ForecastDay) =>
+    [
+      d.code != null ? codeName(d.code) : null,
+      temps(d),
+      d.sun_kwh_m2 != null ? `${d.sun_kwh_m2.toFixed(1)} kWh/m² of sun` : null,
+      d.precip >= 40 ? `${d.precip}% chance of rain` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const sub = "Solar the forecast expects, today and the next two days";
+  const close =
+    acc?.mae_kwh != null ? `The forecast is usually within ${kWh(acc.mae_kwh)} a day of what your panels make.` : null;
+  const open = picked != null ? days[picked] : null;
+
   return (
-    <Card className="h-full gap-4">
-      <div className="flex items-end justify-between gap-3" aria-live="polite">
-        {title}
-        {shown && (
-          <div className="flex shrink-0 flex-col items-end gap-0.5">
-            <span className="text-xs text-ink-faint">{dayName(shown.date)}</span>
-            <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{kWh(shown.pv_kwh)}</span>
-            {range && (
-              <span className="text-[11.5px] text-ink-faint tabular-nums">
-                Likely {(shown.pv_kwh * range.low).toFixed(1)} to {kWh(shown.pv_kwh * range.high)}
-              </span>
-            )}
-          </div>
-        )}
+    <Card aria-labelledby="h-outlook" className="gap-5">
+      <div className="flex items-start justify-between gap-4">
+        <TitleBlock
+          id="h-outlook"
+          title="Days ahead"
+          className="min-w-0 flex-1"
+          sub={
+            <span aria-live="polite" className="block min-h-10">
+              {open ? `${name(open)}, ${shortDay.format(parseYmd(open.date))}: ${detail(open) || "forecast"}` : sub}
+            </span>
+          }
+        />
+        <ButtonLink to="/plan" search={{ day: picked ?? undefined }} variant="link" size="sm" className="flex-none">
+          See the full plan
+        </ButtonLink>
       </div>
-      <table className="w-full border-collapse" {...plot}>
-        <thead>
-          <tr>
-            <th className={TH}>Day</th>
-            <th className={TH}>Sky</th>
-            <th className={cn(TH, "text-right")}>Sunlight</th>
-            <th className={cn(TH, "pl-4 max-sm:hidden")}>
-              <span className="sr-only">Range</span>
-            </th>
-            <th className={cn(TH, "text-right")}>Solar</th>
-          </tr>
-        </thead>
-        <tbody>
-          {f.days.map((d) => {
-            const lo = range ? d.pv_kwh * range.low : null;
-            const hi = range ? d.pv_kwh * range.high : null;
-            return (
-              <tr
-                key={d.date}
-                tabIndex={0}
-                {...bar(d.date)}
-                className={cn(
-                  "cursor-default transition-opacity duration-200 outline-none",
-                  hover != null && hover !== d.date && "opacity-35",
+      <div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1" {...plot}>
+        {days.map((d, i) => {
+          const sky = d.code != null ? codeIcon(d.code, true) : null;
+          return (
+            <button
+              key={d.date}
+              type="button"
+              {...item(i)}
+              aria-pressed={picked === i}
+              className={cn(
+                "flex cursor-pointer flex-col gap-3 rounded-2xl border-0 bg-fg/5 p-4 text-left transition-colors duration-200 hover:bg-fg/8",
+                picked === i && "ring-1 ring-ink-soft",
+                dim(picked, i),
+              )}
+            >
+              <span className="flex items-center justify-between gap-2 text-[13px] text-ink-muted">
+                <span className="truncate">{name(d)}</span>
+                {sky && (
+                  <span className="flex flex-none items-center gap-1.5" style={{ color: hourIconColor(sky) }}>
+                    <Icon name={sky} size={16} />
+                  </span>
                 )}
-              >
-                <td className={cn(TD, "whitespace-nowrap")}>{dayName(d.date)}</td>
-                <td className={cn(TD, "text-ink-muted")}>
-                  <span className="flex items-center gap-1.5 whitespace-nowrap">
-                    {d.code != null && <Icon name={codeIcon(d.code, true)} size={15} className="flex-none" />}
-                    <span className="max-md:hidden">{d.code != null ? codeName(d.code) : ""}</span>
-                    {d.temp_max != null && <span className="text-ink-faint">{degrees(d.temp_max, fahrenheit)}</span>}
-                  </span>
-                </td>
-                <td className={cn(TD, "text-right text-ink-muted")}>
-                  {d.sun_kwh_m2 != null ? d.sun_kwh_m2.toFixed(1) : DASH}
-                </td>
-                <td className={cn(TD, "w-[28%] pr-5 pl-4 max-sm:hidden")}>
-                  <span className="relative block h-1.5 rounded-full bg-track">
-                    {lo != null && hi != null && (
-                      <span
-                        className="absolute inset-y-0 rounded-full"
-                        style={{
-                          left: `${(lo / top) * 100}%`,
-                          width: `${((hi - lo) / top) * 100}%`,
-                          background: alpha(SOLAR, 0.3),
-                        }}
-                      />
-                    )}
-                    <span
-                      className="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                      style={{ left: `${(d.pv_kwh / top) * 100}%`, background: SOLAR }}
-                    />
-                  </span>
-                </td>
-                <td className={cn(TD, "text-right font-medium whitespace-nowrap")}>{kWh(d.pv_kwh)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {acc?.mae_kwh != null && <p className="text-[13px] text-ink-muted">{closeness(acc)}</p>}
-      <Footnote>
-        {range
-          ? `Dot: the forecast. Shaded band: the likely range, where 8 in 10 of the last ${range.days} days landed against their forecast. Sunlight is kWh/m², the sun's energy on a flat square metre.`
-          : "Sunlight is kWh/m², the sun's energy on a flat square metre."}
-      </Footnote>
+              </span>
+              <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{kWh(d.pv_kwh)}</span>
+              <span className="relative block h-1.5 rounded-full bg-track">
+                {range && (
+                  <span
+                    className="absolute inset-y-0 rounded-full"
+                    style={{
+                      left: `${((d.pv_kwh * range.low) / top) * 100}%`,
+                      width: `${((d.pv_kwh * (range.high - range.low)) / top) * 100}%`,
+                      background: alpha(COLOR.solar, 0.3),
+                    }}
+                  />
+                )}
+                <span
+                  className="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  style={{ left: `${(d.pv_kwh / top) * 100}%`, background: COLOR.solar }}
+                />
+              </span>
+              <span className="flex flex-col gap-0.5 text-xs text-ink-faint tabular-nums">
+                <span>{likely(d)}</span>
+                <span className="text-ink-muted">
+                  {[temps(d), d.precip >= 40 ? `${d.precip}% rain` : null].filter(Boolean).join(" · ") || "—"}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {close && <Muted>{close}</Muted>}
+      {range && (
+        <Footnote>
+          {`The likely range is where 8 in 10 of the last ${range.days} days landed against their forecast, ${pct(range.low * 100)} to ${pct(range.high * 100)} of it.`}
+        </Footnote>
+      )}
     </Card>
   );
-}
-
-/** How close the forecast usually gets, in a sentence, with which way it leans when it leans more than a little. */
-function closeness(acc: ForecastAccuracy): string {
-  const within = `The forecast is usually within ${kWh(acc.mae_kwh!)} a day of what your panels make`;
-  const bias = acc.bias_kwh ?? 0;
-  if (acc.mae_kwh! > 0 && Math.abs(bias) > acc.mae_kwh! / 2)
-    return `${within}, and it tends to come in a little ${bias > 0 ? "high" : "low"}.`;
-  return `${within}.`;
 }
