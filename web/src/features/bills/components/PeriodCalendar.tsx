@@ -314,13 +314,16 @@ function DayCell({
       onClick={() => onSelect(cell.key)}
       className={cn(
         base,
-        "border-0 text-left transition-[background] duration-240 ease-[ease]",
+        "relative border-0 text-left transition-[background] duration-240 ease-[ease]",
         fill?.strong ? "text-canvas" : "text-ink-muted",
         !fill && "bg-transparent inset-ring inset-ring-fg/10",
         selected && cn("z-1", RING),
       )}
       style={fill ? { background: fill.color } : undefined}
     >
+      {metric.key === "cost" && v != null && v < 0 && (
+        <i aria-hidden className="absolute top-1 right-1 size-1.5 rounded-full bg-current" />
+      )}
       {partsOf(cell.date).day}
       {cell.day.partial && (
         <i
