@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { duration, hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import { useNow } from "~/features/common/time/hooks";
-import { midnight } from "~/features/common/time/utils";
+import { midnight, sameDay } from "~/features/common/time/utils";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { cn } from "~/features/common/ui/utils";
@@ -78,7 +78,9 @@ export function OffGridHistory({ className }: { className?: string }) {
               <span className="flex min-w-0 flex-col">
                 <span className="text-[14px]">{at(e.start, now)}</span>
                 <span className="text-xs text-ink-muted">
-                  {e.end == null ? "Still off grid" : `Grid back at ${at(e.end, now)}`}
+                  {e.end == null
+                    ? "Still off grid"
+                    : `Grid back at ${sameDay(e.start, e.end) ? hhmm(e.end) : at(e.end, now)}`}
                 </span>
               </span>
               <span className="text-[15px] font-light whitespace-nowrap tabular-nums">
