@@ -36,6 +36,7 @@ LAST_YEAR = 364  # days back to the same weekday last year
 NEAR = 3  # days either side of that to average over
 MIN_NEAR = 3  # complete days needed there to go on last year
 RECENT = 30  # days of recent use to fall back on
+BASELOAD_DAYS = 14  # nights the always-on draw is worked from, as on the Home page
 UPCOMING = 3  # bills estimated ahead
 GRID_MONTHS = 12  # months of grid use by hour
 MIN_RATE_DAYS = 30  # days of savings before a yearly rate (and payback) is worked out
@@ -198,7 +199,7 @@ class BillsService:
                     {"date": d.isoformat(), "net_cost": round(est["import_cost"] + supply - est["feed_in_credit"], 2)}
                 )
 
-        night = self.readings.rollups(now - RECENT * 86400, now, ["pv_power", "grid_power", "battery_power"])
+        night = self.readings.rollups(now - BASELOAD_DAYS * 86400, now, ["pv_power", "grid_power", "battery_power"])
         ways = tips(t, tables, recent, (cur_e - cur_s).days, baseload(night))
 
         upcoming = []

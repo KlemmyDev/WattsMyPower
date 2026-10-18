@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
-import { energyToday } from "~/features/common/energy/utils";
+import { energyToday, homeSources } from "~/features/common/energy/utils";
 import { parseYmd, shortDay } from "~/features/common/formatting/utils/date";
 import { DASH, kWh, pct } from "~/features/common/formatting/utils/number";
 import type { Snapshot } from "~/features/common/live/types";
@@ -28,10 +28,11 @@ export function HomeSourcesCard({
   p: Snapshot | null;
   days: DataDay[];
 }) {
-  const s = sourcesOf(series);
-  const home = energyToday(p)?.home ?? s.solar + s.battery + s.grid;
+  // The split is the one Overview shows, from the day's counters; from the readings when they're missing.
+  const counted = energyToday(p);
+  const s = counted ? homeSources(counted) : sourcesOf(series);
+  const home = counted?.home ?? s.solar + s.battery + s.grid;
   const sum = s.solar + s.battery + s.grid;
-  // The split is from the readings; the total is what the counters say.
   const k = sum > 0 ? home / sum : 0;
   const parts = [
     { key: "solar", label: "Solar, straight from the panels", kwh: s.solar * k, color: SOURCES.solar },
@@ -58,7 +59,7 @@ export function HomeSourcesCard({
       )}
       {month != null && (
         <div className="text-xs text-ink-faint">
-          {pct(month * 100)} self-powered over the last {whole.length} {whole.length === 1 ? "day" : "days"}.
+          {pct(month * 100)} self-sufficient over the last {whole.length} {whole.length === 1 ? "day" : "days"}.
         </div>
       )}
     </Card>

@@ -64,12 +64,16 @@ function usePowerNow() {
 
 /**
  * Mini power flow pinned to the bottom of the page on a phone, where the side nav is a menu (from tablets up it's in
- * the side nav: `NavPower`). Not on Overview, which it opens; it stays mounted so it can slide out when Overview opens
- * and back in when you leave (see `.dock`).
+ * the side nav: `NavPower`). Not on Overview, which it opens, or on a page that leads with the same readings; it stays
+ * mounted so it can slide out when one of those opens and back in when you leave (see `.dock`).
  */
 export function Dock() {
   const f = usePowerNow();
-  const onOverview = useRouterState({ select: (s) => s.location.pathname === "/" });
+  // Not where the page already shows the same readings: Overview, and the pages for solar, the battery, the grid and
+  // the home, each of which leads with its own.
+  const onOverview = useRouterState({
+    select: (s) => s.location.pathname === "/" || /^\/(solar|battery|grid|home)(\/|$)/.test(s.location.pathname),
+  });
   // Start hidden and show on the next frame, so the first appearance slides in too.
   const [ready, setReady] = useState(false);
   useEffect(() => {

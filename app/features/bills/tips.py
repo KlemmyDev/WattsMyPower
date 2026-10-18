@@ -43,8 +43,8 @@ class Baseload(NamedTuple):
 
 
 def baseload(rows: list[tuple[Any, ...]]) -> Baseload | None:
-    """The home's always-on draw in W: each night's low (20th percentile, 1am to 5am) and the median of
-    those. `rows` are (ts, pv_power, grid_power, battery_power) 5-minute rollups."""
+    """The home's always-on draw in W: each night's lowest 5-minute reading (1am to 5am) and the median of those,
+    the same way the Home page works it out. `rows` are (ts, pv_power, grid_power, battery_power) 5-minute rollups."""
     nights: dict[str, list[float]] = {}
     home = grid_in = 0.0
     for ts, pv, grid, bat in rows:
@@ -54,7 +54,7 @@ def baseload(rows: list[tuple[Any, ...]]) -> Baseload | None:
             nights.setdefault(time.strftime("%Y-%m-%d", lt), []).append(w)
             home += w
             grid_in += min(max(grid, 0.0), w)
-    lows = [sorted(v)[len(v) // 5] for v in nights.values() if len(v) >= 24]  # at least 2 of the 4 hours
+    lows = [min(v) for v in nights.values() if len(v) >= 24]  # at least 2 of the 4 hours
     if len(lows) < MIN_NIGHTS:
         return None
     return Baseload(round(statistics.median(lows)), round(grid_in / home, 3) if home else 1.0)

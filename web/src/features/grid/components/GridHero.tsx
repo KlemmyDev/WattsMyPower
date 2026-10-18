@@ -132,7 +132,7 @@ export function GridHero({
         </HeroFigures>
         <HeroStats>
           <HeroStat
-            label="Sold today"
+            label="Sent to the grid today"
             value={kWh(p?.daily_export)}
             sub={bill ? `${money(bill.feed_in_credit)} earned` : undefined}
           />

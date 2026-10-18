@@ -145,7 +145,11 @@ export function useGridHero({
       const [value, unit] = (w == null ? DASH : kW(Math.abs(w))).split(" ");
       const stats: Stat[] = [
         { label: ahead ? "Likely bought" : "Bought", value: kWh(by.imp), sub: `Cost ${money(by.cost)}` },
-        { label: ahead ? "Likely sold" : "Sold", value: kWh(by.exp), sub: `Earned ${money(by.earn)}` },
+        {
+          label: ahead ? "Likely sent to the grid" : "Sent to the grid",
+          value: kWh(by.exp),
+          sub: `Earned ${money(by.earn)}`,
+        },
         {
           label: scrubbed ? `Your rate at ${when}` : "Your rate now",
           value: rate ? centsShort(rate.rate) : DASH,

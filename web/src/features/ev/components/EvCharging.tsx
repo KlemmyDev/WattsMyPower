@@ -71,7 +71,7 @@ function SunShare({ carW, first }: { carW: number; first: EvFirst }) {
   const parts = [
     { key: "home", label: "Home", w: home, color: HOME },
     ...(hasBattery ? (batteryFirst ? [homeBattery, car] : [car, homeBattery]) : [car]),
-    { key: "grid", label: "Exported", w: exported, color: EXPORT },
+    { key: "grid", label: "Sent to the grid", w: exported, color: EXPORT },
   ];
   const total = Math.max(
     1,

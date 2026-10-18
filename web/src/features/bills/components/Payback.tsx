@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { paybackQuery } from "~/features/bills/api";
+import { billsQuery, paybackQuery } from "~/features/bills/api";
 import { Corner } from "~/features/bills/components/BillParts";
+import { useNow } from "~/features/common/time/hooks";
 import { Card, Muted, TitleBlock } from "~/features/common/ui/components/Card";
 import { DataRow } from "~/features/common/ui/components/DataRow";
 import { longDate, monthYearLong, parseYmd } from "~/features/common/formatting/utils/date";
@@ -10,7 +11,23 @@ import { dollars, money } from "~/features/common/formatting/utils/number";
 /** What the system has saved so far and a year, and when it pays for itself, from Settings. */
 export function Payback({ className }: { className?: string }) {
   const { data: p } = useQuery(paybackQuery);
+  const { data: bills } = useQuery(billsQuery);
+  const now = useNow(60_000);
   if (!p) return null;
+  // The year's saving is the one Your bills shows for the next 12 months, so the two agree; the payback date
+  // follows from it. Until that's worked out, the rate the readings so far give.
+  const ny = bills?.next_year;
+  const perYear = ny ? Math.round(ny.without_solar - ny.net_cost) : p.per_year;
+  const left = p.cost && p.saved_total != null ? p.cost - p.saved_total : null;
+  const payback_at =
+    ny && perYear != null && perYear > 0 && left != null && left > 0
+      ? Math.floor(now + (left / perYear) * 365 * 86400)
+      : p.payback_at;
+  const from = p.installed ?? (p.recorded_from ? parseYmd(p.recorded_from).getTime() / 1000 : null);
+  const payback_years =
+    payback_at != null && from != null
+      ? Math.round(((payback_at - from) / (365.25 * 86400)) * 10) / 10
+      : p.payback_years;
   const settings = (
     <Link to="/settings/cost" className="text-link">
       Settings → Cost and warranty
@@ -51,15 +68,15 @@ export function Payback({ className }: { className?: string }) {
             </div>
           )}
           <div>
-            <DataRow label="Saving a year" muted={p.per_year == null}>
-              {p.per_year == null ? "Needs 30 days of readings" : `about ${dollars(p.per_year)}`}
+            <DataRow label="Saving a year" muted={perYear == null}>
+              {perYear == null ? "Needs 30 days of readings" : `about ${dollars(perYear)}`}
             </DataRow>
             {p.cost ? (
               <DataRow label="Pays for itself">
                 {p.paid_off
                   ? "Already paid off"
-                  : p.payback_at
-                    ? `around ${monthYearLong.format(new Date(p.payback_at * 1000))}${p.payback_years ? `, ${p.payback_years} years in` : ""}`
+                  : payback_at
+                    ? `around ${monthYearLong.format(new Date(payback_at * 1000))}${payback_years ? `, ${payback_years} years in` : ""}`
                     : "Needs 30 days of readings"}
               </DataRow>
             ) : null}

@@ -115,7 +115,7 @@ export function SolarHero({
         </HeroFigures>
         <HeroStats>
           <HeroStat
-            label="Peak"
+            label="Peak output"
             value={today.peak ? kW(today.peak.w) : DASH}
             sub={today.peak ? `at ${hhmm(today.peak.t)}` : "Not yet today"}
           />
