@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.core.security import inline_scripts, page_policy
+from app.core.security import EMBED_PATH, EMBED_POLICY_FROM, EMBED_POLICY_TO, inline_scripts, page_policy
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "dist" / "client"
 
@@ -51,6 +51,7 @@ def mount_spa(app: FastAPI, web: Path = WEB) -> None:
         file = (web / path).resolve()
         if path and web in file.parents and file.is_file():
             return FileResponse(file, headers={"Cache-Control": "no-cache"})
-        return FileResponse(
-            shell, headers={"Cache-Control": "no-cache", "Content-Security-Policy": shell_policy(shell)}
-        )
+        csp = shell_policy(shell)
+        if f"/{path}".startswith(EMBED_PATH):  # the shared power summary may be framed by another site
+            csp = csp.replace(EMBED_POLICY_FROM, EMBED_POLICY_TO)
+        return FileResponse(shell, headers={"Cache-Control": "no-cache", "Content-Security-Policy": csp})

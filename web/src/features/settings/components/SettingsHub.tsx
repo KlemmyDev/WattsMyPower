@@ -207,6 +207,13 @@ export function SettingsHub() {
                 detail="Inverters, smart home, cars, prices and weather"
               />
               <SettingsRow
+                to="/settings/embed"
+                icon="code"
+                color={COLOR.solar}
+                label="Embed"
+                detail="Show the power summary on another page"
+              />
+              <SettingsRow
                 to="/settings/data"
                 icon="database"
                 color={COLOR.import}

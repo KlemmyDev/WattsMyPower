@@ -47,6 +47,12 @@ DOCS_POLICY = (
     "frame-ancestors 'none'"
 )
 
+# The shared power summary's page (see app.features.embed) is the one page another site may show in a frame: it can
+# only read the live power figures, behind a secret link, and has no controls.
+EMBED_PATH = "/embed/"
+EMBED_POLICY_FROM = "frame-ancestors 'none'"
+EMBED_POLICY_TO = "frame-ancestors *"
+
 HEADERS = {
     b"x-frame-options": b"DENY",
     b"x-content-type-options": b"nosniff",
@@ -86,6 +92,8 @@ class SecurityHeadersMiddleware:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
                 present = {name.lower() for name, _ in headers}
+                if scope.get("path", "").startswith(EMBED_PATH):
+                    present.add(b"x-frame-options")  # left off, so it can be framed
                 headers += [(name, value) for name, value in HEADERS.items() if name not in present]
                 message = {**message, "headers": headers}
             await send(message)
