@@ -271,6 +271,12 @@ function Row({ month, children }: { month: string; children: ReactNode }) {
   );
 }
 
+/** A day's figure short enough for its cell, so the colour isn't the only thing that says it: "$0.64", "−$0.76", "34". */
+function shortValue(m: Metric, v: number) {
+  if (m.key === "cost") return `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`;
+  return Math.abs(v) < 10 ? v.toFixed(1) : String(Math.round(v));
+}
+
 function DayCell({
   cell,
   metric,
@@ -285,7 +291,7 @@ function DayCell({
   onSelect: (key: string) => void;
 }) {
   const base =
-    "relative flex h-9 items-start rounded-lg p-1.5 font-mono text-[11px] leading-none max-sm:h-8 max-sm:p-1";
+    "relative flex h-11 items-start rounded-lg p-1.5 font-mono text-[11px] leading-none max-sm:h-8 max-sm:p-1";
   if (cell.kind === "pad") return <span />;
   const label = dayMonth(cell.date);
   if (cell.kind === "ahead")
@@ -325,12 +331,13 @@ function DayCell({
         <i aria-hidden className="absolute top-1 right-1 size-1.5 rounded-full bg-current" />
       )}
       {partsOf(cell.date).day}
+      {v != null && (
+        <span aria-hidden className="absolute inset-x-1.5 bottom-1 truncate text-[9px] max-sm:hidden">
+          {shortValue(metric, v)}
+        </span>
+      )}
       {cell.day.partial && (
-        <i
-          className="absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-current"
-          aria-hidden
-          title="Today so far"
-        />
+        <i className="absolute top-1.5 right-3 size-1.5 rounded-full bg-current" aria-hidden title="Today so far" />
       )}
     </button>
   );

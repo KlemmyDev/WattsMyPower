@@ -102,7 +102,7 @@ function Curve({ run, color }: { run: HomeRun; color: string }) {
       </svg>
       <div className="flex justify-between font-mono text-[10px] text-ink-faint">
         <span>{hhmm(data.t[0])}</span>
-        <span>Peak {kW(top)}</span>
+        <span>Highest draw {kW(top)}</span>
         <span>{hhmm(data.t[n - 1] + 300)}</span>
       </div>
     </div>
@@ -384,7 +384,7 @@ export function DevicePage({ id }: { id: number }) {
                         <span className="w-[72px] text-ink-muted">{r.end ? duration(r.end - r.start) : "Running"}</span>
                         <span className="w-[72px]">{r.kwh > 0 ? kWh(r.kwh) : DASH}</span>
                         <span className="min-w-0 flex-1 truncate text-ink-muted">{r.program ?? ""}</span>
-                        {r.peak_w != null && <span className="text-ink-muted">Peak {kW(r.peak_w)}</span>}
+                        {r.peak_w != null && <span className="text-ink-muted">Highest draw {kW(r.peak_w)}</span>}
                       </button>
                       {open === r.id && (
                         <div className="pb-4 pl-[30px]">

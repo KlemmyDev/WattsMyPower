@@ -104,6 +104,7 @@ export function WhereItWent({ p, download }: { p: Snapshot | null; download?: Re
               <div className="flex flex-col items-end gap-0.5">
                 <span className="text-xs text-ink-faint">Solar share</span>
                 <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{pct(kept * 100)}</span>
+                <span className="text-xs text-ink-faint">used at home or stored</span>
               </div>
             )
           )}

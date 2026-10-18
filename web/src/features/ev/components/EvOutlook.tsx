@@ -65,11 +65,9 @@ function words(o: EvOutlook, v: EvVehicle, live: number | null, now: number) {
         head:
           v.solar_from != null && v.solar_from > now
             ? `Enough sun expected in ${v.solar_from - now < 3600 ? clock(v.solar_from - now) : span(v.solar_from - now)}`
-            : `Needs ${kW(o.need_w ?? 0)} more sun to start`,
+            : `Needs ${kW(o.start_w)} of spare sun to start`,
         why: `${
-          v.solar_from != null && v.solar_from > now
-            ? `The forecast has enough from ${hhmm(v.solar_from)}; it needs ${kW(o.need_w ?? 0)} more now. `
-            : ""
+          v.solar_from != null && v.solar_from > now ? `The forecast has enough from ${hhmm(v.solar_from)}. ` : ""
         }It starts once ${kW(o.start_w)} has been spare for ${span(c.start_after)} straight.`,
       };
     case "counting": {
@@ -115,7 +113,7 @@ function words(o: EvOutlook, v: EvVehicle, live: number | null, now: number) {
 
 /**
  * What's next for a car charging from the sun, plainly: a ring and a headline saying what it's waiting on and when it'll
- * act ("Starting in 1:42", "Stopping in 3:40", "Needs 1.2 kW more sun to start"), and a line on why, from the waits
+ * act ("Starting in 1:42", "Stopping in 3:40", "Needs 1.2 kW of spare sun to start"), and a line on why, from the waits
  * it's set to. Counts down each second on its own.
  */
 export function SolarOutlook({ v, live }: { v: EvVehicle; live: number | null }) {

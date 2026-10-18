@@ -5,7 +5,7 @@ import { historyQuery } from "~/features/common/readings/api";
 import type { Snapshot, SystemInfo } from "~/features/common/live/types";
 import type { HistorySeries } from "~/features/common/readings/types";
 import type { Forecast } from "~/features/common/weather/types";
-import { energyToday, reserveOf } from "~/features/common/energy/utils";
+import { energyToday, homeSources, reserveOf } from "~/features/common/energy/utils";
 import { hhmm } from "~/features/common/formatting/utils/date";
 import { energyParts, kWh, powerParts } from "~/features/common/formatting/utils/number";
 import { COLOR } from "~/features/common/theme/utils/colors";
@@ -161,11 +161,7 @@ function totalsOf(series: HistorySeries | undefined): Totals | null {
  * Where the home's power came from today: the grid (what it imported), the battery (its discharge, up to what the
  * grid didn't cover), and straight from the panels (the rest). As History works out each day.
  */
-function sources(e: Totals) {
-  const covered = Math.max(0, e.home - e.imp);
-  const battery = Math.min(covered, e.dis);
-  return { solar: covered - battery, battery, grid: Math.min(e.imp, e.home), ss: e.home > 0 ? covered / e.home : 0 };
-}
+const sources = homeSources;
 type Sources = ReturnType<typeof sources>;
 
 function Stat({ f, note }: { f: Fig; note: boolean }) {

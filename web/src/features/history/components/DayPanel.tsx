@@ -47,13 +47,17 @@ function DayStats({ day, extremes }: { day: Day; extremes: ReturnType<typeof ext
   const { peak, low } = extremes;
   return (
     <HeroStats>
-      <HeroStat label="Made" value={kWh(day.gen)} sub={peak ? `Peak ${kW(peak.w)} at ${hhmm(peak.t)}` : undefined} />
+      <HeroStat
+        label="Made"
+        value={kWh(day.gen)}
+        sub={peak ? `Peak output ${kW(peak.w)} at ${hhmm(peak.t)}` : undefined}
+      />
       <HeroStat label="Used" value={kWh(day.home)} />
       <HeroStat label="Self-sufficiency" value={pct(day.ss * 100)} />
       <HeroStat label="Saved" value={money(day.saved)} />
       <HeroStat label="Bought" value={kWh(day.imp)} sub={day.cost >= 0.005 ? money(day.cost) : undefined} />
       <HeroStat
-        label="Exported"
+        label="Sent to the grid"
         value={kWh(day.exp)}
         sub={day.credit >= 0.005 ? `${money(day.credit)} back` : undefined}
       />

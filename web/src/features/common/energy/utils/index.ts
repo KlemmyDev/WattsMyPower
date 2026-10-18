@@ -39,3 +39,13 @@ export function energyToday(p: Snapshot | null | undefined) {
   const { daily_pv: pv, daily_import: imp, daily_export: exp } = p;
   return { pv, imp, exp, chg, dis, home: Math.max(0, pv + imp - exp + dis - chg) };
 }
+
+/**
+ * Where today's home use came from, from the day's totals: what the grid didn't supply came from solar and then the
+ * battery. The one split every page shows, so Overview and Home agree.
+ */
+export function homeSources(e: NonNullable<ReturnType<typeof energyToday>>) {
+  const covered = Math.max(0, e.home - e.imp);
+  const battery = Math.min(covered, e.dis);
+  return { solar: covered - battery, battery, grid: Math.min(e.imp, e.home), ss: e.home > 0 ? covered / e.home : 0 };
+}
