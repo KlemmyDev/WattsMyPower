@@ -354,7 +354,7 @@ export function ItemTile({
       }
       foot={
         offline
-          ? "Not reachable. Check it in Integrations"
+          ? "Not reachable right now"
           : run
             ? `${item.group ? `${run.device.name} · ` : ""}${run.phase}`
             : item.group
