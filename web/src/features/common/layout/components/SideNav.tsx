@@ -15,6 +15,9 @@ import { BrandMark, Icon, type IconName } from "~/features/common/ui/components/
 import { cn } from "~/features/common/ui/utils";
 import { updatesQuery } from "~/features/updates/api";
 
+/** The pages whose live readings are shown beside their names in the sidebar. */
+const LIVE_PAGES = new Set(["/solar", "/home", "/battery", "/grid"]);
+
 // A section's pages say for themselves which is current (a room is, on its devices' pages). Their links only count
 // themselves current on their exact page, so a link up the path ("/home") doesn't light up as well.
 const EXACT = { exact: true, includeSearch: false } as const;
@@ -253,7 +256,7 @@ function Circuit({
                 to={i.to}
                 icon={i.icon}
                 label={i.label}
-                value={value[i.to]}
+                value={LIVE_PAGES.has(i.to) ? value[i.to] : undefined}
                 color={i.color}
                 full={full}
                 on={current === i.to}
@@ -278,7 +281,7 @@ function Circuit({
                       to={i.to}
                       icon={i.icon}
                       label={i.label}
-                      value={value[i.to]}
+                      value={LIVE_PAGES.has(i.to) ? value[i.to] : undefined}
                       color={i.color}
                       full={full}
                       on={current === i.to}
