@@ -352,11 +352,11 @@ def test_connecting_reads_the_cars_and_never_shows_the_password_or_pin(
     assert status["brand"] == "hyundai" and status["pin"] is True
     assert PASSWORD not in json.dumps(status) and "1234" not in json.dumps(status)
     v = status["vehicles"][0]
-    assert v["status"] == "stopped" and v["control"]["mode"] == "off" and v["min_w"] == CHARGE_W[2]
+    assert v["status"] == "waiting" and v["control"]["mode"] == "solar" and v["min_w"] == CHARGE_W[2]
     assert v["charge_from"] == "default" and v["can_command"] and v["state"]["at_home"]
     # Beside any Teslas, on every page.
     assert live.ev is not None and live.ev[0]["make"] == "Hyundai" and live.ev[0]["soc"] == 50.0
-    assert status["next_read"] == int(DAY) + POLL
+    assert status["next_read"] <= int(DAY) + POLL  # solar charging reads again sooner than when off
 
 
 def test_connecting_checks_what_its_given(
@@ -437,6 +437,7 @@ def test_the_car_itself_is_asked_rarely(
     acct = FakeAccount([car(as_of=int(DAY) - 3 * 3600)])  # the cloud's copy is three hours old
     svc = service(config, db, live, settings, acct, clock)
     connect(svc)
+    asyncio.run(svc.configure(VIN, {"mode": "off"}))
     asyncio.run(svc.read())
     assert acct.reads[-1] == set()  # Off: never asked
     asyncio.run(svc.configure(VIN, {"mode": "solar"}))

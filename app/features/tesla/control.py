@@ -69,7 +69,7 @@ FIRST = ("battery", "shared", "car")  # who gets the sun first
 SHARE_MARGIN = 1.1  # shared: the home battery is kept this much more than it needs, to be full in time
 SUN_KW = 0.05  # forecast solar below this is night, for where the day's sun ends
 
-DEFAULTS: dict[str, Any] = {"mode": "off", "first": "battery", "grid_w": 300}
+DEFAULTS: dict[str, Any] = {"mode": "solar", "first": "battery", "grid_w": 300}
 MODEL_NAMES = {
     "model3": "Model 3",
     "modely": "Model Y",

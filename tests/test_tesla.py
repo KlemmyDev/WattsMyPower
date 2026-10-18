@@ -672,7 +672,7 @@ def test_connecting_ties_the_tesla_to_a_new_car(svc: TeslaService, provider: str
     # Tessie says it's a dual-motor Model Y; over Bluetooth only the VIN says what it is.
     model = "tesla-model-y-lr" if provider == "tessie" else "tesla-model-y-rwd"
     assert details["name"] == "Zappy" and details["model"]["id"] == model
-    assert v["control"]["mode"] == "off"
+    assert v["control"]["mode"] == "solar"  # a new car charges from spare sun unless its owner chose otherwise
     # Connecting again keeps the same car.
     assert connect(svc, provider)["vehicles"][0]["car"] == v["car"]
 
@@ -755,6 +755,7 @@ def test_switching_keeps_each_cars_settings(svc: TeslaService, radio: FakeRadio,
 def test_off_never_commands_but_records_the_level(svc: TeslaService, provider: str, tessie: FakeTessie,
                                                   live: FakeLive, clock: Clock) -> None:  # fmt: skip
     car_id = connect(svc, provider)["vehicles"][0]["car"]
+    svc.configure(VIN, {"mode": "off"})
     minutes(svc, live, clock, 10, grid=-8000)
     assert tessie.commands == []
     level = svc.cars.level(car_id, int(clock()))
@@ -1252,6 +1253,7 @@ def test_a_moment_out_of_range_is_not_a_trip(svc: TeslaService, tessie: FakeTess
 def test_charging_at_home_is_counted_with_its_grid_share(svc: TeslaService, provider: str, tessie: FakeTessie,
                                                           live: FakeLive, clock: Clock) -> None:  # fmt: skip
     connect(svc, provider)
+    svc.configure(VIN, {"mode": "off"})
     tessie.charge(charging_state="Charging", charger_actual_current=10, charge_current_request=10,
                   charger_voltage=230, charger_phases=3, charger_power=7, battery_level=40)  # fmt: skip
     start = int(clock())
@@ -2087,6 +2089,7 @@ def test_the_days_chart_has_what_the_car_drew_and_what_the_dashboard_did(ble: Te
 def test_the_spare_power_shows_without_waiting_a_turn_of_the_loop(svc: TeslaService, tessie: FakeTessie,
                                                                    live: FakeLive, clock: Clock) -> None:  # fmt: skip
     connect(svc, "tessie")
+    svc.configure(VIN, {"mode": "off"})
     svc.cars.update(svc.status()["vehicles"][0]["car"], {"car_phases": 3, "car_min_amps": 5, "car_amps": 16})
     tessie.state["charge_state"].update(charging_state="Stopped")
     live.reading(grid=-4000)
