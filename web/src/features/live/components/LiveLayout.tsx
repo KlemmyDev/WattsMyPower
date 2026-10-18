@@ -39,8 +39,8 @@ export function LiveLayout() {
   const series = data?.series;
   const expected = useMemo(() => expectedToday(weather, f, now), [weather, f, now]);
   const day = useMemo<LiveDay>(
-    () => ({ now, start, rise, set, series, weather, expected }),
-    [now, start, rise, set, series, weather, expected],
+    () => ({ now, start, rise, set, sunKnown: sun != null, series, weather, expected }),
+    [now, start, rise, set, sun, series, weather, expected],
   );
   const [hero, setHero] = useState<LiveHero | null>(null);
   const path = useRouterState({ select: (r) => r.location.pathname });

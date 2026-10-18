@@ -225,19 +225,20 @@ function Solar({
               The forecast sunlight for {what}
               {sun != null ? (
                 <>
-                  , <b className="font-medium text-ink">{sun.toFixed(1)} kWh/m²</b>,
+                  , <b className="font-medium text-ink">{sun.toFixed(1)} kWh of sunlight per m²</b>,
                 </>
               ) : (
                 ""
               )}{" "}
-              times <b className="font-medium text-ink">{cal.kwh_per_kwh_m2.toFixed(2)} kWh</b> for each kWh/m². That's
-              what your panels have made from the sunlight over the last week ({cal.fitted_hours} hours of readings), so
-              it already allows for which way they face, shade and the inverter's limit. You don't need to set those.
+              times <b className="font-medium text-ink">{cal.kwh_per_kwh_m2.toFixed(2)} kWh</b> for each kWh of sunlight
+              per m². That's what your panels have made from the sunlight over the last week ({cal.fitted_hours} hours
+              of readings), so it already allows for which way they face, shade and the inverter's limit. You don't need
+              to set those.
             </>
           ) : (
             <>
               The forecast sunlight for {what}
-              {sun != null ? ` (${sun.toFixed(1)} kWh/m²)` : ""} times 80% of your array's size
+              {sun != null ? ` (${sun.toFixed(1)} kWh of sunlight per m²)` : ""} times 80% of your array's size
               {system?.pv_kw ? ` (${system.pv_kw} kW)` : ""}. Once it has a few daylight hours of your inverter's
               output, it calibrates to what your panels actually make.
             </>

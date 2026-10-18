@@ -97,7 +97,12 @@ export function useBatteryHero({
       }
       return since;
     };
-    const lastsUntil = (t: number) => after(t).find(([, lv]) => lv <= reserve + 0.5)?.[0] ?? null;
+    // When it runs down to the reserve, but only within the night `lowest` looks at: the outlook runs on through
+    // tomorrow, and tomorrow night's time would read as tonight's (an 8:53 pm that was a day away).
+    const lastsUntil = (t: number) => {
+      const b = t < rise + 1.5 * HOUR ? rise + 1.5 * HOUR : rise + DAY + 1.5 * HOUR;
+      return after(t).find(([x, lv]) => x <= b && lv <= reserve + 0.5)?.[0] ?? null;
+    };
     // What went in and came out by `t`: the readings so far, then as expected.
     const inOutBy = (t: number) => {
       let charged = 0;

@@ -58,13 +58,26 @@ function DayCell({
 const WEEKDAYS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 
 /** Wider screens: the view as week columns, Monday at the top, scrolling sideways when narrow. */
-export const YearHeatmap = memo(function YearHeatmap({ cells, lead, selected, onSelect }: GridProps) {
+export const YearHeatmap = memo(function YearHeatmap({ cells: all, lead: allLead, selected, onSelect }: GridProps) {
+  // Until there's half a year of readings, only the weeks they span (and the selected day's), so the squares aren't
+  // squeezed into one corner of a mostly empty year.
+  const { cells, lead } = useMemo(() => {
+    const read = all.filter((c) => c.label);
+    if (!read.length || read[read.length - 1].i - read[0].i >= 183) return { cells: all, lead: allLead };
+    const first = Math.min(read[0].i, selected >= 0 && selected < all.length ? selected : read[0].i);
+    const last = Math.max(read[read.length - 1].i, selected < all.length ? selected : 0);
+    const from = Math.floor((first + allLead) / 7) * 7 - allLead; // back to the Monday
+    const to = Math.ceil((last + 1 + allLead) / 7) * 7 - allLead; // and on to the Sunday
+    const kept = all.filter((c) => c.i >= from && c.i < to);
+    return { cells: kept, lead: kept.length ? (kept[0].i + allLead) % 7 : 0 };
+  }, [all, allLead, selected]);
+  const base = cells.length ? Math.floor((cells[0].i + allLead) / 7) : 0;
   const nWeeks = Math.ceil((lead + cells.length) / 7);
   const months: { col: number; label: string }[] = [];
   for (const c of cells) {
     const dt = new Date(c.ts * 1000);
-    if (partsOf(dt).day !== 1 && c.i !== 0) continue;
-    const col = Math.floor((c.i + lead) / 7);
+    if (partsOf(dt).day !== 1 && c !== cells[0]) continue;
+    const col = Math.floor((c.i + allLead) / 7) - base;
     // Skip a label that would crowd the one before it or run off the end.
     if (col <= nWeeks - 3 && (!months.length || col - months[months.length - 1].col > 2))
       months.push({ col, label: monthShort.format(dt) });

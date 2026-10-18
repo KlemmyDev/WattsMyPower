@@ -143,26 +143,30 @@ export function BatteryToday({
           <span className="text-ink">Charged</span>
           <span className="text-ink tabular-nums">{kWh(charged)}</span>
         </span>
-        <Split
-          total={charged}
-          parts={[
-            { key: "solar", label: "From solar", kwh: solar, color: COLOR.solar },
-            { key: "grid", label: "From the grid", kwh: grid, color: COLOR.import },
-          ]}
-        />
+        {series && (
+          <Split
+            total={charged}
+            parts={[
+              { key: "solar", label: "From solar", kwh: solar, color: COLOR.solar },
+              { key: "grid", label: "From the grid", kwh: grid, color: COLOR.import },
+            ]}
+          />
+        )}
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="flex items-baseline justify-between text-[13.5px]">
           <span className="text-ink">Discharged</span>
           <span className="text-ink tabular-nums">{kWh(discharged)}</span>
         </span>
-        <Split
-          total={discharged}
-          parts={[
-            { key: "home", label: "To your home", kwh: home, color: COLOR.teal },
-            { key: "out", label: "To the grid", kwh: out, color: COLOR.export },
-          ]}
-        />
+        {series && (
+          <Split
+            total={discharged}
+            parts={[
+              { key: "home", label: "To your home", kwh: home, color: COLOR.teal },
+              { key: "out", label: "To the grid", kwh: out, color: COLOR.export },
+            ]}
+          />
+        )}
       </div>
     </Card>
   );
