@@ -44,6 +44,8 @@ export function SolarOutlook({
   const name = (d: ForecastDay) => (d.date === dateKey(now) ? "Today" : shortDay.format(parseYmd(d.date)));
   const likely = (d: ForecastDay) =>
     range ? `Likely ${(d.pv_kwh * range.low).toFixed(1)} to ${kWh(d.pv_kwh * range.high)}` : "Range builds up in time";
+  const dayText = (d: ForecastDay) =>
+    d.date === dateKey(now) ? `Today, ${shortDay.format(parseYmd(d.date))}` : shortDay.format(parseYmd(d.date));
   const temps = (d: ForecastDay) =>
     d.temp_min != null && d.temp_max != null
       ? `${degrees(d.temp_min, fahrenheit)} to ${degrees(d.temp_max, fahrenheit)}`
@@ -70,8 +72,8 @@ export function SolarOutlook({
           title="Days ahead"
           className="min-w-0 flex-1"
           sub={
-            <span aria-live="polite" className="block min-h-10">
-              {open ? `${name(open)}, ${shortDay.format(parseYmd(open.date))}: ${detail(open) || "forecast"}` : sub}
+            <span aria-live="polite" className="line-clamp-2 block min-h-10">
+              {open ? `${dayText(open)}: ${detail(open) || "forecast"}` : sub}
             </span>
           }
         />
