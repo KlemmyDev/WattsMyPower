@@ -5,7 +5,6 @@ import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
 import type { Snapshot } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
-import { Breakdown } from "~/features/common/ui/components/Breakdown";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
 import { exportCsvUrl } from "~/features/history/api";
@@ -19,6 +18,7 @@ import { useSolarHero } from "~/features/solar/components/SolarSky";
 import { YourPanels } from "~/features/solar/components/YourPanels";
 import { useSolarDay } from "~/features/solar/hooks";
 import { pastDays } from "~/features/solar/utils";
+import { cn } from "~/features/common/ui/utils";
 
 /**
  * Solar, on one page: the sky as it is now over what the panels are making and how the day's going (scrub or play
@@ -41,10 +41,10 @@ export function SolarPage() {
     <a
       href={exportCsvUrl(start, start + 86_400, true)}
       download
-      className="flex min-h-10 items-center gap-2 self-start rounded-full border border-line bg-fg/4 px-4 text-sm text-ink-body no-underline transition-colors hover:bg-fg/8 hover:text-ink"
+      className="flex items-center gap-1.5 rounded-full border border-line bg-fg/4 px-2.5 py-1 text-xs text-ink-body no-underline transition-colors hover:bg-fg/8 hover:text-ink"
     >
-      <Icon name="download" size={16} />
-      Download today's readings
+      <Icon name="download" size={13} />
+      Download readings
     </a>
   );
   return (
@@ -86,25 +86,43 @@ export function WhereItWent({ p, download }: { p: Snapshot | null; download?: Re
   const lit = parts.find((x) => x.key === hover);
   return (
     <Card>
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <TitleBlock title="Where it went" sub="Today's solar so far" />
-        {lit ? (
-          <div className="flex flex-col items-end gap-0.5" aria-live="polite">
-            <span className="text-xs text-ink-faint">{lit.label}</span>
-            <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{kWh(lit.kwh)}</span>
-          </div>
-        ) : (
-          kept != null && (
-            <div className="flex flex-col items-end gap-0.5">
-              <span className="text-xs text-ink-faint">Kept at home</span>
-              <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{pct(kept * 100)}</span>
+        <div className="flex flex-col items-end gap-2">
+          {download}
+          {lit ? (
+            <div className="flex flex-col items-end gap-0.5" aria-live="polite">
+              <span className="text-xs text-ink-faint">{lit.label}</span>
+              <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{kWh(lit.kwh)}</span>
             </div>
-          )
-        )}
+          ) : (
+            kept != null && (
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-xs text-ink-faint">Self consumption</span>
+                <span className="text-[28px] leading-8 font-light tracking-[-1px] tabular-nums">{pct(kept * 100)}</span>
+              </div>
+            )
+          )}
+        </div>
       </div>
-      {download && <div className="-mt-2">{download}</div>}
       {pv > 0 ? (
-        <Breakdown parts={parts} total={pv} onHover={setHover} />
+        <div className="flex items-end gap-3">
+          {parts.map((x) => (
+            <div
+              key={x.key}
+              className="flex flex-1 flex-col items-center gap-1.5"
+              onPointerEnter={() => setHover(x.key)}
+              onPointerLeave={() => setHover(null)}
+            >
+              <span className="text-sm font-medium tabular-nums">{kWh(x.kwh)}</span>
+              <span
+                className={cn("block w-full rounded-t-md transition-opacity", hover && hover !== x.key && "opacity-40")}
+                style={{ height: `${Math.max(4, (x.kwh / pv) * 120)}px`, background: x.color }}
+              />
+              <span className="text-xs text-ink-muted">{x.label}</span>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="text-[13px] text-ink-faint">No solar yet today.</div>
       )}
