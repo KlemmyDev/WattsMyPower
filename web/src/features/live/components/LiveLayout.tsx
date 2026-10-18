@@ -36,11 +36,13 @@ export function LiveLayout() {
   const sun = at ? sunDay(start + 43_200, at.lat, at.lon) : null;
   const rise = sun?.rise ?? start + 6 * 3600;
   const set = sun?.set ?? start + 18 * 3600;
+  // A flag, not `sun` itself: that's a new object on every render, which would make `day` new every time too.
+  const sunKnown = sun != null;
   const series = data?.series;
   const expected = useMemo(() => expectedToday(weather, f, now), [weather, f, now]);
   const day = useMemo<LiveDay>(
-    () => ({ now, start, rise, set, sunKnown: sun != null, series, weather, expected }),
-    [now, start, rise, set, sun, series, weather, expected],
+    () => ({ now, start, rise, set, sunKnown, series, weather, expected }),
+    [now, start, rise, set, sunKnown, series, weather, expected],
   );
   const [hero, setHero] = useState<LiveHero | null>(null);
   const path = useRouterState({ select: (r) => r.location.pathname });
