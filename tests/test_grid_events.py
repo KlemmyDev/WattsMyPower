@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Config
 from app.core.database import Database
-from app.features.grid.events import OffGridTracker, off_grid, recent
+from app.features.grid.events import OffGridTracker, off_grid, recent, supply_healthy
 from app.features.live.service import LiveService
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
@@ -28,6 +28,16 @@ def test_a_reading_says_off_grid_only_when_its_running_state_does() -> None:
     assert off_grid({"running_state": 0x1000}) is True and off_grid({"running_state": 0x0041}) is True
     assert off_grid({"running_state": 0}) is False and off_grid({"running_state": 0x0800}) is False
     assert off_grid({}) is None and off_grid({"running_state": None}) is None
+
+
+def test_the_supply_is_healthy_when_what_it_reports_is_in_range() -> None:
+    assert supply_healthy({"grid_voltage": 240.0, "grid_freq": 50.0}) is True
+    assert supply_healthy({"grid_voltage": 240.0}) is True  # one figure is enough
+    assert supply_healthy({"grid_voltage": 217.0, "grid_freq": 49.9}) is True
+    assert supply_healthy({"grid_voltage": 254.0, "grid_freq": 50.0}) is False
+    assert supply_healthy({"grid_voltage": 240.0, "grid_freq": 50.3}) is False
+    assert supply_healthy({"grid_voltage": 0.0, "grid_freq": 0.0}) is None  # not measuring the grid
+    assert supply_healthy({}) is None and supply_healthy(None) is None
 
 
 def test_each_stretch_off_grid_is_one_row_with_when_it_began_and_ended(db: Database, config: Config) -> None:
@@ -67,15 +77,19 @@ def test_the_status_says_nothing_until_the_inverter_has_reported_a_state_and_is_
     db: Database, config: Config
 ) -> None:
     _, live = tracker(db, config)
-    assert live.grid_connection() == {"off_grid": None, "off_grid_since": None}
+    assert live.grid_connection() == {"off_grid": None, "off_grid_since": None, "grid_healthy": None}
     live.off_grid_known = True
     assert live.grid_connection()["off_grid"] is None  # never heard from
     live.last_success = time.time()
-    assert live.grid_connection() == {"off_grid": False, "off_grid_since": None}
+    assert live.grid_connection() == {"off_grid": False, "off_grid_since": None, "grid_healthy": None}  # no figures
+    live.latest = {"grid_voltage": 241.0, "grid_freq": 50.01}
+    assert live.grid_connection()["grid_healthy"] is True
+    live.latest = {"grid_voltage": 262.0, "grid_freq": 50.0}  # too high
+    assert live.grid_connection()["grid_healthy"] is False
     live.off_grid_since = 160
-    assert live.grid_connection() == {"off_grid": True, "off_grid_since": 160}
+    assert live.grid_connection() == {"off_grid": True, "off_grid_since": 160, "grid_healthy": None}
     live.last_success = time.time() - 3600  # stale: not what's happening now
-    assert live.grid_connection() == {"off_grid": None, "off_grid_since": None}
+    assert live.grid_connection() == {"off_grid": None, "off_grid_since": None, "grid_healthy": None}
 
 
 def test_the_events_are_listed_for_the_grid_page(config: Config) -> None:

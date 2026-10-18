@@ -111,4 +111,6 @@ export type LiveStatus = {
    * say, or it hasn't been heard from lately. And since when (unix seconds), while it is. */
   off_grid?: boolean | null;
   off_grid_since?: number | null;
+  /** On the grid, with its voltage and frequency in their normal range; null when that is not known. */
+  grid_healthy?: boolean | null;
 };

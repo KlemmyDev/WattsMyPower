@@ -11,7 +11,7 @@ import { gridEventsQuery } from "~/features/grid/api";
 /** Whether the house is on the grid or running without it, from the live status: null when this inverter doesn't say. */
 export function useGridConnection() {
   const s = useLive();
-  return { offGrid: s?.off_grid ?? null, since: s?.off_grid_since ?? null };
+  return { offGrid: s?.off_grid ?? null, since: s?.off_grid_since ?? null, healthy: s?.grid_healthy ?? null };
 }
 
 /** "3:12 pm", or "Sat 17 Oct, 3:12 pm" when it wasn't today. */
@@ -19,7 +19,7 @@ const at = (ts: number, now: number) => `${ts >= midnight(now) ? "" : `${shortDa
 
 /** A small status for the Grid page: "On the grid", or red "Off grid since 3:12 pm". Nothing if it isn't reported. */
 export function ConnectionPill({ className }: { className?: string }) {
-  const { offGrid, since } = useGridConnection();
+  const { offGrid, since, healthy } = useGridConnection();
   const now = useNow(30_000);
   if (offGrid == null) return null;
   return (
@@ -31,8 +31,17 @@ export function ConnectionPill({ className }: { className?: string }) {
         className,
       )}
     >
-      <i className={cn("size-2 rounded-full", offGrid ? "bg-bad" : "bg-good")} aria-hidden />
-      {offGrid ? `Off grid${since ? ` since ${at(since, now)}` : ""}` : "On the grid"}
+      <i
+        className={cn("size-2 rounded-full", offGrid ? "bg-bad" : healthy === false ? "bg-warn" : "bg-good")}
+        aria-hidden
+      />
+      {offGrid
+        ? `Off grid${since ? ` since ${at(since, now)}` : ""}`
+        : healthy
+          ? "On the grid, supply normal"
+          : healthy === false
+            ? "On the grid, supply outside its normal range"
+            : "On the grid"}
     </span>
   );
 }

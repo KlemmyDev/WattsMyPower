@@ -10,7 +10,17 @@ import { embedPowerQuery } from "~/features/embed/api";
 import type { EmbedPower as Power, EmbedTheme, EmbedVariant } from "~/features/embed/types";
 
 /** One figure of the summary, ready to draw in any of the looks. */
-type Reading = { key: string; icon: IconName; color: string; name: string; value: string; on: boolean; bar?: number };
+type Reading = {
+  key: string;
+  icon: IconName;
+  color: string;
+  name: string;
+  value: string;
+  on: boolean;
+  bar?: number;
+  /** All is well: a small green dot by the icon. */
+  ok?: boolean;
+};
 
 function readings(p: Power): Reading[] {
   const g = p.grid_w ?? 0;
@@ -28,6 +38,7 @@ function readings(p: Power): Reading[] {
       name: gridVerb(p.grid_w, p.off_grid),
       value: p.off_grid ? "Off" : kW(p.grid_w),
       on: p.off_grid || Math.abs(g) > ON,
+      ok: p.grid_healthy === true,
     },
   ];
   if (pct != null)
@@ -128,6 +139,7 @@ function Tiles({ items }: { items: Reading[] }) {
         >
           <span className="flex" style={{ color: tint(r) }}>
             <Icon name={r.icon} size={20} />
+            <Ok on={r.ok} />
           </span>
           <span className="text-[22px] leading-6 font-light tracking-[-0.5px] tabular-nums">{r.value}</span>
           {r.bar != null && <Bar pct={r.bar} color={r.color} className="max-w-16" />}
@@ -146,6 +158,7 @@ function Compact({ items }: { items: Reading[] }) {
         <span key={r.key} className="flex items-center gap-1.5" title={r.name}>
           <span className="flex" style={{ color: tint(r) }}>
             <Icon name={r.icon} size={16} />
+            <Ok on={r.ok} />
           </span>
           <span className="font-medium">{r.value}</span>
         </span>
@@ -177,6 +190,7 @@ function Circuit({ items }: { items: Reading[] }) {
               }}
             >
               <Icon name={r.icon} size={20} />
+              <Ok on={r.ok} />
             </span>
             <span className="text-[15px] font-medium tabular-nums">{r.value}</span>
             <span className="text-center text-[11px] leading-3 text-ink-muted">{r.name}</span>
@@ -196,6 +210,7 @@ function Stack({ items }: { items: Reading[] }) {
           <span className="flex items-center gap-3">
             <span className="flex flex-none" style={{ color: tint(r) }}>
               <Icon name={r.icon} size={18} />
+              <Ok on={r.ok} />
             </span>
             <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">{r.name}</span>
             <span className="text-lg font-light tabular-nums">{r.value}</span>
@@ -216,4 +231,15 @@ function Bar({ pct, color, className }: { pct: number; color: string; className?
       />
     </span>
   );
+}
+
+/** A small green dot at the corner of an icon: all is well (the grid is connected, its supply normal). */
+function Ok({ on }: { on?: boolean }) {
+  return on ? (
+    <i
+      aria-hidden
+      title="Connected, supply normal"
+      className="relative -top-1 -left-1 size-1.5 rounded-full bg-good/80"
+    />
+  ) : null;
 }

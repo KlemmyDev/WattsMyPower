@@ -10,6 +10,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from app.features.grid.service import VOLTAGE_HIGH, VOLTAGE_LOW
 from app.features.inverters.sungrow.sh_rs import OFF_GRID
 from app.features.inverters.types import Snapshot
 
@@ -21,6 +22,23 @@ def off_grid(snap: Snapshot) -> bool | None:
     """Whether a reading says the inverter is running the house without the grid; None where it doesn't say."""
     state = snap.get("running_state")
     return None if state is None else int(state) in OFF_GRID
+
+
+FREQ_LOW, FREQ_HIGH = 49.85, 50.15  # Hz: the normal band (the standard allows 49.85 to 50.15)
+
+
+def supply_healthy(snap: Snapshot | None) -> bool | None:
+    """Whether the grid supply the inverter sees is in its normal range: voltage within the limits and frequency in
+    the normal band, going by whichever of the two it reports. None with no reading, or neither."""
+    if snap is None:
+        return None
+    v, f = snap.get("grid_voltage"), snap.get("grid_freq")
+    checks = []
+    if v is not None and v > 50:  # below that it isn't measuring the grid
+        checks.append(VOLTAGE_LOW <= v <= VOLTAGE_HIGH)
+    if f is not None and f > 0:
+        checks.append(FREQ_LOW <= f <= FREQ_HIGH)
+    return all(checks) if checks else None
 
 
 class OffGridTracker:

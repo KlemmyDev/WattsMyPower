@@ -9,6 +9,8 @@ export type EmbedPower = {
   battery_pct: number | null;
   /** Running the house without the grid; null where this inverter doesn't say. */
   off_grid: boolean | null;
+  /** On the grid with a normal supply (voltage and frequency); null where not known. */
+  grid_healthy: boolean | null;
   /** Unix seconds of the last reading. */
   updated: number | null;
 };

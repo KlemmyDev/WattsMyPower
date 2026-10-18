@@ -23,7 +23,7 @@ const loading = (title: string) => (
 /** The grid's outlook as the Overview's banner (outages, warnings, a price spike); while all's normal, a quiet line. */
 function Status({ ctx, h }: WidgetProps) {
   const { data } = useQuery(gridQuery);
-  const { offGrid } = useGridConnection();
+  const { offGrid, healthy } = useGridConnection();
   const quiet =
     !offGrid &&
     data &&
@@ -38,7 +38,8 @@ function Status({ ctx, h }: WidgetProps) {
       <span className="flex min-w-0 flex-col">
         <span className="text-[15px] font-semibold">The grid's running normally</span>
         <span className="truncate text-[13px] text-ink-muted">
-          {offGrid === false ? "On the grid. " : ""}No outages or warnings near you
+          {offGrid === false ? (healthy ? "On the grid, supply normal. " : "On the grid. ") : ""}No outages or warnings
+          near you
         </span>
       </span>
     </WidgetCard>

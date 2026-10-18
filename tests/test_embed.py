@@ -44,7 +44,7 @@ def test_the_token_opens_the_power_figures_and_a_wrong_one_finds_nothing(client:
     client.cookies.clear()  # as in another site's frame: no session
     got = client.get("/api/embed/public/power", params={"token": token})
     assert got.status_code == 200 and set(got.json()) == {
-        "solar_w", "home_w", "grid_w", "battery_w", "battery_pct", "off_grid", "updated",
+        "solar_w", "home_w", "grid_w", "battery_w", "battery_pct", "off_grid", "grid_healthy", "updated",
     }  # fmt: skip
     assert client.get("/api/embed/public/power", params={"token": token + "x"}).status_code == 404
     assert client.get("/api/embed/public/power").status_code == 404

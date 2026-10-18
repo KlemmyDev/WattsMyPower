@@ -12,6 +12,7 @@ from typing import Any
 from app.core.config import Config
 from app.core.timezone import site_zone
 from app.core.version import about
+from app.features.grid.events import supply_healthy
 from app.features.inverters.types import Snapshot
 from app.features.settings.store import SettingsStore
 from app.features.tariffs.store import TariffStore
@@ -141,5 +142,8 @@ class LiveService:
         inverter doesn't say or it hasn't been heard from lately. And since when, while it is."""
         fresh = self.last_success is not None and time.time() - self.last_success < FRESH
         if not (fresh and self.off_grid_known):
-            return {"off_grid": None, "off_grid_since": None}
-        return {"off_grid": self.off_grid_since is not None, "off_grid_since": self.off_grid_since}
+            return {"off_grid": None, "off_grid_since": None, "grid_healthy": None}
+        off = self.off_grid_since is not None
+        # Healthy: connected, and the supply's voltage and frequency in their normal range.
+        healthy = None if off else supply_healthy(self.latest)
+        return {"off_grid": off, "off_grid_since": self.off_grid_since, "grid_healthy": healthy}
