@@ -130,6 +130,13 @@ export function SolarTrend({ trend: t }: { trend: SolarInsights["trend"] }) {
           {months.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <div className="relative flex h-[120px] items-end gap-2 max-sm:gap-[3px]" {...plot}>
+                {avg != null && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 border-t border-dashed border-ink-faint"
+                    style={{ bottom: `${(avg / top) * 100}%` }}
+                  />
+                )}
                 {months.map((x, k) => (
                   <button
                     key={x.month}
