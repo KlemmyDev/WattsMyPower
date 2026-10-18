@@ -109,7 +109,8 @@ export function useHomeNavPages(enabled: boolean): NavPage[] {
         key: `room:${item.group}`,
         label: item.group,
         link: { to: "/home/rooms/$room", params: { room: item.group } },
-        value: w ? kW(w) : "Idle",
+        // Offline when none of its devices has a fresh reading, as its tile says.
+        value: w ? kW(w) : item.members.every((d) => !d.now || !d.now.online || d.now.stale) ? "Offline" : "Idle",
         share: w / top,
         color: colors.get(item.id),
         active: here === `/home/rooms/${item.group}` || item.members.some((d) => here === `/home/${d.id}`),

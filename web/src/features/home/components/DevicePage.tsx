@@ -115,13 +115,7 @@ function liveOf(d: HomeDevice | undefined, kindLabel: string): ItemLive {
   const n = d.now;
   const w = drawing(d);
   const running = !!n && !n.stale && n.running;
-  const quiet = !n
-    ? "No reading"
-    : n.stale || !n.online
-      ? `Offline, last read ${hhmm(n.at)}`
-      : n.switched_on === false
-        ? "Off"
-        : "Idle";
+  const quiet = !n ? "No reading" : n.stale || !n.online ? "Offline" : n.switched_on === false ? "Off" : "Idle";
   const left = running && n.remaining_min ? `${Math.round(n.remaining_min)} min left` : null;
   const status = running
     ? [n.phase ?? "Running", n.program !== n.phase && n.program, left].filter(Boolean).join(" · ")

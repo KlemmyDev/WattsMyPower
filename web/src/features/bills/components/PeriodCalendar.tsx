@@ -271,10 +271,12 @@ function Row({ month, children }: { month: string; children: ReactNode }) {
   );
 }
 
-/** A day's figure short enough for its cell, so the colour isn't the only thing that says it: "$0.64", "−$0.76", "34". */
+/** A day's figure short enough for its cell, so the colour isn't the only thing that says it: "$0.6", "−$0.8", "34". */
 function shortValue(m: Metric, v: number) {
-  if (m.key === "cost") return `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`;
-  return Math.abs(v) < 10 ? v.toFixed(1) : String(Math.round(v));
+  const a = Math.abs(v);
+  const n = a < 10 ? a.toFixed(1) : String(Math.round(a));
+  if (m.key === "cost") return `${v < 0 ? "−" : ""}$${n}`;
+  return `${v < 0 ? "−" : ""}${n}`;
 }
 
 function DayCell({
@@ -332,7 +334,7 @@ function DayCell({
       )}
       {partsOf(cell.date).day}
       {v != null && (
-        <span aria-hidden className="absolute inset-x-1.5 bottom-1 truncate text-[9px] max-sm:hidden">
+        <span aria-hidden className="absolute inset-x-1 bottom-1 text-[9px] whitespace-nowrap max-sm:hidden">
           {shortValue(metric, v)}
         </span>
       )}
