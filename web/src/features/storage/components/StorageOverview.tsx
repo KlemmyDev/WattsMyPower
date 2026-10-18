@@ -106,11 +106,27 @@ function Fact({ label, help, children }: { label: string; help?: ReactNode; chil
 }
 
 /**
- * Where it's heading: the databases' size from now to a year on at this week's rate, as a line (tables that keep a
- * fixed window stop growing, so it's the most it could be).
+ * The databases' size `days` on at this week's rate: each table grows until it reaches the limit its retention gives
+ * it (rows older than that are deleted as new ones come), then stays there.
  */
-function Projection({ now, perDay }: { now: number; perDay: number }) {
-  const months = Array.from({ length: 13 }, (_, m) => now + perDay * 30.4 * m);
+function sizeIn(dbs: MeasuredDatabase[], days: number): number {
+  let size = 0;
+  for (const d of dbs) {
+    size += d.total_bytes;
+    for (const g of d.groups)
+      for (const t of g.tables) {
+        const grows = (t.growing_per_day ?? 0) * days;
+        const room = t.limit_bytes != null && t.bytes != null ? Math.max(0, t.limit_bytes - t.bytes) : Infinity;
+        size += Math.min(grows, room);
+      }
+  }
+  return size;
+}
+
+/** Where it's heading: the databases' size from now to a year on at this week's rate, as a line. */
+function Projection({ dbs }: { dbs: MeasuredDatabase[] }) {
+  const months = Array.from({ length: 13 }, (_, m) => sizeIn(dbs, 30.4 * m));
+  const now = months[0];
   const max = months[12] || 1;
   const W = 240;
   const H = 56;
@@ -181,7 +197,7 @@ export function StorageSummary({
           <Fact label="Growing by" help="Per month, at this week's rate.">
             {growth > 0 ? bytes(growth * 30) : "Not growing"}
           </Fact>
-          {growth > 0 && <Projection now={total} perDay={growth} />}
+          {growth > 0 && <Projection dbs={dbs} />}
         </div>
         <div>
           <Fact label="Free on this drive" help={`Of ${bytes(report.disk.total)}`}>
