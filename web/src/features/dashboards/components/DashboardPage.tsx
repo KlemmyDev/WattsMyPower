@@ -23,7 +23,7 @@ import { AddWidgets, WidgetSettings } from "~/features/dashboards/components/Pan
 import { useWidgetCtx } from "~/features/dashboards/hooks";
 import type { Dashboard, Screen, WidgetItem } from "~/features/dashboards/types";
 import { COLS, compact, firstFit, forPhone, newId, resize } from "~/features/dashboards/utils/layout";
-import { defaultDashboards, preset, presetLayout, PRESETS } from "~/features/dashboards/utils/presets";
+import { defaultDashboards, presetLayout, PRESETS } from "~/features/dashboards/utils/presets";
 import { defaultSettings, sizesOf, widgetDef } from "~/features/dashboards/widgets/registry";
 import type { Settings } from "~/features/common/widgets/types";
 
@@ -196,14 +196,6 @@ export function DashboardPage() {
     const w = c.w ?? item.w;
     setItems(resize(next, id, w, c.h ?? item.h, cols, sizesOf(def, settings, screen, w)));
   };
-  const newBoard = () => {
-    const b: Dashboard = {
-      id: newId(),
-      name: `Dashboard ${boards.length + 1}`,
-      layouts: { computer: presetLayout(preset("glance"), ctx), phone: null },
-    };
-    begin([...boards, b], b.id);
-  };
 
   const selected = draft?.selected ? items.find((i) => i.id === draft.selected) : undefined;
   const panel = (bare = false) =>
@@ -250,15 +242,6 @@ export function DashboardPage() {
                     {b.name}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  aria-label="Add a dashboard"
-                  title="Add a dashboard"
-                  onClick={newBoard}
-                  className="flex size-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-sub hover:text-ink"
-                >
-                  <Icon name="plus" size={15} />
-                </button>
               </div>
               <Button variant="outline" size="sm" onClick={() => begin(boards, board.id)}>
                 <Icon name="pencil" size={14} />
