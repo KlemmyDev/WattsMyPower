@@ -30,25 +30,29 @@ export function OptionsCard({ options }: { options: Options }) {
     >
       <OptionList>
         <OptionRow label="Quiet hours" help="Nothing is sent between these times (it's kept in the history).">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:flex-row sm:items-center">
             <Switch on={quiet.enabled} label="Quiet hours" onChange={(enabled) => setQuiet({ ...quiet, enabled })} />
-            <Input
-              type="time"
-              aria-label="Quiet hours start"
-              value={quiet.start}
-              disabled={!quiet.enabled}
-              onChange={(e) => setQuiet({ ...quiet, start: e.target.value })}
-              boxClassName="h-9"
-            />
-            <span className="text-[13px] text-ink-muted">to</span>
-            <Input
-              type="time"
-              aria-label="Quiet hours end"
-              value={quiet.end}
-              disabled={!quiet.enabled}
-              onChange={(e) => setQuiet({ ...quiet, end: e.target.value })}
-              boxClassName="h-9"
-            />
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Input
+                type="time"
+                aria-label="Quiet hours start"
+                value={quiet.start}
+                disabled={!quiet.enabled}
+                onChange={(e) => setQuiet({ ...quiet, start: e.target.value })}
+                boxClassName="h-9 min-w-0 flex-1 gap-1 px-2 sm:flex-none sm:gap-1.5 sm:px-2.5"
+                className="min-w-0 text-sm sm:text-base"
+              />
+              <span className="text-[13px] text-ink-muted">to</span>
+              <Input
+                type="time"
+                aria-label="Quiet hours end"
+                value={quiet.end}
+                disabled={!quiet.enabled}
+                onChange={(e) => setQuiet({ ...quiet, end: e.target.value })}
+                boxClassName="h-9 min-w-0 flex-1 gap-1 px-2 sm:flex-none sm:gap-1.5 sm:px-2.5"
+                className="min-w-0 text-sm sm:text-base"
+              />
+            </div>
           </div>
         </OptionRow>
         <OptionRow label="Most in a day" help="After this many in a day, the rest are held back until tomorrow.">
@@ -60,7 +64,7 @@ export function OptionsCard({ options }: { options: Options }) {
             aria-label="Most notifications in a day"
             value={cap}
             onChange={(e) => setCap(e.target.value)}
-            boxClassName="h-9 w-28"
+            boxClassName="h-9 w-20"
           />
         </OptionRow>
       </OptionList>

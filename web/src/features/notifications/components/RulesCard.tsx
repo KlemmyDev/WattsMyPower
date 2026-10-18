@@ -95,9 +95,9 @@ function RuleRow({
       </div>
       <Collapse open={shown} className="flex flex-col gap-4">
         {rule.settings.length > 0 && (
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-x-3 gap-y-3 sm:gap-4">
             {rule.settings.map((s) => (
-              <label key={s.key} className="flex min-w-[150px] flex-1 flex-col gap-1.5 text-[13px] text-ink-muted">
+              <label key={s.key} className="flex min-w-[130px] flex-1 flex-col gap-1.5 text-[13px] text-ink-muted">
                 {s.label}
                 <Input
                   type="number"
@@ -115,7 +115,7 @@ function RuleRow({
         )}
         <fieldset className="m-0 flex flex-wrap items-center gap-x-4 gap-y-2 border-0 p-0">
           <legend className="sr-only">Send {rule.name} through</legend>
-          <span className="text-[13px] text-ink-muted">Send through</span>
+          <span className="w-full text-[13px] text-ink-muted sm:w-auto">Send through</span>
           {CHANNELS.map((c) => (
             <label
               key={c.id}
