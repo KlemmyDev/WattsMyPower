@@ -166,6 +166,7 @@ function secondFigure(x: {
       sub: undefined,
       ...split(kW(x.pvAt ?? 0)),
     };
+  if (x.live.pv == null) return { label: "Waiting for a reading", live: false, sub: undefined, value: DASH, unit: "" };
   if (x.live.producing)
     return {
       label: "Generating now",
@@ -243,7 +244,7 @@ function story({
   }
   const head =
     today.heading != null
-      ? `Heading for ${kWh(today.heading)}${today.pace != null && Math.abs(today.pace) >= 0.03 ? `, ${signedPct(today.pace)} on this morning's forecast.` : "."}`
+      ? `Heading for ${kWh(today.heading)}${today.pace != null && Math.abs(today.pace) >= 0.03 ? `, ${pct(Math.abs(today.pace) * 100)} ${today.pace < 0 ? "below" : "above"} this morning's forecast.` : "."}`
       : "Making the most of the day.";
   return [head, coming ?? ""];
 }

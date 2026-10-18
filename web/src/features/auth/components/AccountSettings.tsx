@@ -27,9 +27,6 @@ import {
   SettingsSection,
 } from "~/features/settings/components/SettingsSection";
 
-const label = <T extends string>(options: { value: T; label: string }[], v: T) =>
-  options.find((o) => o.value === v)?.label ?? v;
-
 /**
  * Settings → Account: who's signed in (and signing out) and how the dashboard looks in this browser at the top, then the
  * look chosen in pictures, the accessibility switches, and changing the password.
@@ -38,8 +35,6 @@ export function AccountSettings() {
   const { data: session } = useQuery(sessionQuery);
   const logout = useLogout();
   const navigate = useNavigate();
-  const [theme] = useThemeChoice();
-  const [display] = useDisplay();
   const auth = session?.auth_enabled !== false;
 
   return (
@@ -79,13 +74,6 @@ export function AccountSettings() {
           value={!session ? "—" : auth ? (session.username ?? "—") : "No sign-in"}
           sub={auth ? "This browser" : "Handled elsewhere"}
         />
-        <SummaryStat label="Theme" value={label(THEME_OPTIONS, theme)} sub="In this browser" />
-        <SummaryStat
-          label="Size"
-          value={label(SIZE_OPTIONS, display.size)}
-          sub={label(DENSITY_OPTIONS, display.density)}
-        />
-        <SummaryStat label="Clock" value={display.clock === "12" ? "12-hour" : "24-hour"} sub="For every time shown" />
       </SummaryCard>
       <Appearance />
       <Accessibility />

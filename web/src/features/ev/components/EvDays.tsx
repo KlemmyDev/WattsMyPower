@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { hhmm, shortDay } from "~/features/common/formatting/utils/date";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { COLOR, heatColor } from "~/features/common/theme/utils/colors";
@@ -14,6 +14,8 @@ import type { EvSession } from "~/features/ev/types";
 
 const DAYS = 30;
 const SHOWN = 5; // trips and charges listed before "Show all"
+
+const JOIN_GAP = 30 * 60; // charges closer than this are one, as a passing cloud pauses solar charging
 
 const day = (ts: number) => shortDay.format(new Date(ts * 1000));
 
@@ -100,6 +102,30 @@ function duration(s: number): string {
   return h < 48 ? `${h} h${m % 60 ? ` ${m % 60} min` : ""}` : `${Math.round(h / 24)} days`;
 }
 
+/**
+ * Latest first, with charges that follow each other within half an hour made into one: charging on spare solar
+ * stops and starts with the cloud, and each restart would otherwise be a charge of its own.
+ */
+export function joinCharges(sessions: EvSession[]): EvSession[] {
+  const out: EvSession[] = [];
+  for (const s of sessions) {
+    const last = out[out.length - 1]; // the later one: `s` is the one before it
+    if (last && last.kind === "charge" && s.kind === "charge" && s.end != null && last.start - s.end <= JOIN_GAP) {
+      const kwh = (s.kwh ?? 0) + (last.kwh ?? 0);
+      const grid = (s.grid_kwh ?? 0) + (last.grid_kwh ?? 0);
+      out[out.length - 1] = {
+        ...last,
+        start: s.start,
+        soc_start: s.soc_start,
+        kwh,
+        grid_kwh: grid,
+        solar_share: kwh > 0 ? Math.max(0, 1 - grid / kwh) : last.solar_share,
+      };
+    } else out.push(s);
+  }
+  return out;
+}
+
 /** One trip or charge, in a row: what it was, its levels and what it came to, and when. */
 function Row({ s, now }: { s: EvSession; now: number }) {
   const away = s.kind === "away";
@@ -136,14 +162,15 @@ export function EvTrips({ vin, now, className }: { vin: string; now: number; cla
   const { data: h, isPending } = useHistory(vin);
   const [all, setAll] = useState(false);
   const t = h?.totals;
-  const sessions = h?.sessions ?? [];
+  const sessions = useMemo(() => joinCharges(h?.sessions ?? []), [h?.sessions]);
+  const charges = sessions.filter((s) => s.kind === "charge").length;
   return (
     <SmallCard
       id={`h-ttrips-${vin}`}
       title="Trips and charges"
       note={
         t
-          ? `${t.trips} ${t.trips === 1 ? "trip" : "trips"} · ${t.charges} ${t.charges === 1 ? "charge" : "charges"}`
+          ? `${t.trips} ${t.trips === 1 ? "trip" : "trips"} · ${charges} ${charges === 1 ? "charge" : "charges"}`
           : undefined
       }
       className={className}

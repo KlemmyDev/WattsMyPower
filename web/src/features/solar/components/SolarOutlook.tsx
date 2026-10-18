@@ -41,7 +41,8 @@ export function SolarOutlook({
   const days = f.days;
   const range = acc?.range ?? null;
   const top = Math.max(0.1, ...days.map((d) => d.pv_kwh * (range?.high ?? 1)));
-  const name = (d: ForecastDay) => (d.date === dateKey(now) ? "Today" : shortDay.format(parseYmd(d.date)));
+  const name = (d: ForecastDay) =>
+    d.date === dateKey(now) ? "Today, still to come" : shortDay.format(parseYmd(d.date));
   const likely = (d: ForecastDay) =>
     range ? `Likely ${(d.pv_kwh * range.low).toFixed(1)} to ${kWh(d.pv_kwh * range.high)}` : "Range builds up in time";
   const dayText = (d: ForecastDay) =>
@@ -54,7 +55,7 @@ export function SolarOutlook({
     [
       d.code != null ? codeName(d.code) : null,
       temps(d),
-      d.sun_kwh_m2 != null ? `${d.sun_kwh_m2.toFixed(1)} kWh/m² of sun` : null,
+      d.sun_kwh_m2 != null ? `${d.sun_kwh_m2.toFixed(1)} kWh of sunlight per m²` : null,
       d.precip >= 40 ? `${d.precip}% chance of rain` : null,
     ]
       .filter(Boolean)

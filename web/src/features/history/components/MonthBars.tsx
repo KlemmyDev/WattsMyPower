@@ -20,16 +20,21 @@ function niceMax(v: number) {
 }
 
 /**
- * The year January to December, a bar a month: the house's use stacked by where it came from (solar, the battery, the
+ * The year January to December (or just the months with readings, until there are six), a bar a month: the house's use stacked by where it came from (solar, the battery, the
  * grid). Hover reads a month out; choosing one opens its days. Months without readings keep their place.
  */
 export function MonthBars({ year, months, onSelect }: { year: number; months: Month[]; onSelect: (m: Month) => void }) {
   const { hover: h, width, plot, bar } = useBarHover();
   const byKey = new Map(months.map((m) => [m.key, m]));
-  const slots = Array.from({ length: 12 }, (_, k) => ({
+  const every = Array.from({ length: 12 }, (_, k) => ({
     label: monthShort.format(siteTime(year, k + 1, 15) * 1000),
     m: byKey.get(`${year}-${String(k + 1).padStart(2, "0")}`) ?? null,
   }));
+  // Until there's half a year of readings, only the months they span, so the bars aren't squeezed into one corner.
+  const lo = every.findIndex((x) => x.m);
+  const hi = every.findLastIndex((x) => x.m);
+  const slots = lo >= 0 && hi - lo + 1 < 6 ? every.slice(lo, hi + 1) : every;
+  const cols = { gridTemplateColumns: `repeat(${slots.length}, minmax(0, 1fr))` };
   const top = niceMax(Math.max(0, ...months.map((m) => m.home)));
   const pc = (v: number) => `${((v / top) * 100).toFixed(2)}%`;
   const sel = h != null ? slots[h].m : null;
@@ -47,7 +52,7 @@ export function MonthBars({ year, months, onSelect }: { year: number; months: Mo
             </span>
           </div>
         ))}
-        <div className="relative grid h-full grid-cols-12 gap-1.5 max-sm:gap-1">
+        <div className="relative grid h-full gap-1.5 max-sm:gap-1" style={cols}>
           {slots.map(({ label, m }, k) =>
             m ? (
               <button
@@ -78,7 +83,7 @@ export function MonthBars({ year, months, onSelect }: { year: number; months: Mo
           )}
         </div>
         {sel && h != null && (
-          <ChartTooltip left={((h + 0.5) / 12) * 100} flip={h > 5} width={width}>
+          <ChartTooltip left={((h + 0.5) / slots.length) * 100} flip={h >= slots.length / 2} width={width}>
             <span className="font-medium text-ink">
               {sel.name} {sel.year}
             </span>
@@ -95,7 +100,7 @@ export function MonthBars({ year, months, onSelect }: { year: number; months: Mo
           </ChartTooltip>
         )}
       </div>
-      <div className="grid grid-cols-12 gap-1.5 pr-12 max-sm:gap-1 max-sm:pr-10">
+      <div className="grid gap-1.5 pr-12 max-sm:gap-1 max-sm:pr-10" style={cols}>
         {slots.map(({ label, m }, k) => (
           <span
             key={k}

@@ -94,7 +94,7 @@ export function SolarHero({
             }
           />
           <HeroLive
-            label={live.producing ? "Generating now" : "Panels resting"}
+            label={live.pv == null ? "Waiting for a reading" : live.producing ? "Generating now" : "Panels resting"}
             on={live.producing}
             color={tint}
             value={value}

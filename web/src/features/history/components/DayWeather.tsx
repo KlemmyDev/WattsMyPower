@@ -41,7 +41,7 @@ export function DayWeather({ date, made }: { date: string; made: number | null }
   const facts = [
     s.rain_mm != null && s.rain_mm >= 0.1 ? `${s.rain_mm} mm of rain` : "No rain",
     s.cloud != null && `${s.cloud}% cloud through the day`,
-    s.sunlight_kwh_m2 != null && `${s.sunlight_kwh_m2.toFixed(1)} kWh/m² of sunshine`,
+    s.sunlight_kwh_m2 != null && `${s.sunlight_kwh_m2.toFixed(1)} kWh of sunlight per m²`,
   ].filter(Boolean);
   return (
     <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
