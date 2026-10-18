@@ -223,7 +223,7 @@ export function BatteryBackup({
           title="If the grid went down"
           sub="How long it would run your home with no solar, down to the reserve"
         />
-        <Corner label="Usable now">{usable != null ? kWh(usable) : DASH}</Corner>
+        <Corner label="Usable above reserve">{usable != null ? kWh(usable) : DASH}</Corner>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-0.5 rounded-2xl bg-fg/4 px-4 py-3">
