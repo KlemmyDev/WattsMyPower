@@ -492,6 +492,29 @@ def _grid_events(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS grid_events_by_start ON grid_events (kind, start)")
 
 
+def _notifications(conn: sqlite3.Connection) -> None:
+    """Notifications: where they go (notify_channels: ntfy, webhook), each rule's on/off, numbers and channels
+    (notify_rules), its progress so a restart neither forgets nor repeats one (notify_state), what was sent and how each
+    channel took it (notify_history), and the browsers turned on (push_subscriptions, as they were before alerts were
+    taken out: `endpoint` is the address at its push service, `p256dh` and `auth` its keys, base64url)."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notify_channels (kind TEXT PRIMARY KEY, enabled INTEGER NOT NULL, config TEXT NOT NULL, updated_at INTEGER NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notify_rules (rule TEXT PRIMARY KEY, enabled INTEGER NOT NULL, settings TEXT NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notify_state (rule TEXT PRIMARY KEY, pending_since INTEGER, active_since INTEGER,"
+        " last_fired INTEGER, quiet INTEGER NOT NULL DEFAULT 0, data TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notify_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL,"
+        " rule TEXT, event TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, results TEXT NOT NULL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS notify_history_by_ts ON notify_history (ts)")
+    _push_subscriptions(conn)
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -523,6 +546,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _drop_alerts,
     _home_looks,
     _grid_events,
+    _notifications,
 ]
 
 

@@ -1,5 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AccountAvatar } from "~/features/auth/components/AccountAvatar";
 import { Dock } from "~/features/common/layout/components/Dock";
 import { SectionPagesStrip } from "~/features/common/layout/components/SectionPagesStrip";
@@ -17,6 +17,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // screen stays put rather than starting its entrance again. The live pages (Solar, Battery) count as one: they
   // share a top card that stays put as you move between them (features/live).
   const section = useRouterState({ select: (s) => sectionKey((s.resolvedLocation ?? s.location).pathname) });
+  // The service worker shows notifications, and is part of what lets the dashboard be installed as an app. It keeps no
+  // cache and answers no requests: it only waits for a push.
+  useEffect(() => {
+    if ("serviceWorker" in navigator && window.isSecureContext)
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  }, []);
   const [menu, setMenu] = useState(false);
   const openMenu = useCallback(() => setMenu(true), []);
   const closeMenu = useCallback(() => setMenu(false), []);
