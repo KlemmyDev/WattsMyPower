@@ -52,7 +52,11 @@ function DayStats({ day, extremes }: { day: Day; extremes: ReturnType<typeof ext
       <HeroStat label="Self-sufficiency" value={pct(day.ss * 100)} />
       <HeroStat label="Saved" value={money(day.saved)} />
       <HeroStat label="Bought" value={kWh(day.imp)} sub={day.cost >= 0.005 ? money(day.cost) : undefined} />
-      <HeroStat label="Sold" value={kWh(day.exp)} sub={day.credit >= 0.005 ? `${money(day.credit)} back` : undefined} />
+      <HeroStat
+        label="Exported"
+        value={kWh(day.exp)}
+        sub={day.credit >= 0.005 ? `${money(day.credit)} back` : undefined}
+      />
       <HeroStat label="Lowest battery" value={low != null ? pct(low) : DASH} />
       <HeroStat label="Power bill" value={money(day.net)} sub="With the supply charge" />
     </HeroStats>
