@@ -1,4 +1,4 @@
-import { useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { TitleBlock } from "~/features/common/ui/components/Card";
 import { cn } from "~/features/common/ui/utils";
 
@@ -8,23 +8,45 @@ import { cn } from "~/features/common/ui/utils";
  */
 
 /**
- * Which item of a chart is picked: pointed at, tapped or focused. Spread `plot` on the chart and `item(k)` on each
- * item's button. Moving the pointer off the chart, or focus leaving the item, puts the card back. A finger lifting
- * doesn't count as leaving, so a tapped bar stays read out until another is tapped.
+ * Which item of a chart is picked. Pointing at one (or focusing it) reads it out while the pointer is on it. Clicking
+ * or tapping one pins it, so it stays read out after the pointer moves away; clicking it again, or anywhere outside the
+ * chart, puts the card back. Spread `plot` on the chart and `item(k)` on each item's button. A finger lifting doesn't
+ * count as leaving, so a tapped bar stays read out until another is tapped or the page is tapped elsewhere.
  */
 export function usePick<K = number>() {
-  const [picked, setPicked] = useState<K | null>(null);
+  const [hover, setHover] = useState<K | null>(null);
+  const [pinned, setPinned] = useState<K | null>(null);
+  const chart = useRef<HTMLElement | null>(null);
+  const picked = pinned ?? hover;
+  useEffect(() => {
+    if (pinned == null) return;
+    const outside = (e: globalThis.PointerEvent) => {
+      if (chart.current && !chart.current.contains(e.target as Node)) setPinned(null);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [pinned]);
   const leave = (e: PointerEvent) => {
-    if (e.pointerType !== "touch") setPicked(null);
+    if (e.pointerType !== "touch") setHover(null);
   };
   return {
     picked,
-    plot: { onPointerLeave: leave },
+    plot: {
+      ref: (el: HTMLElement | null) => {
+        chart.current = el;
+      },
+      onPointerLeave: leave,
+    },
     item: (k: K) => ({
-      onPointerEnter: () => setPicked(k),
-      onFocus: () => setPicked(k),
-      onClick: () => setPicked(k),
-      onBlur: () => setPicked(null),
+      onPointerEnter: () => setHover(k),
+      onFocus: () => setHover(k),
+      onClick: () => {
+        if (pinned === k) {
+          setPinned(null);
+          setHover(null);
+        } else setPinned(k);
+      },
+      onBlur: () => setHover(null),
     }),
   };
 }
