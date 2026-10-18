@@ -280,7 +280,7 @@ export function useBatteryHero({
         />
       ),
     };
-  }, [v, p, s, mode, scene, expected, io, now, start, rise, set, preview, draft]);
+  }, [v, p, s, mode, scene, expected, io, now, start, rise, set, preview, draft, forecastFull]);
 }
 
 /**
