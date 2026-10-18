@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -7,6 +7,7 @@ import type { Snapshot } from "~/features/common/live/types";
 import { COLOR } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Icon } from "~/features/common/ui/components/Icon";
+import { dim, usePick } from "~/features/common/ui/components/Pick";
 import { exportCsvUrl } from "~/features/history/api";
 import { useLiveDay, useLiveHero } from "~/features/live/hooks";
 import { useForecast, useForecastAccuracy } from "~/features/common/weather/hooks";
@@ -71,10 +72,11 @@ export function SolarPage() {
 /**
  * Where today's solar went: into the house, into the battery, or out to the grid. Export and charging can come from
  * elsewhere too (the battery to the grid, the grid to the battery), so each is capped at what solar could have given.
- * Pointing at a part puts it in the corner, where the share kept at home sits otherwise.
+ * Pointing at a part, or choosing it, puts it in the corner, where the share kept at home sits otherwise; a chosen
+ * part stays lit until another is chosen.
  */
 export function WhereItWent({ p, download }: { p: Snapshot | null; download?: ReactNode }) {
-  const [hover, setHover] = useState<string | null>(null);
+  const { picked, plot, item } = usePick<string>();
   const pv = p?.daily_pv ?? 0;
   const toGrid = Math.min(p?.daily_export ?? 0, pv);
   const toBattery = Math.min(p?.daily_charge ?? 0, pv - toGrid);
@@ -85,7 +87,7 @@ export function WhereItWent({ p, download }: { p: Snapshot | null; download?: Re
     { key: "grid", label: "Sent to the grid", kwh: toGrid, color: COLOR.export },
   ];
   const kept = pv > 0 ? (home + toBattery) / pv : null;
-  const lit = parts.find((x) => x.key === hover);
+  const lit = parts.find((x) => x.key === picked);
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
@@ -108,21 +110,25 @@ export function WhereItWent({ p, download }: { p: Snapshot | null; download?: Re
         </div>
       </div>
       {pv > 0 ? (
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3" {...plot}>
           {parts.map((x) => (
-            <div
+            <button
               key={x.key}
-              className="flex flex-1 flex-col items-center gap-1.5"
-              onPointerEnter={() => setHover(x.key)}
-              onPointerLeave={() => setHover(null)}
+              type="button"
+              {...item(x.key)}
+              aria-label={`${x.label}: ${kWh(x.kwh)}`}
+              className={cn(
+                "flex min-w-0 flex-1 cursor-pointer flex-col items-center gap-1.5 border-0 bg-transparent p-0",
+                dim(picked, x.key),
+              )}
             >
               <span className="text-sm font-medium tabular-nums">{kWh(x.kwh)}</span>
               <span
-                className={cn("block w-full rounded-t-md transition-opacity", hover && hover !== x.key && "opacity-40")}
+                className="block w-full rounded-t-md"
                 style={{ height: `${Math.max(4, (x.kwh / pv) * 120)}px`, background: x.color }}
               />
               <span className="text-xs text-ink-muted">{x.label}</span>
-            </div>
+            </button>
           ))}
         </div>
       ) : (
