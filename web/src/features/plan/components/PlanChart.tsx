@@ -26,6 +26,7 @@ import { skyEvery3h, WeatherRow } from "~/features/plan/components/WeatherRow";
 import { hourEnd, hourKwh, type PlanDay, type Window } from "~/features/plan/utils";
 import type { Moment } from "~/features/plan/utils/moments";
 import type { Rates } from "~/features/plan/utils/rates";
+import { cn } from "~/features/common/ui/utils";
 
 const W = 1000;
 const PH = 200; // solar and home use
@@ -416,6 +417,9 @@ export function PlanChart({
   );
   const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(0);
+  // Off by default, so the chart shows solar, home use and battery level; the legend turns these on.
+  const [showFlows, setShowFlows] = useState(false);
+  const [showRange, setShowRange] = useState(false);
   const drag = useDragRange(
     from,
     to,
@@ -457,7 +461,7 @@ export function PlanChart({
       {(parts.legend || legendExtra || zoom.zoomed) && (
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-dim">
           {parts.legend &&
-            legend.map(([label, color, kind]) => (
+            legend.slice(0, 3).map(([label, color, kind]) => (
               <span key={label} className="flex items-center gap-1.5">
                 <i
                   className={kind === "box" ? "size-2.5 rounded-[2px]" : "h-[3px] w-3.5 rounded-[2px]"}
@@ -472,11 +476,33 @@ export function PlanChart({
               Forecast
             </span>
           )}
+          {parts.legend && (
+            <button
+              type="button"
+              aria-pressed={showFlows}
+              onClick={() => setShowFlows((v) => !v)}
+              className={cn("flex items-center gap-1.5 rounded-full", showFlows ? "text-ink" : "text-ink-faint")}
+            >
+              <i
+                className="size-2.5 rounded-[2px]"
+                style={{
+                  background: showFlows ? COLOR.fromGrid : "transparent",
+                  border: `1px solid ${COLOR.fromGrid}`,
+                }}
+              />
+              Grid and battery flows
+            </button>
+          )}
           {parts.legend && c.band && (
-            <span className="flex items-center gap-1.5">
+            <button
+              type="button"
+              aria-pressed={showRange}
+              onClick={() => setShowRange((v) => !v)}
+              className={cn("flex items-center gap-1.5 rounded-full", showRange ? "text-ink" : "text-ink-faint")}
+            >
               <i className="size-2.5 rounded-[2px]" style={{ background: alpha(COLOR.solar, 0.22) }} />
               Likely solar range
-            </span>
+            </button>
           )}
           {(legendExtra || zoom.zoomed) && (
             <span className="ml-auto flex items-center gap-2">
@@ -570,7 +596,7 @@ export function PlanChart({
               </clipPath>
             </defs>
             <g clipPath={clipped}>
-              {c.band && <path d={c.band} style={{ fill: alpha(COLOR.solar, 0.16) }} />}
+              {c.band && showRange && <path d={c.band} style={{ fill: alpha(COLOR.solar, 0.16) }} />}
               {c.pvPastArea && (
                 <path d={c.pvPastArea} style={{ fill: alpha(COLOR.solarWash, comparing ? 0.14 : 0.32) }} />
               )}
@@ -667,7 +693,7 @@ export function PlanChart({
           </>
         )}
         {parts.flows && (
-          <div className="relative mt-1 h-[64px] overflow-x-clip compact:h-12">
+          <div hidden={!showFlows} className="relative mt-1 h-[64px] overflow-x-clip compact:h-12">
             <div className="absolute inset-y-0" style={{ left: `${c.bars.left}%`, width: `${c.bars.width}%` }}>
               <FlowBars slots={c.bars.slots} className="relative h-full" />
             </div>
