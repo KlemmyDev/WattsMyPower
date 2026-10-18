@@ -53,11 +53,11 @@ export function SolarPage() {
         <div className="flex min-w-0 flex-col gap-5">
           <SolarDays acc={acc} performance={insights?.performance} now={now} />
           <SolarOutlook f={f} acc={acc} now={now} />
+          {insights && <SolarTrend trend={insights.trend} />}
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <WhereItWent p={p} download={download} />
           <YourPanels p={p} s={s} now={now} />
-          {insights && <SolarTrend trend={insights.trend} />}
         </div>
       </div>
     </>
