@@ -317,10 +317,14 @@ function story(x: {
     const plenty = x.low != null && x.low.lo > x.reserve + 10;
     return `${from} Full by about ${hhmm(x.fb)}${plenty ? ", with plenty for tonight." : "."}`;
   }
-  if (x.st === "discharge")
-    return x.until == null
-      ? `Running your home at ${kw}, with plenty to get you to the morning.`
-      : `Running your home at ${kw}. It should last until about ${hhmm(x.until)}.`;
+  if (x.st === "discharge") {
+    // The forecast low decides this, as it does the Forecast low tile: only claim it runs out when it gets down to
+    // the reserve, and say nothing about the night until there's a forecast to go on.
+    const holds = x.low != null && x.low.lo > x.reserve + 0.5;
+    if (holds) return `Running your home at ${kw}, with plenty to get you to the morning.`;
+    if (x.until != null) return `Running your home at ${kw}. It should last until about ${hhmm(x.until)}.`;
+    return `Running your home at ${kw}.`;
+  }
   if (x.full)
     return x.pv > ON
       ? "Full and waiting. Spare solar is going to the grid until the evening."

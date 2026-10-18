@@ -132,7 +132,7 @@ export function WhereItWent({ p, download }: { p: Snapshot | null; download?: Re
           ))}
         </div>
       ) : (
-        <div className="text-[13px] text-ink-faint">No solar yet today.</div>
+        <div className="text-[13px] text-ink-faint">{p ? "No solar yet today." : "Waiting for the first reading."}</div>
       )}
     </Card>
   );

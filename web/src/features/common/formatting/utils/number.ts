@@ -24,7 +24,10 @@ export function energyParts(v: number, whole = false): [value: string, unit: "Wh
   const wh = Math.round(a * 1000);
   const sign = v < 0 && wh > 0 ? "-" : "";
   if (wh < 1000) return [`${sign}${wh}`, "Wh"];
-  return [`${sign}${whole ? Math.round(a).toLocaleString("en-AU") : a.toFixed(1)}`, "kWh"];
+  return [
+    `${sign}${whole ? Math.round(a).toLocaleString("en-AU") : a.toLocaleString("en-AU", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`,
+    "kWh",
+  ];
 }
 /** kWh as "395 Wh" or "1.2 kWh". */
 export const kWh = (v: number | null | undefined) => (missing(v) ? DASH : energyParts(v).join(" "));
