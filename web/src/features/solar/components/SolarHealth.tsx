@@ -82,7 +82,7 @@ function trendNote(t: NonNullable<SolarInsights["trend"]>): string {
   const n = t.months.length;
   if (!n) return "Fills in as readings and weather build up. Each month needs a few bright hours to count.";
   if (t.per_year == null)
-    return `A trend shows once there are six months to compare (${n} so far). Seasons move this a few per cent.`;
+    return `A trend shows once there are six months to compare (${n} so far). Seasons move this a few per cent. Each bar is one month's output per unit of sunshine; the orange one is the latest month.`;
   if (t.per_year <= WEAR)
     return "Faster than panels usually wear (about half a per cent a year). Dirt, a failing panel or new shade are worth checking.";
   if (t.per_year < 0) return "In line with panels' usual slow wear.";
