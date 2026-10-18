@@ -590,7 +590,7 @@ function NextPoll() {
         aria-live="off"
         aria-label={reading ? "Reading now" : `${retry ? "Retrying" : "Next reading"} in ${clock(left)}`}
       >
-        {reading ? "…" : clock(left)}
+        {reading ? "reading…" : `next in ${clock(left)}`}
       </span>
     </span>
   );
