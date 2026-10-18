@@ -17,7 +17,7 @@ def test_migrate_creates_every_table(db: Database) -> None:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         version = conn.execute("PRAGMA user_version").fetchone()[0]
     assert {"samples", "samples_5m", "settings", "kv", "users", "sessions", "prices"} <= tables
-    assert not {t for t in tables if t.startswith("alert_") or t == "push_subscriptions"}
+    assert not {t for t in tables if t.startswith("alert_")}  # alerts became notifications (notify_*)
     assert version == len(MIGRATIONS)
 
 
@@ -82,8 +82,9 @@ def test_the_removed_alerts_tables_and_their_secrets_go(tmp_path: Path) -> None:
     Database(path).migrate()
     with sqlite3.connect(path) as c:
         tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master")}
-        assert not {"alert_channels", "alert_rules", "alert_state", "alert_history", "alert_history_ts",
-                    "push_subscriptions"} & tables  # fmt: skip
+        assert not {"alert_channels", "alert_rules", "alert_state", "alert_history", "alert_history_ts"} & tables
+        # Notifications came back later (notify_*): its browsers table is new and empty, the old subscription gone.
+        assert c.execute("SELECT COUNT(*) FROM push_subscriptions").fetchone()[0] == 0
         assert c.execute("SELECT key FROM kv").fetchall() == [("tariff",)]
 
 

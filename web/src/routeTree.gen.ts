@@ -47,6 +47,7 @@ import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data
 import { Route as AppSettingsEmbedRouteImport } from './routes/_app/settings/embed'
 import { Route as AppSettingsHouseRouteImport } from './routes/_app/settings/house'
 import { Route as AppSettingsLocationRouteImport } from './routes/_app/settings/location'
+import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsSolarBatteryRouteImport } from './routes/_app/settings/solar-battery'
 import { Route as AppSettingsUpdatesRouteImport } from './routes/_app/settings/updates'
 import { Route as AppSolarForecastRouteImport } from './routes/_app/solar_.forecast'
@@ -267,6 +268,12 @@ const AppSettingsLocationRoute = AppSettingsLocationRouteImport.update({
   path: '/location',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
+const AppSettingsNotificationsRoute =
+  AppSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AppSettingsRouteRoute,
+  } as any)
 const AppSettingsSolarBatteryRoute = AppSettingsSolarBatteryRouteImport.update({
   id: '/solar-battery',
   path: '/solar-battery',
@@ -472,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/settings/embed': typeof AppSettingsEmbedRoute
   '/settings/house': typeof AppSettingsHouseRoute
   '/settings/location': typeof AppSettingsLocationRoute
+  '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
   '/settings/updates': typeof AppSettingsUpdatesRoute
   '/solar/forecast': typeof AppSolarForecastRoute
@@ -539,6 +547,7 @@ export interface FileRoutesByTo {
   '/settings/embed': typeof AppSettingsEmbedRoute
   '/settings/house': typeof AppSettingsHouseRoute
   '/settings/location': typeof AppSettingsLocationRoute
+  '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
   '/settings/updates': typeof AppSettingsUpdatesRoute
   '/solar/forecast': typeof AppSolarForecastRoute
@@ -611,6 +620,7 @@ export interface FileRoutesById {
   '/_app/settings/embed': typeof AppSettingsEmbedRoute
   '/_app/settings/house': typeof AppSettingsHouseRoute
   '/_app/settings/location': typeof AppSettingsLocationRoute
+  '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/solar-battery': typeof AppSettingsSolarBatteryRoute
   '/_app/settings/updates': typeof AppSettingsUpdatesRoute
   '/_app/solar_/forecast': typeof AppSolarForecastRoute
@@ -682,6 +692,7 @@ export interface FileRouteTypes {
     | '/settings/embed'
     | '/settings/house'
     | '/settings/location'
+    | '/settings/notifications'
     | '/settings/solar-battery'
     | '/settings/updates'
     | '/solar/forecast'
@@ -749,6 +760,7 @@ export interface FileRouteTypes {
     | '/settings/embed'
     | '/settings/house'
     | '/settings/location'
+    | '/settings/notifications'
     | '/settings/solar-battery'
     | '/settings/updates'
     | '/solar/forecast'
@@ -820,6 +832,7 @@ export interface FileRouteTypes {
     | '/_app/settings/embed'
     | '/_app/settings/house'
     | '/_app/settings/location'
+    | '/_app/settings/notifications'
     | '/_app/settings/solar-battery'
     | '/_app/settings/updates'
     | '/_app/solar_/forecast'
@@ -1130,6 +1143,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsLocationRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/notifications': {
+      id: '/_app/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AppSettingsNotificationsRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/solar-battery': {
       id: '/_app/settings/solar-battery'
       path: '/solar-battery'
@@ -1417,6 +1437,7 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsEmbedRoute: typeof AppSettingsEmbedRoute
   AppSettingsHouseRoute: typeof AppSettingsHouseRoute
   AppSettingsLocationRoute: typeof AppSettingsLocationRoute
+  AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsSolarBatteryRoute: typeof AppSettingsSolarBatteryRoute
   AppSettingsUpdatesRoute: typeof AppSettingsUpdatesRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
@@ -1430,6 +1451,7 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsEmbedRoute: AppSettingsEmbedRoute,
   AppSettingsHouseRoute: AppSettingsHouseRoute,
   AppSettingsLocationRoute: AppSettingsLocationRoute,
+  AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsSolarBatteryRoute: AppSettingsSolarBatteryRoute,
   AppSettingsUpdatesRoute: AppSettingsUpdatesRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,

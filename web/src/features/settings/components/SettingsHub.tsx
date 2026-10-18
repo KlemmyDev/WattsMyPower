@@ -5,6 +5,7 @@ import { locationLabel } from "~/features/common/energy/utils";
 import { hhmm, monthYear } from "~/features/common/formatting/utils/date";
 import { dollars, pct } from "~/features/common/formatting/utils/number";
 import { useLiveStatus } from "~/features/common/layout/hooks";
+import { InstallPrompt } from "~/features/notifications/components/InstallPrompt";
 import { useLive } from "~/features/common/live/hooks/useLive";
 import type { SystemInfo } from "~/features/common/live/types";
 import { inverterName, secondName } from "~/features/common/live/utils";
@@ -169,6 +170,7 @@ export function SettingsHub() {
   const s = useLive()?.system;
   return (
     <>
+      <InstallPrompt dismissible why="Then notifications can reach you." />
       <SystemSummary />
       <div className="@container">
         <div className="grid grid-cols-1 items-start gap-6 @3xl:grid-cols-2">
@@ -205,6 +207,13 @@ export function SettingsHub() {
                 color={COLOR.battery}
                 label="Integrations"
                 detail="Inverters, smart home, cars, prices and weather"
+              />
+              <SettingsRow
+                to="/settings/notifications"
+                icon="bell"
+                color={COLOR.warn}
+                label="Notifications"
+                detail="Grid down, low battery and more, on your phone"
               />
               <SettingsRow
                 to="/settings/embed"

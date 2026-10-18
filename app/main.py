@@ -38,6 +38,7 @@ from app.features.integrations.router import router as integrations_router
 from app.features.live.router import health_router
 from app.features.live.router import router as live_router
 from app.features.meter.router import router as meter_router
+from app.features.notifications.router import router as notifications_router
 from app.features.onboarding.router import router as onboarding_router
 from app.features.readings.router import router as readings_router
 from app.features.settings.router import apply_zone, name_location, zone_location
@@ -53,6 +54,7 @@ log = logging.getLogger(__name__)
 ROUTERS = [
     auth_router,
     embed_router,
+    notifications_router,
     live_router,
     readings_router,
     tariffs_router,

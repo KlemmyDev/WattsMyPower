@@ -22,6 +22,7 @@ from app.features.inverters.limits import bounds_for
 from app.features.live.client import Feed
 from app.features.live.service import LiveService
 from app.features.live.transform import Freeze, Pv2Carry, behind_meter, snapshots
+from app.features.notifications.service import Notifier
 from app.features.readings.repository import ReadingsRepository
 
 log = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class CollectorIngest:
         readings: ReadingsRepository,
         live: LiveService,
         client: Feed,
+        notifier: Notifier | None = None,
     ):
         self.config = config
         self.db = db
@@ -61,6 +63,7 @@ class CollectorIngest:
         self.has_pv2 = False
         self.behind_meter = config.pv2_behind_meter
         self.off_grid = OffGridTracker(live)
+        self.notifier = notifier
         self._hybrid: tuple[Any, Any] | None = None  # (host, driver) the details in live.info are from
         self._conn: sqlite3.Connection | None = None
         self._task: asyncio.Task[None] | None = None
@@ -147,6 +150,15 @@ class CollectorIngest:
         save_cursor(conn, newest)
         return newest
 
+    async def _notify(self) -> None:
+        """Let the notification rules look at where things stand (what they find goes out to you)."""
+        if self.notifier is None:
+            return
+        try:
+            await asyncio.to_thread(self.notifier.evaluate)
+        except Exception:
+            log.exception("Checking what to notify about failed")
+
     async def _run(self, conn: sqlite3.Connection) -> None:
         cfg = self.config
         cursor = await asyncio.to_thread(load_cursor, conn)
@@ -170,12 +182,14 @@ class CollectorIngest:
                 self.live.last_error = f"Can't reach the collector ({type(e).__name__}: {e})"
                 log.warning("%s; retrying in %ss", self.live.last_error, backoff)
                 self.live.publish()
+                await self._notify()
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, cfg.max_backoff)
                 more = True
                 continue
             if not more:
                 self.live.publish()
+                await self._notify()
 
             if time.time() - last_prune > 3600:
                 last_prune = time.time()

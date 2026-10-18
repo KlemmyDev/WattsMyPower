@@ -101,6 +101,15 @@ Everything below is new. When it's released, this heading becomes the beta's ver
   WSL). Updates back up both databases first, and can be started from **Manage → System → Updates**. Releases come on
   three channels: nightly, beta and stable.
 - A dark and a light theme, drag-to-zoom on every day chart, and layouts for phones.
+- **Notifications** (Settings → Notifications): be told when the grid goes down and comes back, the battery runs low, the
+  house buys a lot from the grid, or the inverter stops answering. They arrive as your phone's or computer's own
+  notifications (Web Push, free, no account), and can also go to an ntfy topic or a webhook. Each can be switched off,
+  has its own numbers, and waits for a problem to last before it speaks; quiet hours and a daily limit keep it from
+  being noisy, and a history shows how each channel took everything sent. The dashboard can be saved to the home screen
+  as an app, which an iPhone needs for notifications.
+- **Off-grid status and history:** whether the house is on the grid or running without it (a blackout), shown on the Grid
+  page, the nav and the Overview, with a list of each time it happened.
+- **Embed** (Settings → Embed): the live power summary in four looks, to show in a frame on another page.
 
 ### Known issues
 

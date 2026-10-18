@@ -35,6 +35,7 @@ from app.features.live.ingest import CollectorIngest
 from app.features.live.service import LiveService
 from app.features.live.simulator import Simulator
 from app.features.meter.service import MeterService
+from app.features.notifications.service import Notifier
 from app.features.onboarding.service import OnboardingService
 from app.features.readings.repository import ReadingsRepository
 from app.features.settings.geocode import Geocoder
@@ -69,6 +70,7 @@ class Services:
     onboarding: OnboardingService
     dashboards: DashboardService
     live: LiveService
+    notifications: Notifier
     battery: BatteryService
     updates: UpdateService
     grid: GridService
@@ -90,9 +92,12 @@ def build_services(config: Config) -> Services:
     meter = MeterService(db, readings)
     bills = BillsService(db, readings, settings, tariffs, meter, amber.repo)
     live = LiveService(config, settings, tariffs)
+    notifications = Notifier(db, live)
     collector = None if config.mock else CollectorClient(config.collector_url, config.collector_token)
     source: CollectorIngest | Simulator = (
-        CollectorIngest(config, db, readings, live, collector) if collector else Simulator(config, db, readings, live)
+        CollectorIngest(config, db, readings, live, collector, notifications)
+        if collector
+        else Simulator(config, db, readings, live)
     )
     weather = WeatherService(config, db, settings)
     car = CarService(db)
@@ -125,6 +130,7 @@ def build_services(config: Config) -> Services:
         onboarding=OnboardingService(config, db, integrations),
         dashboards=DashboardService(db),
         live=live,
+        notifications=notifications,
         battery=BatteryService(
             db,
             live,
