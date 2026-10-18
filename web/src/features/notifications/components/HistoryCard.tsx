@@ -31,15 +31,13 @@ export function HistoryCard({ history }: { history: HistoryEntry[] }) {
         <ul className="m-0 flex list-none flex-col divide-y divide-line-subtle p-0">
           {history.map((h) => (
             <li key={h.id} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <span className="flex min-w-0 items-center gap-2 text-[14px] font-medium">
-                  <Pill tone={h.event === "held" ? "neutral" : h.event === "resolved" ? "ok" : "brand"} size="sm">
-                    {EVENT[h.event]}
-                  </Pill>
-                  <span className="truncate">{h.title}</span>
-                </span>
+              <div className="flex items-center justify-between gap-3">
+                <Pill tone={h.event === "held" ? "neutral" : h.event === "resolved" ? "ok" : "brand"} size="sm">
+                  {EVENT[h.event]}
+                </Pill>
                 <span className="text-xs text-ink-faint tabular-nums">{when(h.ts)}</span>
               </div>
+              <span className="text-[14px] font-medium text-pretty">{h.title}</span>
               <span className="text-[13px] leading-5 text-ink-muted">{h.body}</span>
               <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                 {Object.entries(h.results).map(([k, v]) => (

@@ -130,7 +130,9 @@ function Sharing() {
               </OptionRow>
               <OptionRow label="Link" help="Opens the summary on its own.">
                 <div className="flex w-full min-w-0 items-center gap-2 max-sm:flex-col max-sm:items-stretch">
-                  <code className="min-w-0 flex-1 text-xs break-all text-ink-muted">{link}</code>
+                  <code className="min-w-0 flex-1 pb-1 text-xs text-ink-muted max-sm:overflow-x-auto max-sm:whitespace-nowrap sm:break-all">
+                    {link}
+                  </code>
                   <Button variant="outline" size="sm" onClick={() => copy(link, "Link")}>
                     Copy link
                   </Button>
@@ -138,7 +140,9 @@ function Sharing() {
               </OptionRow>
               <OptionRow label="Code for a page" help="Paste it into the other page where the summary should go.">
                 <div className="flex w-full min-w-0 items-center gap-2 max-sm:flex-col max-sm:items-stretch">
-                  <code className="min-w-0 flex-1 text-xs break-all text-ink-muted">{code}</code>
+                  <code className="min-w-0 flex-1 pb-1 text-xs text-ink-muted max-sm:overflow-x-auto max-sm:whitespace-nowrap sm:break-all">
+                    {code}
+                  </code>
                   <Button variant="outline" size="sm" onClick={() => copy(code, "Code")}>
                     Copy code
                   </Button>
@@ -151,8 +155,8 @@ function Sharing() {
                 key={link}
                 src={link}
                 title="Power summary preview"
-                style={{ height }}
-                className="w-full rounded-2xl border border-line-subtle bg-surface"
+                style={{ height: `calc(${height}px + var(--extra, 0px))` }}
+                className="w-full rounded-2xl border border-line-subtle bg-surface max-sm:[--extra:100px]"
               />
             </div>
             <div className="flex flex-wrap items-center gap-3">

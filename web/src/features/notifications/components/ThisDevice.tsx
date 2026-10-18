@@ -124,7 +124,9 @@ export function ThisDevice({ publicKey, devices }: { publicKey: string; devices:
         ? "Notifications arrive here, even with the dashboard closed."
         : support === "ready"
           ? "Get notifications as this device's own, even with the dashboard closed. No account needed."
-          : "Not available here yet.";
+          : support === "ios-install"
+            ? "Add the dashboard to your home screen first, as above."
+            : "Not available here yet.";
 
   return (
     <SettingsSection
@@ -139,7 +141,7 @@ export function ThisDevice({ publicKey, devices }: { publicKey: string; devices:
         </div>
         <div className="flex min-w-[200px] flex-1 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold">
-            This device
+            Notifications
             {support === "ready" && mine !== undefined && (
               <Pill tone={on ? "ok" : "neutral"} size="sm">
                 {on ? "On" : "Off"}
@@ -167,7 +169,8 @@ export function ThisDevice({ publicKey, devices }: { publicKey: string; devices:
           </div>
         )}
       </div>
-      {support && support !== "ready" && <Blocked support={support} />}
+      {/* On an iPhone the install prompt above already says how, so the steps aren't given twice. */}
+      {support && support !== "ready" && support !== "ios-install" && <Blocked support={support} />}
       <div aria-live="polite" className="flex flex-col gap-1 empty:hidden">
         {test.isSuccess && test.variables === mine && (
           <HelpText>Test sent. It should pop up in a few seconds.</HelpText>

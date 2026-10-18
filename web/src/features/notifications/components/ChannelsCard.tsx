@@ -15,13 +15,13 @@ const ABOUT: Record<ChannelKind, { name: string; blurb: string; placeholder: Rec
     name: "ntfy",
     blurb:
       "Free notifications to your phone through the ntfy app (iPhone and Android). Pick a topic name nobody would guess, subscribe to it in the app, and put its address here. No account needed.",
-    placeholder: { url: "https://ntfy.sh/your-secret-topic", token: "Only for a topic that needs a login" },
+    placeholder: { url: "https://ntfy.sh/your-secret-topic", token: "Only if it needs a login" },
   },
   webhook: {
     name: "Webhook",
     blurb:
       "Posts each notification as JSON to an address you give it. Handy for Home Assistant, Discord or Slack (use their webhook address), or your own script.",
-    placeholder: { url: "https://…", token: "Sent as a bearer token, if it needs one" },
+    placeholder: { url: "https://…", token: "Only if it needs one" },
   },
 };
 

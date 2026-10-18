@@ -22,20 +22,20 @@ export function InstallPrompt({ dismissible = false, why }: { dismissible?: bool
   if (state == null || state === "installed" || state === "none") return null;
   if (dismissible && dismissed) return null;
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-[22px] border border-line-subtle bg-surface px-5 py-4">
-      <span className="flex size-11 flex-none items-center justify-center rounded-full bg-canvas text-ink">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[22px] border border-line-subtle bg-surface px-5 py-4">
+      <span className="flex size-11 flex-none items-center justify-center self-start rounded-full bg-canvas text-ink">
         <Icon name="phone" size={22} />
       </span>
-      <div className="flex min-w-[220px] flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 basis-[calc(100%-4.5rem)] flex-col gap-0.5 sm:basis-0">
         <span className="text-[15px] font-semibold">Add WattsMyPower to your home screen</span>
         <span className="text-[13px] leading-5 text-ink-muted">
           {state === "ios"
             ? "Tap Share, then Add to Home Screen, and open it from there. It opens like an app, and it's the only way an iPhone allows notifications."
             : "It opens like an app, with no browser bars, and notifications can reach you."}
-          {why ? ` ${why}` : ""}
+          {state === "prompt" && why ? ` ${why}` : ""}
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-sm:w-full">
         {state === "prompt" && (
           <Button
             size="sm"
