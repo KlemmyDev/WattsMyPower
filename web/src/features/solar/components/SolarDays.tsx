@@ -1,5 +1,5 @@
 import { parseYmd, shortDay } from "~/features/common/formatting/utils/date";
-import { DASH, kWh, pct } from "~/features/common/formatting/utils/number";
+import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { COLOR, heatColor } from "~/features/common/theme/utils/colors";
 import { Card, TitleBlock } from "~/features/common/ui/components/Card";
 import { Delta } from "~/features/common/ui/components/Live";
@@ -32,18 +32,12 @@ export function SolarDays({
   const min = Math.min(...kwh);
   const total = kwh.reduce((a, v) => a + v, 0);
   const average = total / days.length;
-  const rated = (performance?.days ?? []).filter((d) => d.ratio != null);
-  const weather = rated.length ? rated.reduce((a, d) => a + d.ratio!, 0) / rated.length : null;
   const best = days.find((d) => d.kwh === max)!;
   const lowest = days.find((d) => d.kwh === min)!;
-  const above = days.filter((d) => d.kwh >= average).length;
   const figures: [string, string, string?][] = [
     ["Average", kWh(average), `${days.length} days`],
     ["Best", kWh(max), shortDay.format(parseYmd(best.date))],
     ["Lowest", kWh(min), shortDay.format(parseYmd(lowest.date))],
-    ["Above average", `${above} of ${days.length}`, "days that beat the average"],
-    ["Usually off by", acc?.mae_kwh != null ? kWh(acc.mae_kwh) : DASH, "a day, the forecast"],
-    ["Of what the sun allowed", weather != null ? pct(weather * 100) : DASH, "panels against the weather"],
   ];
   const cols = { gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` };
   const avgLine = `${(average / max) * 100}%`;
