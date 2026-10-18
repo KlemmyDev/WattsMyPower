@@ -50,13 +50,15 @@ export function SolarPage() {
   return (
     <>
       <div className="live-cols grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
-        <div className="flex min-w-0 flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
           <SolarDays acc={acc} performance={insights?.performance} now={now} />
           <SolarOutlook f={f} acc={acc} now={now} />
           {insights && <SolarTrend trend={insights.trend} />}
         </div>
-        <div className="flex min-w-0 flex-col gap-5">
-          <WhereItWent p={p} download={download} />
+        <div className="flex min-w-0 flex-col gap-5 max-3xl:contents">
+          <div className="min-w-0 max-3xl:order-first">
+            <WhereItWent p={p} download={download} />
+          </div>
           <YourPanels p={p} s={s} now={now} />
         </div>
       </div>
