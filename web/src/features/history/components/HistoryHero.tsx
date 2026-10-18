@@ -130,7 +130,7 @@ export function HistoryHero({
               <HeroStat label="Made" value={kWhInt(totals.gen)} sub={perDay(totals.gen)} />
               <HeroStat label="Used" value={kWhInt(totals.home)} sub={perDay(totals.home)} />
               <HeroStat label="Bought" value={kWhInt(totals.imp)} sub={`${cash(totals.cost)} of power`} />
-              <HeroStat label="Sold" value={kWhInt(totals.exp)} sub={`${cash(totals.credit)} back`} />
+              <HeroStat label="Exported" value={kWhInt(totals.exp)} sub={`${cash(totals.credit)} back`} />
             </HeroStats>
           </HeroTop>
           <SourceBar totals={totals} before={before} beforeLabel={running ? `${year - 1} by now` : String(year - 1)} />
