@@ -99,13 +99,19 @@ export function SolarDays({
               type="button"
               {...item(i)}
               aria-label={`${shortDay.format(parseYmd(d.date))}: ${kWh(d.kwh)}`}
+              title={`${shortDay.format(parseYmd(d.date))}: ${kWh(d.kwh)}`}
               className={cn(
                 "h-11 cursor-pointer rounded-md border-0 p-0 transition-[scale,opacity] duration-200 max-sm:h-8 max-sm:rounded-[3px]",
                 h === i && "scale-y-110",
                 h != null && h !== i && "opacity-35",
               )}
               style={{ background: heatColor(COLOR.solar, max > min ? (d.kwh - min) / (max - min) : 1) }}
-            />
+            >
+              <span className="hidden flex-col text-[11px] leading-3 font-medium text-ink tabular-nums sm:flex">
+                <span>{parseYmd(d.date).getDate()}</span>
+                <span>{Math.round(d.kwh)}</span>
+              </span>
+            </button>
           ))}
         </div>
         <div className="flex items-center justify-between gap-3 font-mono text-[11px] text-ink-faint">
