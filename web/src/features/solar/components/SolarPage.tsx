@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { kWh, pct } from "~/features/common/formatting/utils/number";
 import { useSnapshot } from "~/features/common/live/hooks/useSnapshot";
 import { useSystem } from "~/features/common/live/hooks/useSystem";
@@ -37,6 +37,16 @@ export function SolarPage() {
   const past = pastDays(acc, insights?.performance, now);
   const usual = past.length >= 3 ? past.reduce((a, d) => a + d.kwh, 0) / past.length : null;
   useLiveHero(useSolarHero({ p, s, f, acc, series, usual }));
+  const download = (
+    <a
+      href={exportCsvUrl(start, start + 86_400, true)}
+      download
+      className="flex min-h-10 items-center gap-2 self-start rounded-full border border-line bg-fg/4 px-4 text-sm text-ink-body no-underline transition-colors hover:bg-fg/8 hover:text-ink"
+    >
+      <Icon name="download" size={16} />
+      Download today's readings
+    </a>
+  );
   return (
     <>
       <div className="live-cols grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-5 max-3xl:grid-cols-1">
@@ -45,19 +55,11 @@ export function SolarPage() {
           <SolarOutlook f={f} acc={acc} now={now} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
-          <WhereItWent p={p} />
+          <WhereItWent p={p} download={download} />
           <YourPanels p={p} s={s} now={now} />
           {insights && <SolarTrend trend={insights.trend} />}
         </div>
       </div>
-      <a
-        href={exportCsvUrl(start, start + 86_400, true)}
-        download
-        className="flex min-h-10 items-center gap-2 self-start rounded-full border border-line bg-fg/4 px-4 text-sm text-ink-body no-underline transition-colors hover:bg-fg/8 hover:text-ink"
-      >
-        <Icon name="download" size={16} />
-        Download today's readings
-      </a>
     </>
   );
 }
@@ -69,7 +71,7 @@ export function SolarPage() {
  * elsewhere too (the battery to the grid, the grid to the battery), so each is capped at what solar could have given.
  * Pointing at a part puts it in the corner, where the share kept at home sits otherwise.
  */
-export function WhereItWent({ p }: { p: Snapshot | null }) {
+export function WhereItWent({ p, download }: { p: Snapshot | null; download?: ReactNode }) {
   const [hover, setHover] = useState<string | null>(null);
   const pv = p?.daily_pv ?? 0;
   const toGrid = Math.min(p?.daily_export ?? 0, pv);
@@ -100,6 +102,7 @@ export function WhereItWent({ p }: { p: Snapshot | null }) {
           )
         )}
       </div>
+      {download && <div className="-mt-2">{download}</div>}
       {pv > 0 ? (
         <Breakdown parts={parts} total={pv} onHover={setHover} />
       ) : (
