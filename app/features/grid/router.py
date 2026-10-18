@@ -7,6 +7,7 @@ import asyncio
 from fastapi import APIRouter
 
 from app.dependencies import ServicesDep
+from app.features.grid.events import recent
 
 router = APIRouter(prefix="/api/grid")
 
@@ -15,6 +16,17 @@ router = APIRouter(prefix="/api/grid")
 async def grid(svc: ServicesDep):
     """The region and its price now, the day's prices and those ahead, its notices, storms coming, and the outlook."""
     return await asyncio.to_thread(svc.grid.view)
+
+
+@router.get("/events")
+async def events(svc: ServicesDep):
+    """Each time the house ran without the grid (newest first), and whether this inverter reports it at all."""
+
+    def read() -> dict:
+        with svc.db.reading() as conn:
+            return {"events": recent(conn), "known": svc.live.off_grid_known}
+
+    return await asyncio.to_thread(read)
 
 
 @router.post("/refresh")

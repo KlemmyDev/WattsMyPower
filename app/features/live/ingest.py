@@ -16,6 +16,7 @@ from typing import Any
 
 from app.core.config import Config
 from app.core.database import Database
+from app.features.grid.events import OffGridTracker
 from app.features.inverters import drivers
 from app.features.inverters.limits import bounds_for
 from app.features.live.client import Feed
@@ -59,6 +60,7 @@ class CollectorIngest:
         self.freeze = Freeze()
         self.has_pv2 = False
         self.behind_meter = config.pv2_behind_meter
+        self.off_grid = OffGridTracker(live)
         self._hybrid: tuple[Any, Any] | None = None  # (host, driver) the details in live.info are from
         self._conn: sqlite3.Connection | None = None
         self._task: asyncio.Task[None] | None = None
@@ -67,6 +69,7 @@ class CollectorIngest:
         """Open the write connection and start following the feed. Expects the database migrated already."""
         self._conn = conn = await asyncio.to_thread(self.db.connect)
         await asyncio.to_thread(self.readings.heal_rollups, conn)
+        await asyncio.to_thread(self.off_grid.load, conn)
         latest = await asyncio.to_thread(self.readings.latest)
         self.live.latest = latest and await asyncio.to_thread(self.readings.with_metered_today, latest)
         self._task = asyncio.create_task(self._run(conn))
@@ -136,6 +139,7 @@ class CollectorIngest:
             bounds=bounds_for(self.live.info),
         )
         self.readings.insert_many(conn, snaps)
+        self.off_grid.observe(conn, snaps)
         self.live.frozen_since = self.freeze.since
         if snaps:
             self.live.latest = self.readings.with_metered_today({"ts": snaps[-1][0], **snaps[-1][1]})

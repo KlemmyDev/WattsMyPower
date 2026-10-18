@@ -24,10 +24,10 @@ function readings(p: Power): Reading[] {
     {
       key: "grid",
       icon: "grid",
-      color: COLOR.gridSoft,
-      name: gridVerb(p.grid_w),
-      value: kW(p.grid_w),
-      on: Math.abs(g) > ON,
+      color: p.off_grid ? COLOR.bad : COLOR.gridSoft,
+      name: gridVerb(p.grid_w, p.off_grid),
+      value: p.off_grid ? "Off" : kW(p.grid_w),
+      on: p.off_grid || Math.abs(g) > ON,
     },
   ];
   if (pct != null)

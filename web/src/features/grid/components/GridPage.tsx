@@ -14,6 +14,7 @@ import {
   WholesaleCard,
 } from "~/features/grid/components/GridCards";
 import { useGridHero } from "~/features/grid/components/GridSky";
+import { ConnectionPill, OffGridBanner, OffGridHistory } from "~/features/grid/components/GridConnection";
 import { useGridDay } from "~/features/grid/hooks";
 
 /**
@@ -38,7 +39,9 @@ export function GridPage() {
       : null;
   return (
     <>
+      <OffGridBanner />
       {grid && grid.outlook.level !== "normal" && <GridAlert grid={grid} p={p} s={s} />}
+      <ConnectionPill />
       {radius != null && <RadiusPicker radius={radius} />}
       {/* Four cards two by two (four across leaves each too narrow for its lines), one under another on a phone. */}
       <div className="@container">
@@ -55,6 +58,7 @@ export function GridPage() {
           )}
           {grid?.hazards && <WarningsNow view={grid.hazards} now={now} />}
           <VoltageToday series={series} p={p} grid={grid} />
+          <OffGridHistory />
         </div>
       </div>
       {isError && !grid && (

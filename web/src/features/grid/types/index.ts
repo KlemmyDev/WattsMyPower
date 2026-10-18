@@ -185,3 +185,8 @@ export type GridView = {
   error: string | null;
   limits: { voltage_low: number; voltage_high: number; freq_low: number; freq_high: number; spike: number };
 };
+
+/** A stretch of the house running without the grid: when it began and ended (null while it's still going). */
+export type GridEvent = { id: number; start: number; end: number | null };
+
+export type GridEvents = { events: GridEvent[]; known: boolean };

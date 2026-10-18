@@ -170,7 +170,11 @@ function Circuit({
         "/solar": kW(p.pv_power),
         "/home": kW(p.load_power),
         "/battery": pct(p.battery_soc),
-        "/grid": p.grid_power == null ? undefined : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
+        "/grid": live?.off_grid
+          ? "Off grid"
+          : p.grid_power == null
+            ? undefined
+            : `${p.grid_power < -ON ? "−" : ""}${kW(p.grid_power)}`,
         // Each car's charge.
         "/ev": ev?.length ? ev.map((c) => pct(c.soc)).join(" · ") : undefined,
       }

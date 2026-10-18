@@ -13,8 +13,8 @@ export const batteryState = (w: number | null | undefined): BatteryState | null 
 export const batteryTone = (w: number | null | undefined) =>
   batteryState(w) === "discharge" ? COLOR.solar : COLOR.battery;
 
-export const gridVerb = (g: number | null | undefined) =>
-  g == null ? "Grid" : g > ON ? "Importing" : g < -ON ? "Exporting" : "Nothing flowing";
+export const gridVerb = (g: number | null | undefined, offGrid?: boolean | null) =>
+  offGrid ? "Off grid" : g == null ? "Grid" : g > ON ? "Importing" : g < -ON ? "Exporting" : "Nothing flowing";
 
 export const DEFAULT_RESERVE = 10;
 export const reserveOf = (s: SystemInfo | undefined) => s?.battery_reserve ?? DEFAULT_RESERVE;

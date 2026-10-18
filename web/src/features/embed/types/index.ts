@@ -7,6 +7,8 @@ export type EmbedPower = {
   grid_w: number | null;
   battery_w: number | null;
   battery_pct: number | null;
+  /** Running the house without the grid; null where this inverter doesn't say. */
+  off_grid: boolean | null;
   /** Unix seconds of the last reading. */
   updated: number | null;
 };

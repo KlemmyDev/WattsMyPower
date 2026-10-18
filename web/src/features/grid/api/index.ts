@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiGet, apiSend } from "~/features/common/api/utils";
-import type { GridView } from "~/features/grid/types";
+import type { GridEvents, GridView } from "~/features/grid/types";
 
 const MIN = 60_000;
 
@@ -19,3 +19,11 @@ export const gridQuery = queryOptions({
 
 /** Fetch from AEMO now (after a failed fetch). */
 export const refreshGrid = () => apiSend<GridView>("POST", "grid/refresh");
+
+/** Each time the house ran without the grid, newest first, and whether this inverter reports it at all. */
+export const gridEventsQuery = queryOptions({
+  queryKey: ["grid", "events"],
+  queryFn: ({ signal }) => apiGet<GridEvents>("grid/events", undefined, { signal }),
+  staleTime: MIN,
+  refetchInterval: 5 * MIN,
+});
