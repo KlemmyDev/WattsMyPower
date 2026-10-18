@@ -64,9 +64,9 @@ export function useSolarHero({
         sub: best ? `${kWh(best.kwh)} in the hour` : "Not yet",
       },
       {
-        label: "Against a usual day",
+        label: "Against a typical day",
         value: vsUsual != null ? (Math.abs(vsUsual) < 0.04 ? "About usual" : signedPct(vsUsual)) : DASH,
-        sub: usual ? `Usual is ${kWh(usual)}` : "Needs a few days",
+        sub: usual ? `Typical day is ${kWh(usual)}` : "Needs a few days",
       },
       {
         label: "Tomorrow",
