@@ -256,7 +256,7 @@ function FixedMeter({ v }: { v: EvVehicle }) {
         : spare >= need
           ? "Enough to charge"
           : !s?.charging && v.solar_from
-            ? `Spare sun expected from ${hhmm(v.solar_from)}`
+            ? `Spare solar expected from ${hhmm(v.solar_from)}`
             : `Needs ${kW(need - spare)} more to start`;
   const shown = draw ?? spare;
   return (
@@ -699,7 +699,7 @@ export function EvSpareSun({
   return (
     <SmallCard
       id={`h-ts-${v.vin}`}
-      title="Spare sun"
+      title="Spare solar"
       note={
         fixed
           ? `Starts at ${kW(v.min_w ?? 0)}`
@@ -752,7 +752,7 @@ export function EvSunFirst({
               ? "Your home battery might not be full by sunset, so it comes first for now. The car gets the rest."
               : `Your home battery needs about ${share.need_kwh} kWh more to be full by sunset, so it gets about ${Math.round(share.battery * 100)}% of what it could take. The car gets the rest.`;
   return (
-    <SmallCard id={`h-tf-${v.vin}`} title="Sun first" note={FIRST_WORDS[c.first]} className={className}>
+    <SmallCard id={`h-tf-${v.vin}`} title="Priority" note={FIRST_WORDS[c.first]} className={className}>
       <ChoiceTiles
         label="Who gets the sun first"
         options={FIRST}
