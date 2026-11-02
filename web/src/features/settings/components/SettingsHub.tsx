@@ -223,6 +223,13 @@ export function SettingsHub() {
                 detail="Show the power summary on another page"
               />
               <SettingsRow
+                to="/settings/developers"
+                icon="terminal"
+                color={COLOR.brand}
+                label="Developers"
+                detail="Keys for other apps to read your energy data"
+              />
+              <SettingsRow
                 to="/settings/data"
                 icon="database"
                 color={COLOR.import}

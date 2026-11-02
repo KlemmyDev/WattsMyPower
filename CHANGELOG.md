@@ -110,6 +110,11 @@ Everything below is new. When it's released, this heading becomes the beta's ver
 - **Off-grid status and history:** whether the house is on the grid or running without it (a blackout), shown on the Grid
   page, the nav and the Overview, with a list of each time it happened.
 - **Embed** (Settings → Embed): the live power summary in four looks, to show in a frame on another page.
+- **API keys for other apps** (Settings → Developers): make a key for an app on your network, such as the Home Hub family
+  dashboard, and choose what it may read (live power, history, costs and savings, the forecast, insights, and the
+  system's details, which are off unless you tick them). It reads through a read-only `/api/v1` and can't change
+  anything. Only a hash of each key is kept, the list shows when each was last used, and removing one stops it at once.
+  See [docs/developers.md](docs/developers.md).
 
 ### Known issues
 

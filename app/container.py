@@ -30,6 +30,7 @@ from app.features.imports.service import ImportService
 from app.features.insights.service import InsightsService
 from app.features.integrations.service import IntegrationsService
 from app.features.inverters.sungrow.mock import MockRegisters
+from app.features.keys.service import ApiKeyService
 from app.features.live.client import CollectorClient
 from app.features.live.ingest import CollectorIngest
 from app.features.live.service import LiveService
@@ -65,6 +66,7 @@ class Services:
     bills: BillsService
     imports: ImportService
     auth: AuthService
+    keys: ApiKeyService
     integrations: IntegrationsService
     storage: StorageService
     onboarding: OnboardingService
@@ -125,6 +127,7 @@ def build_services(config: Config) -> Services:
         bills=bills,
         imports=ImportService(db),
         auth=AuthService(db, enabled=config.auth),
+        keys=ApiKeyService(db),
         integrations=integrations,
         storage=StorageService(config, db, collector),
         onboarding=OnboardingService(config, db, integrations),

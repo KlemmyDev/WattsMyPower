@@ -35,6 +35,8 @@ from app.features.home.router import router as home_router
 from app.features.imports.router import router as imports_router
 from app.features.insights.router import router as insights_router
 from app.features.integrations.router import router as integrations_router
+from app.features.keys.router import router as keys_router
+from app.features.keys.router import v1 as keys_v1_router
 from app.features.live.router import health_router
 from app.features.live.router import router as live_router
 from app.features.meter.router import router as meter_router
@@ -54,6 +56,8 @@ log = logging.getLogger(__name__)
 ROUTERS = [
     auth_router,
     embed_router,
+    keys_router,
+    keys_v1_router,
     notifications_router,
     live_router,
     readings_router,

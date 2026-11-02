@@ -65,7 +65,8 @@ class AuthMiddleware:
     there), because middleware is constructed by `add_middleware` before services can be passed in.
     """
 
-    OPEN = ("/api/auth/", "/api/embed/public/")
+    # /api/v1 has no session either: another app sends a key, which each of its routes checks (app.features.keys).
+    OPEN = ("/api/auth/", "/api/embed/public/", "/api/v1/")
 
     def __init__(self, app: ASGIApp):
         self.app = app

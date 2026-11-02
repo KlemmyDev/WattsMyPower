@@ -44,6 +44,7 @@ import { Route as AppSettingsSplatRouteImport } from './routes/_app/settings/$'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsCostRouteImport } from './routes/_app/settings/cost'
 import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
+import { Route as AppSettingsDevelopersRouteImport } from './routes/_app/settings/developers'
 import { Route as AppSettingsEmbedRouteImport } from './routes/_app/settings/embed'
 import { Route as AppSettingsHouseRouteImport } from './routes/_app/settings/house'
 import { Route as AppSettingsLocationRouteImport } from './routes/_app/settings/location'
@@ -251,6 +252,11 @@ const AppSettingsCostRoute = AppSettingsCostRouteImport.update({
 const AppSettingsDataRoute = AppSettingsDataRouteImport.update({
   id: '/data',
   path: '/data',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
+const AppSettingsDevelopersRoute = AppSettingsDevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
 const AppSettingsEmbedRoute = AppSettingsEmbedRouteImport.update({
@@ -476,6 +482,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/cost': typeof AppSettingsCostRoute
   '/settings/data': typeof AppSettingsDataRoute
+  '/settings/developers': typeof AppSettingsDevelopersRoute
   '/settings/embed': typeof AppSettingsEmbedRoute
   '/settings/house': typeof AppSettingsHouseRoute
   '/settings/location': typeof AppSettingsLocationRoute
@@ -544,6 +551,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/cost': typeof AppSettingsCostRoute
   '/settings/data': typeof AppSettingsDataRoute
+  '/settings/developers': typeof AppSettingsDevelopersRoute
   '/settings/embed': typeof AppSettingsEmbedRoute
   '/settings/house': typeof AppSettingsHouseRoute
   '/settings/location': typeof AppSettingsLocationRoute
@@ -617,6 +625,7 @@ export interface FileRoutesById {
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/cost': typeof AppSettingsCostRoute
   '/_app/settings/data': typeof AppSettingsDataRoute
+  '/_app/settings/developers': typeof AppSettingsDevelopersRoute
   '/_app/settings/embed': typeof AppSettingsEmbedRoute
   '/_app/settings/house': typeof AppSettingsHouseRoute
   '/_app/settings/location': typeof AppSettingsLocationRoute
@@ -689,6 +698,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/cost'
     | '/settings/data'
+    | '/settings/developers'
     | '/settings/embed'
     | '/settings/house'
     | '/settings/location'
@@ -757,6 +767,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/cost'
     | '/settings/data'
+    | '/settings/developers'
     | '/settings/embed'
     | '/settings/house'
     | '/settings/location'
@@ -829,6 +840,7 @@ export interface FileRouteTypes {
     | '/_app/settings/account'
     | '/_app/settings/cost'
     | '/_app/settings/data'
+    | '/_app/settings/developers'
     | '/_app/settings/embed'
     | '/_app/settings/house'
     | '/_app/settings/location'
@@ -1120,6 +1132,13 @@ declare module '@tanstack/react-router' {
       path: '/data'
       fullPath: '/settings/data'
       preLoaderRoute: typeof AppSettingsDataRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
+    '/_app/settings/developers': {
+      id: '/_app/settings/developers'
+      path: '/developers'
+      fullPath: '/settings/developers'
+      preLoaderRoute: typeof AppSettingsDevelopersRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
     '/_app/settings/embed': {
@@ -1434,6 +1453,7 @@ interface AppSettingsRouteRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
   AppSettingsCostRoute: typeof AppSettingsCostRoute
   AppSettingsDataRoute: typeof AppSettingsDataRoute
+  AppSettingsDevelopersRoute: typeof AppSettingsDevelopersRoute
   AppSettingsEmbedRoute: typeof AppSettingsEmbedRoute
   AppSettingsHouseRoute: typeof AppSettingsHouseRoute
   AppSettingsLocationRoute: typeof AppSettingsLocationRoute
@@ -1448,6 +1468,7 @@ const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
   AppSettingsCostRoute: AppSettingsCostRoute,
   AppSettingsDataRoute: AppSettingsDataRoute,
+  AppSettingsDevelopersRoute: AppSettingsDevelopersRoute,
   AppSettingsEmbedRoute: AppSettingsEmbedRoute,
   AppSettingsHouseRoute: AppSettingsHouseRoute,
   AppSettingsLocationRoute: AppSettingsLocationRoute,

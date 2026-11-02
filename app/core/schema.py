@@ -515,6 +515,14 @@ def _notifications(conn: sqlite3.Connection) -> None:
     _push_subscriptions(conn)
 
 
+def _api_keys(conn: sqlite3.Connection) -> None:
+    """Keys that let other apps read the dashboard's data (app.features.keys): only a hash of each is kept."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, prefix TEXT NOT NULL,"
+        " hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, created_at INTEGER NOT NULL, last_used INTEGER)"
+    )
+
+
 # Applied in order; the database's PRAGMA user_version records how many have run.
 # Never edit or reorder one that has shipped: add a new one.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
@@ -547,6 +555,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _home_looks,
     _grid_events,
     _notifications,
+    _api_keys,
 ]
 
 
