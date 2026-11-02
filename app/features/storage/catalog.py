@@ -309,6 +309,14 @@ DASHBOARD: dict[str, Table] = {
         "One row for each browser or phone that turned notifications on. Its address and keys are never shown.",
         "Until it turns them off",
     ),
+    "api_keys": Table(
+        "settings",
+        "Developer keys",
+        "Keys that let other apps read the dashboard's data (Settings → Developers): each one's name, what it may read and "
+        "a hash of the key. The keys themselves are never kept.",
+        "Until removed",
+        Spec("created_at"),
+    ),
     "kv": Table(
         "settings",
         "Saved details",

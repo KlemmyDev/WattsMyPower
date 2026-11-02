@@ -463,7 +463,7 @@ sqlite3 data/wattsmypower.db \
   "SELECT datetime(ts,'unixepoch','localtime'), pv_power, battery_soc FROM samples ORDER BY ts DESC LIMIT 10"
 ```
 
-HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session cookie; `/healthz` is open):
+HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session cookie; `/healthz` is open; `/api/v1/*` takes a key instead, see [Developers: API keys](docs/developers.md)):
 
 | Endpoint | |
 |---|---|
@@ -497,6 +497,8 @@ HTTP API (every `/api` endpoint except `/api/auth/*` needs a signed-in session c
 | `GET /api/settings`, `PUT /api/settings` | read or change the forecast location (coordinates and place name) and system cost |
 | `GET /api/geocode?q=` | suburbs, towns and addresses matching q (OpenStreetMap), for choosing the forecast location |
 | `GET /api/stats`, `GET /healthz` | row counts / DB size, health |
+| `GET /api/keys`, `POST /api/keys`, `DELETE /api/keys/{id}` | the API keys other apps use to read your data, make one (the whole key is in the answer once), remove one |
+| `GET /api/v1/*` | the read-only API a key opens: `ping`, `live`, `today`, `history`, `daily`, `export.csv`, `costs`, `tariff`, `bills`, `forecast`, `insights`, `system`; each key reads only what it was given |
 
 ## Local development
 
@@ -573,6 +575,7 @@ app/
     insights/           longer-term figures: the battery's health and sizing, solar performance, the battery's run
     savings/            quarterly bill, payback, plan comparison
     auth/               sign-in: the household account, sessions, and the /api guard
+    keys/               API keys for other apps: making and removing them, and the read-only /api/v1 they open
     onboarding/         the first-run set-up guide's progress, and spotting installs already set up
     storage/            Manage → Data: both databases measured table by table (measure.py) and
                         described in plain words (catalog.py), and a backup to download (backup.py)
