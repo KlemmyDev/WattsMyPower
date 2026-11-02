@@ -32,7 +32,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 from collector.devices import RawReading, Words
-from collector.devices.modbus import Range, read_ranges
+from collector.devices.modbus import BadRanges, Range, read_ranges
 
 TCP_PORT = 502
 IDENTITY: Range = (0, 30)  # holding
@@ -57,8 +57,8 @@ class GrowattDevice:
     def __init__(self, host: str, port: int = TCP_PORT, unit: int = 1, client_cls: Any = None, timeout: float = 5):
         self.host, self.port, self.unit, self.timeout = host, port, unit or 1, timeout
         self._client_cls = client_cls or ModbusTcpClient
-        self._bad_input: set[int] = set()
-        self._bad_holding: set[int] = set()
+        self._bad_input = BadRanges()
+        self._bad_holding = BadRanges()
         params = inspect.signature(self._client_cls.read_input_registers).parameters
         self._unit_kw = next((k for k in ("device_id", "slave", "unit") if k in params), "slave")
 

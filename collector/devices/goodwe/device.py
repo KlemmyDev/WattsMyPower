@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collector.devices import RawReading, Words
 from collector.devices.goodwe.protocol import UDP_PORT, GoodWeClient
-from collector.devices.modbus import Range, read_ranges
+from collector.devices.modbus import BadRanges, Range, read_ranges
 
 
 class GoodWeDevice:
@@ -26,7 +26,7 @@ class GoodWeDevice:
         # Unit 0 (or a Modbus default of 1 from a form that didn't ask) means the family's own address.
         self.unit = unit if unit not in (0, 1) else self.default_unit
         self.client = GoodWeClient(host, port, self.unit, timeout, retries)
-        self._bad: set[int] = set()
+        self._bad = BadRanges()
 
     def probe(self) -> Words | None:
         """The identity registers, or None if nothing here answers like this family. One quick try, for a scan."""
