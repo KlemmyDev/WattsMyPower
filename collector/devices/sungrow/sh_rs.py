@@ -19,7 +19,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 from collector.devices import RawReading, Words, WriteRefused
-from collector.devices.modbus import Range, read_ranges
+from collector.devices.modbus import BadRanges, Range, read_ranges
 
 # Per Sungrow's doc: communication address = protocol address - 1.
 ADDRESS_OFFSET = -1
@@ -53,8 +53,8 @@ class ShRsDevice:
         self.host, self.port, self.unit = host, port, unit
         self._client_cls = client_cls or ModbusTcpClient
         # Ranges the gateway rejected, by first address: read one register at a time from then on.
-        self._bad_input: set[int] = set()
-        self._bad_holding: set[int] = set()
+        self._bad_input = BadRanges()
+        self._bad_holding = BadRanges()
         # pymodbus renamed the unit-id kwarg across 3.x versions.
         params = inspect.signature(self._client_cls.read_input_registers).parameters
         self._unit_kw = next((k for k in ("device_id", "slave", "unit") if k in params), "slave")

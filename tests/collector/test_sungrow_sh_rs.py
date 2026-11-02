@@ -175,3 +175,28 @@ def test_a_write_that_times_out_is_a_connection_error() -> None:
     with pytest.raises(ConnectionError):
         ShRsDevice("10.0.0.1", client_cls=client).write_holding([(13050, 0)])
     assert client.closed == 1
+
+
+def test_a_rejected_block_is_asked_for_whole_again_later(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = [1000.0]
+    monkeypatch.setattr("collector.devices.modbus.time.monotonic", lambda: now[0])
+    client = fake_client(rejected={12999})
+    device = ShRsDevice("10.0.0.1", client_cls=client)
+    device.read(include_info=False)  # refused, so its 41 registers are read one at a time
+    assert ("input", 12999, 41, 1) in client.requests and ("input", 13007, 1, 1) in client.requests
+
+    client.requests.clear()
+    now[0] += 60
+    device.read(include_info=False)  # soon after: straight to single reads, without asking again
+    assert ("input", 12999, 41, 1) not in client.requests and ("input", 13007, 1, 1) in client.requests
+
+    client.requests.clear()
+    now[0] += 600
+    client.rejected = set()  # the dongle answers it again
+    reading = device.read(include_info=False)
+    assert ("input", 12999, 41, 1) in client.requests and ("input", 13007, 1, 1) not in client.requests
+    assert reading.input[13008] == 13008 and reading.input[13010] == 13010
+
+    client.requests.clear()
+    device.read(include_info=False)  # and stays whole
+    assert ("input", 12999, 41, 1) in client.requests and ("input", 13007, 1, 1) not in client.requests

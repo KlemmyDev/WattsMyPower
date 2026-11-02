@@ -26,7 +26,7 @@ from typing import Any
 from Cryptodome.Cipher import AES
 
 from collector.devices import RawReading, Words
-from collector.devices.modbus import Range, read_ranges
+from collector.devices.modbus import BadRanges, Range, read_ranges
 
 FIXED_KEY = b"Grow#0*2Sun68CbE"
 GET_KEY = b"\x68\x68\x00\x00\x00\x06\xf7\x04\x0a\xe7\x00\x08"
@@ -55,7 +55,7 @@ class DongleDevice:
         self._aes: Any = None  # an AES-ECB cipher, or None when the dongle doesn't encrypt
         self._key_day: date | None = None
         self._tid = 0
-        self._bad: set[int] = set()
+        self._bad = BadRanges()
 
     def _connect(self) -> socket.socket:
         return socket.create_connection((self.host, self.port), timeout=self.timeout)
